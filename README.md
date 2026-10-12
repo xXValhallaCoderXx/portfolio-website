@@ -72,10 +72,10 @@ Serve the optimized GLBs from the same Firebase Hosting site at `/models/*.glb`.
 self-contained files with embedded textures and already use Meshopt compression. A separate
 storage bucket or model CDN is unnecessary for this site.
 
-Install the [Firebase CLI](https://firebase.google.com/docs/cli), sign in with `firebase login`,
-and create or choose a project in the [Firebase console](https://console.firebase.google.com/).
-The committed config is ready to use; there is no need to run `firebase init` or add a Firebase
-SDK to the app. Replace `YOUR_PROJECT_ID` below with the project's ID.
+Install the [Firebase CLI](https://firebase.google.com/docs/cli) and sign in with `firebase login`.
+This repository targets [`renate-gouveia-portfolio`](https://console.firebase.google.com/project/renate-gouveia-portfolio/overview)
+through `.firebaserc`. The config is ready to use; there is no need to run `firebase init` or add
+a Firebase SDK to the app.
 
 To check the built site locally with Firebase's routing and headers:
 
@@ -93,9 +93,31 @@ To publish a temporary preview, then deploy the live site after reviewing it:
 
 ```bash
 npm run build
-firebase hosting:channel:deploy prelaunch --project YOUR_PROJECT_ID
-firebase deploy --only hosting --project YOUR_PROJECT_ID
+firebase hosting:channel:deploy prelaunch --project renate-gouveia-portfolio
+firebase deploy --only hosting --project renate-gouveia-portfolio
 ```
+
+### Automatic deployment from GitHub
+
+After `.github/workflows/firebase-hosting.yml` is merged, every push to `main`, including a merged
+pull request, starts the **Deploy portfolio** workflow. It installs dependencies with `npm ci`,
+authenticates to Google Cloud, and runs `firebase deploy --only hosting`. The predeploy hook
+builds `dist/`; a failed build stops the deployment.
+
+Follow the run in [GitHub Actions](https://github.com/xXValhallaCoderXx/portfolio-website/actions/workflows/firebase-hosting.yml).
+A successful run publishes the site at https://renate-gouveia-portfolio.web.app. To deploy again
+manually, open **Actions → Deploy portfolio → Run workflow** and select `main`.
+
+GitHub authenticates using [Workload Identity Federation](https://github.com/google-github-actions/auth),
+which issues temporary credentials. The configured provider accepts only this repository's
+`firebase-hosting.yml` workflow on `main`, triggered by `push` or `workflow_dispatch`. The
+`github-hosting-deploy` service account has Firebase Hosting Admin and API Keys Viewer roles
+in `renate-gouveia-portfolio`. This setup uses no service-account keys or repository secrets.
+
+The Google Cloud provider is
+`projects/194838900506/locations/global/workloadIdentityPools/github-actions/providers/portfolio-main`.
+Its repository and owner conditions use GitHub's numeric IDs. If the repository moves to a new
+owner or the workflow is renamed, update the provider's conditions as well as the workflow.
 
 Firebase Hosting includes a [global CDN and usage quotas](https://firebase.google.com/docs/hosting/usage-quotas-pricing).
 Monitor data transfer as traffic grows; move models to separate storage only if their size or
