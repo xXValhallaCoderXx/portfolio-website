@@ -483,6 +483,83 @@ export function createGame(stage, hooks = {}) {
 
   // While set, the camera is parked at `from` looking at `at` (see the debug handle at the bottom).
   let spy = null;
+  // How far the backdrop's camera has climbed above the glider, 0 to 1, and how far it is asked to.
+  // The page raises it as the hero scrolls away, until the fjord is seen from above like a map.
+  const climb = { now: 0, want: 0 };
+
+  // As a backdrop the glider can be pulled about with the mouse: a drag near it holds it off to
+  // one side, and a pointer passing by stirs it. Let go and it swings home. `x` and `y` are how far
+  // it has been pulled across and up the screen, in metres, and `toX`, `toY` where a drag holds it.
+  const TUG = { stiffness: 14, damping: 3.2, reachX: 13, reachY: 7, stir: 0.9, lean: 0.035 };
+  const tug = { x: 0, y: 0, vx: 0, vy: 0, toX: 0, toY: 0, held: null };
+  const across = new THREE.Vector3();
+  const upward = new THREE.Vector3();
+  const ahead = new THREE.Vector3();
+  const roll = new THREE.Quaternion();
+
+  // Where the glider is in the window, how near the pointer is to it, and the metres one pixel covers there.
+  function tugReach(event) {
+    const box = stage.getBoundingClientRect();
+    const at = ahead.copy(glider.group.position).project(camera);
+    const x = box.left + (at.x * 0.5 + 0.5) * box.width;
+    const y = box.top + (0.5 - at.y * 0.5) * box.height;
+    const far = camera.position.distanceTo(glider.group.position);
+    return {
+      near: Math.hypot(event.clientX - x, event.clientY - y) < Math.max(150, box.height * 0.26),
+      scale: (2 * far * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / box.height,
+    };
+  }
+
+  function letGo() {
+    tug.held = null;
+    tug.toX = tug.toY = 0;
+    document.documentElement.classList.remove('tugging');
+  }
+
+  on(window, 'pointerdown', (event) => {
+    if (mode !== 'intro' || event.pointerType !== 'mouse' || event.button !== 0) return;
+    if (event.target.closest?.('a, button, input, .window')) return;
+    const { near, scale } = tugReach(event);
+    if (!near) return;
+    tug.held = { x: event.clientX - tug.x / scale, y: event.clientY + tug.y / scale, scale };
+    document.documentElement.classList.add('tugging');
+    event.preventDefault(); // a drag on the glider is not a text selection
+  });
+  on(window, 'pointermove', (event) => {
+    if (mode !== 'intro' || event.pointerType !== 'mouse') return document.documentElement.classList.remove('tuggable');
+    if (tug.held) {
+      const { clamp } = THREE.MathUtils;
+      tug.toX = clamp((event.clientX - tug.held.x) * tug.held.scale, -TUG.reachX, TUG.reachX);
+      tug.toY = clamp((tug.held.y - event.clientY) * tug.held.scale, -TUG.reachY, TUG.reachY);
+      return undefined;
+    }
+    const { near, scale } = tugReach(event);
+    document.documentElement.classList.toggle('tuggable', near);
+    if (near) {
+      // One fast sweep of the mouse must not fling the glider away, so each nudge is capped.
+      const { clamp } = THREE.MathUtils;
+      tug.vx += clamp(event.movementX, -40, 40) * scale * TUG.stir;
+      tug.vy -= clamp(event.movementY, -40, 40) * scale * TUG.stir;
+    }
+    return undefined;
+  });
+  on(window, 'pointerup', letGo);
+  on(window, 'pointercancel', letGo);
+  on(window, 'blur', letGo);
+
+  // Moves the pull along by `dt` seconds and returns how far the wing leans into it.
+  function tugStep(dt) {
+    const step = Math.min(dt, 0.1);
+    const slices = Math.ceil(step * 120);
+    const h = step / slices;
+    for (let i = 0; i < slices; i++) {
+      tug.vx += (TUG.stiffness * (tug.toX - tug.x) - TUG.damping * tug.vx) * h;
+      tug.vy += (TUG.stiffness * (tug.toY - tug.y) - TUG.damping * tug.vy) * h;
+      tug.x += tug.vx * h;
+      tug.y += tug.vy * h;
+    }
+    return THREE.MathUtils.clamp(tug.vx * TUG.lean, -0.45, 0.45);
+  }
 
   function updateCamera(dt) {
     if (spy) {
@@ -492,12 +569,20 @@ export function createGame(stage, hooks = {}) {
     }
     if (mode === 'lost') return lostScene.aim(dt);
     if (mode === 'intro') {
-      // As a backdrop the camera circles the glider. On a wide screen it aims a little to the
-      // glider's left, which puts the glider right of centre and clear of the headline.
+      // As a backdrop the camera circles the glider, and climbs above it as the page scrolls away.
+      // On a wide screen it aims a little to the glider's left, which puts the glider right of
+      // centre and clear of the headline; the aim widens with distance to hold it there.
+      climb.now += (climb.want - climb.now) * (1 - Math.exp(-dt * 5));
+      const up = climb.now * climb.now * (3 - 2 * climb.now);
       const a = time * 0.12 + 2.6;
-      const aside = camera.aspect > 1.2 ? 13 : 0;
-      camera.position.set(g.pos.x + Math.sin(a) * 38, g.pos.y + 9, g.pos.z + Math.cos(a) * 38);
-      camera.lookAt(g.pos.x - Math.cos(a) * aside, g.pos.y + 4, g.pos.z + Math.sin(a) * aside);
+      const back = 38 + 22 * up;
+      const above = 9 + 135 * up;
+      const aside = camera.aspect > 1.2 ? 0.33 * Math.hypot(back, above - 4) : 0;
+      // On an upright phone the headline fills the lower half, so the camera aims below the
+      // glider, which lifts the glider into the upper half.
+      const below = camera.aspect < 1 ? 13 : 0;
+      camera.position.set(g.pos.x + Math.sin(a) * back, g.pos.y + above, g.pos.z + Math.cos(a) * back);
+      camera.lookAt(g.pos.x - Math.cos(a) * aside, g.pos.y + (4 - below) * (1 - up), g.pos.z + Math.sin(a) * aside);
       return;
     }
     chaseTarget();
@@ -964,15 +1049,24 @@ export function createGame(stage, hooks = {}) {
     if (mode === 'intro') g.pos.y = START.y + Math.sin(time * 0.8) * 1.2;
     glider.group.position.copy(g.pos);
     glider.group.rotation.set(0, -g.yaw, -g.bank);
+    // As a backdrop the glider goes where the mouse has pulled it, leaning into the move the way
+    // the screen shows it: across the picture, whichever way the camera happens to be facing.
+    const lean = mode === 'intro' ? tugStep(elapsed) : 0;
+    if (mode === 'intro') {
+      across.setFromMatrixColumn(camera.matrixWorld, 0);
+      upward.setFromMatrixColumn(camera.matrixWorld, 1);
+      glider.group.position.addScaledVector(across, tug.x).addScaledVector(upward, tug.y);
+      glider.group.quaternion.premultiply(roll.setFromAxisAngle(camera.getWorldDirection(ahead), lean));
+    }
     const airborne = mode === 'flying';
     glider.pose({
       dt: elapsed,
       time,
-      bank: g.bank,
+      bank: g.bank + lean,
       pace: airborne ? g.speed - FLIGHT.trim.speed : 0,
-      turn: airborne ? g.turn : 0,
+      turn: airborne ? g.turn : THREE.MathUtils.clamp(lean * 1.6, -1, 1),
       slow: airborne && input.slow,
-      lift: airborne ? g.lift : 0,
+      lift: airborne ? g.lift : mode === 'intro' ? tug.y : 0,
       liftSide: g.liftSide,
       landed: mode === 'landed',
     });
@@ -1038,6 +1132,8 @@ export function createGame(stage, hooks = {}) {
       lens.rising = rising;
       if (!rising) lens.warp = 1;
     },
+    /** How far the hero has scrolled away, 0 to 1: the backdrop's camera climbs to match. */
+    rise: (amount) => (climb.want = Math.max(0, Math.min(1, amount))),
     /** The page tells the game whether its stage is on screen, so an unseen backdrop costs nothing. */
     setVisible: (seen) => (visible = seen),
     dispose() {
@@ -1046,6 +1142,7 @@ export function createGame(stage, hooks = {}) {
       sizeWatch.disconnect();
       audio?.ctx.close();
       renderer.dispose();
+      document.documentElement.classList.remove('tuggable', 'tugging');
       delete window.fjord;
       stage.replaceChildren();
     },

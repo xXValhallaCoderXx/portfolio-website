@@ -12,7 +12,19 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
 
 ## How the page and the flight fit together
 
-- The page is the website. The fjord idles behind the hero and takes no input.
+- The page is the website. The fjord idles behind the hero; its glider can be pulled about with
+  the mouse and swings back when let go, but nothing there is needed to use the page.
+- "Take-off", at the foot of the hero, is the way in to the route: clicking it scrolls to the
+  first section. On a phone the hero stops short of the window so that it shows.
+- Below the hero the page is one flight path with a waypoint per section. A small glider follows
+  the path as the page scrolls, and the top bar counts its height down. Scrolling is never taken
+  over. As the hero scrolls away the fjord's camera climbs until the scene reads as a map, and
+  the path starts where the glider hangs.
+- Each role unfolds in place into a field report, and a few carry a small interactive sketch.
+  Beside the list, on a desktop, a live view of the flight's rune ridge goes to the stone of the
+  role being read.
+- Three projects have a playable preview: a scripted model of what the product does, never the
+  product itself. Each project also has its own address, `/projects/<id>`, with the full report.
 - `[ ./fly.sh ]`, the `fly.sh` tab or a section's "fly to" link starts the flight. It fills the
   window, locks page scrolling and moves the address to `/fly`.
 - The swap in either direction plays behind a short warp of star streaks.
@@ -29,14 +41,19 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
   `src/game/lost.js`.
 
 The host must serve `index.html` for every address (a single-page-app rewrite), or direct links to
-the flight and to missing pages will show the host's own error page instead.
+the flight, to a project and to missing pages will show the host's own error page instead.
 
 ## Where things live
 
 - `src/content.js`: everything a visitor reads. The page and the flight both draw from it.
-- `src/App.jsx`, `src/components/`, `src/styles.css`: the page.
+- `src/App.jsx`: the top bar, the hero, and which of the page, a project or the flight is showing.
+- `src/components/Route.jsx`, `src/route.css`: the flight path and its waypoints.
+  `Sections.jsx` is what each waypoint holds, and what a landing in the flight shows.
+- `src/components/demos/`, `src/components/sketches/`, `src/demos.css`: the playable previews on
+  the projects and the sketches in the field reports.
 - `src/game/`: the flight. `game.js` is the flight model, HUD, map and sound; `terrain.js` is the
-  world; `scenery.js` is the sky, buildings and glider; `achievements.js` is progress and belts.
+  world; `scenery.js` is the sky, buildings and glider; `achievements.js` is progress and belts;
+  `ridge.js` is the small live view of rune ridge on the page.
 - `public/poster.jpg`: the still shown in the hero before the live scene loads.
 
 ## 3D models
@@ -64,7 +81,7 @@ them from older commits.
 ## Firebase Hosting
 
 This is a static Vite app. `firebase.json` deploys only `dist/`, rebuilds before `firebase deploy`,
-and rewrites addresses to `index.html` for `/fly` and the missing-page flight. It caches Vite's
+and rewrites addresses to `index.html` for `/fly`, `/projects/<id>` and the missing-page flight. It caches Vite's
 hashed bundles for a year; HTML, models and images revalidate because their filenames stay the
 same when their contents change.
 

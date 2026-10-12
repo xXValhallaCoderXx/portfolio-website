@@ -1,0 +1,573 @@
+/* The playable previews on the projects, and the sketches inside the field reports. */
+
+.demo {
+  display: grid;
+  gap: 12px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.demo p {
+  max-width: none;
+  margin: 0;
+}
+
+.demo-ask {
+  color: var(--text);
+}
+
+.demo-ask .dim,
+.stage-name,
+.next-session > span {
+  display: block;
+  margin: 0 0 4px;
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.demo-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.demo button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.demo .demo-note {
+  color: var(--dim);
+  font-size: 11px;
+}
+
+/* A row of small choices, one of them on. */
+.efforts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.efforts .dim {
+  margin-right: 4px;
+}
+
+.efforts button,
+.stepper button {
+  padding: 1px 9px;
+  border-color: var(--rule);
+  color: var(--text);
+}
+
+.efforts button.on {
+  border-color: var(--cyan);
+  background: var(--cyan);
+  color: var(--bg);
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ---- Hird: a research swarm */
+
+.swarm {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px dashed var(--rule);
+}
+
+.stage + .stage::before {
+  content: '→';
+  position: absolute;
+  top: 50%;
+  left: -8px;
+  color: var(--dim);
+  translate: -50% -50%;
+}
+
+.seat {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  background: var(--raised);
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: left;
+  white-space: normal;
+}
+
+.seat i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--rule);
+}
+
+button.seat:hover,
+button.seat:focus-visible {
+  border-color: var(--cyan);
+  background: var(--raised);
+  color: var(--text);
+}
+
+.seat.running {
+  border-color: var(--blue);
+  color: var(--text);
+}
+
+.seat.running i {
+  background: var(--blue);
+  animation: pulse 0.7s ease-in-out infinite;
+}
+
+.seat.done {
+  color: var(--text);
+}
+
+.seat.done i {
+  background: #5fd38d;
+}
+
+.seat.picked {
+  border-color: var(--cyan);
+  box-shadow: inset 0 0 0 1px var(--cyan);
+}
+
+.seat.result.done {
+  border-color: #5fd38d;
+}
+
+/* The timeline and the seat inspector share one space, so the preview does not jump about. */
+.timeline,
+.inspect {
+  min-height: calc(4.65em + 16px);
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 2px solid var(--rule);
+  color: var(--dim);
+  list-style: none;
+}
+
+.dossier .timeline,
+.dossier .inspect {
+  min-height: calc(9.3em + 16px);
+}
+
+.timeline li:last-child:not(.dim),
+.inspect b {
+  color: var(--cyan);
+}
+
+.inspect p + p {
+  margin-top: 4px;
+}
+
+.inspect p:nth-child(2) {
+  color: var(--text);
+}
+
+.meter {
+  position: relative;
+  min-width: 150px;
+  padding: 3px 9px;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  color: var(--text);
+  font-size: 11px;
+  text-align: center;
+}
+
+.meter i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: rgba(45, 212, 238, 0.26);
+  transition: width 0.5s;
+}
+
+.meter span {
+  position: relative;
+}
+
+@container (max-width: 560px) {
+  .swarm {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stage + .stage::before {
+    content: none;
+  }
+}
+
+/* ---- Flight Log: a flight replayed */
+
+.flight-map {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--rule);
+  background: #0a1422;
+}
+
+.flight-map .water {
+  fill: rgba(59, 158, 255, 0.1);
+}
+
+.flight-map .ground {
+  fill: none;
+  stroke: rgba(59, 158, 255, 0.3);
+}
+
+.planned-route {
+  fill: none;
+  stroke: var(--dim);
+  stroke-width: 1.2;
+  stroke-dasharray: 3 4;
+}
+
+.flown-route {
+  fill: none;
+  stroke: var(--ember);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pin circle {
+  fill: var(--bg);
+  stroke: var(--text);
+}
+
+.pin text {
+  fill: var(--dim);
+  font-size: 9px;
+}
+
+.pilot-marker circle {
+  fill: rgba(45, 212, 238, 0.2);
+  stroke: var(--cyan);
+}
+
+.pilot-marker path {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.3;
+  stroke-linecap: round;
+}
+
+.flight-chart {
+  display: block;
+  width: 100%;
+  height: 46px;
+}
+
+.flight-chart polygon {
+  fill: rgba(59, 158, 255, 0.14);
+}
+
+.flight-chart polyline {
+  fill: none;
+  stroke: var(--blue);
+  vector-effect: non-scaling-stroke;
+}
+
+.flight-chart line {
+  stroke: var(--cyan);
+  vector-effect: non-scaling-stroke;
+}
+
+.readouts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 26px;
+  margin: 0;
+}
+
+.readouts dt {
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.readouts dd {
+  margin: 0;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.demo input[type='range'] {
+  flex: 1;
+  min-width: 90px;
+  accent-color: var(--cyan);
+}
+
+/* ---- Sheetless: the last set of a session */
+
+.prescription {
+  color: var(--cyan);
+}
+
+.sets {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sets li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  min-height: 38px;
+  padding: 6px 10px;
+  border: 1px solid var(--rule);
+}
+
+.sets .logged {
+  color: var(--dim);
+}
+
+.sets .logged b {
+  margin-left: auto;
+  color: #5fd38d;
+}
+
+.sets .live {
+  border-color: var(--blue);
+  background: var(--raised);
+  color: var(--text);
+}
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stepper output {
+  min-width: 1.6ch;
+  font-weight: 700;
+  text-align: center;
+}
+
+.next-session {
+  min-height: 7.4em;
+  padding: 10px 12px;
+  border: 1px dashed var(--rule);
+}
+
+.next-session.shown {
+  border: 1px solid var(--cyan);
+}
+
+.next-session .up {
+  color: #5fd38d;
+}
+
+.next-session .down {
+  color: var(--ember);
+}
+
+.next-session .why {
+  margin-top: 4px;
+  color: var(--text);
+}
+
+/* ---- sketch: bulk payroll shared between workers */
+
+.payroll-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 18px;
+}
+
+.payouts {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 4px;
+  max-width: 420px;
+}
+
+.payouts i {
+  aspect-ratio: 1;
+  border: 1px solid var(--rule);
+  background: var(--raised);
+}
+
+.payouts .working {
+  border-color: var(--blue);
+  background: var(--blue);
+  animation: pulse 0.42s ease-in-out infinite;
+}
+
+.payouts .paid {
+  border-color: #5fd38d;
+  background: rgba(95, 211, 141, 0.45);
+}
+
+.lanes {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.report .lanes li {
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--rule);
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.report .lanes .busy {
+  border-color: var(--blue);
+  color: var(--text);
+}
+
+/* ---- sketch: Atomic Design, one level at a time */
+
+.atoms-stage {
+  padding: 18px 14px 14px;
+  border: 1px solid var(--rule);
+  background: var(--bg);
+}
+
+.template {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 16px;
+}
+
+.organism {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.molecule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.template,
+.organism,
+.molecule {
+  position: relative;
+  padding: 10px;
+  border: 1px dashed transparent;
+  transition: border-color 0.3s;
+}
+
+/* Each level's name sits on its outline, and shows only at that level. */
+.template::before,
+.organism::before,
+.molecule::before {
+  content: attr(data-name);
+  position: absolute;
+  top: -9px;
+  left: 8px;
+  padding: 0 5px;
+  background: var(--bg);
+  color: var(--cyan);
+  font-size: 10px;
+  line-height: 16px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.atom {
+  padding: 2px 8px;
+  border: 1px solid var(--rule);
+  color: var(--text);
+  font-size: 12px;
+  transition: border-color 0.3s;
+}
+
+.atom.avatar {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--rule);
+}
+
+.atom.label {
+  color: var(--dim);
+}
+
+.atom.input {
+  flex: 1;
+  background: var(--raised);
+}
+
+.atom.action {
+  justify-self: start;
+  margin-left: 10px;
+  background: var(--blue);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+[data-level='0'] .atom,
+[data-level='1'] .molecule,
+[data-level='2'] .organism,
+[data-level='3'] .template {
+  border-color: var(--cyan);
+}
+
+[data-level='1'] .molecule::before,
+[data-level='2'] .organism::before,
+[data-level='3'] .template::before {
+  opacity: 1;
+}
+
+/* ---- sketch: the order book */
+
+.orderbook canvas {
+  display: block;
+  width: 100%;
+  height: 190px;
+  border: 1px solid var(--rule);
+  background: var(--bg);
+}
+
+@container (max-width: 520px) {
+  .payroll-flow,
+  .template {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seat.running i,
+  .payouts .working {
+    animation: none;
+  }
+}
