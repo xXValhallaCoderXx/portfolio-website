@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { clone as cloneModel } from 'three/addons/utils/SkeletonUtils.js';
 import { PROJECTS } from '../content.js';
 import { ZONES, STONES, THERMALS, TREES, BOULDERS, heightAt } from './terrain.js';
 
@@ -15,10 +16,10 @@ const WARM = 0xffb066;
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 const files = new Map();
 
-function loadModel(name, size, selfLight = 0.07) {
+export function loadModel(name, size, selfLight = 0.07) {
   if (!files.has(name)) files.set(name, loader.loadAsync(`${import.meta.env.BASE_URL}models/${name}.glb`));
   return files.get(name).then((file) => {
-    const model = file.scene.clone();
+    const model = cloneModel(file.scene); // unlike a plain clone, this keeps a skeleton attached to its skin
     model.scale.setScalar(size);
     model.traverse((part) => {
       if (!part.isMesh || part.material.userData.lit) return;
@@ -296,7 +297,7 @@ export function buildPlaces() {
       place.add(holder);
     }
     group.add(place);
-    marks.set(zone.id, { ring, pulse, pillar });
+    marks.set(zone.id, { ring, pulse, pillar, visited: false, hot: false, beat: marks.size * 1.7 });
   }
 
   // The career stones turn their carved faces toward pilots coming up the fjord.
@@ -319,6 +320,7 @@ export function buildPlaces() {
   let ship = null;
   furnish(mooring, 'longship', 20).then((model) => (ship = model));
   group.add(jetty, mooring);
+  const harbour = { x: shore.x, z: shore.z, out: shore.out, ship: mooring, berth: mooring.position.clone() };
   animated.push((time) => {
     mooring.position.y = -0.9 + Math.sin(time * 0.9) * 0.12;
     if (ship) ship.rotation.x = Math.sin(time * 0.7) * 0.03;
@@ -326,19 +328,27 @@ export function buildPlaces() {
 
   return {
     group,
+    harbour,
     update(time) {
       for (const tick of animated) tick(time);
-      for (const { pulse } of marks.values()) {
+      for (const mark of marks.values()) {
         const t = (time * 0.4) % 1;
-        pulse.scale.setScalar(1 - t * 0.85);
-        pulse.material.opacity = 0.6 * (1 - t);
+        mark.pulse.scale.setScalar(1 - t * 0.85);
+        mark.pulse.material.opacity = 0.6 * (1 - t);
+        // A place still to visit breathes to invite a click; the one under the pointer flares.
+        const glow = mark.visited ? 0.12 : 0.36 + 0.14 * Math.sin(time * 2.2 + mark.beat);
+        mark.pillar.material.opacity = mark.hot ? 0.95 : glow;
+        mark.pillar.scale.x = mark.pillar.scale.z = mark.hot ? 2.2 : 1;
       }
     },
     // A visited place keeps its ring but its pillar dims, so progress reads from the air.
     setVisited(id) {
       const mark = marks.get(id);
-      mark.pillar.material.opacity = 0.12;
+      mark.visited = true;
       mark.ring.material.color.set(LINE);
+    },
+    setHot(id) {
+      for (const [each, mark] of marks) mark.hot = each === id;
     },
   };
 }
@@ -555,6 +565,7 @@ function placeholderGlider() {
 // lengths are metres. `turn` spins a model about its vertical axis so that it faces forward.
 const WING = { span: 11.5, turn: Math.PI, height: 6.2 };
 const PILOT = {
+  model: 'pilot-skeleton',
   length: 2.7,
   turn: Math.PI / 2,
   drop: 1.3,
@@ -562,6 +573,8 @@ const PILOT = {
   // 0.67 tall). These are for the right-hand side; the left side mirrors them across z.
   shoulder: [-0.19, 0.48, 0.175],
   hand: [-0.02, 0.56, 0.25],
+  // The bones that carry those points and the ones the flight moves. `side` becomes L or R.
+  bones: { chest: 'Spine02', waist: 'Spine01', head: 'Head', arm: 'side_Upperarm', fist: 'side_Forearm' },
 };
 
 // How lively the glider is in the air. Raise a number for more of that motion, set it to 0 to
@@ -574,6 +587,9 @@ const MOTION = {
   liftKick: 0.06, // how hard flying into rising air knocks the wing back and to the side
   gusts: 0.55, // how much rough air rocks the glider; rising air is rougher than still air
   pilotFollow: 0.6, // how much of each swing the pilot's body leans along with
+  armPull: 0.7, // how far the pilot's arm comes down with a full pull on that side's brake
+  bodyLean: 0.06, // how far the pilot's upper body leans toward the side being steered
+  headTurn: 0.4, // how far the pilot's head turns to look into a turn
   brakePull: 0.035, // how far steering pulls the trailing edge down on that side
   tipFlutter: 0.012, // how much the wingtips shake in rough air
   ripple: 0.004, // how much the surface ripples along the span
@@ -588,17 +604,25 @@ const smooth = (from, to, x) => {
   return t * t * (3 - 2 * t);
 };
 
-// How far a point of the wing is pushed up or down right now, in the wing file's own units.
+// Where a point of the wing sits right now, in the wing file's own units, written into `out`.
 // The same rule moves the wing's surface and the line ends attached to it.
-function wingFlex(x, z, air) {
+function flexWing(x, y, z, air, out) {
   const reach = Math.min(1, Math.abs(x) * 2); // 0 at the centre, 1 at a tip
   const aft = THREE.MathUtils.clamp(0.5 - z / (2 * HALF_CHORD), 0, 1); // 0 at the leading edge, 1 at the trailing edge
   const brake = x > 0 ? air.brakeLeft : air.brakeRight; // in the file, +x is the pilot's left
-  return (
+  const lift =
     -MOTION.brakePull * brake * smooth(0.08, 0.5, reach) * aft * aft * aft +
     MOTION.tipFlutter * air.rough * reach * reach * reach * Math.sin(air.time * 9 + x * 14) +
     MOTION.ripple * air.rough * Math.sin(x * 46 + air.time * 5) * Math.sin(aft * Math.PI) +
-    MOTION.breathing * air.rough * reach * reach * Math.sin(air.time * 1.7)
+    MOTION.breathing * air.rough * reach * reach * Math.sin(air.time * 1.7);
+  const fold = air.collapse;
+  if (fold <= 0) return out.set(x, y + lift, z);
+  // A collapsed wing folds in from its tips, lets them drop, and thrashes.
+  const thrash = Math.sin(air.time * 17 + x * 31) * Math.cos(air.time * 11 + z * 43);
+  return out.set(
+    x * (1 - 0.62 * fold) + fold * 0.04 * Math.sin(air.time * 13 + z * 40),
+    y + lift - fold * (0.2 * reach * reach - 0.05 * thrash),
+    z * (1 - 0.35 * fold) + fold * 0.05 * thrash,
   );
 }
 
@@ -633,7 +657,8 @@ function loosen(wing) {
 }
 
 // Finds where each line meets the pilot and the underside of the wing. Both ends are kept in
-// their own model's units, so the lines can be redrawn as the two models move apart.
+// their own model's units, so the lines can be redrawn as the two models move apart. `part` names
+// the piece of the pilot each line is tied to.
 function lineAnchors(wing) {
   wing.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(wing);
@@ -649,25 +674,94 @@ function lineAnchors(wing) {
   };
 
   const anchors = [];
-  const join = ([x, y, z], side, onWing) => onWing && anchors.push({ onPilot: new THREE.Vector3(x, y, side * z), onWing });
+  const join = ([x, y, z], side, part, onWing) =>
+    onWing && anchors.push({ onPilot: new THREE.Vector3(x, y, side * z), part, side, onWing });
   for (const side of [-1, 1]) {
     for (const reach of [0.1, 0.32, 0.54, 0.76, 0.93]) {
-      join(PILOT.shoulder, side, underside(reach, -0.55, side)); // front row
-      join(PILOT.shoulder, side, underside(reach, 0.25, side)); // rear row
+      join(PILOT.shoulder, side, 'chest', underside(reach, -0.55, side)); // front row
+      join(PILOT.shoulder, side, 'chest', underside(reach, 0.25, side)); // rear row
     }
-    for (const reach of [0.3, 0.6, 0.88]) join(PILOT.hand, side, underside(reach, 0.82, side)); // brakes
+    for (const reach of [0.3, 0.6, 0.88]) join(PILOT.hand, side, 'fist', underside(reach, 0.82, side)); // brakes
   }
   return anchors;
 }
 
+// The pilot file faces +x, with +y up and +z to its right.
+const FORWARD = new THREE.Vector3(1, 0, 0);
+const UP = new THREE.Vector3(0, 1, 0);
+const RIGHT = new THREE.Vector3(0, 0, 1);
+
+// Picks out the pilot's moving joints and ties each line end to the bone that carries it. Must
+// run while the pilot is still unturned, so that its bones can be read in the file's own frame.
+// A pilot file without a skeleton comes back with no joints and its line ends left fixed.
+function rigPilot(pilot, anchors) {
+  pilot.updateMatrixWorld(true);
+  const named = (part, side) => pilot.getObjectByName(PILOT.bones[part].replace('side', side > 0 ? 'R' : 'L'));
+  const joint = (part, side) => {
+    const bone = named(part, side);
+    // `toLocal` turns an axis of the file's frame into the frame this bone is posed in.
+    return bone && { bone, rest: bone.quaternion.clone(), toLocal: bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert() };
+  };
+  for (const anchor of anchors) {
+    const bone = named(anchor.part, anchor.side);
+    if (!bone) continue;
+    anchor.bone = bone;
+    anchor.onBone = anchor.onPilot.clone().applyMatrix4(pilot.matrixWorld).applyMatrix4(bone.matrixWorld.clone().invert());
+  }
+  const joints = {
+    chest: joint('chest'),
+    waist: joint('waist'),
+    head: joint('head'),
+    leftArm: joint('arm', -1),
+    rightArm: joint('arm', 1),
+  };
+  return Object.values(joints).every(Boolean) ? joints : null;
+}
+
+const spin = new THREE.Quaternion();
+const axis = new THREE.Vector3();
+
+// Turns a joint away from its resting pose, about an axis given in the pilot file's frame.
+// With `more`, the turn is added to whatever the joint was last given instead.
+function turnJoint(joint, about, angle, more = false) {
+  axis.copy(about).applyQuaternion(joint.toLocal);
+  if (!more) joint.bone.quaternion.copy(joint.rest);
+  joint.bone.quaternion.premultiply(spin.setFromAxisAngle(axis, angle));
+}
+
+// The reserve parachute, 7 m across, with a ring of lines down to the pilot. It stays hidden and
+// is placed by whoever throws it; the lines are redrawn to follow.
+const RESERVE = { size: 7, lines: 12, rim: 0.45 };
+
+async function loadReserve() {
+  const canopy = new THREE.Group();
+  canopy.add(await loadModel('reserve', RESERVE.size, 0.25));
+  canopy.visible = false;
+  const lines = new THREE.LineSegments(
+    new THREE.BufferGeometry().setAttribute(
+      'position',
+      new THREE.BufferAttribute(new Float32Array(RESERVE.lines * 6), 3).setUsage(THREE.DynamicDrawUsage),
+    ),
+    new THREE.LineBasicMaterial({ color: 0xffe2c4, transparent: true, opacity: 0.4 }),
+  );
+  lines.frustumCulled = false;
+  lines.visible = false;
+  return { canopy, lines };
+}
+
 async function loadGliderModels() {
-  const [wing, pilot] = await Promise.all([loadModel('wing', WING.span, 0.2), loadModel('pilot', PILOT.length, 0.2)]);
+  const [wing, pilot] = await Promise.all([loadModel('wing', WING.span, 0.2), loadModel(PILOT.model, PILOT.length, 0.2)]);
   wing.rotation.y = WING.turn;
   wing.position.y = WING.height;
+  const { mesh, rest } = loosen(wing);
+  const anchors = lineAnchors(wing);
+  const joints = rigPilot(pilot, anchors);
   pilot.rotation.y = PILOT.turn;
   pilot.position.y = -PILOT.drop;
-  const { mesh, rest } = loosen(wing);
-  return { wing, pilot, mesh, rest, anchors: lineAnchors(wing) };
+  pilot.traverse((part) => {
+    if (part.isSkinnedMesh) part.frustumCulled = false; // its outline moves with its bones
+  });
+  return { wing, pilot, mesh, rest, anchors, joints };
 }
 
 // The origin is the pilot; the wing arcs overhead. Forward is -z.
@@ -683,7 +777,7 @@ export function buildGlider() {
 
   let rig = null;
   loadGliderModels()
-    .then(({ wing, pilot, mesh, rest, anchors }) => {
+    .then(({ wing, pilot, mesh, rest, anchors, joints }) => {
       pilot.updateMatrix();
       const pivot = new THREE.Vector3(PILOT.shoulder[0], PILOT.shoulder[1], 0).applyMatrix4(pilot.matrix);
       sling.position.copy(pivot);
@@ -706,46 +800,97 @@ export function buildGlider() {
       sling.add(wing);
       seat.add(pilot);
       group.add(lines);
-      rig = { wing, pilot, mesh, rest, anchors, lines };
+      rig = { wing, pilot, mesh, rest, anchors, joints, lines };
     })
     .catch((error) => console.warn('Glider models did not load; keeping the placeholder.', error));
 
   // The swing is two springs, one fore-and-aft and one side to side, each pulled toward a resting
   // angle and pushed around by the air.
   const sway = { pitch: 0, pitchRate: 0, roll: 0, rollRate: 0, collapse: 0, lastBank: 0, lastLift: 0 };
-  const air = { time: 0, rough: 0, brakeLeft: 0, brakeRight: 0 };
+  const air = { time: 0, rough: 0, brakeLeft: 0, brakeRight: 0, collapse: 0 };
+  // What an emergency does to the gear, each from 0 to 1: the wing crumpling, being gathered in,
+  // and the arm throwing the reserve. Whoever stages the emergency sets these.
+  const gear = { collapse: 0, stow: 0, throwing: 0 };
+  let reserve = null;
   const wingToGroup = new THREE.Matrix4();
   const pilotToGroup = new THREE.Matrix4();
+  const worldToGroup = new THREE.Matrix4();
   const point = new THREE.Vector3();
 
   function redraw() {
-    const { wing, pilot, mesh, rest, anchors, lines } = rig;
+    const { wing, pilot, mesh, rest, anchors, joints, lines } = rig;
+    if (joints) {
+      // Each arm comes down with its brake; the body leans and the head looks toward the turn.
+      const steer = air.brakeRight - air.brakeLeft;
+      turnJoint(joints.leftArm, RIGHT, -air.brakeLeft * MOTION.armPull);
+      turnJoint(joints.rightArm, RIGHT, -air.brakeRight * MOTION.armPull);
+      // Throwing the reserve: the right arm sweeps down and out to the side, then comes back.
+      const sweep = Math.sin(Math.PI * gear.throwing);
+      if (sweep > 0) {
+        turnJoint(joints.rightArm, RIGHT, -0.9 * sweep, true);
+        turnJoint(joints.rightArm, UP, -1.1 * sweep, true);
+      }
+      turnJoint(joints.waist, FORWARD, steer * MOTION.bodyLean);
+      turnJoint(joints.chest, FORWARD, steer * MOTION.bodyLean);
+      turnJoint(joints.head, UP, -steer * MOTION.headTurn);
+    }
     const surface = mesh.geometry.attributes.position;
     for (let i = 0; i < rest.length; i += 3) {
-      surface.array[i + 1] = rest[i + 1] + wingFlex(rest[i], rest[i + 2], air);
+      flexWing(rest[i], rest[i + 1], rest[i + 2], air, point);
+      surface.array[i] = point.x;
+      surface.array[i + 1] = point.y;
+      surface.array[i + 2] = point.z;
     }
     surface.needsUpdate = true;
+    // A stowed wing is gathered in to a bundle at the pilot's shoulders, with its lines out of sight.
+    sling.scale.setScalar(1 - 0.88 * gear.stow);
+    lines.visible = gear.stow < 0.5;
 
-    sling.updateMatrix();
-    seat.updateMatrix();
+    // The bones' positions are needed now, before the frame is drawn, to tie the lines to them.
+    group.updateWorldMatrix(true, true);
+    worldToGroup.copy(group.matrixWorld).invert();
     wingToGroup.multiplyMatrices(sling.matrix, wing.matrix);
     pilotToGroup.multiplyMatrices(seat.matrix, pilot.matrix);
     const ends = lines.geometry.attributes.position;
-    anchors.forEach(({ onPilot, onWing }, i) => {
-      point.copy(onPilot).applyMatrix4(pilotToGroup);
+    anchors.forEach(({ onPilot, onBone, bone, onWing }, i) => {
+      if (bone) point.copy(onBone).applyMatrix4(bone.matrixWorld).applyMatrix4(worldToGroup);
+      else point.copy(onPilot).applyMatrix4(pilotToGroup);
       ends.setXYZ(i * 2, point.x, point.y, point.z);
-      point.copy(onWing);
-      point.y += wingFlex(onWing.x, onWing.z, air);
-      point.applyMatrix4(wingToGroup);
+      flexWing(onWing.x, onWing.y, onWing.z, air, point).applyMatrix4(wingToGroup);
       ends.setXYZ(i * 2 + 1, point.x, point.y, point.z);
     });
     ends.needsUpdate = true;
+
+    if (reserve) {
+      // The reserve's lines run from the point between the pilot's shoulders to its rim.
+      reserve.lines.visible = reserve.canopy.visible;
+      reserve.canopy.updateMatrix();
+      const cords = reserve.lines.geometry.attributes.position;
+      for (let i = 0; i < RESERVE.lines; i++) {
+        const around = (i / RESERVE.lines) * Math.PI * 2;
+        point.set(Math.cos(around) * RESERVE.rim * RESERVE.size, 0.2, Math.sin(around) * RESERVE.rim * RESERVE.size);
+        point.applyMatrix4(reserve.canopy.matrix);
+        cords.setXYZ(i * 2, sling.position.x, sling.position.y, sling.position.z);
+        cords.setXYZ(i * 2 + 1, point.x, point.y, point.z);
+      }
+      cords.needsUpdate = true;
+    }
   }
 
   return {
     group,
     sway,
     air,
+    gear,
+    /** The reserve canopy, once `packReserve` has loaded it. Place and scale it in the glider's frame. */
+    get reserve() {
+      return reserve?.canopy ?? null;
+    },
+    async packReserve() {
+      reserve ??= await loadReserve();
+      group.add(reserve.canopy, reserve.lines);
+      return reserve.canopy;
+    },
     /**
      * Moves the glider for this frame. `pace` is speed above trim in m/s, `turn` is the steering
      * from -1 (left) to 1 (right), `lift` is the rising air in m/s and `liftSide` says which side
@@ -761,6 +906,7 @@ export function buildGlider() {
         sway.lastLift = lift;
 
         air.time = time;
+        air.collapse = gear.collapse;
         air.rough += ((landed ? 0 : 0.3 + Math.min(1, lift / 5) * 0.7) - air.rough) * Math.min(1, step * 2);
         const both = slow ? 0.6 : 0;
         const ease = Math.min(1, step * 6);

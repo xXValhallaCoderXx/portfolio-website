@@ -7,6 +7,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { WORLD, ZONES, STONES, THERMALS, START, centerX, heightAt, surfaceAt, buildTerrain } from './terrain.js';
 import { PROJECT_PROPS, buildSky, buildPlaces, buildScatter, buildThermals, buildGlider } from './scenery.js';
 import { ACHIEVEMENTS, beltFor, readProgress, writeProgress } from './achievements.js';
+import { createLost } from './lost.js';
 import './game.css';
 
 const { clamp } = THREE.MathUtils;
@@ -30,7 +31,12 @@ const FLIGHT = {
   diveSink: 6.5,
 };
 
+// How many times faster the flight runs while boosting or flying itself to a place.
+const HASTE = 3;
+
 const KEYS = {
+  ShiftLeft: 'boost',
+  ShiftRight: 'boost',
   ArrowLeft: 'left',
   KeyA: 'left',
   ArrowRight: 'right',
@@ -76,6 +82,7 @@ const MARKUP = /* html */ `
   <div class="fj-touch">
     <button data-input="left" aria-label="Steer left">◀</button>
     <button data-input="dive" aria-label="Dive">▼</button>
+    <button data-input="boost" aria-label="Speed up">»</button>
     <button data-input="right" aria-label="Steer right">▶</button>
   </div>
   <div class="fj-fade"></div>`;
@@ -87,6 +94,7 @@ const MARKUP = /* html */ `
  * hooks.onPanel({ id, path } | null)  a landing opened or closed its panel
  * hooks.onProgress(progress)          achievements or visited places changed
  * hooks.onExit()                      the visitor asked to leave the flight
+ * hooks.onLost(stage)                 a beat of the missing-page emergency (see lost.js)
  */
 export function createGame(stage, hooks = {}) {
   stage.insertAdjacentHTML('beforeend', MARKUP);
@@ -162,6 +170,9 @@ export function createGame(stage, hooks = {}) {
   composer.addPass(new OutputPass());
   let useBloom = true;
 
+  // The lens widens for a moment in a warp and stays a little wide while boosting.
+  const lens = { base: 60, was: 60, now: 60, warp: 0, rising: false };
+
   // The scene fills its stage: the hero while idle, the whole window in flight.
   const view = { width: 1, height: 1 };
   function resize() {
@@ -172,7 +183,9 @@ export function createGame(stage, hooks = {}) {
     const scale = renderer.getPixelRatio();
     patch.uniforms.uTexel.value.set(1 / (view.width * scale), 1 / (view.height * scale));
     camera.aspect = view.width / view.height;
-    camera.fov = camera.aspect < 1 ? 75 : 60; // a wider lens keeps the wing in frame on a phone held upright
+    lens.base = camera.aspect < 1 ? 75 : 60; // a wider lens keeps the wing in frame on a phone held upright
+    camera.fov = lens.now = lens.base + lens.now - lens.was;
+    lens.was = lens.base;
     camera.updateProjectionMatrix();
   }
   const sizeWatch = new ResizeObserver(resize);
@@ -194,9 +207,11 @@ export function createGame(stage, hooks = {}) {
     lift: 0,
     liftSide: 0,
   };
-  const input = { left: false, right: false, fast: false, slow: false, dive: false };
-  let mode = 'intro'; // intro (idle backdrop) | flying | landed | launching
+  const input = { left: false, right: false, fast: false, slow: false, dive: false, boost: false };
+  let mode = 'intro'; // intro (idle backdrop) | flying | landed | launching | lost (the 404 emergency)
   let mapOpen = false;
+  let auto = null; // the place the glider is flying itself to, if any
+  let hot = null; // the place under the pointer
   let panel = null;
   let climbStart = null;
   let outOfBounds = false;
@@ -238,6 +253,10 @@ export function createGame(stage, hooks = {}) {
   function simulate(dt) {
     airtime += dt;
     let turn = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    if (auto) {
+      const want = Math.atan2(auto.x - g.pos.x, -(auto.z - g.pos.z));
+      turn = clamp(wrapAngle(want - g.yaw) * 2.5, -1, 1);
+    }
     outOfBounds =
       Math.abs(g.pos.x) > WORLD.halfX - 50 || g.pos.z < WORLD.north + 45 || g.pos.z > WORLD.south - 45;
     if (outOfBounds) {
@@ -250,11 +269,11 @@ export function createGame(stage, hooks = {}) {
     g.yaw += g.yawRate * dt;
     g.bank += (g.yawRate * 0.75 - g.bank) * Math.min(1, dt * 4);
 
-    const trim = input.fast ? FLIGHT.fast : input.slow ? FLIGHT.slow : FLIGHT.trim;
+    const trim = auto ? FLIGHT.trim : input.fast ? FLIGHT.fast : input.slow ? FLIGHT.slow : FLIGHT.trim;
     g.speed += (trim.speed - g.speed) * Math.min(1, dt * 1.6);
     g.sink += (trim.sink - g.sink) * Math.min(1, dt * 1.6);
     let sink = g.sink + Math.abs(g.yawRate) * FLIGHT.turnSink;
-    if (input.dive) sink += FLIGHT.diveSink;
+    if (input.dive && !auto) sink += FLIGHT.diveSink;
 
     // Thermals are weak near the ground, so they never stop you landing.
     const agl = g.pos.y - surfaceAt(g.pos.x, g.pos.z);
@@ -274,7 +293,20 @@ export function createGame(stage, hooks = {}) {
     g.lift = lift;
     g.turn = turn;
 
-    g.vy += (lift - sink - g.vy) * Math.min(1, dt * 2.5);
+    let climb = lift - sink;
+    if (auto) {
+      // Flying itself, the glider holds a glide path that ends just above the ring, and stays
+      // clear of any ground between here and there.
+      const dist = Math.hypot(auto.x - g.pos.x, auto.z - g.pos.z);
+      let path = auto.h + 4 + dist / 9;
+      if (dist > auto.r * 2) {
+        for (const ahead of [20, 45, 70]) {
+          path = Math.max(path, surfaceAt(g.pos.x + Math.sin(g.yaw) * ahead, g.pos.z - Math.cos(g.yaw) * ahead) + 22);
+        }
+      }
+      climb = clamp((path - g.pos.y) * 0.9, -6, 6);
+    }
+    g.vy += (climb - g.vy) * Math.min(1, dt * 2.5);
     g.pos.x += Math.sin(g.yaw) * g.speed * dt;
     g.pos.z -= Math.cos(g.yaw) * g.speed * dt;
     g.pos.y += g.vy * dt;
@@ -292,7 +324,7 @@ export function createGame(stage, hooks = {}) {
       if (Math.hypot(g.pos.x - stone.x, g.pos.z - stone.z) < 26 && g.pos.y - stone.y < 80) {
         progress.stones.push(i);
         persist();
-        toast(`<small>experience.log</small><b>${stone.years}</b><span>${stone.role}</span>`);
+        toast(`<small>experience.log · ${stone.years}</small><b>${stone.role}</b><span>${stone.company}</span>`);
         if (progress.stones.length === STONES.length) unlock('runes');
       }
     }
@@ -305,6 +337,7 @@ export function createGame(stage, hooks = {}) {
 
   function land(zone) {
     mode = 'landed';
+    setAuto(null);
     g.vy = g.yawRate = g.speed = 0;
     g.pos.y = surfaceAt(g.pos.x, g.pos.z) + 1.4;
     if (zone) {
@@ -342,6 +375,19 @@ export function createGame(stage, hooks = {}) {
     mode = 'flying';
   }
 
+  // Sends the glider to a place by itself, at boosted speed. Steering takes control back.
+  function setAuto(zone) {
+    auto = zone;
+    for (const { zone: each, el } of zoneLabels) el.classList.toggle('target', each === auto);
+  }
+
+  function autoFly(zone) {
+    if (!zone || (mode !== 'flying' && mode !== 'landed')) return;
+    closeMap();
+    setAuto(zone);
+    if (mode === 'landed') takeOff();
+  }
+
   function takeOff() {
     if (mode !== 'landed') return;
     mode = 'launching';
@@ -357,6 +403,7 @@ export function createGame(stage, hooks = {}) {
   function teleportTo(zone) {
     closePanel();
     closeMap();
+    setAuto(null);
     mode = 'launching';
     fadeThen(() => {
       // Arrive on final approach from the water: left alone, the glide ends inside the ring.
@@ -367,8 +414,52 @@ export function createGame(stage, hooks = {}) {
 
   function respawn() {
     if (mode === 'intro') return;
+    setAuto(null);
     mode = 'launching';
     fadeThen(() => launchFrom(START.x, START.y, START.z, START.yaw));
+  }
+
+  // ---------------------------------------------------------------- the missing page
+
+  const lostScene = createLost({
+    scene,
+    camera,
+    g,
+    glider,
+    view,
+    harbour: places.harbour,
+    fade: fadeThen,
+    onStage(name) {
+      if (name === 'tree') unlock('reserve');
+      if (name === 'aboard') unlock('aegir');
+      // Once the story has ended there is nothing left for the instruments to say.
+      lostEnded = name === 'tree' || name === 'aboard';
+      $('.fj-hud dl').hidden = lostEnded;
+      hooks.onLost?.(name);
+    },
+  });
+  let lostEnded = false;
+
+  /** Plays the emergency a missing page turns into, from the top. */
+  function lost() {
+    if (mode !== 'intro') idle();
+    mode = 'lost';
+    $('.fj-hud').hidden = false;
+    stage.classList.add('playing', 'lost');
+    lostScene.begin();
+  }
+
+  function throwReserve() {
+    if (mode !== 'lost') return;
+    startAudio();
+    lostScene.throwReserve();
+  }
+
+  /** Cuts the emergency short: back to the idle backdrop, with the page left to show its links. */
+  function skipLost() {
+    if (mode !== 'lost') return;
+    idle();
+    hooks.onLost?.('skipped');
   }
 
   // ---------------------------------------------------------------- camera
@@ -399,6 +490,7 @@ export function createGame(stage, hooks = {}) {
       camera.lookAt(...spy.at);
       return;
     }
+    if (mode === 'lost') return lostScene.aim(dt);
     if (mode === 'intro') {
       // As a backdrop the camera circles the glider. On a wide screen it aims a little to the
       // glider's left, which puts the glider right of centre and clear of the headline.
@@ -419,20 +511,25 @@ export function createGame(stage, hooks = {}) {
 
   const labels = [];
 
-  function addLabel(x, y, z, range, html) {
-    const el = document.createElement('div');
+  function addLabel(x, y, z, range, html, tag = 'div') {
+    const el = document.createElement(tag);
     el.className = 'fj-label';
     el.innerHTML = html;
     $('.fj-labels').append(el);
     labels.push({ el, at: new THREE.Vector3(x, y, z), range });
     return el;
   }
-  const zoneLabels = ZONES.map((zone) => ({
-    zone,
-    el: addLabel(zone.x, zone.h + 34, zone.z, 600, `<b>${zone.label}</b><span></span>`),
-  }));
+  // A place's label is a button: clicking it, or its pillar, sends the glider there.
+  const zoneLabels = ZONES.map((zone) => {
+    const el = addLabel(zone.x, zone.h + 34, zone.z, 600, `<b>${zone.label}</b><span></span><i></i>`, 'button');
+    el.classList.add('fj-place');
+    on(el, 'click', () => autoFly(zone));
+    on(el, 'pointerenter', () => setHot(zone));
+    on(el, 'pointerleave', () => setHot(null));
+    return { zone, el };
+  });
   for (const stone of STONES) {
-    addLabel(stone.x, stone.y + stone.height + 4, stone.z, 170, `<b>${stone.years}</b><span>${stone.role}</span>`);
+    addLabel(stone.x, stone.y + stone.height + 4, stone.z, 170, `<b>${stone.role}</b><span>${stone.company} · ${stone.years}</span>`);
   }
   for (const prop of PROJECT_PROPS) addLabel(prop.x, prop.y, prop.z, 120, `<b>${prop.label}</b>`);
 
@@ -450,8 +547,45 @@ export function createGame(stage, hooks = {}) {
     }
   }
 
+  function setHot(zone) {
+    if (zone === hot) return;
+    hot = zone;
+    places.setHot(hot?.id ?? null);
+    $('.fj-scene').style.cursor = hot ? 'pointer' : '';
+    for (const { zone: each, el } of zoneLabels) el.classList.toggle('hot', each === hot);
+  }
+
+  // The place whose pillar of light passes under a point on screen, if any.
+  const foot = new THREE.Vector3();
+  const head = new THREE.Vector3();
+  function pillarAt(clientX, clientY) {
+    const box = stage.getBoundingClientRect();
+    const px = clientX - box.left;
+    const py = clientY - box.top;
+    let best = null;
+    let bestGap = 30;
+    for (const zone of ZONES) {
+      foot.set(zone.x, zone.h, zone.z).project(camera);
+      head.set(zone.x, zone.h + 320, zone.z).project(camera);
+      if (foot.z > 1 || head.z > 1) continue;
+      const ax = (foot.x * 0.5 + 0.5) * view.width;
+      const ay = (-foot.y * 0.5 + 0.5) * view.height;
+      const bx = (head.x * 0.5 + 0.5) * view.width;
+      const by = (-head.y * 0.5 + 0.5) * view.height;
+      const along = clamp(((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / ((bx - ax) ** 2 + (by - ay) ** 2 || 1), 0, 1);
+      const gap = Math.hypot(px - (ax + (bx - ax) * along), py - (ay + (by - ay) * along));
+      if (gap < bestGap) [best, bestGap] = [zone, gap];
+    }
+    return best;
+  }
+
+  on($('.fj-scene'), 'pointermove', (event) => setHot(mode === 'flying' && !mapOpen ? pillarAt(event.clientX, event.clientY) : null));
+  on($('.fj-scene'), 'pointerleave', () => setHot(null));
+  on($('.fj-scene'), 'click', (event) => mode === 'flying' && !mapOpen && autoFly(pillarAt(event.clientX, event.clientY)));
+
   function hintText() {
     if (mode !== 'flying' || mapOpen) return '';
+    if (auto) return `flying itself to ${auto.label} · steer to take over`;
     if (outOfBounds) return 'the fog turns you back toward the fjord';
     const agl = g.pos.y - surfaceAt(g.pos.x, g.pos.z);
     const near = nearestZone(false);
@@ -460,16 +594,25 @@ export function createGame(stage, hooks = {}) {
       return unvisited && agl > 28 ? 'hold space to dive · you land inside the ring' : '';
     }
     if (agl < 45 && g.vy < 0) return 'low — steer for the amber sparks to climb';
-    if (airtime < 14) return 'lit pillars are places to land · amber sparks are rising air';
+    if (airtime < 9) return 'lit pillars are places to land · amber sparks are rising air';
+    if (airtime < 20) return 'click a pillar to fly there by itself · hold shift to speed up';
     return '';
   }
 
   function updateHud() {
-    hud('alt').textContent = `${Math.round(g.pos.y)} m`;
+    hud('alt').textContent = `${Math.max(0, Math.round(g.pos.y))} m`;
     const bars = Math.min(4, Math.round(Math.abs(g.vy) / 1.5));
     hud('vario').textContent = `${g.vy >= 0 ? '+' : '−'}${Math.abs(g.vy).toFixed(1)} m/s ${(g.vy >= 0 ? '▲' : '▼').repeat(bars)}`;
     hud('vario').classList.toggle('up', g.vy > 0.2);
-    hud('speed').textContent = `${Math.round(g.speed * 3.6)} km/h${input.dive && mode === 'flying' ? ' · dive' : ''}`;
+    if (mode === 'lost') {
+      hud('speed').textContent = `${Math.round(Math.abs(g.vy) * 3.6)} km/h down`;
+      hud('next').textContent = 'nowhere · 404';
+      hud('belt').textContent = `${beltFor(progress)} · ${progress.unlocked.length}/${ACHIEVEMENTS.length}`;
+      $('.fj-hint').textContent = '';
+      return;
+    }
+    const pace = auto ? ` · auto ×${HASTE}` : input.boost ? ` · ×${HASTE}` : input.dive ? ' · dive' : '';
+    hud('speed').textContent = `${Math.round(g.speed * 3.6)} km/h${mode === 'flying' ? pace : ''}`;
     const next = nearestZone(true) ?? nearestZone(false);
     const bearing = wrapAngle(Math.atan2(next.zone.x - g.pos.x, -(next.zone.z - g.pos.z)) - g.yaw);
     const arrow = ARROWS[((Math.round(bearing / (Math.PI / 4)) % 8) + 8) % 8];
@@ -477,7 +620,8 @@ export function createGame(stage, hooks = {}) {
     hud('belt').textContent = `${beltFor(progress)} · ${progress.unlocked.length}/${ACHIEVEMENTS.length}`;
     for (const { zone, el } of zoneLabels) {
       const dist = Math.round(Math.hypot(zone.x - g.pos.x, zone.z - g.pos.z));
-      el.lastChild.textContent = `${zone.place} · ${dist} m${progress.visited.includes(zone.id) ? ' · visited' : ''}`;
+      el.children[1].textContent = `${zone.place} · ${dist} m${progress.visited.includes(zone.id) ? ' · visited' : ''}`;
+      el.children[2].textContent = zone === auto ? 'flying there' : '▶ fly here';
     }
     $('.fj-hint').textContent = hintText();
     if (mapOpen) drawMap();
@@ -492,7 +636,9 @@ export function createGame(stage, hooks = {}) {
   }
 
   function openPanel(id, path) {
-    panel = { id, path };
+    // `next` is the place still to see, offered as a one-click flight from the panel.
+    const next = ZONES.find((zone) => zone.id !== id && !progress.visited.includes(zone.id));
+    panel = { id, path, next: next ? { id: next.id, label: next.label } : null };
     hooks.onPanel?.(panel);
     $('.fj-hud dl').hidden = true;
   }
@@ -645,7 +791,8 @@ export function createGame(stage, hooks = {}) {
     if (!audio) return;
     const now = audio.ctx.currentTime;
     const flying = mode === 'flying' && !mapOpen;
-    audio.wind.gain.setTargetAtTime(flying ? 0.02 + g.speed * 0.004 : 0.01, now, 0.3);
+    const rush = mode === 'lost' ? Math.min(0.14, 0.01 + Math.abs(g.vy) * 0.005) : 0.01;
+    audio.wind.gain.setTargetAtTime(flying ? 0.02 + g.speed * 0.004 : rush, now, 0.3);
     if (flying && g.vy > 0.4 && now >= audio.nextBeep) {
       const gap = Math.max(0.11, 0.42 - g.vy * 0.05);
       audio.osc.frequency.setValueAtTime(620 + g.vy * 85, now);
@@ -672,6 +819,7 @@ export function createGame(stage, hooks = {}) {
   /** Hands the glider to the visitor. With a place id, starts on final approach to that place. */
   function fly(zoneId) {
     const zone = ZONES.find((candidate) => candidate.id === zoneId);
+    if (mode === 'lost') idle();
     if (mode === 'intro') {
       $('.fj-hud').hidden = false;
       stage.classList.add('playing');
@@ -683,18 +831,26 @@ export function createGame(stage, hooks = {}) {
     if (zone) teleportTo(zone);
   }
 
+  /** From a landing, flies itself to the next place not yet visited. */
+  function flyToNext() {
+    autoFly(ZONES.find((zone) => zone.id === panel?.next?.id));
+  }
+
   /** Takes control back: the glider returns to circling as a backdrop. */
   function idle() {
     if (mode === 'intro') return;
     closeMap();
     closePanel();
+    setAuto(null);
+    setHot(null);
+    lostScene.reset();
     mode = 'intro';
     g.pos.set(START.x, START.y, START.z);
     g.yaw = START.yaw;
     g.yawRate = g.bank = g.vy = 0;
     for (const key of Object.keys(input)) input[key] = false;
     $('.fj-hud').hidden = true;
-    stage.classList.remove('playing');
+    stage.classList.remove('playing', 'lost');
     audio?.ctx.suspend();
     if (document.fullscreenElement) document.exitFullscreen();
   }
@@ -703,6 +859,15 @@ export function createGame(stage, hooks = {}) {
 
   on(window, 'keydown', (event) => {
     if (mode === 'intro' || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (mode === 'lost') {
+      // In the emergency there is one thing to do, and several keys that do it.
+      if (event.code === 'KeyR' || event.code === 'Space' || event.code === 'Enter') {
+        event.preventDefault();
+        if (!event.repeat) throwReserve();
+      } else if (event.code === 'Escape') lostEnded ? hooks.onExit?.() : skipLost();
+      else if (event.code === 'KeyL' && !event.repeat) toggleSound();
+      return;
+    }
     if (event.code in KEYS) {
       event.preventDefault();
       if (event.code === 'Space') {
@@ -711,6 +876,8 @@ export function createGame(stage, hooks = {}) {
         if (mode === 'landed') return takeOff();
       }
       input[KEYS[event.code]] = true;
+      // Steering by hand takes the glider back from flying itself.
+      if (KEYS[event.code] === 'left' || KEYS[event.code] === 'right') setAuto(null);
       return;
     }
     if (event.repeat) return;
@@ -720,6 +887,7 @@ export function createGame(stage, hooks = {}) {
     else if (event.code === 'KeyR') respawn();
     else if (event.code === 'Escape') mapOpen ? closeMap() : hooks.onExit?.();
     else if (event.code === 'Enter' && mode === 'landed') takeOff();
+    else if (event.code === 'KeyN' && mode === 'landed') flyToNext();
   });
 
   on(window, 'keyup', (event) => {
@@ -737,6 +905,7 @@ export function createGame(stage, hooks = {}) {
     const set = (down) => (event) => {
       event.preventDefault();
       input[button.dataset.input] = down;
+      if (down && button.dataset.input !== 'boost' && button.dataset.input !== 'dive') setAuto(null);
     };
     on(button, 'pointerdown', set(true));
     on(button, 'pointerup', set(false));
@@ -772,12 +941,24 @@ export function createGame(stage, hooks = {}) {
     // Scrolled out of view as a backdrop, there is nothing to draw.
     if (!visible && mode === 'intro') return;
 
-    // Fixed steps keep the flight model identical on slow and fast machines.
-    backlog += elapsed;
+    if (mode === 'lost') lostScene.update(elapsed, time + elapsed);
+
+    // Fixed steps keep the flight model identical on slow and fast machines. Boosting, or flying
+    // itself to a place, runs the flight several times faster than the clock.
+    const haste = mode === 'flying' && !mapOpen && (input.boost || auto) ? HASTE : 1;
+    time += elapsed;
+    backlog += elapsed * haste;
     while (backlog >= STEP) {
       backlog -= STEP;
-      time += STEP;
       if (mode === 'flying' && !mapOpen) simulate(STEP);
+    }
+
+    lens.warp = lens.rising ? Math.min(1, lens.warp + elapsed / 0.35) : Math.max(0, lens.warp - elapsed / 0.8);
+    const wide = lens.base + 44 * lens.warp * lens.warp + (haste > 1 ? 12 : 0);
+    lens.now += (wide - lens.now) * Math.min(1, elapsed * 10);
+    if (Math.abs(camera.fov - lens.now) > 0.02) {
+      camera.fov = lens.now;
+      camera.updateProjectionMatrix();
     }
 
     if (mode === 'intro') g.pos.y = START.y + Math.sin(time * 0.8) * 1.2;
@@ -843,8 +1024,20 @@ export function createGame(stage, hooks = {}) {
   return {
     fly,
     idle,
+    lost,
+    throwReserve,
+    skipLost,
     takeOff,
+    flyToNext,
     openMap,
+    /**
+     * The lens half of the page's warp: `true` widens it as the warp builds, `false` snaps it wide
+     * and lets it settle, as if dropping out of the warp.
+     */
+    warp(rising) {
+      lens.rising = rising;
+      if (!rising) lens.warp = 1;
+    },
     /** The page tells the game whether its stage is on screen, so an unseen backdrop costs nothing. */
     setVisible: (seen) => (visible = seen),
     dispose() {

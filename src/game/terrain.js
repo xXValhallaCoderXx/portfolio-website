@@ -92,7 +92,8 @@ export const STONES = [...EXPERIENCE].reverse().map((entry, i, all) => {
   const newest = i === all.length - 1;
   const z = ridge.z + (newest ? 0 : 32 * (all.length - 1 - i));
   const x = shore(z, 1, newest ? 92 : 34 + 6 * i);
-  return { years: entry.years, role: entry.role, height: 9 + 2 * i + (newest ? 1 : 0), x, z, y: surfaceAt(x, z) };
+  const height = 9 + 2 * i + (newest ? 1 : 0);
+  return { years: entry.years, role: entry.role, company: entry.company, height, x, z, y: surfaceAt(x, z) };
 });
 
 const forge = ZONES.find((zone) => zone.id === 'projects');

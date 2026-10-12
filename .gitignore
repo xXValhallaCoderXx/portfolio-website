@@ -1,2 +1,15 @@
 node_modules/
 dist/
+
+# Local model sources; deploy the optimized assets in public/models/ instead.
+/concepts/
+/models-raw/
+
+# Firebase's local cache and debug logs.
+.firebase/
+firebase-debug*.log
+ui-debug*.log
+firepit-log.txt
+
+# Personal documents used as source material; this repository is public.
+*.pdf

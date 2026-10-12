@@ -9,9 +9,10 @@ export const ACHIEVEMENTS = [
   { id: 'runes', name: 'Rune reader', text: 'Fly past every rune stone.' },
   { id: 'valkyrie', name: 'Valkyrie', text: 'Climb above 330 m.' },
   { id: 'tour', name: 'Grand tour', text: 'Land at all four places.' },
+  { id: 'reserve', name: 'Reserve ride', text: 'Throw your reserve when a page goes missing.' },
 ];
 
-// One belt per achievement earned. Swap in your own art's grading order.
+// One belt per achievement earned, topping out at black. Swap in your own art's grading order.
 export const BELTS = ['white', 'yellow', 'orange', 'green', 'blue', 'purple', 'brown', 'brown · 1st kyu', 'black · 1st dan'];
 
 export const beltFor = (progress) => BELTS[Math.min(progress.unlocked.length, BELTS.length - 1)];
