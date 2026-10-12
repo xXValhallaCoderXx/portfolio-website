@@ -229,7 +229,7 @@ export default function Fjord({ flying, armed, target, lost, warping, onArm, onE
             </button>{' '}
             <button onClick={() => onExit(null)}>[ back to the page ]</button>
           </p>
-          <p className="dim">← → steer · space dive · shift speed up · click a pillar to fly there · m map</p>
+          <p className="dim">← → steer · space dive · shift speed up · click a pillar to fly there · m map · h controls</p>
         </div>
       )}
       {flying && panel && (

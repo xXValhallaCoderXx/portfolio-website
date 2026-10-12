@@ -28,7 +28,7 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
 - `[ ./fly.sh ]`, the `fly.sh` tab or a section's "fly to" link starts the flight. It fills the
   window, locks page scrolling and moves the address to `/fly`.
 - The swap in either direction plays behind a short warp of star streaks.
-- In flight, Shift speeds time up. Clicking a place's pillar or label makes the glider fly itself
+- In flight, `[ h: controls ]` at the top right lists every key. Shift speeds time up. Clicking a place's pillar or label makes the glider fly itself
   there, and steering takes control back.
 - Landing at a place opens the same section the page shows. "Open on page" leaves the flight at
   that section; Escape, the exit button and the browser's back button leave it too.

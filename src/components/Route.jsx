@@ -81,12 +81,22 @@ export default function Route({ onFly, hud }) {
     const glider = { x: 0, y: 0, lean: 0, vx: 0, swing: 0, spin: 0, placed: false };
 
     const trace = () => {
+      // Put away behind a project's own page there is nothing to measure.
+      if (!el.offsetWidth) return;
+      // Boxes are reported as drawn, and the warp scales the page while it plays. Dividing that
+      // scale back out gives positions as laid out, which is what the path is drawn in.
       const box = el.getBoundingClientRect();
-      const margin = el.querySelector('.margin').getBoundingClientRect();
+      const scaleX = box.width / el.offsetWidth;
+      const scaleY = box.height / el.offsetHeight;
+      const edge = el.querySelector('.margin').getBoundingClientRect();
+      const margin = { left: box.left + (edge.left - box.left) / scaleX, width: edge.width / scaleX };
       const nodes = [...el.querySelectorAll('[data-node]')].map((node) => {
         const at = node.getBoundingClientRect();
-        return { x: at.left + at.width / 2 - box.left, y: at.top + at.height / 2 - box.top };
+        return { x: (at.left + at.width / 2 - box.left) / scaleX, y: (at.top + at.height / 2 - box.top) / scaleY };
       });
+      // How far down the page the route starts, again as laid out.
+      let top = 0;
+      for (let at = el; at; at = at.offsetParent) top += at.offsetTop;
       // Long stretches between waypoints get extra bends, alternating sides of the margin.
       const points = [nodes[0]];
       for (let i = 1; i < nodes.length; i += 1) {
@@ -106,7 +116,7 @@ export default function Route({ onFly, hud }) {
       const length = line.current.getTotalLength();
       const samples = [];
       for (let at = 0; at <= length; at += 6) samples.push(line.current.getPointAtLength(at).y);
-      course = { length, samples, top: box.top + scrollY, stops: nodes.slice(1, -1).map((node) => node.y) };
+      course = { length, samples, top, stops: nodes.slice(1, -1).map((node) => node.y) };
       flown.current.style.strokeDasharray = length;
       // The path has moved, so the glider is set down on it again rather than flown across.
       glider.placed = false;

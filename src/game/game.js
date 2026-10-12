@@ -62,10 +62,33 @@ const MARKUP = /* html */ `
       <dt>belt</dt><dd data-hud="belt"></dd>
     </dl>
     <nav>
+      <button data-do="keys" aria-expanded="false">[ h: controls ]</button>
       <button data-do="map">[ m: map ]</button>
       <button data-do="sound">[ sound: on ]</button>
       <button data-do="fullscreen">[ f: fullscreen ]</button>
       <button data-do="exit">[ esc: exit ]</button>
+      <aside class="fj-keys" hidden>
+        <p>controls</p>
+        <dl>
+          <dt>← →</dt><dd>steer <span>or A D</span></dd>
+          <dt>↑ ↓</dt><dd>faster · slower <span>or W S</span></dd>
+          <dt>space</dt><dd>hold to dive · take off again once landed</dd>
+          <dt>shift</dt><dd>hold to speed time up</dd>
+          <dt>click</dt><dd>a lit pillar or its label, to fly there by itself</dd>
+          <dt>n</dt><dd>once landed, fly to the next place</dd>
+          <dt>m</dt><dd>map: pick a place to fly to</dd>
+          <dt>r</dt><dd>start again from the launch</dd>
+          <dt>l · f</dt><dd>sound · fullscreen</dd>
+          <dt>esc</dt><dd>back to the page</dd>
+        </dl>
+        <ul>
+          <li>◀ ▶ steer</li>
+          <li>▼ hold to dive</li>
+          <li>» hold to speed time up</li>
+          <li>tap a lit pillar or its label to fly there by itself</li>
+        </ul>
+        <p class="fj-keys-goal">land inside a lit ring to read that part of the page</p>
+      </aside>
     </nav>
   </div>
   <div class="fj-toasts"></div>
@@ -210,6 +233,7 @@ export function createGame(stage, hooks = {}) {
   const input = { left: false, right: false, fast: false, slow: false, dive: false, boost: false };
   let mode = 'intro'; // intro (idle backdrop) | flying | landed | launching | lost (the 404 emergency)
   let mapOpen = false;
+  let keysOpen = false;
   let auto = null; // the place the glider is flying itself to, if any
   let hot = null; // the place under the pointer
   let panel = null;
@@ -802,6 +826,14 @@ export function createGame(stage, hooks = {}) {
     mapCtx.restore();
   }
 
+  // The list of controls drops down under its button and stays until it is put away. It covers
+  // nothing that matters and stops nothing: the flight goes on underneath.
+  function showKeys(open = !keysOpen) {
+    keysOpen = open;
+    $('.fj-keys').hidden = !open;
+    $('[data-do="keys"]').setAttribute('aria-expanded', open);
+  }
+
   // The map covers the landing panel while it is open, and hands it back when it closes.
   function openMap() {
     if (mode === 'intro') return;
@@ -925,6 +957,7 @@ export function createGame(stage, hooks = {}) {
   function idle() {
     if (mode === 'intro') return;
     closeMap();
+    showKeys(false);
     closePanel();
     setAuto(null);
     setHot(null);
@@ -967,10 +1000,11 @@ export function createGame(stage, hooks = {}) {
     }
     if (event.repeat) return;
     if (event.code === 'KeyM') mapOpen ? closeMap() : openMap();
+    else if (event.code === 'KeyH') showKeys();
     else if (event.code === 'KeyL') toggleSound();
     else if (event.code === 'KeyF') toggleFullscreen();
     else if (event.code === 'KeyR') respawn();
-    else if (event.code === 'Escape') mapOpen ? closeMap() : hooks.onExit?.();
+    else if (event.code === 'Escape') mapOpen ? closeMap() : keysOpen ? showKeys(false) : hooks.onExit?.();
     else if (event.code === 'Enter' && mode === 'landed') takeOff();
     else if (event.code === 'KeyN' && mode === 'landed') flyToNext();
   });
@@ -1000,6 +1034,7 @@ export function createGame(stage, hooks = {}) {
 
   const actions = {
     map: () => (mapOpen ? closeMap() : openMap()),
+    keys: () => showKeys(),
     sound: toggleSound,
     fullscreen: toggleFullscreen,
     exit: () => hooks.onExit?.(),
