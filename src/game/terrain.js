@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { EXPERIENCE, SECTIONS } from '../content.js';
 
 // World units are roughly metres. North is -z, east is +x, the fjord surface is y = 0.
 export const WORLD = { halfX: 320, north: -450, south: 450, ceiling: 420 };
@@ -57,16 +58,18 @@ function rawHeight(x, z) {
   return mix(h, -9, smoothstep(-425, -449, z));
 }
 
-// Places to land. `side` picks the shore (+1 east, -1 west, 0 mid-fjord), `off` is metres inland.
+// Places to land, one per page section. `side` picks the shore (+1 east, -1 west, 0 mid-fjord) and
+// `off` is metres inland. Each takes its label and name from the section with the same id.
 export const ZONES = [
-  { id: 'about', label: 'about.md', place: 'the hall', z: 170, side: 1, off: 44, r: 26 },
-  { id: 'projects', label: 'projects/', place: 'the forge', z: -10, side: -1, off: 46, r: 26 },
-  { id: 'experience', label: 'experience.log', place: 'rune ridge', z: -190, side: 1, off: 80, r: 24 },
-  { id: 'contact', label: 'contact.sh', place: 'the beacon', z: -300, side: 0, off: 0, r: 22, h: 7 },
+  { id: 'about', z: 170, side: 1, off: 44, r: 26 },
+  { id: 'projects', z: -10, side: -1, off: 46, r: 26 },
+  { id: 'experience', z: -190, side: 1, off: 80, r: 24 },
+  { id: 'contact', z: -300, side: 0, off: 0, r: 22, h: 7 },
 ].map((zone) => {
+  const section = SECTIONS.find((candidate) => candidate.id === zone.id);
   const x = shore(zone.z, zone.side, zone.off);
   const h = zone.h ?? Math.min(70, Math.max(7, rawHeight(x, zone.z)));
-  return { ...zone, x, h };
+  return { ...zone, label: section.file, place: section.place, x, h };
 });
 
 // Terrain height with a flat plateau cut for each landing zone.
@@ -83,17 +86,13 @@ export const surfaceAt = (x, z) => Math.max(0, heightAt(x, z));
 
 const ridge = ZONES.find((zone) => zone.id === 'experience');
 
-// The career timeline: flying north along the east shore you pass the stones in order, and the
-// newest stands on the plateau above them.
-export const STONES = [
-  { years: '2012 – 2014', role: 'Junior Engineer', south: 96, off: 34, height: 9 },
-  { years: '2014 – 2017', role: 'Software Engineer', south: 64, off: 40, height: 11 },
-  { years: '2017 – 2021', role: 'Senior Engineer', south: 32, off: 46, height: 13 },
-  { years: '2021 – now', role: 'Staff Engineer', south: 0, off: 92, height: 16 },
-].map((stone) => {
-  const z = ridge.z + stone.south;
-  const x = shore(z, 1, stone.off);
-  return { ...stone, x, z, y: surfaceAt(x, z) };
+// The career timeline, one stone per role: flying north along the east shore you pass them oldest
+// first, each a little taller, and the newest stands on the plateau above.
+export const STONES = [...EXPERIENCE].reverse().map((entry, i, all) => {
+  const newest = i === all.length - 1;
+  const z = ridge.z + (newest ? 0 : 32 * (all.length - 1 - i));
+  const x = shore(z, 1, newest ? 92 : 34 + 6 * i);
+  return { years: entry.years, role: entry.role, height: 9 + 2 * i + (newest ? 1 : 0), x, z, y: surfaceAt(x, z) };
 });
 
 const forge = ZONES.find((zone) => zone.id === 'projects');

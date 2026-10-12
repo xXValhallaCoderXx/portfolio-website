@@ -1,5 +1,5 @@
-// Shrinks the raw generator exports in ../assets into web-ready files in ../models.
-// Run `npm run models` from this folder after adding or replacing a file in ../assets.
+// Shrinks the raw generator exports in models-raw/ into web-ready files in public/models/.
+// Run `npm run models` after adding or replacing a file in models-raw/.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,8 +9,8 @@ import { dedup, meshopt, prune, simplify, weld } from '@gltf-transform/functions
 import { MeshoptDecoder, MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const source = path.join(here, '../assets');
-const target = path.join(here, '../models');
+const source = path.join(here, '../models-raw');
+const target = path.join(here, '../public/models');
 
 // How far a simplified surface may drift from the original, as a fraction of the model's size.
 // Larger values cut more triangles but start tearing the texture seams.

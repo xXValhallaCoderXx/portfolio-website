@@ -1,0 +1,215 @@
+/* Everything the game draws over its own canvas. Colours and buttons come from the page's styles. */
+
+.fj-scene {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---- hud */
+
+.fj-hud dl {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 0 14px;
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--rule);
+  background: rgba(6, 10, 19, 0.6);
+}
+
+.fj-hud dt {
+  color: var(--cyan);
+}
+
+.fj-hud dd {
+  margin: 0;
+  min-width: 17ch;
+}
+
+.fj-hud dd.up {
+  color: var(--ember);
+}
+
+.fj-hud nav {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 50%;
+}
+
+.fj-hint {
+  position: absolute;
+  right: 0;
+  bottom: 22px;
+  left: 0;
+  color: var(--dim);
+  text-align: center;
+  text-shadow: 0 0 6px var(--bg);
+  pointer-events: none;
+}
+
+.fj-labels {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.fj-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 2px 8px;
+  border-left: 2px solid var(--cyan);
+  background: rgba(6, 10, 19, 0.65);
+  font-size: 11px;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.fj-label b {
+  display: block;
+  color: var(--cyan);
+  font-size: 12px;
+}
+
+/* ---- toasts */
+
+.fj-toasts {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(360px, 80vw);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.fj-toast {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 14px;
+  border: 1px solid var(--cyan);
+  background: var(--panel);
+  animation: fj-toast 5.2s ease both;
+}
+
+.fj-toast small {
+  color: var(--dim);
+}
+
+.fj-toast b {
+  color: var(--cyan);
+  font-size: 15px;
+}
+
+@keyframes fj-toast {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  6%,
+  88% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---- map */
+
+.fj-map {
+  width: auto;
+}
+
+.fj-map-canvas {
+  display: block;
+  width: auto;
+  height: min(420px, 50vh);
+  margin: 14px auto 10px;
+  border: 1px solid var(--rule);
+  cursor: crosshair;
+}
+
+.fj-map-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 0 16px 14px;
+}
+
+/* ---- touch */
+
+.fj-touch {
+  position: absolute;
+  right: 0;
+  bottom: 56px;
+  left: 0;
+  display: none;
+  justify-content: space-between;
+  padding: 0 18px;
+  pointer-events: none;
+}
+
+.fj-touch button {
+  width: 64px;
+  height: 64px;
+  font-size: 22px;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+
+@media (pointer: coarse) {
+  .playing .fj-touch {
+    display: flex;
+  }
+}
+
+@media (max-width: 560px) {
+  .fj-hud nav {
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  /* Phones handle true fullscreen inconsistently, and the flight already fills the screen. */
+  .fj-hud [data-do='fullscreen'] {
+    display: none;
+  }
+
+  .fj-map-canvas {
+    height: min(420px, 40vh);
+  }
+
+  .fj-map-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fj-fade {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+.fj-fade.on {
+  opacity: 1;
+}

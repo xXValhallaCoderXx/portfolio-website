@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { PROJECTS } from '../content.js';
 import { ZONES, STONES, THERMALS, TREES, BOULDERS, heightAt } from './terrain.js';
 
 const FILL = 0x0a1a2c;
@@ -9,13 +10,13 @@ const CYAN = 0x5ee6ff;
 const EMBER = 0xff9a3c;
 const WARM = 0xffb066;
 
-// Generated models, shrunk into models/ by tools/optimize-models.mjs. Each file is 1 unit along
-// its longest side with its base at the origin, so `size` is that side in metres.
+// Generated models, shrunk into public/models/ by tools/optimize-models.mjs. Each file is 1 unit
+// along its longest side with its base at the origin, so `size` is that side in metres.
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 const files = new Map();
 
 function loadModel(name, size, selfLight = 0.07) {
-  if (!files.has(name)) files.set(name, loader.loadAsync(`models/${name}.glb`));
+  if (!files.has(name)) files.set(name, loader.loadAsync(`${import.meta.env.BASE_URL}models/${name}.glb`));
   return files.get(name).then((file) => {
     const model = file.scene.clone();
     model.scale.setScalar(size);
@@ -187,17 +188,17 @@ function runestone(height) {
 }
 
 // What stands at each place. `at` is [metres uphill of the ring's centre, metres north of it],
-// `faces` is where the front points, `light` is a warm lamp at [right, up, forward, strength]
-// from the model's base, and `label` names the project a prop stands for.
+// `faces` is where the front points, and `light` is a warm lamp at [right, up, forward, strength]
+// from the model's base. A model named as a project's `prop` in content.js is labelled with it.
 const FURNITURE = {
   about: [{ model: 'hall', size: 26, at: [12, 0], faces: 'south', light: [0, 2.6, 15, 90], standIn: hall }],
   projects: [
     { model: 'forge', size: 11, at: [12, 0], faces: 'water', light: [0, 2.4, -1, 140], standIn: forgeHouse },
     // The props are monument-sized on purpose, so they read from the air.
-    { model: 'hound', size: 6.5, at: [12, 15], faces: 'water', label: 'sentiment-hound' },
-    { model: 'shield-rack', size: 7.5, tall: 4.5, at: [12, -15], faces: 'water', label: 'hird-orchestrator' },
-    { model: 'kettlebell', size: 4, at: [-2, 19], faces: 'water', label: 'sheetless.app' },
-    { model: 'wing-bag', size: 4.2, at: [-2, -19], faces: 'water', label: 'flyte-paragliding.app' },
+    { model: 'hound', size: 6.5, at: [12, 15], faces: 'water' },
+    { model: 'shield-rack', size: 7.5, tall: 4.5, at: [12, -15], faces: 'water' },
+    { model: 'kettlebell', size: 4, at: [-2, 19], faces: 'water' },
+    { model: 'wing-bag', size: 4.2, at: [-2, -19], faces: 'water' },
   ],
   contact: [{ model: 'beacon', size: 19, at: [0, 7], faces: 'south', fire: 17.8, standIn: beacon }],
 };
@@ -247,12 +248,12 @@ function shoreBelow(zone) {
 
 // Where each project's prop stands, for the labels that float over them.
 export const PROJECT_PROPS = ZONES.flatMap((zone) =>
-  (FURNITURE[zone.id] ?? [])
-    .filter((item) => item.label)
-    .map((item) => {
-      const [x, z] = spotAt(zone, item.at);
-      return { label: item.label, x: zone.x + x, y: zone.h + (item.tall ?? item.size) + 1.5, z: zone.z + z };
-    }),
+  (FURNITURE[zone.id] ?? []).flatMap((item) => {
+    const project = PROJECTS.find((candidate) => candidate.prop === item.model);
+    if (!project) return [];
+    const [x, z] = spotAt(zone, item.at);
+    return [{ label: project.name, x: zone.x + x, y: zone.h + (item.tall ?? item.size) + 1.5, z: zone.z + z }];
+  }),
 );
 
 export function buildPlaces() {
