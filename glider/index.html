@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>fly.sh — fjord glider</title>
+    <link rel="icon" href="data:," />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+    <div id="labels"></div>
+
+    <div id="hud" hidden>
+      <dl>
+        <dt>alt</dt>
+        <dd id="hud-alt"></dd>
+        <dt>vario</dt>
+        <dd id="hud-vario"></dd>
+        <dt>speed</dt>
+        <dd id="hud-speed"></dd>
+        <dt>next</dt>
+        <dd id="hud-next"></dd>
+        <dt>belt</dt>
+        <dd id="hud-belt"></dd>
+      </dl>
+      <nav>
+        <button id="btn-map">[ m: map ]</button>
+        <button id="btn-sound">[ sound: on ]</button>
+      </nav>
+    </div>
+
+    <div id="toasts"></div>
+    <div id="hint"></div>
+
+    <section id="intro">
+      <p class="prompt">$ ./fly.sh</p>
+      <h1><span>&gt;</span> FLY_THE_FJORD</h1>
+      <p>// Steer a paraglider over the fjord. Land at the lit places to read about me.</p>
+      <button id="btn-start">[ click to start ]</button>
+      <p class="keys">
+        ← → steer · ↑ speed · ↓ brake · space dive · m map · r restart · l sound
+      </p>
+    </section>
+
+    <section id="panel" class="window" hidden>
+      <header><i></i><i></i><i></i><span id="panel-path"></span></header>
+      <div id="panel-body"></div>
+      <footer>
+        <button id="btn-takeoff">[ space: take off ]</button>
+        <button id="btn-panel-map">[ m: map ]</button>
+      </footer>
+    </section>
+
+    <section id="map" class="window" hidden>
+      <header><i></i><i></i><i></i><span>~/fjord/map — pick a place to fly to</span></header>
+      <canvas id="map-canvas" width="300" height="420"></canvas>
+      <div id="map-list"></div>
+      <footer>
+        <button id="btn-map-close">[ esc: close ]</button>
+        <button id="btn-reset">[ reset progress ]</button>
+      </footer>
+    </section>
+
+    <div id="touch">
+      <button data-input="left" aria-label="Steer left">◀</button>
+      <button data-input="dive" aria-label="Dive">▼</button>
+      <button data-input="right" aria-label="Steer right">▶</button>
+    </div>
+
+    <div id="fade"></div>
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
