@@ -564,11 +564,78 @@ const PILOT = {
   hand: [-0.02, 0.56, 0.25],
 };
 
-// Lines run from the pilot to the underside of the wing, found by casting rays up at it.
-function rigLines(wing, pilot) {
+// How lively the glider is in the air. Raise a number for more of that motion, set it to 0 to
+// switch it off. Angles are radians; the wing numbers are fractions of the wingspan.
+const MOTION = {
+  swingSpeed: 2.8, // how quickly the pilot swings back under the wing (higher is snappier)
+  swingDamping: 0.35, // how soon a swing dies away (1 stops it without any overshoot)
+  speedPitch: 0.02, // how far the wing sits ahead of the pilot per m/s above trim speed
+  turnLead: 0.1, // how far the wing rolls ahead of the pilot going into and out of a turn
+  liftKick: 0.06, // how hard flying into rising air knocks the wing back and to the side
+  gusts: 0.55, // how much rough air rocks the glider; rising air is rougher than still air
+  pilotFollow: 0.6, // how much of each swing the pilot's body leans along with
+  brakePull: 0.035, // how far steering pulls the trailing edge down on that side
+  tipFlutter: 0.012, // how much the wingtips shake in rough air
+  ripple: 0.004, // how much the surface ripples along the span
+  breathing: 0.008, // how much the whole arc flexes open and shut
+};
+
+// The wing file's own shape: 1 wide along x, with its leading edge at +z.
+const HALF_CHORD = 0.139;
+
+const smooth = (from, to, x) => {
+  const t = THREE.MathUtils.clamp((x - from) / (to - from), 0, 1);
+  return t * t * (3 - 2 * t);
+};
+
+// How far a point of the wing is pushed up or down right now, in the wing file's own units.
+// The same rule moves the wing's surface and the line ends attached to it.
+function wingFlex(x, z, air) {
+  const reach = Math.min(1, Math.abs(x) * 2); // 0 at the centre, 1 at a tip
+  const aft = THREE.MathUtils.clamp(0.5 - z / (2 * HALF_CHORD), 0, 1); // 0 at the leading edge, 1 at the trailing edge
+  const brake = x > 0 ? air.brakeLeft : air.brakeRight; // in the file, +x is the pilot's left
+  return (
+    -MOTION.brakePull * brake * smooth(0.08, 0.5, reach) * aft * aft * aft +
+    MOTION.tipFlutter * air.rough * reach * reach * reach * Math.sin(air.time * 9 + x * 14) +
+    MOTION.ripple * air.rough * Math.sin(x * 46 + air.time * 5) * Math.sin(aft * Math.PI) +
+    MOTION.breathing * air.rough * reach * reach * Math.sin(air.time * 1.7)
+  );
+}
+
+// Swaps the wing's compressed geometry for plain numbers in the wing file's own units, so that
+// every point can be moved each frame. Returns the new mesh and its resting shape.
+function loosen(wing) {
   wing.updateMatrixWorld(true);
-  pilot.updateMatrixWorld(true);
-  const onPilot = ([x, y, z], side) => pilot.localToWorld(new THREE.Vector3(x, y, side * z));
+  let source = null;
+  wing.traverse((part) => {
+    if (part.isMesh) source ??= part;
+  });
+  const toFile = wing.matrixWorld.clone().invert().multiply(source.matrixWorld);
+  const packed = source.geometry.attributes.position;
+  const rest = new Float32Array(packed.count * 3);
+  const point = new THREE.Vector3();
+  for (let i = 0; i < packed.count; i++) {
+    point.fromBufferAttribute(packed, i).applyMatrix4(toFile);
+    rest[i * 3] = point.x;
+    rest[i * 3 + 1] = point.y;
+    rest[i * 3 + 2] = point.z;
+  }
+  const geometry = source.geometry.clone();
+  geometry.setAttribute('position', new THREE.BufferAttribute(rest.slice(), 3).setUsage(THREE.DynamicDrawUsage));
+  // The copied bounds still describe the compressed numbers; the line anchors below rely on real ones.
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  const mesh = new THREE.Mesh(geometry, source.material);
+  mesh.frustumCulled = false; // its outline now changes every frame
+  wing.clear();
+  wing.add(mesh);
+  return { mesh, rest };
+}
+
+// Finds where each line meets the pilot and the underside of the wing. Both ends are kept in
+// their own model's units, so the lines can be redrawn as the two models move apart.
+function lineAnchors(wing) {
+  wing.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(wing);
   const halfSpan = (box.max.x - box.min.x) / 2;
   const halfChord = (box.max.z - box.min.z) / 2;
@@ -577,24 +644,20 @@ function rigLines(wing, pilot) {
   const underside = (reach, along, side) => {
     const narrowing = Math.sqrt(1 - 0.8 * reach * reach); // the wing gets shallower toward its tips
     ray.set(new THREE.Vector3(side * reach * halfSpan, box.min.y - 1, along * halfChord * narrowing), up);
-    return ray.intersectObject(wing, true)[0]?.point;
+    const hit = ray.intersectObject(wing, true)[0];
+    return hit && wing.worldToLocal(hit.point.clone());
   };
 
-  const points = [];
-  const join = (from, to) => to && points.push(from, to);
+  const anchors = [];
+  const join = ([x, y, z], side, onWing) => onWing && anchors.push({ onPilot: new THREE.Vector3(x, y, side * z), onWing });
   for (const side of [-1, 1]) {
-    const shoulder = onPilot(PILOT.shoulder, side);
-    const hand = onPilot(PILOT.hand, side);
     for (const reach of [0.1, 0.32, 0.54, 0.76, 0.93]) {
-      join(shoulder, underside(reach, -0.55, side)); // front row
-      join(shoulder, underside(reach, 0.25, side)); // rear row
+      join(PILOT.shoulder, side, underside(reach, -0.55, side)); // front row
+      join(PILOT.shoulder, side, underside(reach, 0.25, side)); // rear row
     }
-    for (const reach of [0.3, 0.6, 0.88]) join(hand, underside(reach, 0.82, side)); // brakes
+    for (const reach of [0.3, 0.6, 0.88]) join(PILOT.hand, side, underside(reach, 0.82, side)); // brakes
   }
-  return new THREE.LineSegments(
-    new THREE.BufferGeometry().setFromPoints(points),
-    new THREE.LineBasicMaterial({ color: 0xcfeaff, transparent: true, opacity: 0.28 }),
-  );
+  return anchors;
 }
 
 async function loadGliderModels() {
@@ -603,33 +666,134 @@ async function loadGliderModels() {
   wing.position.y = WING.height;
   pilot.rotation.y = PILOT.turn;
   pilot.position.y = -PILOT.drop;
-  return { wing, pilot, lines: rigLines(wing, pilot) };
+  const { mesh, rest } = loosen(wing);
+  return { wing, pilot, mesh, rest, anchors: lineAnchors(wing) };
 }
 
 // The origin is the pilot; the wing arcs overhead. Forward is -z.
 export function buildGlider() {
   const group = new THREE.Group();
   group.rotation.order = 'YXZ';
-  const canopy = new THREE.Group();
+  // The wing and the pilot each hang from the point between the pilot's shoulders, where the
+  // lines gather, so swinging either one about it keeps the lines meeting there.
+  const sling = new THREE.Group();
   const seat = new THREE.Group();
   const placeholder = placeholderGlider();
-  group.add(canopy, seat, placeholder);
+  group.add(sling, seat, placeholder);
 
+  let rig = null;
   loadGliderModels()
-    .then(({ wing, pilot, lines }) => {
+    .then(({ wing, pilot, mesh, rest, anchors }) => {
+      pilot.updateMatrix();
+      const pivot = new THREE.Vector3(PILOT.shoulder[0], PILOT.shoulder[1], 0).applyMatrix4(pilot.matrix);
+      sling.position.copy(pivot);
+      seat.position.copy(pivot);
+      wing.position.sub(pivot);
+      pilot.position.sub(pivot);
+      wing.updateMatrix();
+      pilot.updateMatrix();
+
+      const lines = new THREE.LineSegments(
+        new THREE.BufferGeometry().setAttribute(
+          'position',
+          new THREE.BufferAttribute(new Float32Array(anchors.length * 6), 3).setUsage(THREE.DynamicDrawUsage),
+        ),
+        new THREE.LineBasicMaterial({ color: 0xcfeaff, transparent: true, opacity: 0.28 }),
+      );
+      lines.frustumCulled = false;
+
       group.remove(placeholder);
-      canopy.add(wing, lines);
+      sling.add(wing);
       seat.add(pilot);
+      group.add(lines);
+      rig = { wing, pilot, mesh, rest, anchors, lines };
     })
     .catch((error) => console.warn('Glider models did not load; keeping the placeholder.', error));
 
+  // The swing is two springs, one fore-and-aft and one side to side, each pulled toward a resting
+  // angle and pushed around by the air.
+  const sway = { pitch: 0, pitchRate: 0, roll: 0, rollRate: 0, collapse: 0, lastBank: 0, lastLift: 0 };
+  const air = { time: 0, rough: 0, brakeLeft: 0, brakeRight: 0 };
+  const wingToGroup = new THREE.Matrix4();
+  const pilotToGroup = new THREE.Matrix4();
+  const point = new THREE.Vector3();
+
+  function redraw() {
+    const { wing, pilot, mesh, rest, anchors, lines } = rig;
+    const surface = mesh.geometry.attributes.position;
+    for (let i = 0; i < rest.length; i += 3) {
+      surface.array[i + 1] = rest[i + 1] + wingFlex(rest[i], rest[i + 2], air);
+    }
+    surface.needsUpdate = true;
+
+    sling.updateMatrix();
+    seat.updateMatrix();
+    wingToGroup.multiplyMatrices(sling.matrix, wing.matrix);
+    pilotToGroup.multiplyMatrices(seat.matrix, pilot.matrix);
+    const ends = lines.geometry.attributes.position;
+    anchors.forEach(({ onPilot, onWing }, i) => {
+      point.copy(onPilot).applyMatrix4(pilotToGroup);
+      ends.setXYZ(i * 2, point.x, point.y, point.z);
+      point.copy(onWing);
+      point.y += wingFlex(onWing.x, onWing.z, air);
+      point.applyMatrix4(wingToGroup);
+      ends.setXYZ(i * 2 + 1, point.x, point.y, point.z);
+    });
+    ends.needsUpdate = true;
+  }
+
   return {
     group,
-    pose({ bank, landed }) {
-      // On the ground the wing drops forward, clear of the camera; in a turn the pilot leans into it.
-      canopy.rotation.x += ((landed ? -1.25 : 0) - canopy.rotation.x) * 0.08;
-      placeholder.rotation.x = canopy.rotation.x * 0.4;
-      seat.rotation.z = -bank * 0.35;
+    sway,
+    air,
+    /**
+     * Moves the glider for this frame. `pace` is speed above trim in m/s, `turn` is the steering
+     * from -1 (left) to 1 (right), `lift` is the rising air in m/s and `liftSide` says which side
+     * its core is on (-1 left, 1 right).
+     */
+    pose({ dt, time, bank, pace, turn, slow, lift, liftSide, landed }) {
+      const { clamp } = THREE.MathUtils;
+      const step = Math.min(dt, 0.1);
+      if (step > 0) {
+        const bankRate = clamp((bank - sway.lastBank) / step, -3, 3);
+        const liftRate = clamp((lift - sway.lastLift) / step, -20, 20);
+        sway.lastBank = bank;
+        sway.lastLift = lift;
+
+        air.time = time;
+        air.rough += ((landed ? 0 : 0.3 + Math.min(1, lift / 5) * 0.7) - air.rough) * Math.min(1, step * 2);
+        const both = slow ? 0.6 : 0;
+        const ease = Math.min(1, step * 6);
+        air.brakeLeft += (Math.min(1, Math.max(0, -turn) + both) - air.brakeLeft) * ease;
+        air.brakeRight += (Math.min(1, Math.max(0, turn) + both) - air.brakeRight) * ease;
+
+        const pull = MOTION.swingSpeed ** 2;
+        const drag = 2 * MOTION.swingDamping * MOTION.swingSpeed;
+        const gust = MOTION.gusts * air.rough;
+        // Faster flight puts the wing ahead (negative pitch); a turn starting or ending rolls it first.
+        const pitchRest = -pace * MOTION.speedPitch;
+        const rollRest = -bankRate * MOTION.turnLead;
+        // Rising air knocks the wing back and lifts the side nearer its core.
+        const pitchPush = liftRate * MOTION.liftKick + gust * (Math.sin(time * 1.7) * 0.6 + Math.sin(time * 3.1 + 1.3) * 0.4);
+        const rollPush =
+          liftRate * liftSide * MOTION.liftKick + gust * (Math.sin(time * 1.3 + 2.1) * 0.6 + Math.sin(time * 2.7 + 0.5) * 0.4);
+        const slices = Math.ceil(step * 90);
+        const h = step / slices;
+        for (let i = 0; i < slices; i++) {
+          sway.pitchRate += (pull * (pitchRest - sway.pitch) - drag * sway.pitchRate + pitchPush) * h;
+          sway.pitch = clamp(sway.pitch + sway.pitchRate * h, -0.5, 0.5);
+          sway.rollRate += (pull * (rollRest - sway.roll) - drag * sway.rollRate + rollPush) * h;
+          sway.roll = clamp(sway.roll + sway.rollRate * h, -0.5, 0.5);
+        }
+        // On the ground the wing drops forward, clear of the camera.
+        sway.collapse += ((landed ? -1.25 : 0) - sway.collapse) * Math.min(1, step * 5);
+      }
+
+      sling.rotation.set(sway.pitch + sway.collapse, 0, sway.roll);
+      // The pilot leans along with each swing, and into a turn.
+      seat.rotation.set(sway.pitch * MOTION.pilotFollow, 0, sway.roll * MOTION.pilotFollow - bank * 0.35);
+      placeholder.rotation.x = sway.collapse * 0.4;
+      if (rig) redraw();
     },
   };
 }

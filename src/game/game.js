@@ -189,6 +189,10 @@ export function createGame(stage, hooks = {}) {
     speed: FLIGHT.trim.speed,
     sink: FLIGHT.trim.sink,
     vy: 0,
+    // What the air and the pilot are doing right now, for the glider's sway.
+    turn: 0,
+    lift: 0,
+    liftSide: 0,
   };
   const input = { left: false, right: false, fast: false, slow: false, dive: false };
   let mode = 'intro'; // intro (idle backdrop) | flying | landed | launching
@@ -255,11 +259,20 @@ export function createGame(stage, hooks = {}) {
     // Thermals are weak near the ground, so they never stop you landing.
     const agl = g.pos.y - surfaceAt(g.pos.x, g.pos.z);
     let lift = 0;
+    let coreSide = 0;
     for (const thermal of THERMALS) {
       const d = Math.hypot(g.pos.x - thermal.x, g.pos.z - thermal.z);
-      if (d < thermal.r) lift += thermal.s * smoothstep(thermal.r, thermal.r * 0.45, d);
+      if (d >= thermal.r) continue;
+      const rising = thermal.s * smoothstep(thermal.r, thermal.r * 0.45, d);
+      lift += rising;
+      // How far to the right of the glider this thermal's core lies, from -1 to 1.
+      const right = (thermal.x - g.pos.x) * Math.cos(g.yaw) + (thermal.z - g.pos.z) * Math.sin(g.yaw);
+      coreSide += (rising * right) / thermal.r;
     }
+    g.liftSide = lift > 0 ? clamp(coreSide / lift, -1, 1) : 0;
     lift *= smoothstep(8, 45, agl) * (1 - smoothstep(WORLD.ceiling - 80, WORLD.ceiling, g.pos.y));
+    g.lift = lift;
+    g.turn = turn;
 
     g.vy += (lift - sink - g.vy) * Math.min(1, dt * 2.5);
     g.pos.x += Math.sin(g.yaw) * g.speed * dt;
@@ -770,7 +783,18 @@ export function createGame(stage, hooks = {}) {
     if (mode === 'intro') g.pos.y = START.y + Math.sin(time * 0.8) * 1.2;
     glider.group.position.copy(g.pos);
     glider.group.rotation.set(0, -g.yaw, -g.bank);
-    glider.pose({ bank: g.bank, landed: mode === 'landed' });
+    const airborne = mode === 'flying';
+    glider.pose({
+      dt: elapsed,
+      time,
+      bank: g.bank,
+      pace: airborne ? g.speed - FLIGHT.trim.speed : 0,
+      turn: airborne ? g.turn : 0,
+      slow: airborne && input.slow,
+      lift: airborne ? g.lift : 0,
+      liftSide: g.liftSide,
+      landed: mode === 'landed',
+    });
     updateCamera(elapsed);
 
     terrain.update(time);
@@ -805,6 +829,7 @@ export function createGame(stage, hooks = {}) {
   // fjord.spy([x, y, z], [x, y, z]) parks the camera to inspect something; fjord.spy() releases it.
   window.fjord = {
     g,
+    glider,
     progress,
     camera,
     ZONES,
