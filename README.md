@@ -34,6 +34,11 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
   that section; Escape, the exit button and the browser's back button leave it too.
 - Phones, and visitors who ask for reduced motion, get a still image in the hero. The 3D code
   loads for them only if they choose to fly.
+- In an upright window the hero is two bands, the scene above the words, so the glider is never
+  behind the headline. In any small window the top bar is one row and the hero says less. The
+  rules are together at the end of `src/styles.css`, under "small windows".
+- On a touch screen the flight shows as little as it can: a line of readouts, a map button and a
+  menu, and round buttons to fly with. Key names are left out of every button there.
 
 - Any other address is a missing page, and gets an emergency of its own: the wing collapses and the
   visitor either throws the reserve in time and lands in a tree, or does not and is fished out of

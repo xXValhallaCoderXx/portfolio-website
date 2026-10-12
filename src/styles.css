@@ -105,6 +105,27 @@ button.link:focus-visible {
   text-decoration: underline;
 }
 
+/* The key that does what a button does, named inside the button. A touch screen has no keys, so
+   there it is left out; `for-keys` and `for-touch` swap whole phrases the same way. */
+kbd {
+  font: inherit;
+}
+
+.for-touch {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  kbd,
+  .for-keys {
+    display: none;
+  }
+
+  .for-touch {
+    display: revert;
+  }
+}
+
 /* ---- the big prompt lines */
 
 .shout {
@@ -252,15 +273,18 @@ button.link:focus-visible {
 }
 
 .hero-copy {
+  /* The glider hangs from 56% across at its nearest, in every shape of window wider than it is
+     tall. The words keep to the left of that: `--left` is their margin, 53% their far edge. */
+  --left: 8vw;
   position: relative;
   z-index: 1;
-  max-width: 980px;
-  padding: calc(var(--bar) + 24px) 8vw 9vh;
+  width: min(980px, 53vw);
+  padding: calc(var(--bar) + 24px) 0 9vh var(--left);
 }
 
-/* The headline never breaks a line in two: on a narrow screen the type shrinks to fit instead. */
+/* The headline never breaks a line in two: the type is sized so the longest line just fits. */
 .hero-copy .shout {
-  font-size: min(clamp(30px, 6vw, 64px), calc((100vw - 40px) / (var(--chars, 18) * 0.64)));
+  font-size: min(64px, calc((53vw - var(--left)) / (var(--chars, 18) * 0.63)));
 }
 
 .hero-copy .shout .line {
@@ -270,6 +294,11 @@ button.link:focus-visible {
 .hero-copy .intro {
   max-width: 62ch;
   margin: 18px 0 20px;
+}
+
+/* The introduction has a short form for phones; only one of the two is ever shown. */
+.intro .short {
+  display: none;
 }
 
 .who {
@@ -304,12 +333,14 @@ button.link:focus-visible {
 .fjord {
   position: absolute;
   inset: 0;
-  /* The still shown until the live scene has loaded. Its glider sits right of centre. */
-  background: var(--bg) url('/poster.jpg') 73% center / cover no-repeat;
+  /* The still shown until the live scene has loaded. Its glider is 67.4% of the way across the
+     picture, and placing the picture at 67.4% keeps it that far across the window too. */
+  background: var(--bg) url('/poster.jpg') 67.4% center / cover no-repeat;
 }
 
 .fjord.flying {
   position: fixed;
+  inset: 0;
   z-index: 40;
 }
 
@@ -317,6 +348,8 @@ button.link:focus-visible {
   position: absolute;
   inset: 0;
   opacity: 0;
+  /* The scene scrolls at half the page's speed; `--gone` is how far the hero has scrolled away. */
+  translate: 0 calc(var(--gone, 0) * 46%);
   transition: opacity 0.9s;
 }
 
@@ -348,6 +381,7 @@ button.link:focus-visible {
 }
 
 .fjord-start button {
+  margin: 0 6px 8px 0;
   padding: 10px 16px;
 }
 
@@ -651,11 +685,41 @@ html.tugging {
   user-select: none;
 }
 
-/* ---- narrower screens */
+/* ---- small windows
 
-@media (max-width: 760px) {
-  body {
-    font-size: 13px;
+   Three things change, each on its own condition:
+   - compact: a phone either way up, or any small window. The top bar is one row and the hero says
+     less, so that it fits and the way in to the route still shows at the foot of the window.
+   - stacked: an upright window. Side by side there is no room and the glider ends up behind the
+     headline, so the hero becomes two bands: the scene fills whatever height the words leave,
+     with the glider in its middle, and nothing is ever drawn over anything else.
+   - narrow: a phone held upright. Smaller type, and windows that take the whole screen. */
+
+@media (max-width: 760px), (max-height: 700px) {
+  /* One row of tabs is the whole top bar. */
+  :root {
+    --bar: 38px;
+  }
+
+  .chrome,
+  .tab-number {
+    display: none;
+  }
+
+  .tabs a,
+  .tabs button {
+    padding: 0 13px;
+  }
+
+  /* The tabs scroll sideways under the flight's own tab, which stays put at the right edge. */
+  .tabs .tab-fly {
+    position: sticky;
+    right: 0;
+    margin-left: auto;
+    border-right: 0;
+    border-left: 1px solid var(--rule);
+    background: var(--bg);
+    box-shadow: -18px 0 14px -8px var(--bg);
   }
 
   /* The hero stops a little short of the window, so the start of the route shows beneath it. */
@@ -663,24 +727,209 @@ html.tugging {
     min-height: calc(100svh - 64px);
   }
 
-  /* The still is drawn smaller and from the top, which puts its glider above the headline. */
+  .hero-copy {
+    --left: 5vw;
+    padding: calc(var(--bar) + 14px) 0 20px var(--left);
+  }
+
+  .hero-copy > .dim:first-child,
+  .hero-hint {
+    display: none;
+  }
+
+  .who {
+    margin: 0 0 8px;
+    font-size: clamp(13px, 2.3vw, 17px);
+    white-space: nowrap;
+  }
+
+  .hero-copy .intro {
+    margin: 14px 0 16px;
+  }
+
+  .intro .long {
+    display: none;
+  }
+
+  .intro .short {
+    display: inline;
+  }
+
+  /* Two buttons, side by side; the third is one tap away in the tabs. */
+  .actions {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    max-width: 380px;
+  }
+
+  .actions > button,
+  .actions > .button {
+    justify-content: center;
+    padding: 10px 6px;
+  }
+
+  .actions > .roomy {
+    display: none;
+  }
+}
+
+@media (orientation: portrait), (max-width: 560px) {
+  .hero {
+    flex-direction: column;
+    align-items: stretch;
+    padding-top: var(--bar);
+  }
+
+  .hero::after {
+    content: none;
+  }
+
   .fjord {
-    background:
-      linear-gradient(to bottom, rgba(6, 10, 19, 0) 40%, var(--bg) 64%),
-      var(--bg) url('/poster.jpg') 73% top / auto 64% no-repeat;
+    position: relative;
+    inset: auto;
+    flex: 1 1 0;
+    min-height: min(170px, 28svh);
+    overflow: hidden;
+    background: none;
+    container-type: size;
+  }
+
+  /* The still, scaled from the band's height so that its glider lands in the middle of the band
+     whatever shape the band is. In the picture the glider is 67.4% across and 51.2% down. */
+  .fjord::before {
+    --tall: max(140cqh, 62cqw, 330px);
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: url('/poster.jpg') calc(50% - 0.309 * var(--tall)) calc(50% - 0.012 * var(--tall) + 3cqh) / auto var(--tall)
+      no-repeat;
+  }
+
+  /* The band fades out at its foot, into the words. */
+  .fjord::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, rgba(6, 10, 19, 0) 58%, var(--bg));
+    pointer-events: none;
+  }
+
+  .fjord.flying::after {
+    content: none;
+  }
+
+  /* The live scene keeps its glider centred in the band too, and does not slide about in it. */
+  .fjord:not(.flying) .fjord-stage {
+    --centred: 1;
+    translate: none;
   }
 
   .hero-copy {
-    padding: calc(var(--bar) + 16px) 20px 7vh;
+    --left: 8vw;
+    flex: none;
+    width: auto;
+    padding: 4px var(--left) 5vh;
+  }
+
+  /* Under the glider, not beside it, the headline may use the full width. */
+  .hero-copy .shout {
+    font-size: min(64px, 8vw, calc((100vw - 2 * var(--left)) / (var(--chars, 18) * 0.64)));
+  }
+}
+
+/* Upright but wide, as a tablet is: the words run the full width, so they stop well above the
+   way in to the route, which sits in the foot of the hero at the right. */
+@media (orientation: portrait) and (min-width: 761px) {
+  .hero-copy {
+    padding-bottom: 100px;
+  }
+}
+
+@media (max-width: 760px) {
+  body {
+    font-size: 13px;
   }
 
   .footer {
     padding: 20px;
   }
+}
 
-  .chrome .dim,
-  .hud {
+/* A phone held upright: the words get its full width, and the two small lines come back where
+   the screen is tall enough to hold them under the scene. */
+@media (max-width: 760px) and (orientation: portrait), (max-width: 560px) {
+  .hero-copy {
+    --left: 20px;
+    padding: 4px var(--left) 22px;
+  }
+
+  .who {
+    font-size: clamp(13px, 4.1vw, 17px);
+  }
+
+  .actions {
+    max-width: none;
+  }
+}
+
+@media (max-width: 760px) and (orientation: portrait) and (min-height: 701px) {
+  .hero-copy > .dim:first-child,
+  .hero-hint {
+    display: block;
+  }
+
+  .hero-hint {
+    margin: 10px 0 0;
+  }
+}
+
+/* A phone on its side has very little height: the hero tightens up, and on the smallest the
+   introduction goes too, so the way in to the route is still in sight. */
+@media (max-height: 420px) and (orientation: landscape) {
+  .hero {
+    min-height: calc(100svh - 48px);
+  }
+
+  .hero-copy {
+    padding-top: calc(var(--bar) + 8px);
+    padding-bottom: 12px;
+  }
+
+  .who {
+    margin-bottom: 4px;
+  }
+
+  .hero-copy .intro {
+    margin: 8px 0 10px;
+  }
+}
+
+@media (max-height: 340px) and (orientation: landscape) {
+  .hero-copy .intro {
     display: none;
+  }
+
+  .actions {
+    margin-top: 12px;
+  }
+}
+
+/* On a phone, a window opened over the flight or over a landing takes the whole screen. */
+@media (max-width: 760px), (max-height: 480px) {
+  .window {
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border: 0;
+    background: var(--bg);
+    transform: none;
+  }
+
+  .window footer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 }
 

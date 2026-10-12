@@ -184,7 +184,8 @@ export default function App() {
                 }}
                 key={waypoint.id}
               >
-                {String(i + 1).padStart(2, '0')}_{waypoint.id}
+                <span className="tab-number">{String(i + 1).padStart(2, '0')}_</span>
+                {waypoint.id}
               </a>
             ))}
             <button className="tab-fly" onClick={() => takeFlight()}>
@@ -221,7 +222,10 @@ export default function App() {
                   </span>
                 ))}
               </h1>
-              <p className="intro">// {PROFILE.intro}</p>
+              <p className="intro">
+                // <span className="long">{PROFILE.intro}</span>
+                <span className="short">{PROFILE.introShort}</span>
+              </p>
               <p className="actions">
                 <button className="primary" onClick={() => takeFlight()}>
                   [ ./fly.sh ]
@@ -229,7 +233,7 @@ export default function App() {
                 <a className="button" href="#projects">
                   [ ./view_work.sh ]
                 </a>
-                <a className="button" href="#contact">
+                <a className="button roomy" href="#contact">
                   [ ./contact.sh ]
                 </a>
               </p>

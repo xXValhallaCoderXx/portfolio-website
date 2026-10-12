@@ -11,6 +11,8 @@ export const PROFILE = {
     'Engineering lead with a frontend core, building for the web since 2016. Martial artist and student of old ' +
     'sagas, bringing the old ways of craft and discipline to the new ways of building with AI. I architect ' +
     'resilient software the way I train: deliberately, without shortcuts.',
+  // The same thought in a line or two, for a phone, where the full version would fill the screen.
+  introShort: 'Engineering lead with a frontend core. Old ways of craft and discipline, new ways of building with AI.',
 };
 
 export const STATS = [

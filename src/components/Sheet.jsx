@@ -46,7 +46,7 @@ export default function Sheet({ title, label, onClose, children }) {
           <i />
           <span>{title}</span>
           <button className="link close" onClick={onClose} autoFocus>
-            [ esc: close ]
+            [ <kbd>esc: </kbd>close ]
           </button>
         </header>
         {children}

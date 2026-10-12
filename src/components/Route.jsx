@@ -232,8 +232,8 @@ export default function Route({ onFly, hud }) {
           </radialGradient>
         </defs>
         <g className="glider" ref={marker}>
-          <circle className="aura" cy="8" r="34" fill="url(#glider-aura)" />
           <g className="glider-shape">
+            <circle className="aura" cy="8" r="34" fill="url(#glider-aura)" />
             <path className="wing" d="M-20 3 Q0 -15 20 3 Q0 -5 -20 3 Z" />
             <g ref={hang}>
               <path className="lines" d="M-16 0 L0 23 L16 0 M-7 -3 L0 23 L7 -3" />

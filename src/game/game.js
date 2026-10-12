@@ -62,11 +62,11 @@ const MARKUP = /* html */ `
       <dt>belt</dt><dd data-hud="belt"></dd>
     </dl>
     <nav>
-      <button data-do="keys" aria-expanded="false">[ h: controls ]</button>
-      <button data-do="map">[ m: map ]</button>
+      <button data-do="map">[ <kbd>m: </kbd>map ]</button>
+      <button data-do="keys" aria-expanded="false">[ <span class="for-keys">h: controls</span><span class="for-touch">≡ menu</span> ]</button>
       <button data-do="sound">[ sound: on ]</button>
-      <button data-do="fullscreen">[ f: fullscreen ]</button>
-      <button data-do="exit">[ esc: exit ]</button>
+      <button data-do="fullscreen">[ <kbd>f: </kbd>fullscreen ]</button>
+      <button data-do="exit">[ <kbd>esc: </kbd>exit ]</button>
       <aside class="fj-keys" hidden>
         <p>controls</p>
         <dl>
@@ -88,6 +88,10 @@ const MARKUP = /* html */ `
           <li>tap a lit pillar or its label to fly there by itself</li>
         </ul>
         <p class="fj-keys-goal">land inside a lit ring to read that part of the page</p>
+        <div class="fj-keys-more">
+          <button data-do="sound">[ sound: on ]</button>
+          <button data-do="exit">[ <kbd>esc: </kbd>exit ]</button>
+        </div>
       </aside>
     </nav>
   </div>
@@ -98,7 +102,7 @@ const MARKUP = /* html */ `
     <canvas class="fj-map-canvas" width="300" height="420"></canvas>
     <div class="fj-map-list"></div>
     <footer>
-      <button data-do="map">[ esc: close ]</button>
+      <button data-do="map">[ <kbd>esc: </kbd>close ]</button>
       <button data-do="reset">[ reset progress ]</button>
     </footer>
   </section>
@@ -199,6 +203,8 @@ export function createGame(stage, hooks = {}) {
   // The scene fills its stage: the hero while idle, the whole window in flight.
   const view = { width: 1, height: 1 };
   function resize() {
+    // Where the page gives the scene a frame of its own, it asks for the glider dead centre.
+    view.centred = getComputedStyle(stage).getPropertyValue('--centred').trim() === '1';
     view.width = Math.max(1, stage.clientWidth);
     view.height = Math.max(1, stage.clientHeight);
     renderer.setSize(view.width, view.height, false);
@@ -601,10 +607,10 @@ export function createGame(stage, hooks = {}) {
       const a = time * 0.12 + 2.6;
       const back = 38 + 22 * up;
       const above = 9 + 135 * up;
-      const aside = camera.aspect > 1.2 ? 0.33 * Math.hypot(back, above - 4) : 0;
+      const aside = camera.aspect > 1.2 && !view.centred ? 0.33 * Math.hypot(back, above - 4) : 0;
       // On an upright phone the headline fills the lower half, so the camera aims below the
       // glider, which lifts the glider into the upper half.
-      const below = camera.aspect < 1 ? 13 : 0;
+      const below = camera.aspect < 1 && !view.centred ? 13 : 0;
       camera.position.set(g.pos.x + Math.sin(a) * back, g.pos.y + above, g.pos.z + Math.cos(a) * back);
       camera.lookAt(g.pos.x - Math.cos(a) * aside, g.pos.y + (4 - below) * (1 - up), g.pos.z + Math.sin(a) * aside);
       return;
@@ -692,6 +698,9 @@ export function createGame(stage, hooks = {}) {
   on($('.fj-scene'), 'pointerleave', () => setHot(null));
   on($('.fj-scene'), 'click', (event) => mode === 'flying' && !mapOpen && autoFly(pillarAt(event.clientX, event.clientY)));
 
+  // On a touch screen the hints name the on-screen buttons instead of keys.
+  const touch = matchMedia('(pointer: coarse)').matches;
+
   function hintText() {
     if (mode !== 'flying' || mapOpen) return '';
     if (auto) return `flying itself to ${auto.label} · steer to take over`;
@@ -700,11 +709,11 @@ export function createGame(stage, hooks = {}) {
     const near = nearestZone(false);
     if (near.dist < near.zone.r * 2.5) {
       const unvisited = !progress.visited.includes(near.zone.id);
-      return unvisited && agl > 28 ? 'hold space to dive · you land inside the ring' : '';
+      return unvisited && agl > 28 ? `hold ${touch ? '▼' : 'space'} to dive · you land inside the ring` : '';
     }
     if (agl < 45 && g.vy < 0) return 'low — steer for the amber sparks to climb';
     if (airtime < 9) return 'lit pillars are places to land · amber sparks are rising air';
-    if (airtime < 20) return 'click a pillar to fly there by itself · hold shift to speed up';
+    if (airtime < 20) return `${touch ? 'tap' : 'click'} a pillar to fly there by itself · hold ${touch ? '»' : 'shift'} to speed up`;
     return '';
   }
 
@@ -921,7 +930,7 @@ export function createGame(stage, hooks = {}) {
 
   function toggleSound() {
     soundOn = !soundOn;
-    $('[data-do="sound"]').textContent = `[ sound: ${soundOn ? 'on' : 'off'} ]`;
+    for (const button of stage.querySelectorAll('[data-do="sound"]')) button.textContent = `[ sound: ${soundOn ? 'on' : 'off'} ]`;
     audio?.master.gain.setTargetAtTime(soundOn ? 1 : 0, audio.ctx.currentTime, 0.05);
   }
 

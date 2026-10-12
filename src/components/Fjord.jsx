@@ -30,9 +30,17 @@ function LandingPanel({ panel, onTakeOff, onNext, onMap, onOpenPage }) {
         )}
       </div>
       <footer>
-        <button onClick={onTakeOff}>[ space: take off ]</button>
-        {panel.next && <button onClick={onNext}>[ n: fly me to {panel.next.label} ]</button>}
-        <button onClick={onMap}>[ m: map ]</button>
+        <button onClick={onTakeOff}>
+          [ <kbd>space: </kbd>take off ]
+        </button>
+        {panel.next && (
+          <button onClick={onNext}>
+            [ <kbd>n: </kbd>fly me to {panel.next.label} ]
+          </button>
+        )}
+        <button onClick={onMap}>
+          [ <kbd>m: </kbd>map ]
+        </button>
         {section && <button onClick={onOpenPage}>[ open on page ]</button>}
       </footer>
     </section>
@@ -63,7 +71,7 @@ function MissingPage({ path, stage, onThrow, onSkip, onHome, onFly, onRetry }) {
       {(stage === 'gliding' || stage === 'falling') && (
         <p>
           <button className="primary" onClick={onThrow} disabled={stage !== 'falling'}>
-            [ r: throw reserve ]
+            [ <kbd>r: </kbd>throw reserve ]
           </button>{' '}
           <span className="dim">before 40 m</span>
         </p>
@@ -89,7 +97,9 @@ function MissingPage({ path, stage, onThrow, onSkip, onHome, onFly, onRetry }) {
       )}
       {!ending && (
         <p className="fjord-lost-skip">
-          <button onClick={onSkip}>[ esc: skip ]</button>
+          <button onClick={onSkip}>
+            [ <kbd>esc: </kbd>skip ]
+          </button>
           <button className="link" onClick={() => onHome(null)}>
             take me home →
           </button>
@@ -161,14 +171,14 @@ export default function Fjord({ flying, armed, target, lost, warping, onArm, onE
     const follow = () => {
       const gone = Math.min(1, scrollY / Math.max(1, stage.current.offsetHeight));
       game.current?.rise(gone);
-      stage.current.style.translate = `0 ${(gone * 46).toFixed(2)}%`;
+      stage.current.style.setProperty('--gone', gone.toFixed(3));
     };
     follow();
     addEventListener('scroll', follow, { passive: true });
     return () => {
       removeEventListener('scroll', follow);
       game.current?.rise(0);
-      if (stage.current) stage.current.style.translate = '';
+      stage.current?.style.removeProperty('--gone');
     };
   }, [flying, live]);
 
@@ -195,7 +205,7 @@ export default function Fjord({ flying, armed, target, lost, warping, onArm, onE
   }, [flying, armed, target, lost, load]);
 
   return (
-    <div className={`fjord${flying ? ' flying' : ''}${live ? ' live' : ''}`}>
+    <div className={`fjord${flying ? ' flying' : ''}${live ? ' live' : ''}${flying && panel ? ' reading' : ''}`}>
       <div className="fjord-stage" ref={stage} />
       {flying && !live && !lost && <p className="fjord-note">loading the fjord…</p>}
       {flying && lost && (
@@ -225,11 +235,13 @@ export default function Fjord({ flying, armed, target, lost, warping, onArm, onE
           <p>// Steer a paraglider over the fjord. Land at the lit places to read about me.</p>
           <p>
             <button className="primary" onClick={onArm}>
-              [ click to start ]
+              [ <span className="for-keys">click</span>
+              <span className="for-touch">tap</span> to start ]
             </button>{' '}
             <button onClick={() => onExit(null)}>[ back to the page ]</button>
           </p>
-          <p className="dim">← → steer · space dive · shift speed up · click a pillar to fly there · m map · h controls</p>
+          <p className="dim for-keys">← → steer · space dive · shift speed up · click a pillar to fly there · m map · h controls</p>
+          <p className="dim for-touch">◀ ▶ steer · ▼ dive · » speed up · tap a lit pillar to fly there</p>
         </div>
       )}
       {flying && panel && (

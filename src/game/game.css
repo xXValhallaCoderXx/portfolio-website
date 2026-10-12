@@ -312,23 +312,123 @@
   display: none !important;
 }
 
-@media (max-width: 560px) {
-  .fj-hud nav {
-    flex-direction: column;
-    align-items: flex-end;
+/* Sound and the way out, repeated inside the menu for when the row above has no room for them. */
+.fj-keys-more {
+  display: none;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* ---- a touch screen, or any window this narrow: as little over the flight as will do */
+
+@media (pointer: coarse), (max-width: 560px) {
+  /* The readouts lose their labels and their box, and sit in a line. */
+  .fj-hud > dl {
+    top: 10px;
+    left: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 12px;
+    max-width: calc(100% - 190px);
+    padding: 5px 10px;
+    border: 0;
+    background: rgba(6, 10, 19, 0.5);
+    font-size: 12px;
   }
 
-  /* Phones handle true fullscreen inconsistently, and the flight already fills the screen. */
-  .fj-hud [data-do='fullscreen'] {
+  .fj-hud > dl dt,
+  .fj-hud > dl [data-hud='speed'],
+  .fj-hud > dl [data-hud='belt'] {
     display: none;
   }
 
-  .fj-map-canvas {
-    height: min(420px, 40vh);
+  .fj-hud > dl dd {
+    min-width: 0;
   }
 
-  .fj-map-list {
-    grid-template-columns: 1fr;
+  .fj-hud > dl [data-hud='next'] {
+    flex-basis: 100%;
+    color: var(--dim);
+  }
+
+  /* Two buttons stay out, the map and the menu; sound and the way out move into the menu. */
+  .fj-hud nav {
+    top: 10px;
+    right: 10px;
+    flex-wrap: nowrap;
+    max-width: none;
+  }
+
+  .fj-hud nav > [data-do='sound'],
+  .fj-hud nav > [data-do='fullscreen'],
+  .fj-hud nav > [data-do='exit'] {
+    display: none;
+  }
+
+  .fj-hud nav > button {
+    padding: 5px 9px;
+    background: rgba(6, 10, 19, 0.5);
+    font-size: 12px;
+  }
+
+  .fj-keys-more {
+    display: flex;
+  }
+
+  /* An achievement is one line here, not a card. */
+  .fj-toasts {
+    top: 56px;
+    width: min(320px, 86vw);
+  }
+
+  .fj-toast {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .fj-toast small {
+    display: none;
+  }
+
+  .fj-toast b {
+    font-size: 13px;
+  }
+
+  .fj-map-canvas {
+    height: min(440px, 46svh);
+  }
+}
+
+/* On a phone a window takes the whole screen, and the map is a window. */
+@media (max-width: 760px) {
+  .fj-map {
+    width: 100%;
+  }
+}
+
+@media (pointer: coarse) {
+  /* The buttons to fly with: round, see-through, and clear of the phone's own bottom edge. */
+  .fj-touch {
+    bottom: max(18px, env(safe-area-inset-bottom));
+    padding: 0 14px;
+  }
+
+  .fj-touch button {
+    width: 58px;
+    height: 58px;
+    border-color: rgba(59, 158, 255, 0.55);
+    border-radius: 50%;
+    background: rgba(6, 10, 19, 0.45);
+  }
+
+  /* Hints sit just above those buttons, not under them. */
+  .fj-hint {
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 70px);
+    padding: 0 22px;
+    font-size: 12px;
   }
 }
 
