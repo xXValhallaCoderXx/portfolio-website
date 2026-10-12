@@ -8,8 +8,9 @@ export const PROFILE = {
   host: 'forge-frost',
   headline: ['FORGED_IN_CODE', 'TEMPERED_BY_GRIT'],
   intro:
-    'Engineering lead with a frontend core, building for the web since 2016. Martial artist, student of old ' +
-    'sagas and new systems. I architect resilient software the way I train: deliberately, without shortcuts.',
+    'Engineering lead with a frontend core, building for the web since 2016. Martial artist and student of old ' +
+    'sagas, bringing the old ways of craft and discipline to the new ways of building with AI. I architect ' +
+    'resilient software the way I train: deliberately, without shortcuts.',
 };
 
 export const STATS = [
@@ -26,14 +27,32 @@ export const SKILLS = [
   { label: 'lead', items: ['SDLC and agile methods', 'project management', 'technical process improvement'] },
 ];
 
-// The four sections, in page order: what a recruiter looks for first comes first. Each `id` is
-// also the place you land at in the flight.
+// The places you can land at in the flight, each one a section of the page with the same `id`.
+// `file` and `command` are how the flight's landing panel prints it.
 export const SECTIONS = [
+  { id: 'about', file: 'about.md', command: 'cat about.md', place: 'the hall' },
   { id: 'experience', file: 'experience.log', command: 'git log --oneline --decorate experience.log', place: 'rune ridge' },
   { id: 'projects', file: 'projects/', command: 'ls -la ./projects/', place: 'the forge' },
-  { id: 'about', file: 'about.md', command: 'cat about.md', place: 'the hall' },
   { id: 'contact', file: 'contact.sh', command: './contact --reach-out', place: 'the beacon' },
 ];
+
+// The page below the hero is one flight path, and these are its waypoints in order. Skills is the
+// only one with no place to land at in the flight.
+export const ROUTE = [
+  { id: 'about', title: 'About', sub: 'the pilot' },
+  { id: 'experience', title: 'Experience', sub: 'the ascent' },
+  { id: 'projects', title: 'Projects', sub: 'the destinations' },
+  { id: 'skills', title: 'Skills', sub: 'the gear' },
+  { id: 'contact', title: 'Contact', sub: 'next flight' },
+];
+
+// Handwritten in the margin of a waypoint, on screens wide enough to have a margin.
+export const NOTES = {
+  about: 'A journey through code, systems and curiosity.',
+  experience: 'Higher, together.',
+  projects: 'Side quests build better engineers.',
+  contact: "Good people. Great projects. Let's fly.",
+};
 
 export const ABOUT = {
   paragraphs: [
@@ -52,8 +71,10 @@ export const ABOUT = {
   flags: ['martial-arts', 'endurance-sports', 'norse-history', 'game-design'],
 };
 
-// Newest first, from the CV. `text` is the short version on the page and `details` the full list shown when a
-// role is opened. In the flight each entry becomes a rune stone along the shore, oldest first.
+// Newest first, from the CV. `text` is the line always on the page. `report` is the field report a
+// role unfolds into: where things stood, what I did, and what changed, each taken from the CV's own
+// wording. `sketch` names the small interactive illustration that goes with a few of them. In the
+// flight each entry becomes a rune stone along the shore, oldest first.
 export const EXPERIENCE = [
   {
     hash: 'a1f09e2',
@@ -63,11 +84,15 @@ export const EXPERIENCE = [
     text:
       'Own the product vision and delivery of a major greenfield initiative. Designed the team\'s development ' +
       'process from scratch and lead the engineering unit, with the final say on UI and UX.',
-    details: [
-      'Directed the product vision and execution of a major greenfield initiative, aligning technical and business goals through close work with stakeholders.',
-      "Designed and implemented a development process from scratch, owning the sprint cadence and speeding up the team's delivery.",
-      'Lead the engineering unit and act as the final technical and aesthetic authority on UI and UX, holding the product to a mobile-first, user-centred standard.',
-    ],
+    report: {
+      situation: 'A major greenfield initiative at HQ.xyz, with the product vision and the delivery both in my hands.',
+      contribution: [
+        'Direct the product vision and its execution, working closely with stakeholders to keep the technical and business goals aligned.',
+        'Designed and implemented the development process from scratch, and own the sprint cadence.',
+        'Lead the engineering unit, and act as the final technical and aesthetic authority on UI and UX.',
+      ],
+      changed: ['The team delivers faster under the new process.', 'The product is held to a mobile-first, user-centred standard.'],
+    },
   },
   {
     hash: '7c3b91a',
@@ -78,16 +103,27 @@ export const EXPERIENCE = [
       'First in-house frontend lead, taking over a codebase built by a remote team. Introduced the application ' +
       'architecture and an Atomic Design component library, wrote the onboarding manual that became the living ' +
       'reference, and shipped a feature that salvaged funds usually lost to the quirks of early multi-sig wallets.',
-    details: [
-      "Led the frontend team as HQ's first in-house lead, taking charge of a codebase developed by a remote team.",
-      'Introduced a scalable application architecture, adopted over time, that sped up feature iteration and kept the codebase uniform and maintainable.',
-      'Designed and built a component library on Atomic Design principles, giving designers and developers a shared language for new screens and a consistent UI.',
-      'Ran sprint execution and resource allocation across the frontend team, keeping delivery and velocity high.',
-      'Worked with stakeholders across departments to scope and define features.',
-      "Wrote an in-depth onboarding manual that cut the supervision new remote contractors needed, and became the application's living reference.",
-      'Proposed and shipped custom solutions, such as a feature that salvaged funds typically lost when multi-sig wallets were still a new concept in Web3.',
-      'Built analytics tracking on APIs to get around the Web3 constraints that block third-party JavaScript trackers, shown in a Retool dashboard, so the product team could see how users behaved.',
-    ],
+    report: {
+      situation:
+        "HQ's frontend had been developed by a remote team. I joined as the first in-house frontend lead and took " +
+        'charge of that codebase.',
+      contribution: [
+        'Introduced a scalable application architecture, adopted over time.',
+        'Designed and built a component library on Atomic Design principles.',
+        'Wrote an in-depth onboarding manual for the application.',
+        'Built analytics tracking on APIs, shown in a Retool dashboard, to get around the Web3 constraints that block third-party JavaScript trackers.',
+        'Proposed and shipped custom solutions, such as a feature to salvage funds from early multi-sig wallets.',
+        'Ran sprint execution and resource allocation for the frontend team, and scoped features with stakeholders across departments.',
+      ],
+      changed: [
+        'Feature iteration sped up, and the codebase stayed uniform and maintainable.',
+        'Designers and developers got a shared language for new screens, and a consistent UI.',
+        "New remote contractors needed less supervision, and the manual became the application's living reference.",
+        'Funds that were typically lost, when multi-sig wallets were still new to Web3, were salvaged.',
+        'The product team could see how users behaved.',
+      ],
+    },
+    sketch: 'atoms',
   },
   {
     hash: '4e82d10',
@@ -98,14 +134,22 @@ export const EXPERIENCE = [
       'Rebuilt the engineering team from the ground up, two local and four remote developers, and set up a ' +
       'satellite office in Jakarta. Restructured an inherited codebase around Domain-Driven Design and sped up a ' +
       'bulk crypto payroll system with Redis and worker threads.',
-    details: [
-      'Restructured an inherited codebase with Domain-Driven Design, reducing duplication and speeding up development.',
-      'Raised the throughput of a bulk crypto payroll system with Redis and worker threads for parallel processing.',
-      'Strengthened security by integrating AWS Key Management Service to protect wallets and sensitive data.',
-      'Standardised coding practices with linters, formatters and other tooling.',
-      'Rebuilt the engineering team from the ground up, recruiting two local and four remote developers and establishing a satellite office in Jakarta.',
-      'Introduced local and test blockchain networks to validate core services before release.',
-    ],
+    report: {
+      situation: 'An inherited codebase, and an engineering team that had to be rebuilt from the ground up.',
+      contribution: [
+        'Recruited two local and four remote developers, and established a satellite office in Jakarta.',
+        'Restructured the inherited codebase with Domain-Driven Design.',
+        'Reworked a bulk crypto payroll system around Redis and worker threads, for parallel processing.',
+        'Integrated AWS Key Management Service to protect wallets and sensitive data.',
+        'Standardised coding practices with linters, formatters and other tooling, and introduced local and test blockchain networks.',
+      ],
+      changed: [
+        'Less duplication, and faster development.',
+        'Higher throughput for bulk payroll.',
+        'Core services validated on local and test networks before release.',
+      ],
+    },
+    sketch: 'payroll',
   },
   {
     hash: '9d5e7b4',
@@ -115,13 +159,17 @@ export const EXPERIENCE = [
     text:
       'Delivered core product features in a complex trading codebase, and made the order book fast enough for ' +
       'rapid updates with worker threads and the Canvas API.',
-    details: [
-      'Integrated into a complex codebase and delivered core product features under tight deadlines.',
-      'Worked with business stakeholders to gather requirements and shape solutions.',
-      'Coordinated with external vendors, including email and SMS providers and SaaS platforms.',
-      'Contributed to hiring by writing interview materials and running technical assessments.',
-      'Optimised the trading order book with worker threads and the Canvas API, so it could keep up with rapid updates.',
-    ],
+    report: {
+      situation: 'A complex trading codebase, tight deadlines, and an order book that had to keep up with rapid updates.',
+      contribution: [
+        'Delivered core product features under tight deadlines.',
+        'Optimised the trading order book with worker threads and the Canvas API.',
+        'Worked with business stakeholders on requirements, and coordinated external vendors: email and SMS providers and SaaS platforms.',
+        'Wrote interview materials and ran technical assessments for hiring.',
+      ],
+      changed: ['The order book kept up with rapid updates.'],
+    },
+    sketch: 'orderbook',
   },
   {
     hash: '3b6f0c1',
@@ -131,12 +179,16 @@ export const EXPERIENCE = [
     text:
       'Led four frontend engineers across two products, turning two siloed teams into one, and brought the team ' +
       'to adopt TypeScript and shared coding conventions.',
-    details: [
-      'Led a team of four frontend engineers across two products, unifying previously siloed teams.',
-      'Introduced weekly sync-ups for knowledge sharing and brainstorming, which lifted morale and collaboration.',
-      "Won the team's agreement to adopt TypeScript and standard coding conventions across both products.",
-      'Worked with cross-functional stakeholders to define product requirements and shape roadmaps.',
-    ],
+    report: {
+      situation: 'Four frontend engineers across two products, working as two siloed teams.',
+      contribution: [
+        'Led the four engineers as one team.',
+        'Introduced weekly sync-ups for knowledge sharing and brainstorming.',
+        "Won the team's agreement to adopt TypeScript and standard coding conventions across both products.",
+        'Worked with cross-functional stakeholders to define product requirements and shape roadmaps.',
+      ],
+      changed: ['Two siloed teams became one.', 'Morale and collaboration lifted.', 'TypeScript and shared conventions on both products.'],
+    },
   },
   {
     hash: 'e2a47d9',
@@ -146,11 +198,19 @@ export const EXPERIENCE = [
     text:
       'Finished a property management platform against a tight launch date, and built a framework-agnostic ' +
       'design system proof of concept that the company later adopted.',
-    details: [
-      'Joined mid-sprint to finish a property management platform under tight deadlines, for a launch on time.',
-      'Used a headless CMS to manage property listings and app content with less developer involvement.',
-      'Built and presented a framework-agnostic design system proof of concept, working with React, React Native, Vue and others on web and mobile, which was later adopted across the company.',
-    ],
+    report: {
+      situation: 'A property management platform with a launch date. I joined mid-sprint.',
+      contribution: [
+        'Finished the platform under tight deadlines.',
+        'Used a headless CMS to manage property listings and app content.',
+        'Built and presented a framework-agnostic design system proof of concept, working with React, React Native, Vue and others on web and mobile.',
+      ],
+      changed: [
+        'The platform launched on time.',
+        'Listings and content needed less developer involvement.',
+        'The design system was later adopted across the company.',
+      ],
+    },
   },
   {
     hash: '0a1c338',
@@ -160,11 +220,15 @@ export const EXPERIENCE = [
     text:
       'One of the earliest frontend hires. Shipped the flagship client-facing application on an accelerated ' +
       'schedule and introduced a headless CMS for the marketing pages.',
-    details: [
-      'Joined as one of the earliest frontend hires and met an accelerated launch schedule for the flagship client-facing application.',
-      'Contributed to public-facing apps and an internal tool, integrating several third-party SaaS products.',
-      'Proposed and implemented a headless CMS for the marketing pages, so blog posts and resources could be published without a developer.',
-    ],
+    report: {
+      situation: 'One of the earliest frontend hires, with the flagship client-facing application on an accelerated launch schedule.',
+      contribution: [
+        'Shipped the flagship client-facing application.',
+        'Contributed to public-facing apps and an internal tool, integrating several third-party SaaS products.',
+        'Proposed and implemented a headless CMS for the marketing pages.',
+      ],
+      changed: ['The accelerated launch schedule was met.', 'Blog posts and resources could be published without a developer.'],
+    },
   },
 ];
 
@@ -174,6 +238,7 @@ export const EXPERIENCE = [
 //             `tall` marks a phone screenshot, which sits beside the README's text, not under it
 //   `diagram` drawn in place of a screenshot when there is none, with `glyph` as its short form on a card
 //   `links`   only what a visitor can actually open; private repositories are left out
+//   `demo`    the playable preview that goes with it, for the projects that have one
 export const PROJECTS = [
   {
     id: 'hird',
@@ -202,6 +267,7 @@ export const PROJECTS = [
     },
     links: [],
     prop: 'shield-rack',
+    demo: 'hird',
   },
   {
     id: 'flight-log',
@@ -230,6 +296,7 @@ export const PROJECTS = [
     },
     links: [{ label: 'source', url: 'https://github.com/xXValhallaCoderXx/paragliding-tracker' }],
     prop: 'wing-bag',
+    demo: 'flight',
   },
   {
     id: 'sheetless',
@@ -252,6 +319,7 @@ export const PROJECTS = [
     image: { src: '/projects/sheetless.webp', alt: "Sheetless showing the next session: competition bench press, four sets of five, with the top set and estimated one-rep max." },
     links: [],
     prop: 'kettlebell',
+    demo: 'sets',
   },
   {
     id: 'sentiment-hound',

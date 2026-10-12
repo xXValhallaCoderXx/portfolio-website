@@ -154,6 +154,24 @@ export default function Fjord({ flying, armed, target, lost, warping, onArm, onE
     };
   }, [load]);
 
+  // As the hero scrolls away the backdrop's camera climbs, and the scene itself scrolls at half
+  // speed, so the glider stays in view while the fjord below it turns into a map.
+  useEffect(() => {
+    if (flying || !live) return undefined;
+    const follow = () => {
+      const gone = Math.min(1, scrollY / Math.max(1, stage.current.offsetHeight));
+      game.current?.rise(gone);
+      stage.current.style.translate = `0 ${(gone * 46).toFixed(2)}%`;
+    };
+    follow();
+    addEventListener('scroll', follow, { passive: true });
+    return () => {
+      removeEventListener('scroll', follow);
+      game.current?.rise(0);
+      if (stage.current) stage.current.style.translate = '';
+    };
+  }, [flying, live]);
+
   // The scene's lens widens as a warp builds and settles once the swap is made.
   const wasWarping = useRef(false);
   useEffect(() => {
