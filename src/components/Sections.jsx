@@ -117,7 +117,7 @@ function ProjectsBody() {
               <p>{project.tagline}</p>
             </div>
             {project.video ? <ProjectVideo project={project} /> : <Preview project={project} />}
-            {i === 0 && (
+            {i === 0 && !project.video && (
               <figure className="destination-shot">
                 <ProjectPicture project={project} />
               </figure>

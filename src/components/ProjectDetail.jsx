@@ -162,7 +162,7 @@ export default function ProjectDetail({ project, onBack, onOpen, embedded = fals
             <>
               <ProjectVideo project={project} />
               <figcaption className="hero-caption">
-                <span>{project.video.duration}s · native app walkthrough with sample data</span>
+                <span>{project.video.duration}s · product walkthrough with sample data</span>
                 {heroScreen && (
                   <button type="button" className="link" onClick={() => setGallery(0)}>
                     open gallery ↗

@@ -587,7 +587,8 @@
   grid-area: text;
 }
 
-.featured .scene {
+.featured .scene,
+.featured > .project-video {
   grid-area: scene;
 }
 
