@@ -1,3 +1,7 @@
+export function isPortraitScreen(project, screen) {
+  return screen?.orientation ? screen.orientation === 'portrait' : !!project.image?.tall;
+}
+
 /** A shared terminal frame for project screenshots and feature-tour highlights. */
 export default function ProjectScreen({ project, screen, highlight = null, onOpen }) {
   if (!screen) return null;
@@ -21,7 +25,7 @@ export default function ProjectScreen({ project, screen, highlight = null, onOpe
   );
 
   return (
-    <div className={`project-screen${project.image?.tall ? ' portrait' : ''}`}>
+    <div className={`project-screen${isPortraitScreen(project, screen) ? ' portrait' : ''}`}>
       <div className="screen-chrome">
         <span className="screen-lights" aria-hidden="true">
           <i />

@@ -4,6 +4,7 @@ import { DEMOS } from './demos/index.js';
 import Experience from './Experience.jsx';
 import Sheet from './Sheet.jsx';
 import ProjectDetail from './ProjectDetail.jsx';
+import ProjectVideo from './ProjectVideo.jsx';
 
 // The body of each section. The page's waypoints and the flight's landing panels both render these.
 
@@ -115,7 +116,7 @@ function ProjectsBody() {
               <h3>{project.title}</h3>
               <p>{project.tagline}</p>
             </div>
-            <Preview project={project} />
+            {project.video ? <ProjectVideo project={project} /> : <Preview project={project} />}
             {i === 0 && (
               <figure className="destination-shot">
                 <ProjectPicture project={project} />

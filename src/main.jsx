@@ -6,6 +6,7 @@ import './route.css';
 import './demos.css';
 import './experience.css';
 import './project.css';
+import './projectMedia.css';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

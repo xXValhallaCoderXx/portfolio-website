@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { pauseProjectVideos } from '../projectMedia.js';
+import { isPortraitScreen } from './ProjectScreen.jsx';
 
 const clampIndex = (index, count) => Math.max(0, Math.min(index, count - 1));
 
@@ -9,6 +11,7 @@ export default function ScreenGallery({ project, initialIndex = 0, onClose }) {
   const [index, setIndex] = useState(() => clampIndex(initialIndex, screens.length));
   const dialogRef = useRef(null);
   const closeRef = useRef(null);
+  const thumbnailsRef = useRef(null);
   const titleId = useId();
   const captionId = useId();
   const screen = screens[index] || screens[0];
@@ -24,6 +27,7 @@ export default function ScreenGallery({ project, initialIndex = 0, onClose }) {
     const trigger = document.activeElement;
     const root = document.documentElement;
     const wasLocked = root.classList.contains('gallery-open');
+    pauseProjectVideos();
     root.classList.add('gallery-open');
     if (!dialog.open) dialog.showModal();
     closeRef.current?.focus();
@@ -36,6 +40,27 @@ export default function ScreenGallery({ project, initialIndex = 0, onClose }) {
       }
     };
   }, [project.id]);
+
+  useEffect(() => {
+    const strip = thumbnailsRef.current;
+    if (!strip) return undefined;
+
+    // Follow selection without moving focus or the gallery's vertical scroll.
+    const revealSelection = () => {
+      if (strip.scrollWidth <= strip.clientWidth) return;
+      const selected = strip.querySelector('[aria-pressed="true"]');
+      if (!selected) return;
+      const bounds = strip.getBoundingClientRect();
+      const button = selected.getBoundingClientRect();
+      if (button.left < bounds.left) strip.scrollLeft += button.left - bounds.left;
+      else if (button.right > bounds.right) strip.scrollLeft += button.right - bounds.right;
+    };
+
+    revealSelection();
+    const observer = new ResizeObserver(revealSelection);
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [index, project.id]);
 
   if (!screen) return null;
 
@@ -109,7 +134,7 @@ export default function ScreenGallery({ project, initialIndex = 0, onClose }) {
         </button>
       </header>
 
-      <div className={`gallery-media${project.image?.tall ? ' portrait' : ''}`}>
+      <div className={`gallery-media${isPortraitScreen(project, screen) ? ' portrait' : ''}`}>
         <img src={screen.src} alt={screen.alt} decoding="async" />
       </div>
 
@@ -144,7 +169,7 @@ export default function ScreenGallery({ project, initialIndex = 0, onClose }) {
         </button>
       </nav>
 
-      <div className="gallery-thumbnails" role="group" aria-label="Select a screen">
+      <div ref={thumbnailsRef} className="gallery-thumbnails" role="group" aria-label="Select a screen">
         {screens.map((item, itemIndex) => (
           <button
             key={item.id}
@@ -153,7 +178,7 @@ export default function ScreenGallery({ project, initialIndex = 0, onClose }) {
             aria-pressed={itemIndex === index}
             aria-label={`Show ${item.title}`}
           >
-            <img src={item.src} alt="" loading="lazy" decoding="async" />
+            <img src={item.thumbnail ?? item.src} alt="" loading="lazy" decoding="async" />
             <span>{item.title}</span>
           </button>
         ))}

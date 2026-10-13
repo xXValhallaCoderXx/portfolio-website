@@ -1,8 +1,9 @@
 import { Fragment, useState } from 'react';
 import { PROJECTS } from '../content.js';
 import { DEMOS } from './demos/index.js';
-import ProjectScreen from './ProjectScreen.jsx';
+import ProjectScreen, { isPortraitScreen } from './ProjectScreen.jsx';
 import ScreenGallery from './ScreenGallery.jsx';
+import ProjectVideo from './ProjectVideo.jsx';
 
 const number = (index) => String(index + 1).padStart(2, '0');
 
@@ -156,8 +157,20 @@ export default function ProjectDetail({ project, onBack, onOpen, embedded = fals
             )}
           </div>
         </div>
-        <figure className={`project-visual${project.image?.tall ? ' portrait' : ''}`}>
-          {heroScreen ? (
+        <figure className={`project-visual${project.video ? ' video' : isPortraitScreen(project, heroScreen) ? ' portrait' : ''}`}>
+          {project.video ? (
+            <>
+              <ProjectVideo project={project} />
+              <figcaption className="hero-caption">
+                <span>{project.video.duration}s · native app walkthrough with sample data</span>
+                {heroScreen && (
+                  <button type="button" className="link" onClick={() => setGallery(0)}>
+                    open gallery ↗
+                  </button>
+                )}
+              </figcaption>
+            </>
+          ) : heroScreen ? (
             <>
               <div className={`screen-deck${screens.length > 1 ? ' stacked' : ''}`}>
                 {screens.length > 1 &&

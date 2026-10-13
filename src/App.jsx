@@ -6,6 +6,7 @@ import { OpenProject } from './components/Sections.jsx';
 import Warp from './components/Warp.jsx';
 import { PROFILE, PROJECTS, ROUTE } from './content.js';
 import { ACHIEVEMENTS, beltFor, readProgress } from './game/achievements.js';
+import { pauseProjectVideos } from './projectMedia.js';
 
 const FLY = '/fly';
 const isFlightAddress = () => location.pathname.replace(/\/$/, '') === FLY;
@@ -133,6 +134,11 @@ export default function App() {
 
   // While the warp builds, the page's own content pulls away toward the viewer.
   const building = !!warp && !warp.crossed;
+  useEffect(() => {
+    // The home route stays mounted behind project pages and the flight.
+    pauseProjectVideos();
+  }, [project, flight.on, building]);
+
   useEffect(() => {
     document.documentElement.classList.toggle('warping', building);
   }, [building]);

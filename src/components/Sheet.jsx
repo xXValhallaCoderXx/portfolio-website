@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { pauseProjectVideos } from '../projectMedia.js';
 
 // Native dialogs own focus and dismiss only the newest window. Keep the sheet list for the
 // page's scroll lock and to avoid restoring focus beneath a newer sheet during cleanup.
@@ -20,12 +21,14 @@ export default function Sheet({ title, label, onClose, className = '', children 
   useEffect(() => {
     const dialog = dialogRef.current;
     const trigger = document.activeElement;
+    pauseProjectVideos();
     open.push(dialog);
     document.documentElement.classList.add('reading');
     if (!dialog.open) dialog.showModal();
     closeRef.current?.focus();
 
     return () => {
+      pauseProjectVideos();
       const wasTop = open.at(-1) === dialog;
       open.splice(open.indexOf(dialog), 1);
       if (dialog.open) dialog.close();

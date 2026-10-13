@@ -620,6 +620,10 @@
   margin-top: auto;
 }
 
+.destination > .project-video {
+  margin-top: auto;
+}
+
 .destination .try {
   align-self: flex-start;
 }
