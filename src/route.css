@@ -354,174 +354,7 @@
   color: var(--cyan);
 }
 
-/* ---- 02 experience: the stops on the left, the ridge they climb on the right */
-
-.ascent {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 380px);
-  gap: 40px;
-  align-items: start;
-}
-
-.stops {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.stop {
-  padding: 18px 20px 18px 22px;
-  border-left: 2px solid var(--rule);
-  transition:
-    border-color 0.25s,
-    background 0.25s;
-}
-
-.stop.lit {
-  border-left-color: var(--cyan);
-  background: linear-gradient(90deg, rgba(45, 212, 238, 0.07), rgba(45, 212, 238, 0) 70%);
-}
-
-.stop.open {
-  border-left-color: var(--ember);
-}
-
-.stop-when {
-  margin: 0 0 2px;
-  color: var(--dim);
-  font-size: 12px;
-  letter-spacing: 0.06em;
-}
-
-.camp-tag {
-  margin-right: 8px;
-  color: var(--cyan);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.stop h3 {
-  margin: 0 0 6px;
-  font-size: 17px;
-  font-weight: 400;
-  line-height: 1.45;
-}
-
-.stop h3 b {
-  color: var(--blue);
-}
-
-.stop-text {
-  margin-bottom: 8px;
-}
-
-.stop > .link {
-  font-size: 13px;
-}
-
-/* A role unfolded into its field report, in the page rather than over it. */
-.report {
-  margin-top: 16px;
-  padding: 18px 20px 20px;
-  border: 1px solid var(--rule);
-  background: rgba(8, 14, 26, 0.86);
-  animation: unfold 0.35s ease-out;
-  container-type: inline-size;
-}
-
-@keyframes unfold {
-  from {
-    opacity: 0;
-    translate: 0 -8px;
-  }
-}
-
-.report-title {
-  color: var(--blue);
-  font-size: 12px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-}
-
-/* Where things stood and what changed, beside the longer list of what I did. */
-.report-parts {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
-  grid-template-rows: auto 1fr;
-  grid-template-areas:
-    'situation contribution'
-    'changed   contribution';
-  gap: 20px 32px;
-}
-
-.situation {
-  grid-area: situation;
-}
-
-.contribution {
-  grid-area: contribution;
-}
-
-.changed {
-  grid-area: changed;
-}
-
-@container (max-width: 560px) {
-  .report-parts {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: none;
-    grid-template-areas: 'situation' 'contribution' 'changed';
-  }
-}
-
-.report h4 {
-  margin: 0 0 6px;
-  color: var(--cyan);
-  font-size: 13px;
-}
-
-.report p {
-  margin: 0;
-}
-
-.report ul {
-  margin: 0;
-  padding-left: 18px;
-}
-
-.report li {
-  margin-bottom: 7px;
-}
-
-.report li::marker {
-  color: var(--dim);
-}
-
-/* What changed is marked as a gain. */
-.changed ul {
-  padding-left: 20px;
-  list-style: none;
-}
-
-.changed li {
-  position: relative;
-}
-
-.changed li::before {
-  content: '▲';
-  position: absolute;
-  top: 0.45em;
-  left: -19px;
-  color: #5fd38d;
-  font-size: 9px;
-  line-height: 1;
-}
-
-.behind {
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px dashed var(--rule);
-}
+/* ---- 02 experience: the existing desktop ridge and live view */
 
 .ridge {
   position: sticky;
@@ -754,7 +587,8 @@
   grid-area: text;
 }
 
-.featured .scene {
+.featured .scene,
+.featured > .project-video {
   grid-area: scene;
 }
 
@@ -784,6 +618,10 @@
 }
 
 .destination .scene {
+  margin-top: auto;
+}
+
+.destination > .project-video {
   margin-top: auto;
 }
 
@@ -873,146 +711,12 @@
   font-size: 13px;
 }
 
-/* ---- a project's report, on its own page or in a sheet over the flight */
-
-.dossier {
-  display: grid;
-  gap: 34px;
-  font-size: 15px;
-  line-height: 1.75;
-}
-
-.dossier h3 {
-  margin: 0 0 10px;
-  color: var(--cyan);
-  font-size: 13px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-}
-
-.dossier p {
-  max-width: 74ch;
-}
-
-.dossier .lead {
-  font-size: 16px;
-}
-
-.dossier .built {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-  gap: 30px;
-  align-items: start;
-}
-
-/* A phone screenshot is tall and narrow, so it gets a narrower column. */
-.dossier.tall .built {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 260px);
-}
-
-.dossier ul {
-  margin: 0;
-  padding-left: 18px;
-}
-
-.dossier li {
-  margin-bottom: 8px;
-}
-
-.dossier li::marker {
-  color: var(--cyan);
-}
-
-.dossier figure {
-  margin: 0;
-  container-type: inline-size;
-}
-
-.dossier figure img {
-  display: block;
-  width: 100%;
-  border: 1px solid var(--rule);
-}
-
-.dossier figure .diagram {
-  padding: 30px 12px;
-  border: 1px solid var(--rule);
-}
-
-.dossier .scene {
-  max-width: 780px;
-}
-
-.dossier .tags {
-  margin: 10px 0 0;
-}
-
-.project-page {
-  max-width: 1040px;
-  margin: 0 auto;
-  padding: calc(var(--bar) + 30px) 24px 44px;
-  animation: approach 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
-}
-
-/* A project's page comes up as if you were closing in on it. */
-@keyframes approach {
-  from {
-    opacity: 0;
-    filter: blur(5px);
-    transform: translateY(20px) scale(0.985);
-  }
-}
-
-.crumbs,
-.onward {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 20px;
-  font-size: 13px;
-}
-
-.project-head {
-  margin: 38px 0 34px;
-}
-
-.project-head p {
-  margin: 0;
-}
-
-.project-head .dim {
-  font-size: 12px;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-}
-
-.project-head .shout {
-  margin: 6px 0 14px;
-  font-size: clamp(30px, 6vw, 60px);
-}
-
-.project-head .lead {
-  max-width: 58ch;
-  color: var(--text);
-  font-size: 17px;
-}
-
-.onward {
-  justify-content: space-between;
-  margin-top: 48px;
-  padding-top: 18px;
-  border-top: 1px solid var(--rule);
-}
-
 /* ---- where there is less room: in a landing panel, on a tablet, on a phone */
 
 @container (max-width: 820px) {
   .about,
-  .ascent,
   .playable,
-  .side-quests,
-  .dossier .built,
-  .dossier.tall .built {
+  .side-quests {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -1128,20 +832,13 @@
     text-align: left;
   }
 
-  .destination,
-  .report {
+  .destination {
     padding: 14px;
   }
 
-  .project-page {
-    padding-right: 16px;
-    padding-left: 16px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .report,
-  .project-page,
   .ridge-trail,
   .glider .aura,
   .here .aura,

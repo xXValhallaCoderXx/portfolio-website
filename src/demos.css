@@ -169,8 +169,8 @@ button.seat:focus-visible {
   list-style: none;
 }
 
-.dossier .timeline,
-.dossier .inspect {
+.project-detail .timeline,
+.project-detail .inspect {
   min-height: calc(9.3em + 16px);
 }
 
@@ -209,6 +209,91 @@ button.seat:focus-visible {
   position: relative;
 }
 
+/* The full report keeps the pipeline on desktop and lets a phone inspect one stage at a time. */
+.hird-demo.detail .swarm-mobile {
+  display: none;
+}
+
+.hird-demo.detail .seat,
+.hird-demo.detail .demo-bar button {
+  min-height: 44px;
+}
+
+.hird-demo.detail .swarm-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.hird-demo.detail .swarm-track::before {
+  content: '';
+  position: absolute;
+  top: 21px;
+  left: 12.5%;
+  right: 12.5%;
+  height: 1px;
+  background: var(--rule);
+}
+
+.hird-demo.detail .swarm-track button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 66px;
+  padding: 10px 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.hird-demo.detail .swarm-track button > span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: var(--raised);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.hird-demo.detail .swarm-track button[aria-pressed='true'] {
+  color: var(--text);
+}
+
+.hird-demo.detail .swarm-track button[aria-pressed='true'] > span {
+  border-color: var(--cyan);
+  background: var(--cyan);
+  color: var(--bg);
+}
+
+.hird-demo.detail .swarm-track button:focus-visible {
+  outline: 1px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.hird-demo.detail .swarm-track button:hover > span {
+  border-color: var(--cyan);
+}
+
+.hird-demo.detail .swarm-seats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hird-demo.detail .swarm-seats .seat {
+  width: auto;
+  max-width: 100%;
+  padding: 8px 10px;
+}
+
 @container (max-width: 560px) {
   .swarm {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -216,6 +301,47 @@ button.seat:focus-visible {
 
   .stage + .stage::before {
     content: none;
+  }
+
+  .hird-demo.detail .swarm {
+    display: none;
+  }
+
+  .hird-demo.detail .swarm-mobile {
+    display: grid;
+    gap: 10px;
+  }
+
+  .hird-demo.detail .demo-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+  }
+
+  .hird-demo.detail .demo-bar .launch {
+    grid-column: 1 / -1;
+    min-height: 48px;
+  }
+
+  .hird-demo.detail .demo-bar .link {
+    grid-column: 1;
+    grid-row: 2;
+    text-align: left;
+  }
+
+  .hird-demo.detail .demo-bar .spacer {
+    display: none;
+  }
+
+  .hird-demo.detail .timeline-back {
+    display: none;
+  }
+
+  .hird-demo.detail .meter {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    white-space: nowrap;
   }
 }
 

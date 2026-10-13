@@ -6,6 +6,7 @@ import { OpenProject } from './components/Sections.jsx';
 import Warp from './components/Warp.jsx';
 import { PROFILE, PROJECTS, ROUTE } from './content.js';
 import { ACHIEVEMENTS, beltFor, readProgress } from './game/achievements.js';
+import { pauseProjectVideos } from './projectMedia.js';
 
 const FLY = '/fly';
 const isFlightAddress = () => location.pathname.replace(/\/$/, '') === FLY;
@@ -134,6 +135,11 @@ export default function App() {
   // While the warp builds, the page's own content pulls away toward the viewer.
   const building = !!warp && !warp.crossed;
   useEffect(() => {
+    // The home route stays mounted behind project pages and the flight.
+    pauseProjectVideos();
+  }, [project, flight.on, building]);
+
+  useEffect(() => {
     document.documentElement.classList.toggle('warping', building);
   }, [building]);
 
@@ -176,6 +182,7 @@ export default function App() {
             {ROUTE.map((waypoint, i) => (
               <a
                 href={`${project ? '/' : ''}#${waypoint.id}`}
+                aria-current={project && waypoint.id === 'projects' ? 'page' : undefined}
                 onClick={(event) => {
                   // On the main page the link's own address does the work.
                   if (!project) return;
@@ -247,7 +254,7 @@ export default function App() {
         </OpenProject.Provider>
       </div>
 
-      {project && !flight.on && <ProjectPage project={project} onBack={() => closeProject()} onOpen={openProject} onFly={takeFlight} />}
+      {project && !flight.on && <ProjectPage key={project.id} project={project} onBack={() => closeProject()} onOpen={openProject} onFly={takeFlight} />}
 
       <footer className="footer">
         <span>

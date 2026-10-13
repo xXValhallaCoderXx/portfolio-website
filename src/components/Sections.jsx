@@ -1,9 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { ABOUT, CONTACT, EXPERIENCE, PROJECTS, SKILLS, STATS } from '../content.js';
+import { createContext, useCallback, useContext, useState } from 'react';
+import { ABOUT, CONTACT, PROJECTS, SKILLS, STATS } from '../content.js';
 import { DEMOS } from './demos/index.js';
-import { SKETCHES } from './sketches/index.js';
-import Ridge from './Ridge.jsx';
+import Experience from './Experience.jsx';
 import Sheet from './Sheet.jsx';
+import ProjectDetail from './ProjectDetail.jsx';
+import ProjectVideo from './ProjectVideo.jsx';
 
 // The body of each section. The page's waypoints and the flight's landing panels both render these.
 
@@ -41,139 +42,12 @@ function AboutBody() {
   );
 }
 
-/** One role unfolded: where things stood, what I did, and what changed. */
-function FieldReport({ entry, id }) {
-  const Sketch = SKETCHES[entry.sketch];
-  const { situation, contribution, changed } = entry.report;
-  return (
-    <div className="report" id={id} role="region" aria-label={`Field report: ${entry.role} at ${entry.company}`}>
-      <p className="report-title">
-        field report <span className="dim">· {entry.hash}</span>
-      </p>
-      <div className="report-parts">
-        <section className="situation">
-          <h4>The situation</h4>
-          <p>{situation}</p>
-        </section>
-        <section className="contribution">
-          <h4>My contribution</h4>
-          <ul>
-            {contribution.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </section>
-        <section className="changed">
-          <h4>What changed</h4>
-          <ul>
-            {changed.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </section>
-      </div>
-      {Sketch && (
-        <section className="behind">
-          <h4>Behind the scenes</h4>
-          <Sketch />
-        </section>
-      )}
-    </div>
-  );
-}
-
-function ExperienceBody() {
-  const [open, setOpen] = useState(null);
-  // The role under the reader's eye, and the one under their pointer or keyboard focus if any.
-  const [near, setNear] = useState(EXPERIENCE[0].hash);
-  const [pointed, setPointed] = useState(null);
-  const list = useRef(null);
-
-  useEffect(() => {
-    let queued = 0;
-    const read = () => {
-      queued = 0;
-      const line = innerHeight * 0.42;
-      let best = null;
-      for (const stop of list.current?.children ?? []) {
-        const box = stop.getBoundingClientRect();
-        const distance = box.top > line ? box.top - line : box.bottom < line ? line - box.bottom : 0;
-        if (!best || distance < best.distance) best = { hash: stop.dataset.hash, distance };
-      }
-      if (best) setNear(best.hash);
-    };
-    const onScroll = () => {
-      queued ||= requestAnimationFrame(read);
-    };
-    read();
-    // Captured, so that scrolling inside a landing panel in the flight counts as well.
-    addEventListener('scroll', onScroll, { capture: true, passive: true });
-    addEventListener('resize', onScroll);
-    return () => {
-      cancelAnimationFrame(queued);
-      removeEventListener('scroll', onScroll, { capture: true });
-      removeEventListener('resize', onScroll);
-    };
-  }, []);
-
-  // A camp picked on the ridge unfolds its role and brings it into view.
-  const pick = useCallback((hash) => {
-    setOpen(hash);
-    requestAnimationFrame(() =>
-      list.current?.querySelector(`[data-hash="${hash}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }),
-    );
-  }, []);
-
-  const lit = pointed ?? near;
-  return (
-    <div className="ascent">
-      <ol className="stops" ref={list}>
-        {EXPERIENCE.map((entry, i) => {
-          const unfolded = open === entry.hash;
-          const reportId = `report-${entry.hash}`;
-          return (
-            <li
-              className={`stop${unfolded ? ' open' : ''}${lit === entry.hash ? ' lit' : ''}`}
-              data-hash={entry.hash}
-              onPointerEnter={() => setPointed(entry.hash)}
-              onPointerLeave={() => setPointed(null)}
-              onFocus={() => setPointed(entry.hash)}
-              onBlur={() => setPointed(null)}
-              key={entry.hash}
-            >
-              <p className="stop-when">
-                <span className="camp-tag">camp {EXPERIENCE.length - i}</span> {entry.years}
-              </p>
-              <h3>
-                {entry.company} <span className="dim">·</span> <b>{entry.role}</b>
-              </h3>
-              <p className="stop-text">{entry.text}</p>
-              <button
-                className="link"
-                aria-expanded={unfolded}
-                aria-controls={reportId}
-                onClick={() => setOpen(unfolded ? null : entry.hash)}
-              >
-                [ {unfolded ? 'close this chapter ↑' : 'explore this chapter ↓'} ]
-              </button>
-              {unfolded && <FieldReport entry={entry} id={reportId} />}
-            </li>
-          );
-        })}
-      </ol>
-      <Ridge roles={EXPERIENCE} lit={lit} open={open} onPick={pick} />
-    </div>
-  );
-}
-
 /**
- * A project's picture: its screenshot, or when there is none its diagram (in the report) or the
- * short glyph that stands in for it in a list.
+ * A project's card picture, or the short glyph that stands in for it in a list.
  */
-function ProjectPicture({ project, full = false }) {
-  if (!project.image) return <pre className="diagram">{full ? project.diagram : project.glyph}</pre>;
-  const src = full && project.image.full ? project.image.full : project.image.src;
-  return <img src={src} alt={project.image.alt} loading="lazy" />;
+function ProjectPicture({ project }) {
+  if (!project.image) return <pre className="diagram">{project.glyph}</pre>;
+  return <img src={project.image.src} alt={project.image.alt} loading="lazy" />;
 }
 
 function ProjectLinks({ project }) {
@@ -182,61 +56,6 @@ function ProjectLinks({ project }) {
       [ {link.label} ↗ ]
     </a>
   ));
-}
-
-/** Everything about one project, in reading order. The page and the flight both show this. */
-export function ProjectReport({ project }) {
-  const Demo = DEMOS[project.demo];
-  return (
-    <div className={`dossier${project.image?.tall ? ' tall' : ''}`}>
-      <section>
-        <h3>What it is</h3>
-        <p className="lead">{project.summary}</p>
-      </section>
-      {Demo && (
-        <section>
-          <h3>Try it</h3>
-          <div className="scene">
-            <Demo />
-          </div>
-        </section>
-      )}
-      {project.why && (
-        <section>
-          <h3>Why I built it</h3>
-          <p>{project.why}</p>
-        </section>
-      )}
-      <section className="built">
-        <div>
-          <h3>What I built</h3>
-          <ul>
-            {project.built.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </div>
-        <figure>
-          <ProjectPicture project={project} full />
-        </figure>
-      </section>
-      <section>
-        <h3>Where it stands</h3>
-        <p>
-          <span className="status">{project.status}</span> <span className="dim">{project.year}</span>
-        </p>
-        <p className="tags">
-          {project.tags.map((tag) => (
-            <span key={tag}>{tag}</span>
-          ))}
-        </p>
-        <p className="links">
-          <ProjectLinks project={project} />
-          {project.links.length === 0 && <span className="dim">// the repository is private</span>}
-        </p>
-      </section>
-    </div>
-  );
 }
 
 /**
@@ -297,8 +116,8 @@ function ProjectsBody() {
               <h3>{project.title}</h3>
               <p>{project.tagline}</p>
             </div>
-            <Preview project={project} />
-            {i === 0 && (
+            {project.video ? <ProjectVideo project={project} /> : <Preview project={project} />}
+            {i === 0 && !project.video && (
               <figure className="destination-shot">
                 <ProjectPicture project={project} />
               </figure>
@@ -336,13 +155,20 @@ function ProjectsBody() {
         ))}
       </ul>
       {reading && (
-        <Sheet title={`${reading.path} — destination report`} label={reading.title} onClose={close}>
-          <div className="readme-body">
-            <div>
-              <h2 className="report-name">{reading.title}</h2>
-              <p className="dim">{reading.tagline}</p>
-              <ProjectReport project={reading} />
-            </div>
+        <Sheet
+          key={reading.id}
+          title={`${reading.path} — destination report`}
+          label={reading.title}
+          className="project-report-window"
+          onClose={close}
+        >
+          <div className="readme-body project-report-body">
+            <ProjectDetail
+              project={reading}
+              onBack={close}
+              onOpen={(id) => setReading(PROJECTS.find((project) => project.id === id))}
+              embedded
+            />
           </div>
         </Sheet>
       )}
@@ -387,4 +213,10 @@ function ContactBody() {
   );
 }
 
-export const BODIES = { about: AboutBody, experience: ExperienceBody, projects: ProjectsBody, skills: SkillsBody, contact: ContactBody };
+export const BODIES = {
+  about: AboutBody,
+  experience: Experience,
+  projects: ProjectsBody,
+  skills: SkillsBody,
+  contact: ContactBody,
+};

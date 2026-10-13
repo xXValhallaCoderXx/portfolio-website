@@ -185,11 +185,14 @@ export default function Route({ onFly, hud }) {
       if (reached !== current) {
         current = reached;
         el.querySelectorAll('.waypoint').forEach((waypoint, i) => waypoint.classList.toggle('reached', i <= reached));
-        document.querySelectorAll('.tabs a').forEach((tab) => {
-          if (tab.getAttribute('href') === `#${ROUTE[reached]?.id}`) tab.setAttribute('aria-current', 'true');
-          else tab.removeAttribute('aria-current');
-        });
       }
+      // The standalone report owns /# links. Refresh home tabs even when returning to the
+      // same waypoint, since React clears the report's active tab when the page changes.
+      document.querySelectorAll('.tabs a[href^="#"]').forEach((tab) => {
+        const active = tab.getAttribute('href') === `#${ROUTE[reached]?.id}`;
+        if (active && !tab.hasAttribute('aria-current')) tab.setAttribute('aria-current', 'true');
+        else if (!active && tab.hasAttribute('aria-current')) tab.removeAttribute('aria-current');
+      });
       if (hud?.current) {
         const height = Math.round((TAKE_OFF * (1 - covered / course.length)) / 10) * 10;
         const place = reached < 0 ? 'take-off' : `wpt ${String(reached + 1).padStart(2, '0')} ${ROUTE[reached].id}`;
@@ -215,7 +218,7 @@ export default function Route({ onFly, hud }) {
       cancelAnimationFrame(frame);
       removeEventListener('scroll', follow);
       removeEventListener('resize', trace);
-      document.querySelectorAll('.tabs a').forEach((tab) => tab.removeAttribute('aria-current'));
+      document.querySelectorAll('.tabs a[href^="#"]').forEach((tab) => tab.removeAttribute('aria-current'));
     };
   }, [hud]);
 
