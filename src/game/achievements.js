@@ -10,6 +10,11 @@ export const ACHIEVEMENTS = [
   { id: 'valkyrie', name: 'Valkyrie', text: 'Climb above 330 m.' },
   { id: 'tour', name: 'Grand tour', text: 'Land at all four places.' },
   { id: 'reserve', name: 'Reserve ride', text: 'Throw your reserve when a page goes missing.' },
+  { id: 'bullseye', name: 'Bullseye', text: 'Land manually within 1 m of the centre.' },
+  { id: 'four-for-four', name: 'Four for four', text: 'Land a manual bullseye at all four places.' },
+  { id: 'cloudbase-500', name: 'Above the mist', text: 'Reach 500 m in Cloudbase.' },
+  { id: 'cloudbase-1000', name: 'Cloud climber', text: 'Reach 1,000 m in Cloudbase.' },
+  { id: 'cloudbase-1500', name: 'Skyward', text: 'Reach 1,500 m in Cloudbase.' },
 ];
 
 // One belt per achievement earned, topping out at black. Swap in your own art's grading order.
@@ -18,20 +23,49 @@ export const BELTS = ['white', 'yellow', 'orange', 'green', 'blue', 'purple', 'b
 export const beltFor = (progress) => BELTS[Math.min(progress.unlocked.length, BELTS.length - 1)];
 
 const STORE = 'fjord-glider-v1';
+const PLACE_IDS = ['about', 'experience', 'projects', 'contact'];
+const ACHIEVEMENT_IDS = new Set(ACHIEVEMENTS.map(({ id }) => id));
+let sessionProgress;
 
-export function readProgress() {
-  const progress = { unlocked: [], visited: [], stones: [] };
-  try {
-    Object.assign(progress, JSON.parse(localStorage.getItem(STORE) ?? '{}'));
-  } catch {
-    // Storage can be blocked; progress then lasts for the session only.
+export function emptyProgress() {
+  return { unlocked: [], visited: [], stones: [], landingBests: {}, cloudbase: { discovered: false, bestAltitude: 0 } };
+}
+
+export function normalizeProgress(saved) {
+  const progress = emptyProgress();
+  if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return progress;
+  const unique = (value, accepts) => (Array.isArray(value) ? [...new Set(value.filter(accepts))] : []);
+  const nonnegative = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+  progress.unlocked = unique(saved.unlocked, (id) => ACHIEVEMENT_IDS.has(id));
+  progress.visited = unique(saved.visited, (id) => PLACE_IDS.includes(id));
+  progress.stones = unique(saved.stones, (id) => Number.isInteger(id) && id >= 0);
+  for (const id of PLACE_IDS) {
+    if (nonnegative(saved.landingBests?.[id])) progress.landingBests[id] = saved.landingBests[id];
   }
+  progress.cloudbase.discovered = saved.cloudbase?.discovered === true;
+  if (nonnegative(saved.cloudbase?.bestAltitude)) progress.cloudbase.bestAltitude = saved.cloudbase.bestAltitude;
   return progress;
 }
 
-export function writeProgress(progress) {
+export function readProgress() {
+  let saved;
   try {
-    localStorage.setItem(STORE, JSON.stringify(progress));
+    saved = localStorage.getItem(STORE);
+  } catch {
+    // Storage can be blocked; progress then lasts for the session only.
+    return normalizeProgress(sessionProgress);
+  }
+  try {
+    return normalizeProgress(JSON.parse(saved ?? '{}'));
+  } catch {
+    return emptyProgress();
+  }
+}
+
+export function writeProgress(progress) {
+  sessionProgress = normalizeProgress(progress);
+  try {
+    localStorage.setItem(STORE, JSON.stringify(sessionProgress));
   } catch {
     // See above.
   }

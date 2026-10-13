@@ -61,6 +61,10 @@
   right: 0;
   z-index: 3;
   width: min(380px, calc(100vw - 32px));
+  /* On a short screen the list scrolls inside itself, so its last buttons can always be reached. */
+  max-height: calc(100svh - 72px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 12px 16px 14px;
   border: 1px solid var(--rule);
   background: var(--panel);
@@ -443,4 +447,73 @@
 
 .fj-fade.on {
   opacity: 1;
+}
+
+/* A finished run leaves the keyboard/touch focus with its reading or retry controls. */
+.cloudbase-ended .fj-touch,
+.cloudbase-ended .fj-labels {
+  display: none !important;
+}
+
+.fj-keys > [data-do='cloudbase'],
+.fj-keys > [data-do='quit-cloudbase'] {
+  margin-top: 10px;
+  min-height: 44px;
+}
+
+.cloudbase [data-hud='alt'] {
+  color: var(--cyan);
+}
+
+/* ---- a Cloudbase run: the grey of a storm cloud, and the flash of a raven strike */
+
+/* Both lie straight over the picture and under every readout, and never take a click. */
+.fj-veil,
+.fj-strike {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Thinner round the glider, so the wing and its instruments stay in sight while the world goes. */
+.fj-veil {
+  background: radial-gradient(ellipse at 50% 62%, rgba(70, 82, 108, 0.45), rgba(70, 82, 108, 0.95) 75%);
+}
+
+.fj-strike {
+  box-shadow: inset 0 0 120px 30px rgba(255, 157, 74, 0.7);
+}
+
+.fj-strike.on {
+  animation: fj-strike 0.6s ease-out;
+}
+
+@keyframes fj-strike {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Time does not speed up in a run, so the button that does it steps back. */
+.cloudbase .fj-touch [data-input='boost'] {
+  opacity: 0.3;
+}
+
+/* On a phone held sideways the pilot hangs just where the hint would be, and sinks lower still as
+   the camera looks up in a climb. In a run the line rides between the pilot and the wing instead,
+   and follows them down: the game sets --gaze from 0 (level) to 1 (looking fully up). */
+@media (pointer: coarse) and (orientation: landscape) {
+  .cloudbase .fj-hint {
+    bottom: calc(42% - 13% * var(--gaze, 0));
+  }
+}
+
+@media (pointer: coarse), (max-width: 560px) {
+  .cloudbase .fj-hud > dl {
+    gap: 2px 10px;
+  }
 }

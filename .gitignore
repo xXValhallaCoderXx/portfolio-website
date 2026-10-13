@@ -1,5 +1,6 @@
 node_modules/
 dist/
+.artifacts/
 
 # Local model sources; deploy the optimized assets in public/models/ instead.
 /concepts/

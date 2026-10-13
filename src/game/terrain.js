@@ -4,6 +4,13 @@ import { EXPERIENCE, SECTIONS } from '../content.js';
 // World units are roughly metres. North is -z, east is +x, the fjord surface is y = 0.
 export const WORLD = { halfX: 320, north: -450, south: 450, ceiling: 420 };
 
+// The arch stands across the eastward departure from launch. This corridor describes the
+// pilot's clearance, leaving room above for the canopy and to either side for the wings.
+export const GATEWAY = {
+  x: 85, z: 320, baseY: 52, size: 60, rotationY: Math.PI / 2,
+  corridor: { minZ: 316, maxZ: 324, minY: 70, maxY: 88 },
+};
+
 const smoothstep = (a, b, x) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
@@ -75,9 +82,14 @@ export const ZONES = [
 // Terrain height with a flat plateau cut for each landing zone.
 export function heightAt(x, z) {
   let h = rawHeight(x, z);
+  const crag = Math.hypot((x - GATEWAY.x) / 23, (z - GATEWAY.z) / 60);
+  if (crag < 1.45) h = Math.max(h, mix(GATEWAY.baseY, -9, smoothstep(0.75, 1.45, crag)));
   for (const zone of ZONES) {
     const dist = Math.hypot(x - zone.x, z - zone.z);
-    if (dist < zone.r * 2.2) h = mix(zone.h, h, smoothstep(zone.r, zone.r * 2.2, dist));
+    if (zone.id === 'contact') {
+      // Keep the full landing area flat, then drop quickly to water outside the island.
+      if (dist < zone.r * 2.2) h = mix(zone.h, -9, smoothstep(zone.r, zone.r + 8, dist));
+    } else if (dist < zone.r * 2.2) h = mix(zone.h, h, smoothstep(zone.r, zone.r * 2.2, dist));
   }
   return h;
 }
@@ -136,6 +148,7 @@ function scatter(seed, limit, pick) {
     const tilt = Math.max(Math.abs(heightAt(x + 2, z) - h), Math.abs(heightAt(x, z + 2) - h));
     if (ZONES.some((zone) => Math.hypot(x - zone.x, z - zone.z) < zone.r * 1.3)) continue;
     if (STONES.some((stone) => Math.hypot(x - stone.x, z - stone.z) < 16)) continue;
+    if (Math.abs(z - GATEWAY.z) < 40 && x > GATEWAY.x - 85 && x < GATEWAY.x + 35) continue;
     const spot = pick(h, tilt, rand);
     if (spot) spots.push({ x, z, turn: rand() * Math.PI * 2, ...spot });
   }

@@ -3,7 +3,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { clone as cloneModel } from 'three/addons/utils/SkeletonUtils.js';
 import { PROJECTS } from '../content.js';
-import { ZONES, STONES, THERMALS, TREES, BOULDERS, heightAt } from './terrain.js';
+import { ZONES, STONES, THERMALS, TREES, BOULDERS, GATEWAY, heightAt } from './terrain.js';
+import { APPROACH_WINDS } from './approach.js';
 
 const FILL = 0x0a1a2c;
 const LINE = 0x4fb8ff;
@@ -38,6 +39,7 @@ function carvedGlow(model) {
   model.traverse((part) => {
     if (!part.isMesh || part.material.userData.carved) return;
     const { material } = part;
+    if (!material.map?.image) return;
     const image = material.map.image;
     const canvas = document.createElement('canvas');
     canvas.width = image.width;
@@ -239,6 +241,115 @@ function furnish(holder, name, size, standIn) {
     .catch((error) => console.warn(`The ${name} model did not load.`, error));
 }
 
+// The supplied sock and pole share a mesh. Rotate about the pole, and move only the high,
+// outboard cloth vertices; each instance owns its geometry so the four animations stay apart.
+function windsock(wind, animated, phase) {
+  const holder = new THREE.Group();
+  const direction = Math.atan2(-wind.z, wind.x);
+  holder.rotation.y = direction;
+  const fallback = new THREE.Group();
+  const pole = solid(new THREE.CylinderGeometry(0.07, 0.1, 8, 6), { line: LINE });
+  pole.position.y = 4;
+  const cloth = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.15, 0.5, 3.4, 8, 1, true),
+    new THREE.MeshBasicMaterial({ color: EMBER, side: THREE.DoubleSide }),
+  );
+  cloth.rotation.z = -Math.PI / 2;
+  cloth.position.set(1.7, 7.1, 0);
+  fallback.add(pole, cloth);
+  holder.add(fallback);
+  const moving = [];
+  loadModel('windsock', 8, 0.12).then((model) => {
+    model.position.x = 8 * 0.17;
+    model.traverse((part) => {
+      if (!part.isMesh) return;
+      part.geometry = part.geometry.clone();
+      const packed = part.geometry.attributes.position;
+      const rest = new Float32Array(packed.count * 3);
+      for (let i = 0; i < packed.count; i++) {
+        rest[i * 3] = packed.getX(i);
+        rest[i * 3 + 1] = packed.getY(i);
+        rest[i * 3 + 2] = packed.getZ(i);
+      }
+      part.geometry.setAttribute('position', new THREE.BufferAttribute(rest.slice(), 3).setUsage(THREE.DynamicDrawUsage));
+      part.frustumCulled = false;
+      moving.push({ geometry: part.geometry, rest });
+    });
+    holder.remove(fallback);
+    holder.add(model);
+  }).catch((error) => console.warn('The windsock model did not load; keeping the pole and cloth.', error));
+  animated.push((time) => {
+    const flutter = time * 4 + phase;
+    holder.rotation.y = direction + Math.sin(time * 1.4 + phase) * 0.045;
+    cloth.rotation.x = Math.sin(flutter) * 0.12;
+    cloth.position.y = 7.1 + Math.sin(flutter) * 0.07;
+    for (const { geometry, rest } of moving) {
+      const positions = geometry.attributes.position;
+      for (let i = 0; i < rest.length; i += 3) {
+        const x = rest[i], y = rest[i + 1], z = rest[i + 2];
+        const mask = smooth(-0.12, -0.05, x) * smooth(0.73, 0.8, y);
+        const reach = Math.max(0, (x + 0.12) / 0.404);
+        const filled = 0.8 + wind.speed * 0.25;
+        positions.array[i] = x;
+        positions.array[i + 1] = y + mask * (0.014 * reach * Math.sin(flutter + reach * 6) - 0.025 * (1 - filled) * reach);
+        positions.array[i + 2] = z * (1 + mask * (filled - 1)) + mask * reach * 0.014 * Math.sin(flutter * 1.3 + reach * 9);
+      }
+      positions.needsUpdate = true;
+    }
+  });
+  return holder;
+}
+
+/** A visible, fly-through arch. The controller owns discovery and crossing detection. */
+export function buildGateway() {
+  const group = new THREE.Group();
+  group.position.set(GATEWAY.x, GATEWAY.baseY, GATEWAY.z);
+  group.rotation.y = GATEWAY.rotationY;
+  const fallback = new THREE.Group();
+  for (const side of [-1, 1]) {
+    const pillar = solid(new THREE.BoxGeometry(14, 40, 14), { line: CYAN });
+    pillar.position.set(side * 20, 20, 0);
+    fallback.add(pillar);
+  }
+  const lintel = solid(new THREE.BoxGeometry(54, 14, 14), { line: CYAN });
+  lintel.position.y = 47;
+  fallback.add(lintel);
+  group.add(fallback);
+  loadModel('gateway', GATEWAY.size, 0.1).then((model) => {
+    carvedGlow(model);
+    group.remove(fallback);
+    group.add(model);
+  }).catch((error) => console.warn('The gateway model did not load; keeping the stone arch.', error));
+
+  const halo = new THREE.Mesh(
+    new THREE.RingGeometry(0.96, 1, 48),
+    new THREE.MeshBasicMaterial({ color: CYAN, transparent: true, opacity: 0.2,
+      side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
+  );
+  halo.position.y = 27;
+  halo.scale.set(11, 18, 1);
+  group.add(halo);
+  const runes = new THREE.Group();
+  const runeMaterial = new THREE.LineBasicMaterial({ color: CYAN, transparent: true, opacity: 0.9, fog: false });
+  for (const side of [-1, 1]) for (const y of [16, 26, 36]) {
+    const points = [new THREE.Vector3(-1.2, 0, 0), new THREE.Vector3(0, 1.8, 0),
+      new THREE.Vector3(1.2, 0, 0), new THREE.Vector3(0, -1.8, 0), new THREE.Vector3(-1.2, 0, 0)];
+    for (const face of [-1, 1]) {
+      const rune = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), runeMaterial);
+      rune.position.set(side * 20, y, face * 11.5);
+      runes.add(rune);
+    }
+  }
+  group.add(runes);
+  return {
+    group,
+    update(time) {
+      halo.material.opacity = 0.17 + 0.07 * Math.sin(time * 1.6);
+      runeMaterial.opacity = 0.72 + 0.2 * Math.sin(time * 1.6 + 0.6);
+    },
+  };
+}
+
 // The waterline below a place: walk from its centre toward the fjord until the ground goes under.
 function shoreBelow(zone) {
   const [wx, wz] = bearings(zone).water;
@@ -282,6 +393,30 @@ export function buildPlaces() {
       }),
     );
     place.add(ring, pulse, pillar);
+    const wind = APPROACH_WINDS.find((candidate) => candidate.id === zone.id);
+    const sock = windsock(wind, animated, marks.size * 1.7);
+    const [sockX, sockZ] = spotAt(zone, [-zone.r + 5, -7]);
+    sock.position.set(sockX, 0, sockZ);
+    place.add(sock);
+    if (zone.id === 'experience') {
+      const sink = new THREE.Mesh(
+        new THREE.CircleGeometry(16, 24),
+        new THREE.MeshBasicMaterial({ color: 0x02050b, transparent: true, opacity: 0.5,
+          depthWrite: false, side: THREE.DoubleSide }),
+      );
+      sink.geometry.rotateX(-Math.PI / 2);
+      const points = sink.geometry.attributes.position;
+      const cx = zone.x + wind.x * 34;
+      const cz = zone.z + wind.z * 34;
+      for (let i = 0; i < points.count; i++) {
+        const x = points.getX(i), z = points.getZ(i);
+        points.setY(i, heightAt(cx + x, cz + z) + 0.35);
+      }
+      sink.geometry.computeBoundingSphere();
+      sink.position.set(cx, 0, cz);
+      group.add(sink);
+      animated.push((time) => (sink.material.opacity = 0.42 + Math.sin(time * 0.7) * 0.08));
+    }
 
     for (const item of FURNITURE[zone.id] ?? []) {
       const [x, z] = spotAt(zone, item.at);

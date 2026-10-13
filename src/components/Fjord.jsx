@@ -6,8 +6,88 @@ import { BODIES } from './Sections.jsx';
 const wantsBackdrop = () =>
   !matchMedia('(prefers-reduced-motion: reduce)').matches && !matchMedia('(pointer: coarse)').matches && innerWidth >= 760;
 
+function LandingScore({ landing }) {
+  const [visible, setVisible] = useState(() => landing.expiresAt > Date.now());
+  useEffect(() => {
+    const remaining = landing.expiresAt - Date.now();
+    setVisible(remaining > 0);
+    if (remaining <= 0) return undefined;
+    const timeout = setTimeout(() => setVisible(false), remaining);
+    return () => clearTimeout(timeout);
+  }, [landing.expiresAt]);
+  if (!visible) return null;
+  return (
+    <p className="fjord-landing-score" role="status">
+      {landing.distance.toFixed(1)} m from centre · {landing.grade} · {landing.points} pts · best {landing.bestDistance.toFixed(1)} m
+    </p>
+  );
+}
+
+const CLOUDBASE_ENDINGS = {
+  fog: 'The fog caught up.',
+  landing: 'Back on the ground.',
+  landed: 'Back on the ground.',
+  water: 'Back at sea level.',
+  slope: 'Back on the hillside.',
+  quit: 'Run ended.',
+};
+
+function CloudbaseResult({ result, onRetry, onBack, standalone = false }) {
+  const heading = useRef(null);
+  useEffect(() => {
+    if (standalone) heading.current?.focus();
+  }, [result, standalone]);
+  const guardKeys = (event) => {
+    if (!['KeyR', 'KeyM', 'KeyL'].includes(event.code)) event.stopPropagation();
+    if (event.type === 'keydown' && event.key === 'Escape') {
+      event.preventDefault();
+      onBack();
+    }
+  };
+  const Tag = standalone ? 'section' : 'div';
+  return (
+    <Tag
+      className={standalone ? 'window fjord-cloudbase-result' : 'fjord-cloudbase-inline'}
+      aria-labelledby={standalone ? 'cloudbase-result-heading' : undefined}
+      onKeyDown={guardKeys}
+      onKeyUp={guardKeys}
+    >
+      {standalone && (
+        <header><i /><i /><i /><span>~/fjord/cloudbase — run complete</span></header>
+      )}
+      <div className={standalone ? 'fjord-panel-body' : undefined}>
+        <h2 className="shout" id={standalone ? 'cloudbase-result-heading' : undefined} ref={heading} tabIndex={standalone ? -1 : undefined}>
+          <span>&gt;</span> CLOUDBASE
+        </h2>
+        <p className="dim">{CLOUDBASE_ENDINGS[result.reason] ?? 'Run complete.'}</p>
+        <div role="status">
+          <p className="fjord-cloudbase-stats">
+            peak <strong>{Math.floor(result.peak).toLocaleString()} m</strong> · personal best {Math.floor(result.best).toLocaleString()} m
+          </p>
+          <p className="fjord-cloudbase-run">
+            {result.strikes ? `${result.strikes} raven strike${result.strikes === 1 ? '' : 's'}` : 'no raven strikes'}
+            {result.cloud > 0 && ` · ${result.cloud} s in cloud`}
+          </p>
+        </div>
+        {!standalone && (
+          <div className="fjord-cloudbase-actions">
+            <button className="primary" onClick={onRetry}>[ fly again ]</button>
+            <button onClick={onBack}>[ back to the fjord ]</button>
+          </div>
+        )}
+      </div>
+      {standalone && (
+        <footer>
+          <button className="primary" onClick={onRetry}>[ fly again ]</button>
+          <button onClick={onBack}>[ back to the fjord ]</button>
+        </footer>
+      )}
+    </Tag>
+  );
+}
+
 /** What a landing shows: the matching page section, or a short note for a landing anywhere else. */
-function LandingPanel({ panel, onTakeOff, onNext, onMap, onOpenPage }) {
+function LandingPanel({ panel, cloudbase, onRetryCloudbase, onBackToFjord, onTakeOff, onNext, onMap, onOpenPage }) {
   const section = SECTIONS.find((candidate) => candidate.id === panel.id);
   const Body = BODIES[panel.id];
   return (
@@ -19,6 +99,8 @@ function LandingPanel({ panel, onTakeOff, onNext, onMap, onOpenPage }) {
         <span>{panel.path} — zsh</span>
       </header>
       <div className="fjord-panel-body">
+        {panel.landing && <LandingScore landing={panel.landing} />}
+        {cloudbase && <CloudbaseResult result={cloudbase} onRetry={onRetryCloudbase} onBack={onBackToFjord} />}
         <p className="dim">$ {section ? section.command : 'echo $?'}</p>
         {Body ? (
           <Body />
@@ -124,6 +206,7 @@ export default function Fjord({ flying, armed, target, lost, warping, onArm, onE
   const skipped = useRef(false); // the visitor skipped the missing page's cutscene before it could start
   const [live, setLive] = useState(false);
   const [panel, setPanel] = useState(null);
+  const [cloudbase, setCloudbase] = useState(null);
   // Visitors who ask for reduced motion get the missing page's text and links without the fall.
   const [lostStage, setLostStage] = useState(() => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'still' : 'gliding'));
 
@@ -139,6 +222,7 @@ export default function Fjord({ flying, armed, target, lost, warping, onArm, onE
         onExit: () => latest.current.onExit(lastPlace.current),
         onProgress: (progress) => latest.current.onProgress(progress),
         onLost: setLostStage,
+        onCloudbase: setCloudbase,
         onPanel: (next) => {
           if (next && BODIES[next.id]) lastPlace.current = next.id;
           setPanel(next);
@@ -193,6 +277,7 @@ export default function Fjord({ flying, armed, target, lost, warping, onArm, onE
     if (!flying) {
       game.current?.idle();
       setPanel(null);
+      setCloudbase(null);
       lastPlace.current = null;
       return;
     }
@@ -247,10 +332,21 @@ export default function Fjord({ flying, armed, target, lost, warping, onArm, onE
       {flying && panel && (
         <LandingPanel
           panel={panel}
+          cloudbase={cloudbase}
+          onRetryCloudbase={() => game.current?.retryCloudbase()}
+          onBackToFjord={() => game.current?.backToFjord()}
           onTakeOff={() => game.current.takeOff()}
           onNext={() => game.current.flyToNext()}
           onMap={() => game.current.openMap()}
           onOpenPage={() => onExit(panel.id)}
+        />
+      )}
+      {flying && !panel && cloudbase && (
+        <CloudbaseResult
+          result={cloudbase}
+          standalone
+          onRetry={() => game.current?.retryCloudbase()}
+          onBack={() => game.current?.backToFjord()}
         />
       )}
     </div>
