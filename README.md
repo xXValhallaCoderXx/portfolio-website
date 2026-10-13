@@ -20,9 +20,12 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
   the path as the page scrolls, and the top bar counts its height down. Scrolling is never taken
   over. As the hero scrolls away the fjord's camera climbs until the scene reads as a map, and
   the path starts where the glider hangs.
-- Each role unfolds in place into a field report, and a few carry a small interactive sketch.
-  Beside the list, on a desktop, a live view of the flight's rune ridge goes to the stone of the
-  role being read.
+- On a phone, Experience reads one career camp at a time: pick from the compact ridge or list,
+  use Older/Newer or swipe the summary, then explore the report a section at a time. It starts
+  at the current role with its chapter closed, and keeps reading mode when changing camps.
+  Desktop keeps a career list with summaries/titles controls and Report/Behind tabs. The existing
+  rune ridge and live view follow the role being read. Both layouts use the same career reader
+  in the page and flight panels; sketches run only while their Behind tab is visible.
 - Three projects have a playable preview: a scripted model of what the product does, never the
   product itself. Each project also has its own address, `/projects/<id>`, with the full report.
 - Project reports use a screenshot-led header and a selectable contribution tour. Screens open
@@ -61,6 +64,8 @@ the flight, to a project and to missing pages will show the host's own error pag
   `Sections.jsx` is what each waypoint holds, and what a landing in the flight shows.
 - `src/components/demos/`, `src/components/sketches/`, `src/demos.css`: the playable previews on
   the projects and the sketches in the field reports.
+- `src/components/Experience.jsx`, `src/experience.css`: the shared career reader. It adapts to
+  its container width and reads roles, reports and sketch names from `EXPERIENCE` in `src/content.js`.
 - `src/components/ProjectDetail.jsx`, `src/project.css`: the shared project reports; `ProjectPage`
   adds standalone page navigation. Layouts adapt to the available page or window width. Gallery
   images, captions and contribution highlights live in `PROJECTS` in `src/content.js`. Replace
