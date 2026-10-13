@@ -873,89 +873,13 @@
   font-size: 13px;
 }
 
-/* ---- a project's report, on its own page or in a sheet over the flight */
-
-.dossier {
-  display: grid;
-  gap: 34px;
-  font-size: 15px;
-  line-height: 1.75;
-}
-
-.dossier h3 {
-  margin: 0 0 10px;
-  color: var(--cyan);
-  font-size: 13px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-}
-
-.dossier p {
-  max-width: 74ch;
-}
-
-.dossier .lead {
-  font-size: 16px;
-}
-
-.dossier .built {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-  gap: 30px;
-  align-items: start;
-}
-
-/* A phone screenshot is tall and narrow, so it gets a narrower column. */
-.dossier.tall .built {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 260px);
-}
-
-.dossier ul {
-  margin: 0;
-  padding-left: 18px;
-}
-
-.dossier li {
-  margin-bottom: 8px;
-}
-
-.dossier li::marker {
-  color: var(--cyan);
-}
-
-.dossier figure {
-  margin: 0;
-  container-type: inline-size;
-}
-
-.dossier figure img {
-  display: block;
-  width: 100%;
-  border: 1px solid var(--rule);
-}
-
-.dossier figure .diagram {
-  padding: 30px 12px;
-  border: 1px solid var(--rule);
-}
-
-.dossier .scene {
-  max-width: 780px;
-}
-
-.dossier .tags {
-  margin: 10px 0 0;
-}
-
 /* ---- where there is less room: in a landing panel, on a tablet, on a phone */
 
 @container (max-width: 820px) {
   .about,
   .ascent,
   .playable,
-  .side-quests,
-  .dossier .built,
-  .dossier.tall .built {
+  .side-quests {
     grid-template-columns: minmax(0, 1fr);
   }
 

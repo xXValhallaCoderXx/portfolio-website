@@ -169,8 +169,8 @@ button.seat:focus-visible {
   list-style: none;
 }
 
-.dossier .timeline,
-.dossier .inspect {
+.project-detail .timeline,
+.project-detail .inspect {
   min-height: calc(9.3em + 16px);
 }
 

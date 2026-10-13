@@ -42,6 +42,9 @@ export default function ScreenGallery({ project, initialIndex = 0, onClose }) {
   const move = (direction) => setIndex((current) => (current + direction + screens.length) % screens.length);
 
   const onKeyDown = (event) => {
+    // The gallery can open over a flight report. Keep keyboard events inside its own dialog
+    // while preserving the native controls' keyboard behaviour.
+    event.stopPropagation();
     if (event.key === 'Tab') {
       const controls = [...dialogRef.current.querySelectorAll('button:not(:disabled)')].filter(
         (element) => element.getClientRects().length > 0,
@@ -77,8 +80,10 @@ export default function ScreenGallery({ project, initialIndex = 0, onClose }) {
       aria-labelledby={titleId}
       aria-describedby={captionId}
       onKeyDown={onKeyDown}
+      onKeyUp={(event) => event.stopPropagation()}
       onCancel={(event) => {
         event.preventDefault();
+        event.stopPropagation();
         onClose();
       }}
     >

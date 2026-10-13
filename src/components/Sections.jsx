@@ -4,6 +4,7 @@ import { DEMOS } from './demos/index.js';
 import { SKETCHES } from './sketches/index.js';
 import Ridge from './Ridge.jsx';
 import Sheet from './Sheet.jsx';
+import ProjectDetail from './ProjectDetail.jsx';
 
 // The body of each section. The page's waypoints and the flight's landing panels both render these.
 
@@ -167,13 +168,11 @@ function ExperienceBody() {
 }
 
 /**
- * A project's picture: its screenshot, or when there is none its diagram (in the report) or the
- * short glyph that stands in for it in a list.
+ * A project's card picture, or the short glyph that stands in for it in a list.
  */
-function ProjectPicture({ project, full = false }) {
-  if (!project.image) return <pre className="diagram">{full ? project.diagram : project.glyph}</pre>;
-  const src = full && project.image.full ? project.image.full : project.image.src;
-  return <img src={src} alt={project.image.alt} loading="lazy" />;
+function ProjectPicture({ project }) {
+  if (!project.image) return <pre className="diagram">{project.glyph}</pre>;
+  return <img src={project.image.src} alt={project.image.alt} loading="lazy" />;
 }
 
 function ProjectLinks({ project }) {
@@ -182,61 +181,6 @@ function ProjectLinks({ project }) {
       [ {link.label} ↗ ]
     </a>
   ));
-}
-
-/** Everything about one project, in reading order. The page and the flight both show this. */
-export function ProjectReport({ project }) {
-  const Demo = DEMOS[project.demo];
-  return (
-    <div className={`dossier${project.image?.tall ? ' tall' : ''}`}>
-      <section>
-        <h3>What it is</h3>
-        <p className="lead">{project.summary}</p>
-      </section>
-      {Demo && (
-        <section>
-          <h3>Try it</h3>
-          <div className="scene">
-            <Demo />
-          </div>
-        </section>
-      )}
-      {project.why && (
-        <section>
-          <h3>Why I built it</h3>
-          <p>{project.why}</p>
-        </section>
-      )}
-      <section className="built">
-        <div>
-          <h3>What I built</h3>
-          <ul>
-            {project.built.map((line) => (
-              <li key={line.text}>{line.text}</li>
-            ))}
-          </ul>
-        </div>
-        <figure>
-          <ProjectPicture project={project} full />
-        </figure>
-      </section>
-      <section>
-        <h3>Where it stands</h3>
-        <p>
-          <span className="status">{project.status}</span> <span className="dim">{project.year}</span>
-        </p>
-        <p className="tags">
-          {project.tags.map((tag) => (
-            <span key={tag}>{tag}</span>
-          ))}
-        </p>
-        <p className="links">
-          <ProjectLinks project={project} />
-          {project.links.length === 0 && <span className="dim">// the repository is private</span>}
-        </p>
-      </section>
-    </div>
-  );
 }
 
 /**
@@ -336,13 +280,20 @@ function ProjectsBody() {
         ))}
       </ul>
       {reading && (
-        <Sheet title={`${reading.path} — destination report`} label={reading.title} onClose={close}>
-          <div className="readme-body">
-            <div>
-              <h2 className="report-name">{reading.title}</h2>
-              <p className="dim">{reading.tagline}</p>
-              <ProjectReport project={reading} />
-            </div>
+        <Sheet
+          key={reading.id}
+          title={`${reading.path} — destination report`}
+          label={reading.title}
+          className="project-report-window"
+          onClose={close}
+        >
+          <div className="readme-body project-report-body">
+            <ProjectDetail
+              project={reading}
+              onBack={close}
+              onOpen={(id) => setReading(PROJECTS.find((project) => project.id === id))}
+              embedded
+            />
           </div>
         </Sheet>
       )}
@@ -387,4 +338,10 @@ function ContactBody() {
   );
 }
 
-export const BODIES = { about: AboutBody, experience: ExperienceBody, projects: ProjectsBody, skills: SkillsBody, contact: ContactBody };
+export const BODIES = {
+  about: AboutBody,
+  experience: ExperienceBody,
+  projects: ProjectsBody,
+  skills: SkillsBody,
+  contact: ContactBody,
+};

@@ -1,10 +1,54 @@
-/* Standalone destination reports. Flight panels keep their compact dossier layout. */
+/* Shared destination reports, sized by their page or flight reading window. */
 .project-page {
+  container: project-report / inline-size;
   max-width: 1180px;
   margin: 0 auto;
   padding: calc(var(--bar) + 24px) 40px 44px;
   font-size: 15px;
   animation: approach 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+/* Each surface supplies a width container; the article owns the same layout in both. */
+.project-detail {
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.project-report-window {
+  width: min(1180px, 96vw);
+  max-height: 92svh;
+}
+
+.project-report-window > header > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-report-window > header .close {
+  flex: none;
+  min-height: 44px;
+}
+
+.project-report-window > header > i {
+  flex: none;
+}
+
+.project-report-body {
+  container-name: project-report;
+  min-height: 0;
+  scroll-padding-top: 16px;
+}
+
+.project-detail.embedded .project-head {
+  padding-top: 8px;
+}
+.project-detail.embedded .feature-presentation {
+  top: 16px;
+}
+.project-detail.embedded .project-section {
+  scroll-margin-top: 16px;
 }
 
 @keyframes approach {
@@ -14,10 +58,12 @@
   }
 }
 
-.project-page :is(button, a.button, .crumbs a, .onward a) {
+.project-detail :is(button, a.button, .onward a),
+.project-page .crumbs a {
   min-height: 44px;
 }
-.project-page :is(button, a):focus-visible,
+.project-detail :is(button, a):focus-visible,
+.project-page .crumbs :is(button, a):focus-visible,
 .screen-gallery :is(button, a):focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: 4px;
@@ -64,7 +110,7 @@
   text-transform: uppercase;
 }
 .project-head .shout {
-  font-size: clamp(38px, 5.2vw, 76px);
+  font-size: clamp(38px, 6.4cqw, 76px);
   letter-spacing: -0.025em;
 }
 .project-tagline {
@@ -280,7 +326,7 @@ button.screen-image-trigger:focus-visible {
   margin: 0 0 80px;
   scroll-margin-top: calc(var(--bar) + 24px);
 }
-.project-section h2 {
+.project-section :is(h2, h3) {
   margin: 0 0 20px;
   color: var(--cyan);
   font-size: 14px;
@@ -534,7 +580,7 @@ html.gallery-open {
   font-size: 10px;
   white-space: normal;
 }
-.gallery-thumbnails button[aria-pressed="true"] {
+.gallery-thumbnails button[aria-pressed='true'] {
   border-color: var(--cyan);
   color: var(--text);
 }
@@ -552,6 +598,9 @@ html.gallery-open {
     padding-right: 24px;
     padding-left: 24px;
   }
+}
+
+@container project-report (max-width: 1000px) {
   .project-head {
     grid-template-columns: minmax(0, 1fr);
     gap: 36px;
@@ -591,6 +640,64 @@ html.gallery-open {
   .project-fly {
     font-size: 11px;
   }
+  .screen-gallery {
+    padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+      max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  }
+  .gallery-head {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .gallery-head > div {
+    flex: 1;
+  }
+  .gallery-head h2 {
+    font-size: 13px;
+  }
+  .gallery-count {
+    display: none;
+  }
+  .gallery-head .gallery-close {
+    font-size: 11px;
+    padding: 0;
+  }
+  .gallery-media img {
+    max-height: calc(100dvh - 270px);
+  }
+  .gallery-caption {
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .gallery-controls {
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11px;
+  }
+  .gallery-thumbnails {
+    gap: 4px;
+  }
+  .gallery-thumbnails button {
+    width: 44px;
+    min-height: 44px;
+    position: relative;
+    background: none;
+    border: 0;
+  }
+  .gallery-thumbnails button::after {
+    content: '';
+    display: block;
+    height: 3px;
+    background: var(--rule);
+  }
+  .gallery-thumbnails button[aria-pressed='true']::after {
+    background: var(--cyan);
+  }
+  .gallery-thumbnails button :is(img, span) {
+    display: none;
+  }
+}
+
+@container project-report (max-width: 760px) {
   .project-head {
     gap: 24px;
     padding: 26px 0 40px;
@@ -599,7 +706,7 @@ html.gallery-open {
     gap: 16px;
   }
   .project-head .shout {
-    font-size: clamp(30px, 8.6vw, 48px);
+    font-size: clamp(30px, 9.5cqw, 48px);
   }
   .project-tagline {
     font-size: 17px;
@@ -616,7 +723,7 @@ html.gallery-open {
     display: none;
   }
   .project-facts > div:not(:first-child) dd::before {
-    content: "· ";
+    content: '· ';
   }
   .project-facts > div:first-child {
     flex-basis: 100%;
@@ -654,7 +761,7 @@ html.gallery-open {
   .project-section {
     margin-bottom: 40px;
   }
-  .project-section h2 {
+  .project-section :is(h2, h3) {
     margin-bottom: 14px;
     font-size: 13px;
   }
@@ -761,63 +868,6 @@ html.gallery-open {
     gap: 12px;
     border-bottom: 1px solid var(--rule);
   }
-  .screen-gallery {
-    padding: max(12px, env(safe-area-inset-top))
-      max(16px, env(safe-area-inset-right))
-      max(16px, env(safe-area-inset-bottom))
-      max(16px, env(safe-area-inset-left));
-  }
-  .gallery-head {
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  .gallery-head > div {
-    flex: 1;
-  }
-  .gallery-head h2 {
-    font-size: 13px;
-  }
-  .gallery-count {
-    display: none;
-  }
-  .gallery-head .gallery-close {
-    font-size: 11px;
-    padding: 0;
-  }
-  .gallery-media img {
-    max-height: calc(100dvh - 270px);
-  }
-  .gallery-caption {
-    font-size: 11px;
-    line-height: 1.6;
-  }
-  .gallery-controls {
-    justify-content: space-between;
-    gap: 8px;
-    font-size: 11px;
-  }
-  .gallery-thumbnails {
-    gap: 4px;
-  }
-  .gallery-thumbnails button {
-    width: 44px;
-    min-height: 44px;
-    position: relative;
-    background: none;
-    border: 0;
-  }
-  .gallery-thumbnails button::after {
-    content: "";
-    display: block;
-    height: 3px;
-    background: var(--rule);
-  }
-  .gallery-thumbnails button[aria-pressed="true"]::after {
-    background: var(--cyan);
-  }
-  .gallery-thumbnails button :is(img, span) {
-    display: none;
-  }
 }
 
 @media (max-height: 500px) {
@@ -829,6 +879,13 @@ html.gallery-open {
   }
   .gallery-thumbnails {
     display: none;
+  }
+}
+
+@media (max-width: 760px), (max-height: 480px) {
+  .project-report-window {
+    width: 100%;
+    max-height: none;
   }
 }
 

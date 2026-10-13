@@ -28,6 +28,8 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
 - Project reports use a screenshot-led header and a selectable contribution tour. Screens open
   in a gallery with arrow-key navigation and Escape to close; the phone layout uses numbered
   contribution buttons and a compact stage selector for Hird's sample run.
+  The project pages and the reading windows in `fly.sh` use the same detail component. Escape
+  closes the gallery first, then the project window, leaving the visitor at the forge.
 - `[ ./fly.sh ]`, the `fly.sh` tab or a section's "fly to" link starts the flight. It fills the
   window, locks page scrolling and moves the address to `/fly`.
 - The swap in either direction plays behind a short warp of star streaks.
@@ -59,7 +61,8 @@ the flight, to a project and to missing pages will show the host's own error pag
   `Sections.jsx` is what each waypoint holds, and what a landing in the flight shows.
 - `src/components/demos/`, `src/components/sketches/`, `src/demos.css`: the playable previews on
   the projects and the sketches in the field reports.
-- `src/components/ProjectPage.jsx`, `src/project.css`: the standalone project reports. Gallery
+- `src/components/ProjectDetail.jsx`, `src/project.css`: the shared project reports; `ProjectPage`
+  adds standalone page navigation. Layouts adapt to the available page or window width. Gallery
   images, captions and contribution highlights live in `PROJECTS` in `src/content.js`. Replace
   a screen's `src` and `alt` and remove `placeholder` when its real screenshot is available;
   highlights use percentages of the uncropped image. Runtime images belong in `public/projects/`.
