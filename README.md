@@ -25,6 +25,9 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
   role being read.
 - Three projects have a playable preview: a scripted model of what the product does, never the
   product itself. Each project also has its own address, `/projects/<id>`, with the full report.
+- Project reports use a screenshot-led header and a selectable contribution tour. Screens open
+  in a gallery with arrow-key navigation and Escape to close; the phone layout uses numbered
+  contribution buttons and a compact stage selector for Hird's sample run.
 - `[ ./fly.sh ]`, the `fly.sh` tab or a section's "fly to" link starts the flight. It fills the
   window, locks page scrolling and moves the address to `/fly`.
 - The swap in either direction plays behind a short warp of star streaks.
@@ -56,6 +59,10 @@ the flight, to a project and to missing pages will show the host's own error pag
   `Sections.jsx` is what each waypoint holds, and what a landing in the flight shows.
 - `src/components/demos/`, `src/components/sketches/`, `src/demos.css`: the playable previews on
   the projects and the sketches in the field reports.
+- `src/components/ProjectPage.jsx`, `src/project.css`: the standalone project reports. Gallery
+  images, captions and contribution highlights live in `PROJECTS` in `src/content.js`. Replace
+  a screen's `src` and `alt` and remove `placeholder` when its real screenshot is available;
+  highlights use percentages of the uncropped image. Runtime images belong in `public/projects/`.
 - `src/game/`: the flight. `game.js` is the flight model, HUD, map and sound; `terrain.js` is the
   world; `scenery.js` is the sky, buildings and glider; `achievements.js` is progress and belts;
   `ridge.js` is the small live view of rune ridge on the page.

@@ -238,6 +238,11 @@ export const EXPERIENCE = [
 //   `prop`    the model that stands for the project beside the forge
 //   `image`   `src` is the picture on the card and `full` the whole screenshot in the README;
 //             `tall` marks a phone screenshot, which sits beside the README's text, not under it
+//   `platform` a short platform and framework label for the project detail header
+//   `screens` full screenshots for the detail gallery; `placeholder` marks an existing image
+//             temporarily reused for a screen that still needs its own screenshot
+//   `built`   contributions with their authoritative `text` and an optional `screenId`, caption
+//             and highlight rectangle (left/top/width/height as percentages of the screenshot)
 //   `diagram` drawn in place of a screenshot when there is none, with `glyph` as its short form on a card
 //   `links`   only what a visitor can actually open; private repositories are left out
 //   `demo`    the playable preview that goes with it, for the projects that have one
@@ -250,16 +255,36 @@ export const PROJECTS = [
     tagline: 'A desktop workspace where teams of AI agents research, plan and review work on your repository.',
     status: 'in active development',
     year: '2026',
+    platform: 'Desktop · Electron',
     summary:
       'Hird connects a repository and its Linear tickets to one shared orchestration engine. You can chat with an ' +
       'assistant that knows the project, hand an investigation to a swarm of agents that research in parallel and ' +
       'then synthesise what they found, and turn tickets into reviewed plans. It is named after the Norse hird, a ' +
       "lord's household warband.",
     built: [
-      'A desktop app in Electron, React and Mantine, with a sandboxed renderer and typed messaging to the engine.',
-      'A separately runnable Mastra engine that runs agents through OpenRouter, with a scheduler, a concurrency cap and recovery after a restart.',
-      'Research swarms of two to six agents, each with its own budget, optional web search and cited sources.',
-      'Every run recorded with a live timeline, its result, and what it cost in tokens and dollars.',
+      {
+        text: 'A desktop app in Electron, React and Mantine, with a sandboxed renderer and typed messaging to the engine.',
+        screenId: 'agents',
+        caption: "The desktop app, with the engine's status in the top right.",
+        highlight: { left: 83.4, top: 0.4, width: 16.2, height: 4.6 },
+      },
+      {
+        text: 'A separately runnable Mastra engine that runs agents through OpenRouter, with a scheduler, a concurrency cap and recovery after a restart.',
+        screenId: 'agents',
+        caption: 'The OpenRouter key and the models each role can use.',
+        highlight: { left: 18.6, top: 27.6, width: 78.8, height: 26 },
+      },
+      {
+        text: 'Research swarms of two to six agents, each with its own budget, optional web search and cited sources.',
+        screenId: 'runs',
+        caption: 'A research swarm: seats, budgets and cited sources. Temporary preview using the Agents screen.',
+      },
+      {
+        text: 'Every run recorded with a live timeline, its result, and what it cost in tokens and dollars.',
+        screenId: 'agents',
+        caption: 'What the key has spent: today, this week, this month and all time.',
+        highlight: { left: 19.2, top: 55.6, width: 39.8, height: 11.8 },
+      },
     ],
     tags: ['typescript', 'electron', 'react', 'mantine', 'mastra', 'openrouter'],
     image: {
@@ -267,6 +292,47 @@ export const PROJECTS = [
       full: '/projects/hird.webp',
       alt: "Hird's Agents page, listing the model sources a team of agents can draw on and what each has spent.",
     },
+    screens: [
+      {
+        id: 'agents',
+        title: 'Agents',
+        src: '/projects/hird.webp',
+        alt: "Hird's Agents page, listing the model sources a team of agents can draw on and what each has spent.",
+        caption: 'Model sources, the OpenRouter key and what it has spent.',
+      },
+      {
+        id: 'chat-research',
+        title: 'Chat & Research',
+        src: '/projects/hird.webp',
+        alt: "Temporary preview for Chat & Research: Hird's existing Agents page showing model sources and spend.",
+        caption: 'The assistant that knows the project, mid-conversation.',
+        placeholder: true,
+      },
+      {
+        id: 'runs',
+        title: 'Runs',
+        src: '/projects/hird.webp',
+        alt: "Temporary preview for Runs: Hird's existing Agents page showing model sources and spend.",
+        caption: 'A research swarm: live timeline, result and cost.',
+        placeholder: true,
+      },
+      {
+        id: 'tickets',
+        title: 'Tickets',
+        src: '/projects/hird.webp',
+        alt: "Temporary preview for Tickets: Hird's existing Agents page showing model sources and spend.",
+        caption: 'A Linear ticket turned into a reviewed plan.',
+        placeholder: true,
+      },
+      {
+        id: 'approvals',
+        title: 'Approvals',
+        src: '/projects/hird.webp',
+        alt: "Temporary preview for Approvals: Hird's existing Agents page showing model sources and spend.",
+        caption: 'Approvals.',
+        placeholder: true,
+      },
+    ],
     links: [],
     prop: 'shield-rack',
     demo: 'hird',
@@ -279,15 +345,32 @@ export const PROJECTS = [
     tagline: 'A paragliding logbook that records a flight on your phone with no signal, then replays it on a map.',
     status: 'internal alpha on Android',
     year: '2026',
+    platform: 'Android · Expo',
     summary:
       "An Android-first paragliding journal. It records a flight from the phone's GPS and barometer with no account and " +
       'no connection, keeps the raw evidence, and afterwards replays the route on a map with altitude and speed. ' +
       'Flights can be exported as IGC files or shared with friends.',
     built: [
-      'Offline-first recording with background location, and recovery of an interrupted flight when the app is reopened.',
-      'Replay on Mapbox maps with a moving pilot marker, an altitude chart, scrubbing and playback at up to 60 times speed, plus map areas you can download for use with no signal.',
-      'Deterministic IGC export, and shareable postcard images drawn from the recorded route.',
-      'Optional sign-in on Supabase: private cloud backup that restores a logbook on a new phone, and a friends feed with shared flights and kudos.',
+      {
+        text: 'Offline-first recording with background location, and recovery of an interrupted flight when the app is reopened.',
+        screenId: 'flight-replay',
+        caption: 'The existing flight replay screen; recording screenshots will follow.',
+      },
+      {
+        text: 'Replay on Mapbox maps with a moving pilot marker, an altitude chart, scrubbing and playback at up to 60 times speed, plus map areas you can download for use with no signal.',
+        screenId: 'flight-replay',
+        caption: 'A recorded route replayed on the map, with elapsed time, altitude and an altitude chart.',
+      },
+      {
+        text: 'Deterministic IGC export, and shareable postcard images drawn from the recorded route.',
+        screenId: 'flight-replay',
+        caption: 'The existing flight replay screen; export and postcard screenshots will follow.',
+      },
+      {
+        text: 'Optional sign-in on Supabase: private cloud backup that restores a logbook on a new phone, and a friends feed with shared flights and kudos.',
+        screenId: 'flight-replay',
+        caption: 'The existing flight replay screen; backup and friends screenshots will follow.',
+      },
     ],
     tags: ['typescript', 'react-native', 'expo', 'supabase', 'mapbox'],
     image: {
@@ -296,6 +379,15 @@ export const PROJECTS = [
       tall: true,
       alt: 'A recorded flight replayed in Flight Log: the route drawn on a map, with elapsed time, altitude and an altitude chart.',
     },
+    screens: [
+      {
+        id: 'flight-replay',
+        title: 'Flight replay',
+        src: '/projects/flight-log-screen.webp',
+        alt: 'A recorded flight replayed in Flight Log: the route drawn on a map, with elapsed time, altitude and an altitude chart.',
+        caption: 'A recorded flight: route, elapsed time, altitude and altitude chart.',
+      },
+    ],
     links: [{ label: 'source', url: 'https://github.com/xXValhallaCoderXx/paragliding-tracker' }],
     prop: 'wing-bag',
     demo: 'flight',
@@ -308,17 +400,39 @@ export const PROJECTS = [
     tagline: "A strength-training log that replaces the spreadsheet and knows what today's session is.",
     status: 'web app, with a native app being explored',
     year: '2026',
+    platform: 'Web · React',
     summary:
       'Sheetless holds a training programme and shows the next session: the lift, the sets and reps, the effort to aim ' +
       'for and the top set to beat. It tracks estimated one-rep max as the weeks go by, so the planning a lifter ' +
       'would do in a spreadsheet is already done.',
     built: [
-      'A web app on React, Mantine and Supabase.',
-      'A shared domain package for calendar and time-zone logic, with 25 assertions ported to check that it behaves the same on a phone as it does on the server.',
-      'A native spike in Expo that tests the plan for a phone app: the shared code bundled for Android, sessions stored encrypted on the device, and the design tokens carried over.',
+      {
+        text: 'A web app on React, Mantine and Supabase.',
+        screenId: 'next-session',
+        caption: 'The next training session, with the prescribed sets, top set and estimated one-rep max.',
+      },
+      {
+        text: 'A shared domain package for calendar and time-zone logic, with 25 assertions ported to check that it behaves the same on a phone as it does on the server.',
+        screenId: 'next-session',
+        caption: 'The existing session screen; calendar screenshots will follow.',
+      },
+      {
+        text: 'A native spike in Expo that tests the plan for a phone app: the shared code bundled for Android, sessions stored encrypted on the device, and the design tokens carried over.',
+        screenId: 'next-session',
+        caption: 'The existing web session screen; native screenshots will follow.',
+      },
     ],
     tags: ['typescript', 'react', 'mantine', 'supabase', 'expo'],
     image: { src: '/projects/sheetless.webp', alt: "Sheetless showing the next session: competition bench press, four sets of five, with the top set and estimated one-rep max." },
+    screens: [
+      {
+        id: 'next-session',
+        title: 'Next session',
+        src: '/projects/sheetless.webp',
+        alt: 'Sheetless showing the next session: competition bench press, four sets of five, with the top set and estimated one-rep max.',
+        caption: 'Competition bench press: four sets of five, the top set and estimated one-rep max.',
+      },
+    ],
     links: [],
     prop: 'kettlebell',
     demo: 'sets',
@@ -331,17 +445,18 @@ export const PROJECTS = [
     tagline: 'Social-media sentiment analysis as a product, built by a pipeline of coding agents with a human merge as the final gate.',
     status: 'SaaS idea, ongoing',
     year: '2025 – 2026',
+    platform: 'Web · Next.js',
     summary:
       'A SaaS idea for understanding what people say on social media. It analyses comments across platforms such as ' +
       'YouTube, Twitter and Instagram with AI models from Hugging Face, interprets the context behind a sentiment, ' +
       "aggregates the results into metrics, and can run the same analysis on a competitor's posts. The product is " +
       'at an early stage; most of the work so far is the engineering agent that builds it.',
     built: [
-      'An engineering agent that takes a Linear ticket through planning, an isolated build, deterministic verification, browser checks and independent review, and ends in a draft pull request.',
-      'A Mastra control plane that owns that lifecycle in code: state, retries, worktrees and the verification gate. No model decides what runs next, or that the tests passed.',
-      'Claude Code and Codex as interchangeable workers in a sandbox. Every call is a fresh session, so the reviewer never sees the builder\'s conversation.',
-      'A console with an inbox of everything waiting on a human, and a batch queue that works through tickets two at a time.',
-      'The product itself as a Next.js web app with shared services and Playwright end-to-end tests.',
+      { text: 'An engineering agent that takes a Linear ticket through planning, an isolated build, deterministic verification, browser checks and independent review, and ends in a draft pull request.' },
+      { text: 'A Mastra control plane that owns that lifecycle in code: state, retries, worktrees and the verification gate. No model decides what runs next, or that the tests passed.' },
+      { text: 'Claude Code and Codex as interchangeable workers in a sandbox. Every call is a fresh session, so the reviewer never sees the builder\'s conversation.' },
+      { text: 'A console with an inbox of everything waiting on a human, and a batch queue that works through tickets two at a time.' },
+      { text: 'The product itself as a Next.js web app with shared services and Playwright end-to-end tests.' },
     ],
     tags: ['typescript', 'next.js', 'hugging-face', 'mastra', 'playwright'],
     diagram: [
@@ -361,13 +476,14 @@ export const PROJECTS = [
     tagline: 'A top-down combat RPG, built solo for an online game-development hackathon.',
     status: 'hackathon game',
     year: '2025',
+    platform: 'Web · Phaser 3',
     summary:
       'My entry to an online hackathon with a game-development theme, built alone. A simple top-down combat RPG in ' +
       'Phaser 3, with React drawing the interface around it.',
     built: [
-      'The game in Phaser 3, with characters and objects animated from sprite sheets.',
-      'An event-driven bridge between the game logic and the React interface, so neither reaches into the other.',
-      'A game loop tuned for smooth combat.',
+      { text: 'The game in Phaser 3, with characters and objects animated from sprite sheets.' },
+      { text: 'An event-driven bridge between the game logic and the React interface, so neither reaches into the other.' },
+      { text: 'A game loop tuned for smooth combat.' },
     ],
     tags: ['javascript', 'phaser-3', 'react'],
     diagram: ['Phaser scene ◀── events ──▶ React UI', '     │', '     └─ game loop: input ─▶ update ─▶ draw'].join('\n'),

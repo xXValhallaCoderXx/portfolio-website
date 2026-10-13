@@ -4,6 +4,7 @@ import App from './App.jsx';
 import './styles.css';
 import './route.css';
 import './demos.css';
+import './project.css';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

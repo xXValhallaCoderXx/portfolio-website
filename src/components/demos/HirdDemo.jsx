@@ -49,7 +49,20 @@ const SEATS = {
     said: 'F1 (advisory) kept from A1. No blocking findings, so the outcome is a pass.',
     cites: ['Council: Pass'],
   },
+  report: {
+    name: 'research report',
+    step: 'report',
+    said: 'Council: Pass. Start with a request queue for orders, keep shared lists online-only, and estimate how large the local store could grow.',
+    cites: ['Research: offline support', 'Council advisory: local store size'],
+  },
 };
+
+const STAGES = [
+  { key: 'investigate', seats: ['a', 'b', 't'] },
+  { key: 'synthesize', seats: ['s'] },
+  { key: 'council', seats: ['ra', 'rb', 'c'] },
+  { key: 'report', seats: ['report'] },
+];
 
 // The run, beat by beat: who starts or finishes, what the timeline says, and what has been spent.
 const SCRIPT = [
@@ -82,19 +95,26 @@ function stateAt(beat) {
 }
 
 function Seat({ id, state, picked, onPick }) {
+  const result = id === 'report';
   return (
-    <button className={`seat ${state ?? 'waiting'}${picked ? ' picked' : ''}`} onClick={() => onPick(id)} aria-pressed={picked}>
+    <button
+      type="button"
+      className={`seat ${state ?? 'waiting'}${result ? ' result' : ''}${picked ? ' picked' : ''}`}
+      onClick={() => onPick(id)}
+      aria-pressed={picked}
+    >
       <i aria-hidden="true" />
-      {SEATS[id].name}
+      {result && state === 'done' ? 'Council: Pass · report ready' : SEATS[id].name}
     </button>
   );
 }
 
-/** `compact` is the smaller form on a project card: the same run, with a shorter timeline. */
-export default function HirdDemo({ compact = false }) {
+/** Cards use a shorter timeline; the detail page also gets a stage selector on small screens. */
+export default function HirdDemo({ compact = false, detail = false }) {
   const [beat, setBeat] = useState(0);
   const [running, setRunning] = useState(false);
-  const [picked, setPicked] = useState(null);
+  const [picked, setPicked] = useState(detail ? 's' : null);
+  const [stage, setStage] = useState('synthesize');
   const { seats, report, spend } = stateAt(beat);
 
   useEffect(() => {
@@ -109,49 +129,65 @@ export default function HirdDemo({ compact = false }) {
 
   const launch = () => {
     setPicked(null);
+    setStage('investigate');
     setBeat(0);
     setRunning(true);
   };
 
-  const seat = (id) => <Seat id={id} state={seats[id]} picked={picked === id} onPick={setPicked} key={id} />;
+  const pickSeat = (id) => {
+    setPicked(id);
+    setStage(SEATS[id].step);
+  };
+  const seatState = (id) => (id === 'report' ? (report ? 'done' : 'waiting') : seats[id]);
+  const seat = (id) => <Seat id={id} state={seatState(id)} picked={picked === id} onPick={pickSeat} key={id} />;
   const timeline = SCRIPT.slice(0, beat).slice(compact ? -3 : -6);
   const inspected = picked && SEATS[picked];
+  const activeStage = STAGES.find((item) => item.key === stage);
   return (
-    <div className="demo hird-demo">
+    <div className={`demo hird-demo${detail ? ' detail' : ''}`}>
       <p className="demo-ask">
         <span className="dim">research topic</span> {TOPIC}
       </p>
       <div className="swarm">
-        <div className="stage">
-          <span className="stage-name">investigate</span>
-          {['a', 'b', 't'].map(seat)}
-        </div>
-        <div className="stage">
-          <span className="stage-name">synthesize</span>
-          {seat('s')}
-        </div>
-        <div className="stage">
-          <span className="stage-name">council</span>
-          {['ra', 'rb', 'c'].map(seat)}
-        </div>
-        <div className="stage">
-          <span className="stage-name">report</span>
-          <span className={`seat result ${report ? 'done' : 'waiting'}`}>
-            <i aria-hidden="true" />
-            {report ? 'Council: Pass · report ready' : 'research report'}
-          </span>
-        </div>
+        {STAGES.map((item) => (
+          <div className="stage" key={item.key}>
+            <span className="stage-name">{item.key}</span>
+            {item.key === 'report' && !detail ? (
+              <span className={`seat result ${report ? 'done' : 'waiting'}`}>
+                <i aria-hidden="true" />
+                {report ? 'Council: Pass · report ready' : 'research report'}
+              </span>
+            ) : (
+              item.seats.map(seat)
+            )}
+          </div>
+        ))}
       </div>
+      {detail && (
+        <div className="swarm-mobile">
+          <div className="swarm-track" role="group" aria-label="Research stages">
+            {STAGES.map((item, index) => (
+              <button type="button" key={item.key} aria-pressed={stage === item.key} onClick={() => pickSeat(item.seats[0])}>
+                <span aria-hidden="true">{index + 1}</span>
+                {item.key}
+              </button>
+            ))}
+          </div>
+          <div className="swarm-seats" role="group" aria-label={`${stage} seats`}>
+            {activeStage.seats.map(seat)}
+          </div>
+        </div>
+      )}
 
       {inspected ? (
         <div className="inspect" aria-live="polite">
           <p>
             <b>{inspected.name}</b>{' '}
             <span className="dim">
-              · {inspected.step} · {seats[picked] ?? 'waiting'}
+              · {inspected.step} · {seatState(picked) ?? 'waiting'}
             </span>
           </p>
-          {seats[picked] === 'done' ? (
+          {seatState(picked) === 'done' ? (
             <>
               <p>{inspected.said}</p>
               <p className="dim">{inspected.cites.join(' · ')}</p>
@@ -170,12 +206,16 @@ export default function HirdDemo({ compact = false }) {
       )}
 
       <div className="demo-bar">
-        <button className={beat === 0 ? 'primary' : undefined} onClick={launch} disabled={running}>
+        <button type="button" className={`launch${beat === 0 ? ' primary' : ''}`} onClick={launch} disabled={running}>
           [ {beat === 0 ? '▶ launch swarm' : running ? 'running…' : '↺ run it again'} ]
         </button>
         {picked && (
-          <button className="link" onClick={() => setPicked(null)}>
-            [ back to the timeline ]
+          <button type="button" className="link" onClick={() => setPicked(null)}>
+            {detail ? (
+              <>[ <span className="timeline-back">back to the </span>timeline ]</>
+            ) : (
+              '[ back to the timeline ]'
+            )}
           </button>
         )}
         <span className="spacer" />

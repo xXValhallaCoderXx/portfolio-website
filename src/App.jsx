@@ -176,6 +176,7 @@ export default function App() {
             {ROUTE.map((waypoint, i) => (
               <a
                 href={`${project ? '/' : ''}#${waypoint.id}`}
+                aria-current={project && waypoint.id === 'projects' ? 'page' : undefined}
                 onClick={(event) => {
                   // On the main page the link's own address does the work.
                   if (!project) return;
@@ -247,7 +248,7 @@ export default function App() {
         </OpenProject.Provider>
       </div>
 
-      {project && !flight.on && <ProjectPage project={project} onBack={() => closeProject()} onOpen={openProject} onFly={takeFlight} />}
+      {project && !flight.on && <ProjectPage key={project.id} project={project} onBack={() => closeProject()} onOpen={openProject} onFly={takeFlight} />}
 
       <footer className="footer">
         <span>

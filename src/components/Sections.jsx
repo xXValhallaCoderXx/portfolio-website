@@ -212,7 +212,7 @@ export function ProjectReport({ project }) {
           <h3>What I built</h3>
           <ul>
             {project.built.map((line) => (
-              <li key={line}>{line}</li>
+              <li key={line.text}>{line.text}</li>
             ))}
           </ul>
         </div>
