@@ -42,8 +42,8 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
   fifth of a second in it is light: the wing slows to where it sinks least and turns a circle of
   about 8 m instead of 14. Held on, it goes deep (after about half a second over the fjord, eight
   seconds in a Cloudbase run): slow and steep, the way down into a ring. A meter under the hint
-  shows it; red grows in from the right as the wing nears a stall, and any tap of the key returns
-  a deep brake to a light one. Held into the red the wing stalls, and in a turn it spins toward
+  shows it; red grows in from the right as the wing nears a stall, and letting go of the key for
+  a fifteenth of a second (70 ms) returns a deep brake to a light one. Held into the red the wing stalls, and in a turn it spins toward
   the inside wing; it recovers by itself, sooner with the brake let go. Over the fjord a stall is
   short and cheap and cannot begin near the ground. ↑ or W is the speed bar: hands up, faster,
   sinking more and turning wider.
@@ -116,7 +116,7 @@ the flight, to a project and to missing pages will show the host's own error pag
   images, captions and contribution highlights live in `PROJECTS` in `src/content.js`. Replace
   a screen's `src` and `alt` and remove `placeholder` when its real screenshot is available;
   highlights use percentages of the uncropped image. Runtime images belong in `public/projects/`.
-- `src/game/`: the flight. `game.js` is the flight model, HUD, map and sound; `terrain.js` is the
+- `src/game/`: the flight. `game.js` runs it: input, HUD, map and sound; `terrain.js` is the
   world; `scenery.js` is the sky, buildings and glider; `achievements.js` is progress and belts;
   `landing.js` scores a landing, `approach.js` is the wind at each place (and the breeze the
   streaks draw over the fjord) and `gateway.js` the arch. `flight.js` is how the glider flies:

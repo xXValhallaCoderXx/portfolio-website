@@ -581,7 +581,8 @@ export function createGame(stage, hooks = {}) {
       playStall(g.stallSide, g.stallHarsh);
     } else if (g.stall === 0 && effects.stalled) {
       effects.stalled = false;
-      playRefill(effects.stallSide);
+      // A raven strike ends a stall too, by folding the wing: that is no time for it to fill.
+      if (!collapsed) playRefill(effects.stallSide);
     }
     effects.deep = g.brake >= BRAKE.shelf ? effects.deep + dt : 0;
 
@@ -692,11 +693,15 @@ export function createGame(stage, hooks = {}) {
     settleFlight(g);
     climbStart = null;
     effects.gaze = 0;
-    // A new flight starts with nothing said, and nothing of the last stall still showing.
+    // A new flight starts with nothing said, and nothing of the last stall still showing. Nor is
+    // a brake key pressed on the ground, or held through a restart, a brake in the air: key
+    // repeats are ignored, so it stays off until it is pressed again.
     effects.fjordHint.line = '';
     effects.fjordHint.since = 0;
     effects.stalled = false;
     effects.deep = 0;
+    holders.brake.clear();
+    input.brake = false;
     mode = 'flying';
   }
 
@@ -1090,7 +1095,9 @@ export function createGame(stage, hooks = {}) {
     fjordMoment.sinking = g.vy < 0;
     fjordMoment.airtime = airtime;
     fjordMoment.touch = touch;
-    return holdHint(effects.fjordHint, fjordHint(fjordMoment), airtime);
+    // Held on the frame clock, not the flight's: under boost the flight's runs three times as fast,
+    // and a line has to stay up long enough to read in real time.
+    return holdHint(effects.fjordHint, fjordHint(fjordMoment), time);
   }
 
   // The brake meter: two bars scaled across one track, written only when they change and only as
@@ -1840,6 +1847,9 @@ export function createGame(stage, hooks = {}) {
       if (effects.foldLeft < 0.003) effects.foldLeft = 0;
       if (effects.foldRight < 0.003) effects.foldRight = 0;
       effects.luff += (effects.stall.luff - effects.luff) * Math.min(1, elapsed * 6);
+      // Put right out once it is a trace, as the folds are: while it is above nought the wing works
+      // out a flutter for every point of its cloth.
+      if (effects.luff < 0.003 && effects.stall.luff === 0) effects.luff = 0;
     } else effects.foldLeft = effects.foldRight = effects.luff = 0;
     effects.fold = Math.max(effects.foldLeft, effects.foldRight);
     effects.shake = !isAirborne() || calm || mapOpen || held ? 0 : Math.max(effects.want.shake, effects.stall.shake);
@@ -1890,7 +1900,8 @@ export function createGame(stage, hooks = {}) {
       stall: airborne && g.stall > 0 ? 1 : 0,
       foldLeft: effects.foldLeft,
       foldRight: effects.foldRight,
-      rough: airborne ? air.rough : 0,
+      // A gust rocking the wing is only motion; the flutter of a coming stall says something, and stays.
+      rough: airborne && !calm ? air.rough : 0,
     });
     updateMeter();
     updateCamera(elapsed);

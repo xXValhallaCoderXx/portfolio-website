@@ -33,8 +33,8 @@ export const FLIGHT = Object.freeze({
 // `take` per second, lingers on the way to `shelf` (for `linger.run` seconds in a Cloudbase run,
 // where the light brake is a tool for circling tight, and `linger.fjord` otherwise, where the
 // brake is mostly the way down), then is pulled deep at `pull`. Let go, it falls at `dump` until
-// it is back at `light` and at `release` after that, so the briefest tap returns a deep brake to
-// a light one and starts its linger again.
+// it is back at `light` and at `release` after that, so letting go for 70 ms returns even a full
+// brake to a light one and starts its linger again.
 export const BRAKE = Object.freeze({
   light: 0.35, shelf: 0.5, take: 1.75, linger: Object.freeze({ fjord: 0.6, run: 8 }), pull: 1.0, release: 2.5, dump: 10,
 });

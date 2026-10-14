@@ -72,7 +72,8 @@ async function hangGlider() {
   return { glider, surface, rest, fly, still, calmed };
 }
 
-// A glider whose models never arrive. Its pose still swings it, at next to no cost.
+// A glider whose models never arrive. Its pose still runs the swing (which only the models
+// hang from), at next to no cost.
 const swingOnly = () => buildGlider({ loadModel: () => new Promise(() => {}) });
 
 // The pose as it was before the brake, the bar and the stall reached it, copied from scenery.js
@@ -154,6 +155,30 @@ const sameTurn = (actual, expected, what) => {
   for (const key of ['x', 'y', 'z', 'w']) assert.ok(actual[key] === expected[key], `${what}.${key}: ${actual[key]} is ${expected[key]}`);
 };
 
+// Reads how far the rig has turned one of a glider's bones from its resting turn in the file, in
+// radians about `about`, an axis of the pilot file's frame (positive by the right-hand rule), with
+// the axis read off a pilot not yet turned to face forward, as the rig reads it. This is the arm
+// by itself, whatever the body's lean does to the hand. True only of a bone turned about that one
+// axis, so not of the right arm while it throws the reserve.
+async function turnReader() {
+  const pilot = await loadModel('pilot-skeleton', 2.7, 0.2);
+  pilot.updateMatrixWorld(true);
+  const axis = new THREE.Vector3();
+  const frame = new THREE.Quaternion();
+  const rest = new THREE.Quaternion();
+  const spin = new THREE.Quaternion();
+  return (glider, name, about) => {
+    const bone = pilot.getObjectByName(name);
+    axis.copy(about).applyQuaternion(bone.parent.getWorldQuaternion(frame).invert());
+    // The rig puts its turn in front of the resting one, so taking the resting turn back off leaves
+    // the rig's, grown by however far the resting turn is from unit length, which the angle read
+    // from it does not care about. The axis is a hair off unit length as well (the file's turns
+    // are), and the rig builds its turn from it as it is, so that is undone too.
+    spin.copy(boneOf(glider, name).quaternion).multiply(rest.copy(bone.quaternion).invert());
+    return 2 * Math.atan2((spin.x * axis.x + spin.y * axis.y + spin.z * axis.z) / axis.lengthSq(), spin.w);
+  };
+}
+
 test('buildGlider asks the loader it is handed for every model, the reserve included, and measures nothing until they are in', async () => {
   const loader = createTestLoader();
   const glider = buildGlider({ loadModel: loader.loadModel });
@@ -166,7 +191,7 @@ test('buildGlider asks the loader it is handed for every model, the reserve incl
   assert.deepEqual(loader.calls, [['wing', 11.5, 0.2], ['pilot-skeleton', 2.7, 0.2], ['reserve', 7, 0.25]]);
 });
 
-test('a glider whose models fail keeps its stand-in, says so, and still swings', async (t) => {
+test('a glider whose models fail keeps its stand-in, says so, and its pose still runs the swing', async (t) => {
   const warn = t.mock.method(console, 'warn', () => {});
   for (const load of [() => Promise.reject(new Error('404')), () => { throw new Error('no browser here'); }]) {
     const glider = buildGlider({ loadModel: load });
@@ -175,8 +200,13 @@ test('a glider whose models fail keeps its stand-in, says so, and still swings',
     // The sling, the seat and the boxes, and no pilot.
     assert.equal(glider.group.children.length, 3);
     glider.group.traverse((part) => assert.ok(!part.isSkinnedMesh, 'no pilot model'));
-    glider.pose({ ...CALM, dt: STEP, time: STEP, flying: true, brake: 1, stall: 1, foldRight: 1 });
-    assert.ok(glider.sway.pitch > 0, 'the stall still rocks the stand-in back');
+    // Beside a twin that is not stalled, since a frame of ordinary air rocks it a hair as well.
+    const twin = swingOnly();
+    const args = { ...CALM, dt: STEP, time: STEP, flying: true, brake: 1, foldRight: 1 };
+    glider.pose({ ...args, stall: 1 });
+    twin.pose(args);
+    const rocked = glider.sway.pitch - twin.sway.pitch;
+    assert.ok(rocked >= 0.003, `without the models the stall still puts the swing's pitch ${rocked} further back`);
   }
   assert.equal(warn.mock.callCount(), 2);
 });
@@ -266,16 +296,25 @@ test('full steering with no brake brings that hand down to where it has always g
 });
 
 test('in the air the hands rest a little lower; the bar raises both well above that and a deep brake lowers both well below it, equally', async () => {
-  const { fly, still } = await hangGlider();
+  const { glider, fly, still } = await hangGlider();
+  const turnOf = await turnReader();
+  const arms = (angle, what) => {
+    for (const name of ['L_Upperarm', 'R_Upperarm']) close(turnOf(glider, name, RIGHT), angle, 1e-9, `${name}, ${what}`);
+  };
   fly(2, {}, 0.1);
   const handsOff = still();
   fly(2, { flying: true }, 0.1);
   const rest = still({ flying: true });
+  arms(-0.2, 'resting while flying');
   close(rest.handLeft, handsOff.handLeft - 0.17, 0.01, 'resting while flying');
   fly(2, { flying: true, bar: 1 }, 0.1);
   const bar = still({ flying: true, bar: 1 });
+  // All of the way up to the most the arm may turn: the lower rest takes none of it.
+  arms(0.55, 'on the bar');
+  close(bar.handLeft, 0.588, 0.003, 'left hand on the bar');
   fly(2, { flying: true, brake: 1 }, 0.1);
   const deep = still({ flying: true, brake: 1 });
+  arms(-0.7, 'on the full brake');
   for (const side of ['handLeft', 'handRight']) {
     assert.ok(bar[side] - rest[side] >= 0.3, `${side} is ${bar[side] - rest[side]} above the flying rest on the bar`);
     // The deep brake turns the arm to the -0.70 of a full steer, which is 0.44 m below the lower
@@ -285,6 +324,31 @@ test('in the air the hands rest a little lower; the bar raises both well above t
   }
   close(bar.handLeft, bar.handRight, 0.005, 'both hands on the bar');
   close(deep.handLeft, deep.handRight, 0.005, 'both hands on the full brake');
+});
+
+test('on the bar, a hand that brakes or steers comes down exactly where it would without the bar, and a free hand stays up', async () => {
+  const { glider, fly, still } = await hangGlider();
+  const turnOf = await turnReader();
+  const sides = [['handLeft', 'L_Upperarm', -1], ['handRight', 'R_Upperarm', 1]];
+  // Each for long enough that everything eased has landed on what it was handed, so that the bar
+  // is all that differs.
+  for (const args of [{ brake: BRAKE.light }, { brake: 1 }, { turn: 1 }, { turn: -1 }]) {
+    fly(3, { flying: true, ...args }, 0.1);
+    const plain = still({ flying: true, ...args });
+    const plainArms = sides.map(([, name]) => turnOf(glider, name, RIGHT));
+    fly(3, { flying: true, bar: 1, ...args }, 0.1);
+    const barred = still({ flying: true, bar: 1, ...args });
+    sides.forEach(([hand, name, side], i) => {
+      const arm = turnOf(glider, name, RIGHT);
+      if (args.brake || side * args.turn > 0) {
+        close(arm, plainArms[i], 1e-12, `${name} with ${JSON.stringify(args)}`);
+        close(barred[hand], plain[hand], 1e-9, `${hand} with ${JSON.stringify(args)}`);
+      } else close(arm, 0.55, 1e-9, `the free ${name} with ${JSON.stringify(args)}`);
+    });
+  }
+  // Pinned outright: on the bar with a full steer, the steering hand is where a full steer has
+  // always put it.
+  close(still({ flying: true, bar: 1, turn: -1 }).handLeft, -0.4747, 0.002, 'left hand on the bar, steering left');
 });
 
 test('a light brake already shows more than half of the deep brake in the hands, while the wing takes the brake as it is', async () => {
@@ -302,33 +366,50 @@ test('a light brake already shows more than half of the deep brake in the hands,
   for (const side of ['edgeLeft', 'edgeRight']) close(light[side] / deep[side], BRAKE.light, 0.005, `${side} at the light brake`);
 });
 
-test('the inside hand stays lower than the outside one in a turn at every depth of brake', async () => {
-  const { fly, still } = await hangGlider();
+test('the inside hand stays lower than the outside one in a turn at every depth of brake, and on the full brake goes to the floor of the arm and no further', async () => {
+  const { glider, fly, still } = await hangGlider();
+  const turnOf = await turnReader();
   for (const turn of [1, 0.5, -0.5, -1]) {
+    const [inside, outside] = turn > 0 ? ['Right', 'Left'] : ['Left', 'Right'];
     for (let tenth = 0; tenth <= 10; tenth++) {
       const args = { flying: true, turn, brake: tenth / 10 };
-      fly(0.8, args, 0.1);
+      fly(1.2, args, 0.1);
       const hands = still(args);
-      const inside = turn > 0 ? hands.handRight : hands.handLeft;
-      const outside = turn > 0 ? hands.handLeft : hands.handRight;
-      assert.ok(inside < outside - 0.05, `turning ${turn} on brake ${tenth / 10}: inside ${inside}, outside ${outside}`);
+      const what = `turning ${turn} on brake ${tenth / 10}`;
+      // The arms by themselves first, since the body's lean alone puts the inside hand 0.08 m below
+      // the outside one on a half steer and 0.16 m on a full one. The arms' smallest gap is on the
+      // full brake, where the inside arm is held at the floor, 0.05 below the outside one's -0.70.
+      const armIn = turnOf(glider, `${inside[0]}_Upperarm`, RIGHT);
+      const armOut = turnOf(glider, `${outside[0]}_Upperarm`, RIGHT);
+      assert.ok(armIn <= armOut - 0.04, `${what}: inside arm ${armIn}, outside arm ${armOut}`);
+      assert.ok(hands[`hand${inside}`] < hands[`hand${outside}`] - 0.05, `${what}: inside ${hands[`hand${inside}`]}, outside ${hands[`hand${outside}`]}`);
+      // Further down than -0.75 the skin of the arm tears.
+      if (tenth === 10) close(armIn, -0.75, 1e-9, `${what}: inside arm`);
+      // Pinned outright: the inside hand on the full brake with a full steer.
+      if (tenth === 10 && Math.abs(turn) === 1) close(hands[`hand${inside}`], turn > 0 ? -0.5182 : -0.517, 0.002, `${what}: inside hand`);
     }
   }
 });
 
 test('the body leans and the head turns with the steering, whatever the brake is doing', async () => {
   const { glider, fly, still } = await hangGlider();
-  const names = ['Spine01', 'Spine02', 'Head'];
-  const leaning = () => names.map((name) => boneOf(glider, name).quaternion.toArray());
-  fly(3, { flying: true, turn: 0.7 }, 0.1);
-  still({ flying: true, turn: 0.7 });
-  const free = leaning();
-  assert.ok(free[0][3] < 0.9999, 'the body does lean');
-  fly(3, { flying: true, turn: 0.7, brake: 1 }, 0.1);
-  still({ flying: true, turn: 0.7, brake: 1 });
-  // Component by component: the file's resting turns are not quite of unit length, which throws
-  // an angle worked out from them far further off than the turns themselves are.
-  leaning().forEach((turned, i) => turned.forEach((value, k) => close(value, free[i][k], 1e-9, `${names[i]}[${k}]`)));
+  const turnOf = await turnReader();
+  // The waist and the chest lean toward the turn about the pilot's forward axis, and the head
+  // turns to look into it about the upright one, as far as they always have: 0.06 and 0.4 of the
+  // steering.
+  const leaning = (steer, what) => {
+    close(turnOf(glider, 'Spine01', FORWARD), steer * 0.06, 1e-9, `the waist, ${what}`);
+    close(turnOf(glider, 'Spine02', FORWARD), steer * 0.06, 1e-9, `the chest, ${what}`);
+    close(turnOf(glider, 'Head', UP), -steer * 0.4, 1e-9, `the head, ${what}`);
+  };
+  for (const brake of [0, BRAKE.light, 1]) {
+    fly(3, { flying: true, brake }, 0.1);
+    still({ flying: true, brake });
+    leaning(0, `steering nothing on brake ${brake}`);
+    fly(3, { flying: true, turn: 0.7, brake }, 0.1);
+    still({ flying: true, turn: 0.7, brake });
+    leaning(0.7, `steering 0.7 on brake ${brake}`);
+  }
 });
 
 test('a stall throws both hands up from the deep brake and keeps them flailing', async () => {
@@ -357,6 +438,28 @@ test('a stall throws both hands up from the deep brake and keeps them flailing',
   const wing = calmed({ flying: true, stall: 1, brake: 1, turn: 1 });
   close(wing.edgeLeft, 0, 1e-12, 'left edge, stalled');
   close(wing.edgeRight, 0, 1e-12, 'right edge, stalled');
+});
+
+test('nearing a stall the hands tremble a few centimetres, and on a wing flying cleanly they keep still', async () => {
+  const { glider, fly, still } = await hangGlider();
+  const turnOf = await turnReader();
+  // Settled first, then over a second, frame by frame: how far each arm turns and each hand moves,
+  // the swing aside.
+  const spread = (luff) => {
+    fly(2, { flying: true, luff }, 0.1);
+    const seen = { L_Upperarm: [], R_Upperarm: [], handLeft: [], handRight: [] };
+    for (let n = 0; n < 60; n++) {
+      fly(STEP, { flying: true, luff });
+      const hands = still({ flying: true, luff });
+      for (const key of Object.keys(seen)) seen[key].push(key in hands ? hands[key] : turnOf(glider, key, RIGHT));
+    }
+    return Object.fromEntries(Object.entries(seen).map(([key, values]) => [key, Math.max(...values) - Math.min(...values)]));
+  };
+  const trembling = spread(1);
+  for (const arm of ['L_Upperarm', 'R_Upperarm']) close(trembling[arm], 0.06, 0.006, `${arm} trembles`);
+  for (const hand of ['handLeft', 'handRight']) assert.ok(trembling[hand] >= 0.03 && trembling[hand] <= 0.08, `${hand} trembles over ${trembling[hand]} m`);
+  const clean = spread(0);
+  for (const [key, moved] of Object.entries(clean)) assert.equal(moved, 0, `${key} keeps still`);
 });
 
 test('the trailing edge comes down about 0.14 m on the light brake and 0.40 m on the full one, 0.24 m in the middle, and steering still adds on its side', async () => {
@@ -549,8 +652,42 @@ test('a stall rocks the wing back well clear of its stops, and a fold on one sid
   }
 });
 
-test('nothing it is handed, however wild, puts a number astray', async () => {
+test('a gust on the tail rocks the glider harder, and leaves air that is rougher already as it was', () => {
+  // How rough the air has become after ten seconds of it.
+  const roughness = (args) => {
+    const glider = swingOnly();
+    for (let n = 1; n <= 10 / STEP; n++) glider.pose({ ...CALM, dt: STEP, time: n * STEP, flying: true, ...args });
+    return glider.air.rough;
+  };
+  close(roughness({}), 0.3, 1e-6, 'still air');
+  close(roughness({ rough: 0.5 }), 0.65, 1e-6, 'half a gust');
+  close(roughness({ rough: 1 }), 1, 1e-6, 'a full gust');
+  close(roughness({ lift: 5, rough: 0.5 }), 1, 1e-6, 'a strong thermal with half a gust');
+  // Sinking air has always been calmer than still air, and still is without a gust.
+  close(roughness({ lift: -1.5 }), 0.09, 1e-6, 'sinking air');
+  close(roughness({ lift: -1.5, rough: 0.5 }), 0.65, 1e-6, 'sinking air with half a gust');
+});
+
+test('a flutter, a steer or rough air easing out toward nothing lands on it, so that the wing stops working on it', async () => {
+  const { glider, fly } = await hangGlider();
+  // The game eases its flutter out at 6 a second and never quite reaches nothing; left as it was,
+  // it would go on fluttering the wing by ever tinier amounts for the rest of the flight.
+  let luff = 1;
+  fly(1, { flying: true, luff, turn: 1 });
+  for (let n = 0; n < 5 / STEP; n++) {
+    luff += (0 - luff) * Math.min(1, STEP * 6);
+    fly(STEP, { flying: true, luff });
+  }
+  assert.ok(luff > 0, 'the flutter handed in has not reached nothing');
+  for (const key of ['luff', 'steerRight', 'trailRight']) assert.equal(glider.air[key], 0, key);
+  // A glider long on the ground: the shimmer of the air dies away to nothing.
+  fly(15, { landed: true }, 0.1);
+  assert.equal(glider.air.rough, 0, 'the roughness of the air');
+});
+
+test('nothing it is handed, however wild, puts a number astray or turns an arm past where its skin tears', async () => {
   const { glider, surface } = await hangGlider();
+  const turnOf = await turnReader();
   const roll = dice(11);
   const pick = (low, high) => low + (high - low) * roll();
   const measured = {};
@@ -571,6 +708,12 @@ test('nothing it is handed, however wild, puts a number astray', async () => {
       assert.ok(Number.isFinite(value), `${key} is ${value} after pose ${n}`);
     }
     assert.ok(Math.abs(glider.sway.pitch) <= 0.5 && Math.abs(glider.sway.roll) <= 0.5);
+    // Down to -0.75 and up to 0.55, the bar with a flail or a tremble on top included; the throw
+    // of the reserve is a turn of its own on top of the right arm's.
+    for (const name of glider.gear.throwing ? ['L_Upperarm'] : ['L_Upperarm', 'R_Upperarm']) {
+      const arm = turnOf(glider, name, RIGHT);
+      assert.ok(arm >= -0.75 - 1e-9 && arm <= 0.55 + 1e-9, `${name} turned ${arm} after pose ${n}`);
+    }
   }
   assert.ok(surface.array.every(Number.isFinite), 'every point of the wing is a number');
   glider.group.traverse((part) => {

@@ -1062,6 +1062,26 @@ test('a gust is in the sky more than six seconds before it reaches the zone, and
   assert.equal(run.state.gusts[pilot.gustSlot], band);
   assert.equal(run.state.gusts.filter((candidate) => candidate.strength > 0).length, 2);
   assert.ok(Math.abs(pilot.gustAhead - (CLOUD_GUST.start - CLOUD_GUST.speed * (5 + STEP))) < 1e-6);
+  // A band off the zone's middle line is told of across its own width, on either side of its lane.
+  const aside = (offset) => {
+    run.reset(80, 2);
+    run.step(STEP, outside(700));
+    run.gust(heading, 40, 4);
+    const lane = run.state.gusts.find((candidate) => candidate.strength > 0);
+    const point = inBand(lane, 0, offset);
+    run.step(STEP, point);
+    run.step(STEP, point);
+    return { lane, slot: pilot.gustSlot, told: pilot.gustAhead < 999 };
+  };
+  for (const offset of [70, -70, 0]) {
+    const seen = aside(offset);
+    assert.equal(seen.told, true, `${offset} m to the side of a band on a 40 m lane`);
+    assert.equal(run.state.gusts[seen.slot], seen.lane);
+  }
+  for (const offset of [CLOUD_GUST.half + 5, -(CLOUD_GUST.half + 5)]) {
+    assert.equal(aside(offset).told, false, `${offset} m to the side is clear of it`);
+    assert.deepEqual([pilot.gustAhead, pilot.gustIn, pilot.gustSlot], [999, 99, -1]);
+  }
 });
 
 // A reference pilot on the game's own flight model, in the run's own air and wind: it flies to

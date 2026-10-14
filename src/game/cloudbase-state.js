@@ -200,14 +200,19 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
     out.z *= lee;
     const dx = x - Z.x;
     const dz = z - Z.z;
-    const reach = Math.hypot(dx, dz);
+    // Square roots rather than Math.hypot here: the streaks ask for the wind dozens of times a
+    // frame, and hypot hands back a number the engine has to allocate.
+    const reach = Math.sqrt(dx * dx + dz * dz);
     if (reach <= Z.r) {
       // Rising air carries its own: the deeper in lift, the less of the breeze gets in. This is
       // the lift that is there, whatever a cloud or a folded wing lets the pilot have of it.
       let share = 0;
       for (let i = 0; i < state.thermals.length; i++) {
         const thermal = state.thermals[i];
-        if (thermal.live && thermal.strength > 0) share += thermal.strength * profile(Math.hypot(x - thermal.x, z - thermal.z), thermal.r);
+        if (!thermal.live || thermal.strength <= 0) continue;
+        const ax = x - thermal.x;
+        const az = z - thermal.z;
+        share += thermal.strength * profile(Math.sqrt(ax * ax + az * az), thermal.r);
       }
       const open = 1 - W.shelter * Math.min(1, share);
       out.x *= open;

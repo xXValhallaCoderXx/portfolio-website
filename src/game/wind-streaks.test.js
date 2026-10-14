@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import v8 from 'node:v8';
 import * as THREE from 'three';
 import { WIND_STREAKS, createWindStreaks } from './wind-streaks.js';
 import { ORDER } from './cloudbase.js';
-import { CLOUD_GUST, CLOUD_POOL, CLOUD_ZONE, createCloudbaseRun } from './cloudbase-state.js';
+import { CLOUD_GUST, CLOUD_LAUNCH, CLOUD_POOL, CLOUD_WIND, CLOUD_ZONE, createCloudbaseRun } from './cloudbase-state.js';
 import { APPROACH_WINDS, fjordBreeze } from './approach.js';
 import { ZONES } from './terrain.js';
 
@@ -85,15 +86,16 @@ function clearOf(band, point, margin = 3) {
 }
 
 // A real run with one gust band set off by hand, `lane` metres to the right of the zone centre,
-// and the pilot hanging still on the band's middle line abeam the centre, at 700 m: well above the
-// launch hill's lee, and in the band's path. Facing into it, so the camera is behind, downwind.
-// The first scheduled band is never due before 20 seconds, so until then this is the only one.
-function gustyRun({ heading = 0.9, lane = 20, strength = 5, seed = 5 } = {}) {
+// and the pilot hanging still on the band's middle line abeam the centre, at 700 m unless told
+// otherwise: well above the launch hill's lee, and in the band's path. Facing into it, so the
+// camera is behind, downwind. The first scheduled band is never due before 20 seconds, so until
+// then this is the only one.
+function gustyRun({ heading = 0.9, lane = 20, strength = 5, seed = 5, height = 700 } = {}) {
   const run = createCloudbaseRun();
   run.reset(80, seed);
   run.gust(heading, lane, strength);
   const band = run.state.gusts.find((slot) => slot.strength > 0);
-  const pos = { x: CLOUD_ZONE.x - band.uz * lane, y: 700, z: CLOUD_ZONE.z + band.ux * lane };
+  const pos = { x: CLOUD_ZONE.x - band.uz * lane, y: height, z: CLOUD_ZONE.z + band.ux * lane };
   const eye = chase(pos, heading + Math.PI);
   // Steps the run and draws each frame of `seconds`, as the game does.
   const fly = (streaks, seconds) => {
@@ -169,7 +171,7 @@ test('the steady streaks fill a box around the pilot wherever it flies, and no l
   assert.ok(fewest > 0.8 * STEADY, `at least ${fewest} of ${STEADY} streaks were lit at every moment`);
 });
 
-test('the field stays put in the world as the pilot flies through it, and moves only with the wind, at flow times its speed', () => {
+test('the field stays put in the world as the pilot flies through it, and moves only with the air where the pilot is, all of it together, at flow times its speed', () => {
   for (const calm of [false, true]) {
     const streaks = createWindStreaks({ scene: new THREE.Scene(), calm });
     const flow = calm ? W.calm.flow : W.flow;
@@ -192,7 +194,114 @@ test('the field stays put in the world as the pilot flies through it, and moves 
       close(wrapCentred(after[i].mid.z - before[i].mid.z, W.box[2]), flow * -1, 1e-3);
     }
   }
+  // In air that is different everywhere, every streak still moves by the wind at the pilot, while
+  // it lies along the wind at its own place.
+  const uneven = (x, y, z, out) => {
+    out.x = 3 * Math.sin(x / 40) + 1;
+    out.z = 2 * Math.cos(z / 25);
+    out.front = 0;
+    return out;
+  };
+  const streaks = createWindStreaks({ scene: new THREE.Scene() });
+  const pos = { x: 70.5, y: 300.5, z: -40.5 };
+  const here = uneven(pos.x, pos.y, pos.z, {});
+  streaks.update(STEP, pos, { x: pos.x, y: 3000, z: pos.z }, uneven, 1, -1000, null, false);
+  const before = drawn(streaks, 0, STEADY);
+  for (let n = 0; n < 60; n++) streaks.update(STEP, pos, { x: pos.x, y: 3000, z: pos.z }, uneven, 1, -1000, null, false);
+  const after = drawn(streaks, 0, STEADY);
+  let pointing = 0;
+  for (let i = 0; i < STEADY; i++) {
+    close(wrapCentred(after[i].mid.x - before[i].mid.x, W.box[0]), W.flow * here.x, 1e-3);
+    close(wrapCentred(after[i].mid.z - before[i].mid.z, W.box[2]), W.flow * here.z, 1e-3);
+    if (!lit(after[i])) continue;
+    // Drawn with the wind it last looked up, at most three frames and 30 cm ago, which turns the
+    // slowest lit one by under 0.1 rad.
+    const own = uneven(after[i].mid.x, after[i].mid.y, after[i].mid.z, {});
+    const dx = after[i].head.x - after[i].tail.x;
+    const dz = after[i].head.z - after[i].tail.z;
+    assert.ok(Math.abs(dx * own.z - dz * own.x) < 0.1 * Math.hypot(own.x, own.z) * after[i].length, 'along the wind at its own place');
+    assert.ok(dx * own.x + dz * own.z > 0);
+    pointing += 1;
+  }
+  assert.ok(pointing > 0.6 * STEADY, `${pointing} lit streaks checked`);
   assert.ok(W.flow > 1 && W.flow < 2, 'a little faster than the air, so a pilot carried by it still sees it go by');
+});
+
+test('the steady field keeps an even spread however uneven the air: under a run\'s bands, at its downwind edge and over the fjord\'s rings', () => {
+  // How many of the first `used` steady streaks have their middle in each square of the box, seen
+  // from above. A field that keeps its shape still sits across the squares a little unevenly by
+  // where it happens to be: over every place it can be, 140 streaks put 5 to 11 in each 45 m square
+  // and the fjord's 49 put 1 to 8 in each 60 m one. Streaks that crowd push a square well past that.
+  const tally = (streaks, pos, used, cells) => {
+    const size = W.box[0] / cells;
+    const counts = new Array(cells * cells).fill(0);
+    for (const streak of drawn(streaks, 0, used)) {
+      const across = Math.min(cells - 1, Math.floor((streak.mid.x - pos.x + W.box[0] / 2) / size));
+      const along = Math.min(cells - 1, Math.floor((streak.mid.z - pos.z + W.box[2] / 2) / size));
+      counts[along * cells + across] += 1;
+    }
+    return counts;
+  };
+  const even = (streaks, pos, used, cells, [fewest, most], where) => {
+    const counts = tally(streaks, pos, used, cells);
+    assert.ok(Math.min(...counts) >= fewest && Math.max(...counts) <= most, `${where}: ${counts.join(' ')} streaks to a square`);
+  };
+  // Circling 14 m round `site` at 11.5 m/s with the camera behind, as a pilot climbing does.
+  const circle = (pos, eye, site, n) => {
+    const yaw = n * STEP * (11.5 / 14);
+    Object.assign(pos, { x: site.x - 14 * Math.cos(yaw), z: site.z - 14 * Math.sin(yaw) });
+    Object.assign(eye, chase(pos, yaw));
+  };
+
+  // Hanging at the zone centre, where the run's thermals hold the breeze back in their lift and its
+  // own bands sweep through the box with air going two or three times as fast as the breeze.
+  {
+    const run = createCloudbaseRun();
+    run.reset(80, 5);
+    const pos = new THREE.Vector3(CLOUD_ZONE.x, 700, CLOUD_ZONE.z);
+    const eye = new THREE.Vector3(pos.x, pos.y + 9.5, pos.z + 26);
+    const streaks = createWindStreaks({ scene: new THREE.Scene() });
+    for (let n = 0; n <= 90 * 60; n++) {
+      if (n > 0) run.step(STEP, pos);
+      streaks.update(STEP, pos, eye, run.windAt, 1, run.state.fogHeight + 3, run.state.gusts, false);
+      if (n % 600 === 0) even(streaks, pos, STEADY, 4, [4, 13], `under the bands at ${n / 60} s`);
+    }
+    assert.ok(run.state.gustCount >= 3 && run.state.active, `${run.state.gustCount} bands went over`);
+  }
+
+  // Circling as far downwind of the zone centre as the launch is, so that the far side of the box
+  // reaches past the zone's edge, where the run stops the wind blowing outward.
+  {
+    const run = createCloudbaseRun();
+    run.reset(80, 2);
+    const air = run.windAt(CLOUD_ZONE.x, 700, CLOUD_ZONE.z, {});
+    const scale = Math.hypot(CLOUD_LAUNCH.x - CLOUD_ZONE.x, CLOUD_LAUNCH.z - CLOUD_ZONE.z) / Math.hypot(air.x, air.z);
+    const site = { x: CLOUD_ZONE.x + air.x * scale, z: CLOUD_ZONE.z + air.z * scale };
+    const pos = new THREE.Vector3(site.x, 700, site.z);
+    const eye = new THREE.Vector3();
+    const streaks = createWindStreaks({ scene: new THREE.Scene() });
+    for (let n = 0; n <= 60 * 60; n++) {
+      circle(pos, eye, site, n);
+      if (n > 0) run.step(STEP, pos);
+      streaks.update(STEP, pos, eye, run.windAt, 1, run.state.fogHeight + 3, run.state.gusts, false);
+      if (n % 600 === 0) even(streaks, pos, STEADY, 4, [4, 13], `at the zone's edge at ${n / 60} s`);
+    }
+    // And they stay lit: none is left becalmed past the edge.
+    assert.ok(drawn(streaks, 0, STEADY).filter(lit).length > 0.8 * STEADY);
+  }
+
+  // Circling over each landing ring, where the breeze turns to follow the windsock.
+  for (const zone of ZONES) {
+    const used = Math.ceil(STEADY * 0.35);
+    const pos = new THREE.Vector3(zone.x, zone.h + 40, zone.z);
+    const eye = new THREE.Vector3();
+    const streaks = createWindStreaks({ scene: new THREE.Scene() });
+    for (let n = 0; n <= 60 * 60; n++) {
+      circle(pos, eye, zone, n);
+      streaks.update(STEP, pos, eye, fjordBreeze, 0.35, 3, null, false);
+      if (n % 600 === 0) even(streaks, pos, used, 3, [1, 10], `over the ${zone.id} ring at ${n / 60} s`);
+    }
+  }
 });
 
 test('each streak is a comet pointing downwind, longer and brighter the harder it blows, and none shows in a calm', () => {
@@ -471,6 +580,26 @@ test('no lit streak comes close to the camera, cuts across the line of sight to 
   assert.ok(dimmed > 0, 'streaks near the camera are dimmed, not all put out');
 });
 
+test('no lit gust streak hangs under the floor either, wherever it falls in the curtain', () => {
+  const { run, pos, eye } = gustyRun();
+  const streaks = createWindStreaks({ scene: new THREE.Scene() });
+  let checked = 0;
+  for (let n = 0; n < 24 * 60; n++) {
+    run.step(STEP, pos);
+    // The floor sweeps from 10 to 30 m under the pilot, through the bottom of the curtain (which
+    // hangs to 30 m below), and never so near that the leading edge sits on it by design.
+    const floor = pos.y - 10 - 20 * ((n % 300) / 300);
+    streaks.update(STEP, pos, eye, run.windAt, 1, floor, run.state.gusts, false);
+    if (n % 20) continue;
+    for (const streak of drawn(streaks, STEADY, LEADS)) {
+      if (!lit(streak)) continue;
+      checked += 1;
+      assert.ok(streak.mid.y > floor, `a lit gust streak ${(floor - streak.mid.y).toFixed(1)} m under the floor`);
+    }
+  }
+  assert.ok(checked > 200, `${checked} lit gust streaks checked`);
+});
+
 test('the air is drawn pale blue, a gust whiter, and nothing is ever amber or red', () => {
   const { run, band, fly } = gustyRun();
   const streaks = createWindStreaks({ scene: new THREE.Scene() });
@@ -497,6 +626,57 @@ test('the air is drawn pale blue, a gust whiter, and nothing is ever amber or re
   for (let n = 0; n < 6; n++) {
     fly(streaks, 5);
     assert.ok(hues().every(blueWhite));
+  }
+});
+
+test('low in the launch hill\'s lee a band is drawn only as strong as the share of its wind that gets in', () => {
+  // How far a head's colour has gone from the air's own toward the gust's white, 0 to 1, read
+  // from the ratio of its red to its blue, which its brightness leaves alone. Its extra light is
+  // the same share of the gust's.
+  const whiteness = ([r, , b]) => ((r / b) * PALE.b - PALE.r) / (WHITE.r - PALE.r - (r / b) * (WHITE.b - PALE.b));
+  const strength = 5;
+  // How much of the breeze, and of a band, the launch hill lets in at a height.
+  const lee = (y) => {
+    const t = Math.min(1, Math.max(0, (y - CLOUD_WIND.lee[0]) / (CLOUD_WIND.lee[1] - CLOUD_WIND.lee[0])));
+    return t * t * (3 - 2 * t);
+  };
+  // How bright the band's leading edge is drawn at each height.
+  const edges = {};
+  // The pilot in the lee (whose share runs from 3% at the foot of the box to 42% at its top), part
+  // way out of it, and clear above it.
+  for (const [height, fewest] of [[150, 2], [220, 3], [700, 3]]) {
+    const { run, band, pos, eye } = gustyRun({ strength, height });
+    // The same sky with no band in it: what the band adds at a place is the difference.
+    const plain = createCloudbaseRun();
+    plain.reset(80, 5);
+    const streaks = createWindStreaks({ scene: new THREE.Scene() });
+    // Until the middle of the band, where it blows its full strength, is over the pilot.
+    for (let n = 0; n < 19.5 * 60; n++) {
+      run.step(STEP, pos);
+      plain.step(STEP, pos);
+      streaks.update(STEP, pos, eye, run.windAt, 1, run.state.fogHeight + 3, run.state.gusts, false);
+    }
+    let checked = 0;
+    for (const streak of drawn(streaks, 0, STEADY)) {
+      const { ahead, aside } = inBand(band, streak.mid);
+      // Only where the band is whole, a metre in from where it starts to fade.
+      if (!lit(streak) || ahead > -CLOUD_GUST.rise - 1 || ahead < CLOUD_GUST.fall - CLOUD_GUST.depth + 1 ||
+        Math.abs(aside) > CLOUD_GUST.half - CLOUD_GUST.soft - 1) continue;
+      const gusty = run.windAt(streak.mid.x, streak.mid.y, streak.mid.z, {});
+      const still = plain.windAt(streak.mid.x, streak.mid.y, streak.mid.z, {});
+      const share = Math.hypot(gusty.x - still.x, gusty.z - still.z) / strength;
+      close(whiteness(streak.headColour), share, 0.01);
+      checked += 1;
+    }
+    assert.ok(checked >= fewest, `${checked} streaks checked in the band at ${height} m`);
+    edges[height] = luma(segment(streaks, LEADS + run.state.gusts.indexOf(band)).headColour);
+  }
+  // The leading edge, drawn a few metres under the pilot, is dimmed by the lee there as well: the
+  // same line in the same place, only the height differing.
+  assert.ok(edges[700] > 0, 'the leading edge is drawn clear of the lee');
+  for (const height of [150, 220]) {
+    const wanted = lee(height - W.lead.drop) / lee(700 - W.lead.drop);
+    close(edges[height] / edges[700], wanted, 0.02);
   }
 });
 
@@ -619,7 +799,46 @@ test('with dt 0 nothing moves and the picture holds, gusts and all, as it must w
   assert.notDeepEqual(position.array, places);
 });
 
-test('after 600 frames the streaks still draw into the same buffers, and no new array is made along the way', () => {
+// How many arrays and buffers `draw` makes in any way a call can be caught: by a constructor, with
+// or without `new`, by a constructor's `from` or `of`, or by a method that hands back a new one.
+// Each is swapped for a counting stand-in while `draw` runs and put back after. An array or object
+// written out as a literal makes no call and is not seen here; the young-heap test after this one
+// sees any made for each streak.
+const TYPED = Object.getPrototypeOf(Int8Array);
+const MAKERS = [
+  [globalThis, ['Array', 'ArrayBuffer', 'DataView', 'Float32Array', 'Float64Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array', 'Int32Array', 'Uint32Array', 'BigInt64Array', 'BigUint64Array']],
+  [Array, ['from', 'of']],
+  [TYPED, ['from', 'of']],
+  [Object, ['keys', 'values', 'entries', 'getOwnPropertyNames']],
+  [Array.prototype, ['concat', 'filter', 'flat', 'flatMap', 'map', 'slice', 'splice', 'toReversed', 'toSorted', 'toSpliced', 'with']],
+  [TYPED.prototype, ['filter', 'map', 'slice', 'subarray', 'toReversed', 'toSorted', 'with']],
+  [ArrayBuffer.prototype, ['slice']],
+  [String.prototype, ['split']],
+];
+function arraysMadeBy(draw) {
+  let made = 0;
+  const count = {
+    apply(target, self, args) { made += 1; return Reflect.apply(target, self, args); },
+    construct(target, args, newTarget) { made += 1; return Reflect.construct(target, args, newTarget); },
+  };
+  const swapped = [];
+  try {
+    for (const [owner, names] of MAKERS) {
+      for (const name of names) {
+        const real = Object.getOwnPropertyDescriptor(owner, name);
+        if (typeof real?.value !== 'function') continue;
+        Object.defineProperty(owner, name, { ...real, value: new Proxy(real.value, count) });
+        swapped.push([owner, name, real]);
+      }
+    }
+    draw();
+  } finally {
+    for (const [owner, name, real] of swapped) Object.defineProperty(owner, name, real);
+  }
+  return made;
+}
+
+test('after 600 frames the streaks still draw into the same buffers, and no array or buffer is made along the way by any constructor or array method', () => {
   const scene = new THREE.Scene();
   const { run, pos, eye } = gustyRun();
   const streaks = createWindStreaks({ scene });
@@ -627,24 +846,24 @@ test('after 600 frames the streaks still draw into the same buffers, and no new 
   const { geometry, material } = lines;
   const { position, color } = geometry.attributes;
   const arrays = [position.array, color.array];
-  // Every kind of array is counted as it is made while the streaks are drawing.
-  const kinds = ['Array', 'ArrayBuffer', 'Float32Array', 'Float64Array', 'Int8Array', 'Uint8Array', 'Int16Array', 'Uint16Array', 'Int32Array', 'Uint32Array'];
-  const real = kinds.map((name) => globalThis[name]);
+  const makers = () => [Array, Float32Array, Array.from, TYPED.from, Array.prototype.map, TYPED.prototype.subarray, String.prototype.split];
+  const real = makers();
+  // The stand-ins do count, each kind of maker, and are all put back after.
+  for (const make of [() => new Float32Array(2), () => Array(2), () => Array.from('ab'), () => Float64Array.of(1), () => [1].map(String), () => position.array.subarray(0, 3), () => 'a b'.split(' ')]) {
+    assert.ok(arraysMadeBy(make) > 0, `${make} is seen`);
+  }
+  assert.equal(arraysMadeBy(() => {}), 0);
+  assert.deepEqual(makers(), real);
   let made = 0;
-  const counting = kinds.map((name, i) => new Proxy(real[i], { construct(target, args, newTarget) { made += 1; return Reflect.construct(target, args, newTarget); } }));
   for (let n = 0; n < 600; n++) {
     run.step(STEP, pos);
     // Climbing in a circle, so that the box, the curtain and the camera all move.
     Object.assign(pos, { x: pos.x + 0.2 * Math.sin(n / 40), y: pos.y + 0.05, z: pos.z + 0.2 * Math.cos(n / 40) });
     Object.assign(eye, chase(pos, n / 40 + Math.PI / 2));
-    kinds.forEach((name, i) => { globalThis[name] = counting[i]; });
-    try {
-      streaks.update(STEP, pos, eye, run.windAt, 1, run.state.fogHeight + 3, run.state.gusts, false);
-    } finally {
-      kinds.forEach((name, i) => { globalThis[name] = real[i]; });
-    }
+    made += arraysMadeBy(() => streaks.update(STEP, pos, eye, run.windAt, 1, run.state.fogHeight + 3, run.state.gusts, false));
   }
   assert.equal(made, 0, `${made} arrays were made while drawing`);
+  assert.deepEqual(makers(), real, 'every maker is put back');
   assert.equal(lines.geometry, geometry);
   assert.equal(lines.material, material);
   assert.equal(geometry.attributes.position, position);
@@ -654,6 +873,55 @@ test('after 600 frames the streaks still draw into the same buffers, and no new 
   assert.equal(position.count, SEGMENTS * 2);
   assert.deepEqual(scene.children, [lines]);
   assert.ok(drawn(streaks, STEADY, SEGMENTS).some(lit), 'gusts were drawn along the way');
+});
+
+test('drawing a frame makes nothing for each streak: the young heap grows only by the numbers the engine boxes for the winds it asks for', () => {
+  const { run, pos: start } = gustyRun();
+  // The pilot and the camera as the game hands them over.
+  const pos = new THREE.Vector3(start.x, start.y, start.z);
+  const eye = new THREE.Vector3();
+  const streaks = createWindStreaks({ scene: new THREE.Scene() });
+  let n = 0;
+  // Climbing in a circle, so that the box, the curtain and the camera all move.
+  const draw = (windAt) => {
+    n += 1;
+    pos.x += 0.2 * Math.sin(n / 40);
+    pos.y += 0.05;
+    pos.z += 0.2 * Math.cos(n / 40);
+    eye.set(pos.x - 26 * Math.sin(n / 40), pos.y + 9.5, pos.z + 26 * Math.cos(n / 40));
+    streaks.update(STEP, pos, eye, windAt, 1, -1000, run.state.gusts, false);
+  };
+  // Until the band is in the zone, so that its curtain and its leading edge are drawn too.
+  while (n < 9 * 60) {
+    run.step(STEP, pos);
+    draw(run.windAt);
+  }
+  // From here the run holds still and the wind is one that makes nothing of its own, and the
+  // engine is given a few hundred frames to settle on its fastest code.
+  const still = (x, y, z, out) => {
+    out.x = 2.5;
+    out.z = -1.5;
+    out.front = 0.5;
+    return out;
+  };
+  for (let i = 0; i < 600; i++) draw(still);
+  // Handing the three numbers of a place to the wind costs the engine a box for each, which comes
+  // to some 3 KB a frame for the fifty or so places looked up. An object, an array or a function
+  // made for each steady streak adds 8 to 18 KB. One made once a frame, or only for each gust
+  // streak, is too small to tell apart from the engine's own.
+  const limit = 32 * (STEADY + FRONTS);
+  const young = () => v8.getHeapSpaceStatistics().find((space) => space.space_name === 'new_space').space_used_size;
+  // Measured a second at a time until one comes in under the limit: on a busy machine the engine
+  // can take a while to finish its fastest code, and until then it boxes far more.
+  let least = Infinity;
+  for (let window = 0; window < 40 && least >= limit; window++) {
+    const before = young();
+    for (let i = 0; i < 60; i++) draw(still);
+    const grown = young() - before;
+    // A collection on the way empties the young heap, and that second then tells nothing.
+    if (grown >= 0) least = Math.min(least, grown / 60);
+  }
+  assert.ok(least < limit, `${least} bytes a frame (Infinity: every second had a collection)`);
 });
 
 test('dispose takes the streaks out of the scene and releases their geometry and material once, and a second game has its own', () => {

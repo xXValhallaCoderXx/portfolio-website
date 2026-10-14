@@ -15,10 +15,10 @@ export const WIND_STREAKS = Object.freeze({
   // pilot. A streak fades out as either end comes within `margin` of the half-box of a face, so the
   // field has no hard edge; that is longer than half the longest streak, so no lit one pokes out.
   box: Object.freeze([180, 65, 180]), above: 45, margin: 0.15,
-  // How many times as fast as the air the streaks travel. The pilot is carried by the same air, so
-  // at 1 a pilot outside lift would see none of it go by; a little faster shows the wind as a slow
-  // stream across a circle. From a glider doing 11.5 m/s most of what moves on screen is the
-  // glider itself, so the direction is read from each streak's shape.
+  // How many times as fast as the air where the pilot is the whole field travels. The pilot is
+  // carried by that same air, so at 1 a circling pilot would see none of it go by; a little faster
+  // shows the wind as a slow stream across a circle. From a glider doing 11.5 m/s most of what
+  // moves on screen is the glider itself, so the direction is read from each streak's shape.
   flow: 1.5,
   // Metres of streak per m/s of wind, and the shortest and longest. A streak is dark under `still`
   // m/s and fully lit by twice that, so a dead calm draws nothing.
@@ -152,8 +152,13 @@ export function createWindStreaks({ scene, order = 0, calm = false }) {
     phase[i] = roll() * Math.PI * 2;
     shimmer[i] = W.shimmer[0] + (W.shimmer[1] - W.shimmer[0]) * roll();
   }
-  // How far each steady streak has been carried, east and south, kept within one box.
-  const drift = new Float64Array(STEADY * 2);
+  // How far the air has carried the steady field, east and south, kept within one box. The field
+  // moves as one, by the wind where the pilot is. Carried each by the wind at its own place, the
+  // streaks would crowd wherever the air slows (behind a band, past the zone's edge, by a windsock)
+  // and nothing would ever spread them out again. Each still lies, stretches and shines with the
+  // wind at its own place.
+  let driftX = 0;
+  let driftZ = 0;
   // The wind each streak last looked up: east, south and how much of a gust band is there.
   const wind = new Float32Array((STEADY + FRONT) * 3);
   // How bright each streak's head is to be, before it is dimmed near the camera (see tint).
@@ -250,14 +255,17 @@ export function createWindStreaks({ scene, order = 0, calm = false }) {
     return smoothstep(nearIn, nearOut, eye) * smoothstep(clearIn, clearOut, Math.sqrt(qx * qx + qy * qy + qz * qz));
   }
 
-  // Looks up the wind where streak `i` is now, for this frame and the next few.
+  // Looks up the wind where streak `i` is now, for this frame and the next few. The run counts a
+  // band as wholly there however deep in the launch hill's lee, where its wind is cut as the
+  // breeze's is; a band is drawn only as strong as the wind it brings, or a band blowing half a
+  // metre a second low on the hill would show as white, blooming streaks.
   function sample(windAt, i, x, y, z) {
     probe.front = 0;
     windAt(x, y, z, probe);
     const k = i * 3;
     wind[k] = probe.x;
     wind[k + 1] = probe.z;
-    wind[k + 2] = probe.front;
+    wind[k + 2] = probe.front * leeAt(y);
   }
 
   // How bright streak `i`'s twinkle has it at the moment, 1 at most.
@@ -297,7 +305,7 @@ export function createWindStreaks({ scene, order = 0, calm = false }) {
 
   // The steady field. Each streak's place wraps around the pilot within the box, as the 404 scene's
   // air does in one dimension, so the field never runs out and never thins; it stays put in the
-  // world as the pilot flies through it, and only the wind moves it.
+  // world as the pilot flies through it, and only the wind moves it, all of it together (driftX).
   function drawSteady(dt, pos, windAt, share, fresh, base, boost) {
     const moving = dt > 0;
     const shown = STEADY * share;
@@ -308,14 +316,9 @@ export function createWindStreaks({ scene, order = 0, calm = false }) {
     for (let i = 0; i < count; i++) {
       const weight = Math.min(1, shown - i);
       const k = i * 3;
-      const d = i * 2;
-      if (moving && !fresh) {
-        drift[d] = wrap(drift[d] + wind[k] * flow * dt, boxX);
-        drift[d + 1] = wrap(drift[d + 1] + wind[k + 1] * flow * dt, boxZ);
-      }
-      const dx = wrapCentred(seeds[k] * boxX + drift[d] - pos.x, boxX);
+      const dx = wrapCentred(seeds[k] * boxX + driftX - pos.x, boxX);
       const up = wrap(seeds[k + 1] * boxY - (pos.y - below), boxY);
-      const dz = wrapCentred(seeds[k + 2] * boxZ + drift[d + 1] - pos.z, boxZ);
+      const dz = wrapCentred(seeds[k + 2] * boxZ + driftZ - pos.z, boxZ);
       const x = pos.x + dx;
       const y = pos.y - below + up;
       const z = pos.z + dz;
@@ -399,7 +402,7 @@ export function createWindStreaks({ scene, order = 0, calm = false }) {
       // The run drops a band once all of it is as far beyond the zone as it started short of it; its
       // streaks have faded out over the last stretch by then, so none is seen to vanish.
       if (glow > 0) {
-        glow *= shine(i) * boost * leeAt(y)
+        glow *= shine(i) * boost
           * (1 - smoothstep(W.window[0], W.window[1], Math.abs(aside - abeam)))
           * (1 - smoothstep(G.start - G.depth, G.start, along))
           * smoothstep(0, edgeCurtain, Math.min(up, curtain - up))
@@ -479,6 +482,10 @@ export function createWindStreaks({ scene, order = 0, calm = false }) {
     if (step > 0) {
       clock += step;
       frame += 1;
+      // The steady field rides on the air where the pilot is, `flow` times as fast as it blows.
+      windAt(pos.x, pos.y, pos.z, probe);
+      driftX = wrap(driftX + probe.x * flow * step, boxX);
+      driftZ = wrap(driftZ + probe.z * flow * step, boxZ);
     }
     awake = true;
     lastX = pos.x;

@@ -76,10 +76,11 @@ const urgent = (line) => URGENT.some((start) => line.startsWith(start));
 
 /**
  * Decides which line is on screen. `held` is `{ line, since }`, the line showing and the time it
- * appeared; `line` is what the chain says now and `now` the flight's own clock (the run's, or the
- * flight's over the fjord, so the map pauses it). A line gives way at once to an urgent one or
- * when there was none, and otherwise only after HINT_HOLD, so that a moment's change of mind in
- * the air does not flash text too fast to read.
+ * appeared; `line` is what the chain says now and `now` the clock it is held on: a run's own time
+ * (which the map pauses, and which never runs fast), or the frame clock over the fjord, where time
+ * can be boosted. A line gives way at once to an urgent one or when there was none, and otherwise
+ * only after HINT_HOLD, so that a moment's change of mind in the air does not flash text too fast
+ * to read.
  */
 export function holdHint(held, line, now) {
   if (line !== held.line && (held.line === '' || urgent(line) || now - held.since >= HINT_HOLD)) {

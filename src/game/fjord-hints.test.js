@@ -45,7 +45,7 @@ test('the lines about the brake and the stall fit one line of a narrow phone', (
   }
 });
 
-test('held on the flight clock, a fjord line stays up long enough to read, but a stall is said at once', () => {
+test('held on the frame clock, a fjord line stays up long enough to read, but a stall is said at once', () => {
   const held = { line: '', since: 0 };
   assert.equal(holdHint(held, hint({ nearRing: true, unvisited: true }), 30), 'hold space to brake down into the ring');
   assert.equal(holdHint(held, hint({}), 30.5), 'hold space to brake down into the ring');

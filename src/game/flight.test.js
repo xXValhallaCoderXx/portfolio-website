@@ -227,10 +227,13 @@ test('a drift marked calm, a wing that is put somewhere else and a wing with its
   assert.ok(kicked(stillAir(), handsUp(), (air) => { air.windZ = -(STALL.jump + 0.5); }) < 1e-9, 'too big to be weather');
   assert.ok(kicked(stillAir(), handsUp({ locked: true }), jump) < 1e-9);
   assert.ok(kicked(stillAir(), handsUp({ climb: -1 }), jump) < 1e-9);
-  // The first wind a settled wing meets is where it starts from.
+  // The first wind a settled wing meets is where it starts from, however small a change that
+  // would have been (this one is well inside what counts as weather), and the next is a gust.
   const g = settleFlight(aloft());
-  stepFlight(g, handsUp(), stillAir({ windX: 3, windZ: -4 }), STEP);
+  stepFlight(g, handsUp(), stillAir({ windX: 0.6, windZ: -0.8 }), STEP);
   assert.ok(near(g.speed, 11.5, 1e-9));
+  stepFlight(g, handsUp(), stillAir({ windX: 0.6, windZ: -1.6 }), STEP);
+  assert.ok(g.speed < 11.5 - 0.7, 'once it has met the air, a change of it is felt');
   // And nothing loads a wing whose brake is not on.
   const free = fly(aloft(), handsUp({ turn: 1 }), stillAir({ rough: 1 }), 20);
   assert.equal(free.stallLoad, 0);
@@ -314,8 +317,17 @@ test('a raven strike lets the brake and the bar go and ends a stall, and so does
   assert.ok(near(g.yawRate, FLIGHT.turn.hook * FLIGHT.turn.trim, 0.01) && near(g.speed, 11.5, 0.2), 'it flies the hook at trim');
   assert.equal(g.turn, FLIGHT.turn.hook);
 
+  // A wing stalled by its pilot, taken over by the autopilot: the stall ends on the first step.
   const auto = aloft();
-  const self = handsUp({ brake: true, bar: true, climb: -2 });
+  const self = handsUp({ brake: true, harsh: true, turn: 1 });
+  until(auto, self, stillAir(), (wing) => wing.stall > 0);
+  assert.ok(auto.stall > 0 && auto.stallSide === 1);
+  self.climb = -2;
+  stepFlight(auto, self, stillAir(), STEP);
+  assert.deepEqual([auto.stall, auto.stallSide, auto.stallLoad], [0, 0, 0]);
+  // And flying itself it holds its climb with the hands off, whatever the keys ask.
+  self.bar = true;
+  self.turn = 0;
   fly(auto, self, stillAir({ lift: 9, windZ: -6 }), 20);
   assert.ok(near(auto.vy, -2, 0.05), 'it holds the climb it is given');
   assert.deepEqual([auto.brake, auto.bar, auto.stallLoad, auto.stall], [0, 0, 0, 0]);

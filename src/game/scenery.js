@@ -769,9 +769,16 @@ const smooth = (from, to, x) => {
   return t * t * (3 - 2 * t);
 };
 
-// Eases `from` toward `to` by the share `rate`, landing on it exactly once within a hair of it, so
-// that a brake let go is let go to the last bit and the work it costs the wing stops.
-const settle = (from, to, rate) => (Math.abs(to - from) < 1e-4 ? to : from + (to - from) * rate);
+// Eases `from` toward `to` by the share `rate`, landing on it exactly once within `hair` of it, so
+// that a brake let go is let go to the last bit and the work it costs the wing stops. Easing that
+// never landed would go on shrinking toward nothing for good, into the tiny numbers a processor
+// works with many times more slowly, on every point of the wing in every frame.
+const settle = (from, to, rate, hair = 1e-4) => (Math.abs(to - from) < hair ? to : from + (to - from) * rate);
+
+// A share handed to `pose`, held to 0 to 1, with anything too faint to see taken as none. Whoever
+// eases one out may never quite reach nothing (the game's flutter does not), and the wing would
+// pay for it on every point until the flight ended. Anything that is not a number is none too.
+const share = (value) => (value > 1e-3 ? Math.min(1, value) : 0);
 
 // Where a point of the wing sits right now, in the wing file's own units, written into `out`.
 // The same rule moves the wing's surface and the line ends attached to it. `air` is the glider's
@@ -1054,12 +1061,14 @@ export function buildGlider({ loadModel: load = loadModel } = {}) {
     // on a deep brake). In a stall the hands let go of the lines altogether.
     const pull = (1 - air.stall) * (shown + steer * (1 - (1 - MOTION.steerDeep) * shown));
     // Hands up on the speed bar, or thrown up in a stall a little short of that, so that they can
-    // be seen to flail. A hand pulling its brake stays down, and a raised hand leaves its rest.
-    const up = Math.max(air.bar, air.stall);
-    const high = MOTION.armRaise * Math.max(air.bar, MOTION.stallRaise * air.stall);
+    // be seen to flail. A raised hand leaves its rest; a hand pulling its brake stays down, from a
+    // third of a full pull on exactly where it would be without the bar.
+    const hold = 1 - Math.min(1, 3 * pull);
+    const up = Math.max(air.bar, air.stall) * hold;
+    const high = MOTION.armRaise * Math.max(air.bar, MOTION.stallRaise * air.stall) * hold;
     const angle =
       air.rest * (1 - Math.min(1, pull)) * (1 - up) +
-      high * (1 - Math.min(1, 3 * pull)) -
+      high -
       MOTION.armPull * pull +
       MOTION.armTremble * air.luff * Math.sin(air.time * 19 + side) +
       MOTION.armFlail * air.stall * Math.sin(air.time * 11 + 2 * side);
@@ -1186,7 +1195,8 @@ export function buildGlider({ loadModel: load = loadModel } = {}) {
      * (flight.js's, 0 to 1). `luff` is how near the wing is to a stall, 0 to 1, and `stall` is 1
      * while it is stalled. `foldLeft` and `foldRight` are how far the pilot's left and right halves
      * of the wing are folded, 0 to 1, already eased by whoever folds them (gear.collapse still
-     * folds all of it). `rough` is a gust on the tail, 0 to 1.
+     * folds all of it). `rough` is a gust on the tail, 0 to 1. Any of these shares under a
+     * thousandth is taken as none, so that one eased out without ever reaching 0 costs nothing.
      */
     pose({
       dt, time, bank, pace, turn, lift, liftSide, landed,
@@ -1198,28 +1208,32 @@ export function buildGlider({ loadModel: load = loadModel } = {}) {
         const bankRate = clamp((bank - sway.lastBank) / step, -3, 3);
         const liftRate = clamp((lift - sway.lastLift) / step, -20, 20);
         // The moment the wing stalls it is flung back, once.
-        const kick = stall > 0 && !(sway.lastStall > 0) ? MOTION.stallKick : 0;
+        const stalled = share(stall);
+        const kick = stalled > 0 && !(sway.lastStall > 0) ? MOTION.stallKick : 0;
         sway.lastBank = bank;
         sway.lastLift = lift;
-        sway.lastStall = stall;
+        sway.lastStall = stalled;
 
         air.time = time;
         air.collapse = gear.collapse;
-        air.foldLeft = clamp(foldLeft, 0, 1);
-        air.foldRight = clamp(foldRight, 0, 1);
-        // Rising air is rougher than still air, and a gust on the tail rougher still.
+        air.foldLeft = share(foldLeft);
+        air.foldRight = share(foldRight);
+        // Rising air is rougher than still air, and a gust on the tail rougher still. The roughness
+        // and the steering ease exactly as they always have, landing only within a hair (1e-9) far
+        // too fine to see: steering let go, or a glider long on the ground, would otherwise shrink
+        // toward nothing for good.
         const rocking = 0.3 + Math.min(1, lift / 5) * 0.7;
-        const restless = rough > 0 ? Math.max(rocking, 0.3 + 0.7 * Math.min(1, rough)) : rocking;
-        air.rough += ((landed ? 0 : restless) - air.rough) * Math.min(1, step * 2);
+        const onTail = share(rough);
+        const restless = onTail > 0 ? Math.max(rocking, 0.3 + 0.7 * onTail) : rocking;
+        air.rough = settle(air.rough, landed ? 0 : restless, Math.min(1, step * 2), 1e-9);
         const ease = Math.min(1, step * 6);
-        air.steerLeft += (Math.min(1, Math.max(0, -turn)) - air.steerLeft) * ease;
-        air.steerRight += (Math.min(1, Math.max(0, turn)) - air.steerRight) * ease;
-        air.brake = settle(air.brake, clamp(brake, 0, 1), ease);
-        air.bar = settle(air.bar, clamp(bar, 0, 1), ease);
+        air.steerLeft = settle(air.steerLeft, Math.min(1, Math.max(0, -turn)), ease, 1e-9);
+        air.steerRight = settle(air.steerRight, Math.min(1, Math.max(0, turn)), ease, 1e-9);
+        air.brake = settle(air.brake, share(brake), ease);
+        air.bar = settle(air.bar, share(bar), ease);
         air.rest = settle(air.rest, flying ? -MOTION.armRest : 0, ease);
-        air.luff = settle(air.luff, clamp(luff, 0, 1), Math.min(1, step * 5));
+        air.luff = settle(air.luff, share(luff), Math.min(1, step * 5));
         // A stall takes the wing at once and gives it back more slowly.
-        const stalled = clamp(stall, 0, 1);
         air.stall = settle(air.stall, stalled, Math.min(1, step * (stalled > air.stall ? 10 : 3)));
         // What the trailing edge feels: the brake all along it, and steering on its own side (only
         // a little more of that on a deep brake). Stalled, the hands are off the lines.
