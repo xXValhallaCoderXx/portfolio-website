@@ -26,9 +26,10 @@ const smoothstep = (from, to, value) => {
  * Writes into `out` where each effect should be heading for the glider `flight` (as flight.js
  * keeps it): `left` and `right`, how far each half of the wing is folded (0 to 1), `luff`, how
  * hard the cloth flutters (0 to 1), and `shake`, radians of camera shake. Outside the two kinds of
- * flying everything is zero and `flight` is not read.
+ * flying everything is zero and `flight` is not read. `load` is the stall load the flutter warns
+ * of: the wing's own, or 0 where it cannot stall (over the fjord), so nothing there warns of one.
  */
-export function stallEffects(mode, flight, out) {
+export function stallEffects(mode, flight, out, load = flight?.stallLoad ?? 0) {
   out.left = out.right = out.luff = out.shake = 0;
   if (mode !== 'flying' && mode !== 'cloudbase') return out;
   const E = STALL_EFFECTS;
@@ -38,7 +39,7 @@ export function stallEffects(mode, flight, out) {
     else if (flight.stallSide < 0) out.left = E.spin;
     else out.left = out.right = E.fold;
   }
-  out.luff = flight.stall > 0 ? 1 : smoothstep(E.luff[0], E.luff[1], flight.stallLoad);
+  out.luff = flight.stall > 0 ? 1 : smoothstep(E.luff[0], E.luff[1], load);
   if (flight.stall > STALL.surge) out.shake = E.shake;
   return out;
 }

@@ -124,3 +124,12 @@ test('held on in a run, the meter goes light, late, deep, near and stalled in th
   }
   assert.deepEqual(seen, ['light', 'late', 'deep', 'near', 'stalled']);
 });
+
+test('the cloth flutters with the load it is given, so where a wing cannot stall nothing warns of one', () => {
+  const loaded = wing({ stallLoad: 0.9 });
+  assert.ok(stallEffects('flying', loaded, {}).luff > 0.8, 'by default, the wing\'s own load');
+  assert.equal(stallEffects('flying', loaded, {}, 0).luff, 0);
+  assert.equal(stallEffects('cloudbase', loaded, {}, loaded.stallLoad).luff, stallEffects('cloudbase', loaded, {}).luff);
+  // A stall itself still flutters hardest, whatever the load.
+  assert.equal(stallEffects('cloudbase', wing({ stall: 1 }), {}, 0).luff, 1);
+});

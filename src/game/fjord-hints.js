@@ -1,7 +1,7 @@
 // The one line of advice free flight over the fjord shows, chosen from what is happening right now.
-// As in a Cloudbase run (cloudbase-hints.js) the first rule that matches wins, a stalled wing is
-// said first, and a line is held long enough to read. Kept free of game code so it can be tested.
-import { stallHint } from './cloudbase-hints.js';
+// As in a run (cloudbase-hints.js) the first rule that matches wins, a stalled wing is said
+// first, and a line is held long enough to read (hints.js). Kept free of game code so it can be tested.
+import { stallHint } from './hints.js';
 
 // Over a ring this many metres up, there is still a way to come down to it worth saying.
 export const RING_HIGH = 28;
@@ -12,7 +12,8 @@ export const LOW = 45;
  * `facts` describes the moment:
  *   stall, stallSide  seconds of stall left, and -1 or 1 in a spin (0 straight)
  *   auto              the name of the place the glider is flying itself to, or ''
- *   arch              the Cloudbase arch is still to be found and this is the start of a flight
+ *   nearArch          closing on the arch into Good Lift, past which the brake can stall the wing
+ *   arch              the arch into Good Lift is still to be found and this is the start of a flight
  *   outside           past the edge of the map
  *   nearRing          a ring is close, and `unvisited` whether its place is still to be read
  *   agl               metres above the ground
@@ -24,7 +25,9 @@ export function fjordHint(facts) {
   const stalled = stallHint(facts.stall, facts.stallSide);
   if (stalled) return stalled;
   if (facts.auto) return `flying itself to ${facts.auto} · steer to take over`;
-  if (facts.arch) return 'Cloudbase → hard right through the glowing arch';
+  // Over the fjord the wing never stalls; through the arch it can, and the pilot hears it first.
+  if (facts.nearArch) return 'past the arch the brake can stall the wing';
+  if (facts.arch) return 'Good Lift → hard right through the arch';
   if (facts.outside) return 'the fog turns you back toward the fjord';
   // Near a ring nothing else is said: there is one thing to do, and only if it is still to do.
   if (facts.nearRing) return facts.unvisited && facts.agl > RING_HIGH ? `hold ${facts.touch ? '▼' : 'space'} to brake down into the ring` : '';

@@ -5,7 +5,7 @@ import { HINT_HOLD, HINT_WIDTH, holdHint } from './cloudbase-hints.js';
 
 // Gliding high over the fjord well after take-off, with nothing near and nothing to say.
 const quiet = {
-  stall: 0, stallSide: 0, auto: '', arch: false, outside: false, nearRing: false, unvisited: false, agl: 120, sinking: true,
+  stall: 0, stallSide: 0, auto: '', nearArch: false, arch: false, outside: false, nearRing: false, unvisited: false, agl: 120, sinking: true,
   airtime: 60, touch: false,
 };
 const hint = (facts) => fjordHint({ ...quiet, ...facts });
@@ -15,7 +15,8 @@ test('a stalled wing outranks every other line over the fjord too, and a spin sa
   assert.equal(hint({ ...everything, stall: 0.8 }), 'stalled — let go, the wing flies again');
   assert.equal(hint({ ...everything, stall: 0.8, stallSide: 1 }), 'spin — too much brake in the turn, let go');
   assert.equal(hint(everything), 'flying itself to forge · steer to take over');
-  assert.equal(hint({ ...everything, auto: '' }), 'Cloudbase → hard right through the glowing arch');
+  assert.equal(hint({ ...everything, auto: '', nearArch: true }), 'past the arch the brake can stall the wing');
+  assert.equal(hint({ ...everything, auto: '' }), 'Good Lift → hard right through the arch');
   assert.equal(hint({ ...everything, auto: '', arch: false }), 'the fog turns you back toward the fjord');
 });
 
@@ -39,7 +40,7 @@ test('low and sinking says where to climb, and the first twenty seconds teach th
 });
 
 test('the lines about the brake and the stall fit one line of a narrow phone', () => {
-  for (const moment of [{ stall: 1 }, { stall: 1, stallSide: -1 }, { nearRing: true, unvisited: true }, { nearRing: true, unvisited: true, touch: true }]) {
+  for (const moment of [{ stall: 1 }, { stall: 1, stallSide: -1 }, { nearArch: true }, { nearRing: true, unvisited: true }, { nearRing: true, unvisited: true, touch: true }]) {
     const line = hint(moment);
     assert.ok(line.length > 0 && [...line].length <= HINT_WIDTH, `"${line}" is ${[...line].length} characters`);
   }

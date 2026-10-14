@@ -41,12 +41,13 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
 - Space, ↓ and S (▼ on a touch screen) are one brake that goes deeper the longer it is held. A
   fifth of a second in it is light: the wing slows to where it sinks least and turns a circle of
   about 8 m instead of 14. Held on, it goes deep (after about half a second over the fjord, eight
-  seconds in a Cloudbase run): slow and steep, the way down into a ring. A meter under the hint
-  shows it; red grows in from the right as the wing nears a stall, and letting go of the key for
-  a fifteenth of a second (70 ms) returns a deep brake to a light one. Held into the red the wing stalls, and in a turn it spins toward
-  the inside wing; it recovers by itself, sooner with the brake let go. Over the fjord a stall is
-  short and cheap and cannot begin near the ground. ↑ or W is the speed bar: hands up, faster,
-  sinking more and turning wider.
+  seconds in Good Lift): slow and steep, the way down into a ring. A meter under the hint shows
+  it, and letting go of the key for a fifteenth of a second (70 ms) returns a deep brake to a
+  light one. Over the fjord the wing never stalls, however the brake is held, and the meter shows
+  no red. Past the arch it can: red grows in from the right as the wing nears a stall, held into
+  the red it stalls, and in a turn it spins toward the inside wing; it recovers by itself, sooner
+  with the brake let go. ↑ or W is the speed bar: hands up, faster, sinking more and turning
+  wider. In Good Lift, ← and → held together push the bar as well, as ◀ and ▶ do on a phone.
 - Landing at a place opens the same section the page shows. "Open on page" leaves the flight at
   that section; Escape, the exit button and the browser's back button leave it too.
 - A manual landing briefly shows distance from the centre, a grade, points and the best distance
@@ -54,37 +55,68 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
   Map travel, automatic flight and "fly me to next" do not score, including after taking control
   back. A fresh manual takeoff starts a new scoring leg. Light approach wind is shown by each
   windsock; the forge floats you longer, rune ridge has lee-side sink, and the beacon is a small island.
-- Cloudbase is an optional altitude game through the glowing east-shore arch: turn hard right
-  for roughly two seconds after launch, then glide east through it. After discovery, the map
-  and menu offer direct entry. The amber column beyond the arch lifts you clear of the hillside
-  and then wears out. After that the lift is hidden: a flock of ravens circles inside each live
-  thermal, so find the birds, fly to them and climb beside them. Sparks and the core ring show
-  only from close by. Two thermals are alive at a time; each fades with use and with age, and
-  when it dies its ravens fly on to the next, where the lift starts as they arrive. Turn the way
-  the ravens turn: touching one collapses the wing, which costs about 60 m and a moment of
-  steering, and then no bird can strike for a few seconds. Storm clouds drift through in layers
-  from about 580 m, thicker higher up. Inside one there is no lift, the wing sinks and the view
-  greys out until you fly clear, so a cloud over a thermal caps it for a while. Only the rising
-  fog, the ground or quitting ends a run. Each run draws a new sky from its own seed, and the
-  same seed always gives the same sky. The 500/1,000/1,500 m rings are visual milestones.
-  A breeze of 2-4 m/s blows through the run, the wind that carries that height's storm clouds,
-  so it turns as you climb; it carries the glider, and rising air shelters a pilot from two
-  thirds of it. Every 16-26 s a gust band crosses the zone, drawn as a curtain of bright streaks
-  well before it arrives; it adds 3-5.5 m/s for a few seconds and pushes a circling pilot off the
-  core. A front that reaches a braked wing from behind takes airspeed away and can tip a deep
-  brake into a stall, so the hint says to ease off when one is near. Above 260 m a stall in a run
-  costs about as much height as a raven strike; easing the brake once a circle keeps it light.
-  Altitude is measured above sea level. A run lasts about two and a half minutes; peak, personal
-  best, raven strikes and time in cloud appear at the end, with one-click retry. Landing at a
-  portfolio place opens its content immediately, with the run result inline. Map travel and page
-  exit also save the run. The map pauses movement, fog, ravens, clouds and thermal exhaustion
-  together; time boost is switched off in a run, because a raven at three times the speed gives
-  no warning. Escape ends a run, R retries, and the existing sound switch controls vario, wind,
-  fog rumble, raven calls and the sounds of the wing stalling and of a gust going over. Scores
-  and discovery are saved locally; Reset progress clears them. The result counts raven strikes,
-  stalls and time in cloud. Music and a shared leaderboard are deferred. Cloudbase uses the same
-  keyboard and touch controls as flight, except that on a touch screen the » button is a second
-  brake in a run, so the four buttons sit as two pairs, one under each thumb.
+- Good Lift is the game through the glowing east-shore arch: a powerlifting meet in the sky. Turn
+  hard right for roughly two seconds after launch, then glide east through the arch. The arch is a
+  door: the page warps to `/good-lift/daily` and the run starts at the gate, with the same scene
+  and sound. Back leaves it for the fjord. After discovery, the map and the menu offer
+  `[ Good Lift ]` directly. Its code, its models and its styles load only once the glider closes
+  on the arch (inside 70 m), so the home page never carries them.
+  - **Addresses.** `/good-lift/daily` is the Daily Sky, the same for everyone that UTC day; the arch
+    opens it and R flies it again. `/good-lift` is practice, a new sky every run.
+    `/good-lift?sky=<hex>` is one named sky. Any other address under `/good-lift/` is the missing
+    page. Opened directly, an address shows a start screen first, because sound needs a click.
+  - **Lift.** The amber column beyond the arch lifts you clear of the hillside and then wears out.
+    After that the lift is hidden: a flock of ravens circles inside each live thermal, so find the
+    birds, fly to them and climb beside them, turning the way they turn. Sparks and the core ring
+    show only from close by. Two thermals are alive at a time; each fades with use and with age,
+    and when it dies its ravens fly on to the next.
+  - **The meet.** Every 250 m is a line where three judges' lights check the lift since the last:
+    contact (any raven or kettlebell strike), control (any stall or spin) and airspace (more than
+    1.5 s in cloud). Two or more white lights make a good lift and bank the bar into the TOTAL;
+    otherwise the plates drop into the mist. Either way the next bar starts empty at 25 kg. Plates
+    come from full circles turned the flock's way in lift (2.5 kg each), from a trail of 5 to 25 kg
+    plates laid on the bar's glide from a dying thermal toward the next flock, and from close calls.
+  - **Hrungnir.** From 550 m the giant throws kettlebells, each with 2.4 s of warning: a grunt from
+    his side, a red ring where it will land and, if that is off the screen, a chevron at its edge.
+    It is aimed where the wing will be if the pilot holds what they are doing, so changing that
+    dodges it: circling, push the bar; flying straight or on the bar, turn. A hit folds the wing
+    as a raven strike does; a miss under 9 m is a close call, worth 10 kg.
+  - **The horn.** At 110 s Gjallarhorn sounds, just as the fog starts to race, and every good lift
+    after it banks double. The fog, or touching down, ends a run and judges what is on the bar at
+    face value; Escape ends a run and forfeits it. Retrying, Back and leaving the page end a run
+    silently.
+  - **Hazards.** Touching a raven collapses the wing, which costs about 60 m and a moment of
+    steering, and then nothing can strike for a few seconds. Storm clouds drift through in layers
+    from about 580 m; inside one there is no lift, the wing sinks and the view greys out. A breeze
+    of 2-4 m/s turns as you climb, and every 16-26 s a gust band crosses the zone, drawn as a
+    curtain of bright streaks before it arrives. A front that reaches a braked wing from behind can
+    tip a deep brake into a stall. Above 260 m a stall costs about as much height as a strike.
+  - **The meet sheet.** When a run ends, the sheet shows the TOTAL, the peak and the best, the
+    climb drawn over the rising fog, a row of lights for every lift (a filled white disc or a
+    hollow red ring, with the judge's name, so colour is never the only sign), the feats, and a
+    line to share the run by, such as `Good Lift · Daily #12 · 512.5 kg · 1,412 m · ⚪⚪⚪ ⚪🔴⚪`.
+    R flies again, `[ new sky ]` gives practice and `[ today's sky ]` returns to the Daily Sky.
+  - **Replays and challenges.** A run is its seed and its four controls (left, right, brake, bar)
+    step by step, and nothing else: every run is recorded (`src/game/recorder.js`) and, as it ends,
+    replayed in the page (`replay.js`), and only a run that replays to the very same sheet gets a
+    link and a place on the board. The share line carries that link, `/good-lift/daily#vs=…`
+    (a whole run is about 1-2 KB of it). Opening it replays the run before the start screen, which
+    shows what it truly came to (`to beat: … kg · … m · verified`; what a link claims is never
+    trusted), then flies the same sky; the sheet gives the verdict, and a race on today's sky puts
+    the challenger on the day's board. `SIM_VERSION` (`src/game/sim-version.js`) names the rules a
+    run was flown under: a test fingerprints every tuning table, so changing how a run flies without
+    a new version fails `npm test`, and a link from other rules is refused rather than misread.
+  - **Feats and the board.** Opener, Under the horn, Giant-dodger, Clean meet, the 1,000 lb club
+    and Training block (the Daily Sky seven days in a row) are Good Lift's own feats: they show as
+    toasts when the sheet opens, never during a run, and they never move the fjord's belt. Each
+    Daily Sky keeps a board of this browser's ten best runs, ranked by total, then peak, then the
+    earlier run, under three initials. Good Lift keeps all of this under its own `good-lift-v1`
+    key (`src/game/good-lift-store.js`, `board.js`), apart from the fjord's progress.
+  - **Everything else.** The map pauses the run and leaves the portfolio's places off: the way to
+    them is `[ back to the fjord ]`. Time boost is off in a run, and on a touch screen the »
+    button is a second brake, so the four buttons sit as two pairs. Each sky is laid out from its
+    own seed, and the same seed always gives the same sky. Best height and discovery are saved
+    locally; Reset progress clears them and Good Lift's store together.
 - Phones, and visitors who ask for reduced motion, get a still image in the hero. The 3D code
   loads for them only if they choose to fly.
 - In an upright window the hero is two bands, the scene above the words, so the glider is never
@@ -116,18 +148,28 @@ the flight, to a project and to missing pages will show the host's own error pag
   images, captions and contribution highlights live in `PROJECTS` in `src/content.js`. Replace
   a screen's `src` and `alt` and remove `placeholder` when its real screenshot is available;
   highlights use percentages of the uncropped image. Runtime images belong in `public/projects/`.
-- `src/game/`: the flight. `game.js` runs it: input, HUD, map and sound; `terrain.js` is the
+- `src/game/`: the flight. `game.js` runs it: input, HUD, map, sound and the arch's portal; `terrain.js` is the
   world; `scenery.js` is the sky, buildings and glider; `achievements.js` is progress and belts;
   `landing.js` scores a landing, `approach.js` is the wind at each place (and the breeze the
   streaks draw over the fjord) and `gateway.js` the arch. `flight.js` is how the glider flies:
   airspeed and sink, the brake, the speed bar, the stall and gusts, with no 3D code, so tests fly
   it; `stall-effects.js` is what a stall does to the wing and camera and what the brake meter
   shows; `fjord-hints.js` picks free flight's line of advice; `wind-streaks.js` draws the wind.
-  `cloudbase-state.js` is a Cloudbase run (seeded thermals, ravens, storm clouds, wind, gusts and
-  fog) with no 3D code, so `npm test` can fly it; `cloudbase.js` and `ravens.js` draw that run;
-  `run-effects.js` is what a run does to the wing, the picture and the camera;
-  `cloudbase-hints.js` picks its one line of advice. `lost.js` is the missing page and `ridge.js`
-  the small live view of rune ridge on the page.
+  `hints.js` holds what every hint shares. `lost.js` is the missing page and `ridge.js` the small
+  live view of rune ridge on the page.
+- `src/game/good-lift.js` and everything it imports: Good Lift, loaded through one `import()` in
+  `game.js`. `run-step.js` is one fixed step of a run (the wing, the sky, the meet and the
+  kettlebells, in one order) that the game and the tests share; `cloudbase-state.js` is the run's
+  sky (seeded thermals, ravens, storm clouds, wind, gusts and fog); `meet-state.js` is the meet
+  (plates, lines, lights, the horn) and `bells.js` Hrungnir's kettlebells. None of these has 3D
+  code, so `npm test` flies them. `cloudbase.js`, `ravens.js` and `meet-view.js` draw a run;
+  `run-effects.js` is what it does to the wing, the picture and the camera; `cloudbase-hints.js`
+  picks its one line of advice; `daily.js` is the Daily Sky; `meet-card.js` works out the meet
+  sheet (feats, the share line, the barogram) and `src/components/GoodLiftResult.jsx` draws it,
+  shipped with the game; `good-lift.css` styles its readouts and the sheet.
+  `good-lift-address.js` reads the game's addresses and imports nothing, so the page can use it.
+  `npm run check:split` checks the built page carries none of the game, and `split.test.js` checks
+  the same of the source.
 - `public/poster.jpg`: the still shown in the hero before the live scene loads.
 
 ## 3D models
@@ -144,16 +186,25 @@ A model's file name is the name the scene loads it by, so keep them short and st
 
 The optimizer maps the new generator filenames to `windsock.glb`, `gateway.glb`, `raven.glb`
 and `clouds.glb`. To process just these sources, run `npm run models -- windsock gateway raven clouds`.
-The windsock and gateway load with the fjord. The raven and the storm cloud load the first time
-a Cloudbase run starts, with simple stand-ins drawn until they arrive. The raven's file has a
+The windsock and gateway load with the fjord. The raven, the storm cloud and the kettlebell load
+as the glider closes on the arch, or the first time Good Lift starts, with simple stand-ins drawn
+until they arrive. The kettlebells glow in a copy of the forge prop's material, so the forge's own
+bell is never changed. The raven's file has a
 skeleton but no animation, so its wingbeat is posed in code (`src/game/ravens.js`); it is drawn
 about three and a half times life size and lit a little, because a real raven at 200 m against
 a night sky is four dark pixels.
-Run `npm test` for the scoring, progress, gateway, flight and Cloudbase checks. The Cloudbase
-tests include reference pilots that fly whole runs on `flight.js` in the run's own wind, with
-their hands up or circling on the brake, which catch a large shift in how hard the game is: if a
-tuning table in `cloudbase-state.js` or `flight.js` changes, they say whether 1,000 m and 1,500 m
-are still roughly where they were. The measured numbers are in a comment beside that test.
+Run `npm test` for the scoring, progress, gateway, flight and Good Lift checks. The deploy
+workflow runs it, and `npm run check:split`, before every deploy. The Good Lift tests include
+reference pilots (`src/game/pilots.js`) that fly whole runs through `run-step.js` in the run's own
+wind, with their hands up or circling on the brake, which catch a large shift in how hard the
+game is: if a tuning table in `cloudbase-state.js` or `flight.js` changes, they say whether
+1,000 m and 1,500 m are still roughly where they were. Recorded runs of those pilots are pinned to
+the bit, so any change to how a run flies shows. The measured numbers are in comments beside the
+tests. `src/game/golden.test.js` replays runs flown in Chromium on keys alone (recorded with the
+git-ignored `.artifacts/flight-qa/golden-qa.mjs`) and must land on the sheets the browser showed.
+Retuning anything a run is flown by needs a new `SIM_VERSION` with its fingerprint pinned in
+`sim-version.test.js`, and the golden runs recorded again: a new version is also a new Daily Sky
+and a new board. `DAILY_EPOCH` in `src/game/good-lift-address.js` is the UTC day of Daily #1.
 
 `concepts/` and `models-raw/` are local source folders, ignored by Git and unused by the production
 build. Back them up separately if you want to regenerate or edit the models later. Keep

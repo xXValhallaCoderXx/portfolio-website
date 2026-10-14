@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test src/game/*.test.js",
-    "models": "node tools/optimize-models.mjs"
+    "models": "node tools/optimize-models.mjs",
+    "check:split": "node tools/check-split.mjs"
   },
   "dependencies": {
     "react": "^19.3.0",

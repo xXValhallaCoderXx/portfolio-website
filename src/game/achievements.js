@@ -12,9 +12,9 @@ export const ACHIEVEMENTS = [
   { id: 'reserve', name: 'Reserve ride', text: 'Throw your reserve when a page goes missing.' },
   { id: 'bullseye', name: 'Bullseye', text: 'Land manually within 1 m of the centre.' },
   { id: 'four-for-four', name: 'Four for four', text: 'Land a manual bullseye at all four places.' },
-  { id: 'cloudbase-500', name: 'Above the mist', text: 'Reach 500 m in Cloudbase.' },
-  { id: 'cloudbase-1000', name: 'Cloud climber', text: 'Reach 1,000 m in Cloudbase.' },
-  { id: 'cloudbase-1500', name: 'Skyward', text: 'Reach 1,500 m in Cloudbase.' },
+  { id: 'cloudbase-500', name: 'Above the mist', text: 'Reach 500 m in Good Lift.' },
+  { id: 'cloudbase-1000', name: 'Cloud climber', text: 'Reach 1,000 m in Good Lift.' },
+  { id: 'cloudbase-1500', name: 'Skyward', text: 'Reach 1,500 m in Good Lift.' },
 ];
 
 // One belt per achievement earned, topping out at black. Swap in your own art's grading order.
@@ -23,6 +23,10 @@ export const BELTS = ['white', 'yellow', 'orange', 'green', 'blue', 'purple', 'b
 export const beltFor = (progress) => BELTS[Math.min(progress.unlocked.length, BELTS.length - 1)];
 
 const STORE = 'fjord-glider-v1';
+// Good Lift keeps its own store under this key (good-lift-store.js): its best, tonnage, feats, daily
+// streak and board. It never moves the belt, and it stays out of the fjord's progress, which would
+// drop a block it does not know; resetting progress clears both.
+export const GAME_STORE = 'good-lift-v1';
 const PLACE_IDS = ['about', 'experience', 'projects', 'contact'];
 const ACHIEVEMENT_IDS = new Set(ACHIEVEMENTS.map(({ id }) => id));
 let sessionProgress;

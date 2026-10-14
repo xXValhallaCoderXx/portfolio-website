@@ -1,0 +1,535 @@
+/* What a Good Lift run draws over the flight, loaded with the run (good-lift.js), never with the
+   page: the bar's row in the readouts, the judges' lights after each line, the chevron that points
+   at a kettlebell coming from off the screen, and the glow of Gjallarhorn once it has sounded. */
+
+/* The bar's row only shows in a run. */
+.fj-hud > dl .fj-run {
+  display: none;
+}
+
+.cloudbase .fj-hud > dl .fj-run {
+  display: block;
+}
+
+.cloudbase .fj-hud > dl [data-hud='bar'] {
+  color: var(--text);
+}
+
+.cloudbase .fj-hud > dl [data-hud='bar'].doubled {
+  color: var(--ember);
+}
+
+/* ---- the judges' lights: three, lit 150 ms apart, then the call, all gone in 2.5 s */
+
+/* They head the notifications' column (game.js keeps it under the readouts), so a toast can only
+   ever stack beneath them. */
+.fj-lights {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 10px 18px 12px;
+  border: 1px solid var(--rule);
+  background: rgba(6, 10, 19, 0.72);
+  text-align: center;
+  pointer-events: none;
+}
+
+.fj-lights.on {
+  animation: fj-lights 2.5s ease both;
+}
+
+/* The call, for whoever cannot see the lights: said, not shown. */
+.fj-said {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fj-lights p {
+  display: flex;
+  gap: 14px;
+  margin: 0;
+}
+
+.fj-lights i {
+  display: block;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(244, 246, 250, 0.35);
+  border-radius: 50%;
+  background: rgba(6, 10, 19, 0.9);
+}
+
+.fj-lights.on i {
+  animation: fj-light 0.12s ease-out both;
+  animation-delay: calc(var(--n) * 150ms);
+}
+
+.fj-lights i.white {
+  --lit: #f4f6fa;
+  --halo: rgba(244, 246, 250, 0.75);
+}
+
+.fj-lights i.red {
+  --lit: #ff546b;
+  --halo: rgba(255, 84, 107, 0.8);
+}
+
+.fj-lights b {
+  font-size: 22px;
+  letter-spacing: 0.12em;
+}
+
+.fj-lights.good b {
+  color: #f4f6fa;
+  text-shadow: 0 0 12px rgba(244, 246, 250, 0.7);
+}
+
+.fj-lights.good.doubled b {
+  color: var(--ember);
+  text-shadow: 0 0 14px rgba(255, 157, 74, 0.8);
+}
+
+.fj-lights.none b {
+  color: #ff546b;
+  text-shadow: 0 0 12px rgba(255, 84, 107, 0.6);
+}
+
+.fj-lights small {
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.fj-lights.on b,
+.fj-lights.on small {
+  animation: fj-call 0.2s ease-out 0.5s both;
+}
+
+@keyframes fj-lights {
+  0% {
+    opacity: 0;
+  }
+  4%,
+  86% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fj-light {
+  from {
+    background: rgba(6, 10, 19, 0.9);
+    box-shadow: none;
+  }
+  to {
+    border-color: var(--lit);
+    background: var(--lit);
+    box-shadow: 0 0 14px 2px var(--halo);
+  }
+}
+
+@keyframes fj-call {
+  from {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Asking for less motion: the lights and the call are simply there, and simply gone. */
+@media (prefers-reduced-motion: reduce) {
+  .fj-lights.on,
+  .fj-lights.on i,
+  .fj-lights.on b,
+  .fj-lights.on small {
+    animation: none;
+  }
+
+  .fj-lights.on i {
+    border-color: var(--lit);
+    background: var(--lit);
+  }
+}
+
+/* ---- the chevron: a red mark at the edge of the screen, pointing at a kettlebell's landing place */
+
+.fj-chevron {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  width: 0;
+  height: 0;
+  color: #ff546b;
+  font-size: 30px;
+  line-height: 1;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* The mark is drawn about its own middle, pointing up at a rotation of nought. */
+.fj-chevron::before {
+  position: absolute;
+  top: -0.5em;
+  left: -0.5em;
+  width: 1em;
+  height: 1em;
+  content: '▲';
+  text-align: center;
+  text-shadow: 0 0 10px rgba(255, 84, 107, 0.9);
+  animation: fj-chevron 0.4s steps(2, jump-none) infinite;
+}
+
+@keyframes fj-chevron {
+  to {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fj-chevron::before {
+    animation: none;
+  }
+}
+
+/* ---- Gjallarhorn: once it has sounded, the bottom of the picture glows like the forge */
+
+.fj-horn {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 18%;
+  background: linear-gradient(to top, rgba(255, 122, 46, 0.24), rgba(255, 122, 46, 0));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1.2s;
+}
+
+.fj-horn.on {
+  opacity: 1;
+  animation: fj-horn 2.6s ease-in-out infinite alternate;
+}
+
+@keyframes fj-horn {
+  to {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fj-horn.on {
+    animation: none;
+  }
+}
+
+/* On a phone held sideways the hint rides in the middle of the picture: the column the lights and
+   notifications stack in stops short of it, so neither can cover the hint. */
+@media (pointer: coarse) and (orientation: landscape) {
+  .cloudbase .fj-toasts {
+    max-height: calc(58svh - 90px);
+    overflow: hidden;
+  }
+}
+
+/* ---- a touch screen, or any window this narrow */
+
+@media (pointer: coarse), (max-width: 560px) {
+  /* The readouts lose their labels here, the bar's with them; its row carries the total too,
+     since the belt's row is not shown. */
+  .cloudbase .fj-hud > dl dt.fj-run {
+    display: none;
+  }
+
+  .cloudbase .fj-hud > dl [data-hud='bar'] {
+    flex-basis: 100%;
+  }
+
+  .fj-lights {
+    padding: 8px 14px 10px;
+  }
+
+  .fj-lights i {
+    width: 22px;
+    height: 22px;
+  }
+
+  .fj-lights b {
+    font-size: 18px;
+  }
+}
+
+/* ---- the meet sheet: how a run went, lift by lift (GoodLiftResult.jsx) */
+
+.good-lift-result .shout {
+  margin: 0 0 8px;
+  font-size: clamp(20px, 5vw, 30px);
+  overflow-wrap: anywhere;
+}
+
+/* The heading takes the focus as the sheet opens, for whoever reads it aloud; it is no control. */
+.good-lift-result .shout:focus {
+  outline: none;
+}
+
+.good-lift-fresh {
+  color: var(--ember);
+}
+
+.good-lift-verdict {
+  color: var(--cyan);
+}
+
+.good-lift-result > .fjord-panel-body > p {
+  margin: 0 0 8px;
+}
+
+.good-lift-total {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.good-lift-total strong {
+  color: var(--cyan);
+}
+
+.good-lift-cost {
+  color: var(--dim);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* Words for whoever cannot see the lights, out of everyone else's way. */
+.good-lift-hide {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.good-lift-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 10px;
+}
+
+.good-lift-tabs [aria-selected='true'] {
+  background: var(--blue);
+  color: var(--bg);
+}
+
+/* The climb, with the fog filled in under it, the lines it was judged at and the horn. */
+.good-lift-barogram {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  height: auto;
+  margin: 0 0 12px;
+  border: 1px solid var(--rule);
+  background: rgba(6, 10, 19, 0.6);
+}
+
+.good-lift-barogram .fog {
+  fill: rgba(82, 111, 136, 0.55);
+}
+
+.good-lift-barogram .alt {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.good-lift-barogram .judged {
+  stroke-dasharray: 3 4;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.good-lift-barogram .judged.good {
+  stroke: rgba(244, 246, 250, 0.6);
+}
+
+.good-lift-barogram .judged.none {
+  stroke: rgba(255, 84, 107, 0.75);
+}
+
+.good-lift-barogram .horn {
+  stroke: var(--ember);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.good-lift-lights {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 0 14px;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.good-lift-lights th,
+.good-lift-lights td {
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+}
+
+.good-lift-lights thead th {
+  color: var(--dim);
+  font-weight: normal;
+}
+
+.good-lift-lights tr.none td:last-child {
+  color: #ff546b;
+}
+
+.good-lift-double {
+  color: var(--ember);
+}
+
+/* A white light is a filled disc; a red one a hollow ring, so colour is never the only sign. */
+.good-lift-light {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.good-lift-light.white {
+  background: #f4f6fa;
+  box-shadow: 0 0 6px rgba(244, 246, 250, 0.6);
+}
+
+.good-lift-light.red {
+  border: 2px solid #ff546b;
+}
+
+.good-lift-feats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+/* A feat still to earn is dashed and quiet; an earned one solid, ticked and lit. */
+.good-lift-feats li {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+  border: 1px dashed var(--rule);
+  color: var(--dim);
+}
+
+.good-lift-feats li.earned {
+  border-style: solid;
+  color: var(--text);
+}
+
+.good-lift-feats li.earned b {
+  color: var(--cyan);
+}
+
+.good-lift-feats li.fresh {
+  border-color: var(--cyan);
+  box-shadow: 0 0 12px rgba(45, 212, 238, 0.35);
+}
+
+.good-lift-feats em {
+  color: var(--ember);
+  font-style: normal;
+}
+
+.good-lift-share textarea {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  background: rgba(6, 10, 19, 0.7);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  resize: none;
+}
+
+.good-lift-share p {
+  margin: 8px 0 0;
+}
+
+.good-lift-board {
+  display: grid;
+  gap: 4px;
+  max-width: 480px;
+  margin: 0 0 10px;
+  padding-left: 2.2em;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.good-lift-board li > * + * {
+  margin-left: 12px;
+}
+
+.good-lift-board li.mine {
+  color: var(--cyan);
+}
+
+.good-lift-tag {
+  color: var(--dim);
+  font-style: normal;
+  font-weight: normal;
+}
+
+.good-lift-row-lights i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 3px;
+  border-radius: 50%;
+}
+
+.good-lift-row-lights .clean {
+  background: #f4f6fa;
+}
+
+.good-lift-row-lights .one {
+  background: #f4f6fa;
+  box-shadow: inset 0 0 0 2px #ff546b;
+}
+
+.good-lift-row-lights .none {
+  border: 2px solid #ff546b;
+}
+
+.good-lift-initials input {
+  width: 4.5ch;
+  padding: 2px 6px;
+  border: 1px solid var(--rule);
+  background: rgba(6, 10, 19, 0.7);
+  color: var(--text);
+  font: inherit;
+  text-transform: uppercase;
+}
+
+.good-lift-result footer button {
+  min-width: 0;
+  min-height: 44px;
+  white-space: normal;
+}

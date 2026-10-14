@@ -139,3 +139,48 @@ test('a stall, the brake in the red, a gust coming and a brake gone deep are all
     assert.equal(holdHint(held, hint(moment), 10.1), hint(moment));
   }
 });
+
+test('a kettlebell coming says how to dodge it, leading with the bar while circling, and gives way only to a folded or stalled wing', () => {
+  assert.equal(hint({ bell: 1 }), 'kettlebell — push the bar or straighten');
+  assert.equal(hint({ bell: 1, touch: true }), 'kettlebell — ◀▶ for the bar, or straighten');
+  assert.equal(hint({ bell: 2 }), 'kettlebell — turn off your line');
+  assert.equal(hint({ bell: 2, touch: true }), 'kettlebell — turn off your line');
+  const everything = { bell: 1, load: 0.8, brake: 0.9, deep: 3, gustAhead: 10, cloud: 1, outside: true, elapsed: 1, fogClearance: 5 };
+  assert.match(hint(everything), /^kettlebell — push/);
+  assert.match(hint({ ...everything, bell: 2 }), /^kettlebell — turn/, 'flying straight, it outranks the same as circling');
+  assert.match(hint({ ...everything, stall: 1 }), /^stalled/);
+  assert.match(hint({ ...everything, collapse: 1 }), /^raven strike/);
+});
+
+test('a wing folded by a kettlebell says so, and one folded by a raven still names the raven', () => {
+  assert.equal(hint({ collapse: 1, bellHit: true }), 'kettlebell hit — wing collapsed, hold on');
+  assert.equal(hint({ collapse: 1, bellHit: false }), 'raven strike — wing collapsed, hold on');
+});
+
+test('a close call, the horn and a waiting trail each have a line of their own, said only while it is news', () => {
+  assert.equal(hint({ closeCall: 0.5 }), 'close call — 10 kg on the bar');
+  assert.equal(hint({ closeCall: 2.5 }), '');
+  assert.equal(hint({ horn: 1 }), 'Gjallarhorn — every lift counts double');
+  assert.equal(hint({ horn: 3.5 }), '');
+  assert.equal(hint({ trail: true }), 'lift dying — follow the plates on the bar');
+  assert.equal(hint({ trail: true, thermal: 1, dying: true }), 'lift dying — follow the plates on the bar');
+  // Each is news, not a warning: a cloud still comes first, and leaving the zone.
+  assert.match(hint({ closeCall: 0.5, horn: 1, trail: true, cloud: 1 }), /^in cloud/);
+  assert.match(hint({ closeCall: 0.5, outside: true }), /turns you back/);
+  assert.equal(hint({ closeCall: 0.5, horn: 1 }), 'close call — 10 kg on the bar', 'the close call before the horn');
+  // Turning against a flock outranks the trail, which outranks a dying lift's own line.
+  assert.match(hint({ trail: true, thermal: 1, against: 2, flockDir: -1 }), /^ravens turn ◀/);
+  assert.equal(hint({ trail: true, thermal: 0, dying: true }), 'lift dying — follow the plates on the bar');
+});
+
+test('every line the meet adds fits one line of a narrow phone, and a kettlebell is said at once', () => {
+  const moments = [{ collapse: 1, bellHit: true }, { bell: 1 }, { bell: 1, touch: true }, { bell: 2 }, { closeCall: 0 }, { horn: 0 }, { trail: true }];
+  const lines = new Set(moments.map(hint));
+  assert.equal(lines.size, moments.length, 'each moment has its own line');
+  for (const line of lines) assert.ok([...line].length <= HINT_WIDTH, `"${line}" is ${[...line].length} characters`);
+  for (const moment of [{ bell: 1 }, { bell: 2 }, { collapse: 1, bellHit: true }]) {
+    const held = { line: '', since: 0 };
+    holdHint(held, 'climb beside the ravens, never through', 10);
+    assert.equal(holdHint(held, hint(moment), 10.1), hint(moment));
+  }
+});

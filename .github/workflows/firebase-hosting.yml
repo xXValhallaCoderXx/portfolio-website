@@ -41,6 +41,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run the tests
+        # The game's balance and the replays of its runs rest on these: nothing deploys if one fails.
+        run: npm test
+
+      - name: Check the page carries none of the game beyond the arch
+        run: npm run check:split
+
       - name: Install Firebase CLI
         run: npm install --global firebase-tools@15.33.0
 

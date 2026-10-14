@@ -4,7 +4,7 @@ import v8 from 'node:v8';
 import * as THREE from 'three';
 import { WIND_STREAKS, createWindStreaks } from './wind-streaks.js';
 import { ORDER } from './cloudbase.js';
-import { CLOUD_GUST, CLOUD_LAUNCH, CLOUD_POOL, CLOUD_WIND, CLOUD_ZONE, createCloudbaseRun } from './cloudbase-state.js';
+import { CLOUD_GUST, CLOUD_LAUNCH, CLOUD_POOL, CLOUD_WIND, CLOUD_ZONE, RUN_SKY, createCloudbaseRun } from './cloudbase-state.js';
 import { APPROACH_WINDS, fjordBreeze } from './approach.js';
 import { ZONES } from './terrain.js';
 
@@ -108,7 +108,7 @@ function gustyRun({ heading = 0.9, lane = 20, strength = 5, seed = 5, height = 7
 }
 
 test('the streaks are additive 1 px lines in colours of their own, unfogged, and drawn after the run\'s fog when asked', () => {
-  const streaks = createWindStreaks({ scene: new THREE.Scene(), order: ORDER.aboveFog });
+  const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene(), order: ORDER.aboveFog });
   const { lines } = streaks;
   assert.equal(lines.isLineSegments, true);
   assert.equal(lines.name, 'wind-streaks');
@@ -131,12 +131,12 @@ test('the streaks are additive 1 px lines in colours of their own, unfogged, and
     assert.equal(attribute.array instanceof Float32Array, true);
   }
   assert.equal(SEGMENTS, 140 + 60 + CLOUD_POOL.gusts);
-  assert.equal(createWindStreaks({ scene: new THREE.Scene() }).lines.renderOrder, 0);
+  assert.equal(createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() }).lines.renderOrder, 0);
   assert.equal(Object.isFrozen(W), true);
 });
 
 test('the steady streaks fill a box around the pilot wherever it flies, and no lit one reaches past the box', () => {
-  const streaks = createWindStreaks({ scene: new THREE.Scene() });
+  const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
   const wind = blowing(2.5, -1.5);
   const [width, height, depth] = W.box;
   const pos = { x: 0, y: 300, z: 0 };
@@ -173,7 +173,7 @@ test('the steady streaks fill a box around the pilot wherever it flies, and no l
 
 test('the field stays put in the world as the pilot flies through it, and moves only with the air where the pilot is, all of it together, at flow times its speed', () => {
   for (const calm of [false, true]) {
-    const streaks = createWindStreaks({ scene: new THREE.Scene(), calm });
+    const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene(), calm });
     const flow = calm ? W.calm.flow : W.flow;
     const wind = blowing(2, -1);
     const pos = { x: 30, y: 400, z: -20 };
@@ -202,7 +202,7 @@ test('the field stays put in the world as the pilot flies through it, and moves 
     out.front = 0;
     return out;
   };
-  const streaks = createWindStreaks({ scene: new THREE.Scene() });
+  const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
   const pos = { x: 70.5, y: 300.5, z: -40.5 };
   const here = uneven(pos.x, pos.y, pos.z, {});
   streaks.update(STEP, pos, { x: pos.x, y: 3000, z: pos.z }, uneven, 1, -1000, null, false);
@@ -260,7 +260,7 @@ test('the steady field keeps an even spread however uneven the air: under a run\
     run.reset(80, 5);
     const pos = new THREE.Vector3(CLOUD_ZONE.x, 700, CLOUD_ZONE.z);
     const eye = new THREE.Vector3(pos.x, pos.y + 9.5, pos.z + 26);
-    const streaks = createWindStreaks({ scene: new THREE.Scene() });
+    const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
     for (let n = 0; n <= 90 * 60; n++) {
       if (n > 0) run.step(STEP, pos);
       streaks.update(STEP, pos, eye, run.windAt, 1, run.state.fogHeight + 3, run.state.gusts, false);
@@ -279,7 +279,7 @@ test('the steady field keeps an even spread however uneven the air: under a run\
     const site = { x: CLOUD_ZONE.x + air.x * scale, z: CLOUD_ZONE.z + air.z * scale };
     const pos = new THREE.Vector3(site.x, 700, site.z);
     const eye = new THREE.Vector3();
-    const streaks = createWindStreaks({ scene: new THREE.Scene() });
+    const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
     for (let n = 0; n <= 60 * 60; n++) {
       circle(pos, eye, site, n);
       if (n > 0) run.step(STEP, pos);
@@ -295,7 +295,7 @@ test('the steady field keeps an even spread however uneven the air: under a run\
     const used = Math.ceil(STEADY * 0.35);
     const pos = new THREE.Vector3(zone.x, zone.h + 40, zone.z);
     const eye = new THREE.Vector3();
-    const streaks = createWindStreaks({ scene: new THREE.Scene() });
+    const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
     for (let n = 0; n <= 60 * 60; n++) {
       circle(pos, eye, zone, n);
       streaks.update(STEP, pos, eye, fjordBreeze, 0.35, 3, null, false);
@@ -309,7 +309,7 @@ test('each streak is a comet pointing downwind, longer and brighter the harder i
   // Far overhead, out of the way of the fades around the camera.
   const eye = { x: 0, y: 3000, z: 0 };
   const draw = (wind) => {
-    const streaks = createWindStreaks({ scene: new THREE.Scene() });
+    const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
     streaks.update(STEP, pos, eye, wind, 1, -1000, null, false);
     return drawn(streaks, 0, STEADY);
   };
@@ -360,7 +360,7 @@ test('each streak is a comet pointing downwind, longer and brighter the harder i
 
 test('a gust band\'s own streaks hang in a curtain inside it, crowded toward its front, long and bright enough to bloom, and travel with it', () => {
   const { band, pos, eye, fly } = gustyRun();
-  const streaks = createWindStreaks({ scene: new THREE.Scene() });
+  const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
   fly(streaks, 9);
   const fronts = drawn(streaks, STEADY, LEADS);
   const shown = fronts.filter(lit);
@@ -413,7 +413,7 @@ test('a gust band\'s own streaks hang in a curtain inside it, crowded toward its
 
 test('each live front draws its leading edge as one faint line across the zone, as wide as its band and a few metres under the pilot', () => {
   const { run, band, pos, fly } = gustyRun();
-  const streaks = createWindStreaks({ scene: new THREE.Scene() });
+  const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
   const edges = () => drawn(streaks, LEADS, SEGMENTS);
   // Still outside the zone: the band's own streaks show it coming, but there is no edge to draw.
   fly(streaks, 5);
@@ -442,7 +442,7 @@ test('each live front draws its leading edge as one faint line across the zone, 
 
 test('with no gust in the sky, or none to be had over the fjord, no gust streak and no leading edge is drawn', () => {
   const { run, pos, eye, fly } = gustyRun();
-  const streaks = createWindStreaks({ scene: new THREE.Scene() });
+  const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
   const gustDrawn = () => drawn(streaks, STEADY, SEGMENTS).some(lit);
   fly(streaks, 9);
   assert.equal(gustDrawn(), true);
@@ -465,7 +465,7 @@ test('over the fjord, with fjordBreeze as the wind, fewer streaks show and those
   let checked = 0;
   for (const zone of ZONES) {
     const sock = APPROACH_WINDS.find((wind) => wind.id === zone.id);
-    const streaks = createWindStreaks({ scene: new THREE.Scene() });
+    const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
     const pos = { x: zone.x, y: zone.h + 30, z: zone.z };
     const eye = chase(pos);
     for (let n = 0; n < 5 * 60; n++) {
@@ -495,7 +495,7 @@ test('a streak coming into use, or put somewhere else with the pilot, draws the 
     out.front = 0;
     return out;
   };
-  const streaks = createWindStreaks({ scene: new THREE.Scene() });
+  const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
   const pos = { x: 0, y: 300, z: 0 };
   const along = (wind) => (streak) => !lit(streak) || (Math.abs((streak.head.x - streak.tail.x) * wind[1] - (streak.head.z - streak.tail.z) * wind[0]) < 1e-3 &&
     (streak.head.x - streak.tail.x) * wind[0] + (streak.head.z - streak.tail.z) * wind[1] > 0);
@@ -513,7 +513,7 @@ test('a streak coming into use, or put somewhere else with the pilot, draws the 
 
 test('a band blowing out beyond the zone has faded away before the run drops it, so none of it is seen to vanish', () => {
   const { run, band, fly } = gustyRun();
-  const streaks = createWindStreaks({ scene: new THREE.Scene() });
+  const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
   const ofBand = () => drawn(streaks, STEADY, LEADS).filter((streak) => lit(streak) && !clearOf(band, streak.mid, 0));
   fly(streaks, 25);
   assert.ok(ofBand().length > 0.3 * FRONTS, 'crossing the zone it is drawn in full');
@@ -529,7 +529,7 @@ test('a band blowing out beyond the zone has faded away before the run drops it,
 
 test('odd moments never put a number astray: no floor, the camera on the glider, a dead calm, a pilot far off the map', () => {
   const { run, pos, fly } = gustyRun();
-  const streaks = createWindStreaks({ scene: new THREE.Scene() });
+  const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
   fly(streaks, 9);
   const finite = () => {
     const { position, color } = streaks.lines.geometry.attributes;
@@ -551,7 +551,7 @@ test('odd moments never put a number astray: no floor, the camera on the glider,
 });
 
 test('no lit streak comes close to the camera, cuts across the line of sight to the glider or hangs under the floor', () => {
-  const streaks = createWindStreaks({ scene: new THREE.Scene() });
+  const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
   const wind = blowing(3, -2);
   const pos = { x: 0, y: 200, z: 0 };
   let dimmed = 0;
@@ -582,7 +582,7 @@ test('no lit streak comes close to the camera, cuts across the line of sight to 
 
 test('no lit gust streak hangs under the floor either, wherever it falls in the curtain', () => {
   const { run, pos, eye } = gustyRun();
-  const streaks = createWindStreaks({ scene: new THREE.Scene() });
+  const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
   let checked = 0;
   for (let n = 0; n < 24 * 60; n++) {
     run.step(STEP, pos);
@@ -602,7 +602,7 @@ test('no lit gust streak hangs under the floor either, wherever it falls in the 
 
 test('the air is drawn pale blue, a gust whiter, and nothing is ever amber or red', () => {
   const { run, band, fly } = gustyRun();
-  const streaks = createWindStreaks({ scene: new THREE.Scene() });
+  const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
   const hues = () => drawn(streaks).filter(lit).map((part) => part.headColour);
   const blueWhite = ([r, g, b]) => b >= g && g >= r && r > 0;
   const whiteness = (streak) => streak.headColour[0] / streak.headColour[2];
@@ -649,7 +649,7 @@ test('low in the launch hill\'s lee a band is drawn only as strong as the share 
     // The same sky with no band in it: what the band adds at a place is the difference.
     const plain = createCloudbaseRun();
     plain.reset(80, 5);
-    const streaks = createWindStreaks({ scene: new THREE.Scene() });
+    const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
     // Until the middle of the band, where it blows its full strength, is over the pilot.
     for (let n = 0; n < 19.5 * 60; n++) {
       run.step(STEP, pos);
@@ -682,8 +682,8 @@ test('low in the launch hill\'s lee a band is drawn only as strong as the share 
 
 test('once the game has dropped its glow every streak is drawn brighter, by the same share', () => {
   const { run, pos, eye } = gustyRun();
-  const plain = createWindStreaks({ scene: new THREE.Scene() });
-  const bright = createWindStreaks({ scene: new THREE.Scene() });
+  const plain = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
+  const bright = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
   // Two sets drawn from one run, gust and all: it is stepped once a frame and both are drawn.
   for (let n = 0; n < 9 * 60; n++) {
     run.step(STEP, pos);
@@ -704,7 +704,7 @@ test('once the game has dropped its glow every streak is drawn brighter, by the 
 test('under reduced motion fewer streaks show, none of them twinkles, and the field moves with the air', () => {
   const wind = blowing(2, 1);
   for (const calm of [true, false]) {
-    const streaks = createWindStreaks({ scene: new THREE.Scene(), calm });
+    const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene(), calm });
     const flow = calm ? W.calm.flow : W.flow;
     // A pilot carried at exactly the streaks' own speed sees every one of them hold still, so any
     // change in a streak's light can only be its twinkle.
@@ -732,7 +732,7 @@ test('under reduced motion fewer streaks show, none of them twinkles, and the fi
 });
 
 test('level 0 hides the streaks, blanks them and then does no work at all', () => {
-  const streaks = createWindStreaks({ scene: new THREE.Scene() });
+  const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
   const { position, color } = streaks.lines.geometry.attributes;
   const wind = blowing(3, 1);
   const pos = { x: 10, y: 250, z: 10 };
@@ -765,7 +765,7 @@ test('level 0 hides the streaks, blanks them and then does no work at all', () =
 
 test('with dt 0 nothing moves and the picture holds, gusts and all, as it must while the map is open', () => {
   const { run, pos, eye } = gustyRun();
-  const streaks = createWindStreaks({ scene: new THREE.Scene() });
+  const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
   let calls = 0;
   const windAt = (x, y, z, out) => {
     calls += 1;
@@ -841,7 +841,7 @@ function arraysMadeBy(draw) {
 test('after 600 frames the streaks still draw into the same buffers, and no array or buffer is made along the way by any constructor or array method', () => {
   const scene = new THREE.Scene();
   const { run, pos, eye } = gustyRun();
-  const streaks = createWindStreaks({ scene });
+  const streaks = createWindStreaks({ sky: RUN_SKY, scene });
   const { lines } = streaks;
   const { geometry, material } = lines;
   const { position, color } = geometry.attributes;
@@ -880,7 +880,7 @@ test('drawing a frame makes nothing for each streak: the young heap grows only b
   // The pilot and the camera as the game hands them over.
   const pos = new THREE.Vector3(start.x, start.y, start.z);
   const eye = new THREE.Vector3();
-  const streaks = createWindStreaks({ scene: new THREE.Scene() });
+  const streaks = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
   let n = 0;
   // Climbing in a circle, so that the box, the curtain and the camera all move.
   const draw = (windAt) => {
@@ -926,8 +926,8 @@ test('drawing a frame makes nothing for each streak: the young heap grows only b
 
 test('dispose takes the streaks out of the scene and releases their geometry and material once, and a second game has its own', () => {
   const scene = new THREE.Scene();
-  const streaks = createWindStreaks({ scene });
-  const other = createWindStreaks({ scene });
+  const streaks = createWindStreaks({ sky: RUN_SKY, scene });
+  const other = createWindStreaks({ sky: RUN_SKY, scene });
   // A React remount makes a second game: nothing of one set is shared with the other.
   assert.notEqual(other.lines.geometry, streaks.lines.geometry);
   assert.notEqual(other.lines.geometry.attributes.position.array, streaks.lines.geometry.attributes.position.array);
@@ -950,4 +950,22 @@ test('dispose takes the streaks out of the scene and releases their geometry and
   assert.deepEqual(scene.children, [other.lines]);
   other.dispose();
   assert.equal(scene.children.length, 0);
+});
+
+test('a set made without a sky, as the fjord\'s is, never draws a gust front or a leading edge, whatever bands it is handed', () => {
+  assert.ok(WIND_STREAKS.leads >= CLOUD_POOL.gusts, 'a leading edge for every band a sky can hold');
+  const { run, pos, eye, fly } = gustyRun();
+  const bare = createWindStreaks({ scene: new THREE.Scene() });
+  const withSky = createWindStreaks({ sky: RUN_SKY, scene: new THREE.Scene() });
+  for (let n = 0; n < 12 * 60; n++) {
+    run.step(STEP, pos);
+    bare.update(STEP, pos, eye, run.windAt, 1, run.state.fogHeight + 3, run.state.gusts, false);
+    withSky.update(STEP, pos, eye, run.windAt, 1, run.state.fogHeight + 3, run.state.gusts, false);
+  }
+  assert.ok(drawn(withSky, STEADY, SEGMENTS).some(lit), 'the band is drawn where there is a sky');
+  assert.ok(!drawn(bare, STEADY, SEGMENTS).some(lit), 'and never where there is none');
+  // The steady field is drawn the same either way.
+  assert.ok(drawn(bare, 0, STEADY).filter(lit).length > 0.5 * STEADY);
+  bare.dispose();
+  withSky.dispose();
 });

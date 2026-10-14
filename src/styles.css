@@ -488,48 +488,6 @@ kbd {
   overflow-wrap: anywhere;
 }
 
-.fjord-cloudbase-inline {
-  margin-bottom: 18px;
-  padding-bottom: 14px;
-  border-bottom: 1px dashed var(--rule);
-}
-
-.fjord-cloudbase-inline .shout,
-.fjord-cloudbase-result .shout {
-  margin: 0 0 12px;
-  font-size: clamp(20px, 5vw, 30px);
-  overflow-wrap: anywhere;
-}
-
-.fjord-cloudbase-stats {
-  overflow-wrap: anywhere;
-}
-
-.fjord-cloudbase-stats strong {
-  color: var(--cyan);
-}
-
-/* What the run cost: raven strikes and time lost in cloud. */
-.fjord-cloudbase-run {
-  margin-top: -6px;
-  color: var(--dim);
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-
-.fjord-cloudbase-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.fjord-cloudbase-actions button,
-.fjord-cloudbase-result footer button {
-  min-width: 0;
-  min-height: 44px;
-  white-space: normal;
-}
-
 /* ---- small pieces the page and the flight's panels share */
 
 .facts {

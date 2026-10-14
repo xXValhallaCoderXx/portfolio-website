@@ -18,9 +18,18 @@ const WARM = 0xffb066;
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 const files = new Map();
 
-export function loadModel(name, size, selfLight = 0.07) {
+const fetchModel = (name) => {
   if (!files.has(name)) files.set(name, loader.loadAsync(`${import.meta.env.BASE_URL}models/${name}.glb`));
-  return files.get(name).then((file) => {
+  return files.get(name);
+};
+
+/** Fetches a model into the cache without making one, so it is at hand when first wanted. */
+export function prefetchModel(name) {
+  return fetchModel(name).then(() => true, () => false);
+}
+
+export function loadModel(name, size, selfLight = 0.07) {
+  return fetchModel(name).then((file) => {
     const model = cloneModel(file.scene); // unlike a plain clone, this keeps a skeleton attached to its skin
     model.scale.setScalar(size);
     model.traverse((part) => {

@@ -81,6 +81,10 @@ export const CLOUD_GUST = Object.freeze({
   spread: 0.35, depth: 55, rise: 6, fall: 30, half: 80, soft: 30, lane: 70,
 });
 
+// What the streaks need of this sky to draw its gust bands (wind-streaks.js): the zone they cross,
+// the bands' own shape and the launch hill's lee.
+export const RUN_SKY = Object.freeze({ zone: CLOUD_ZONE, gust: CLOUD_GUST, lee: CLOUD_WIND.lee });
+
 const TAU = Math.PI * 2;
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const ease = (value) => value * value * (3 - 2 * value);

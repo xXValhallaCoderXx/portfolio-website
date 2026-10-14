@@ -4,7 +4,9 @@ import {
   CLOUD_ZONE, CLOUD_GATE, CLOUD_LAUNCH, CLOUD_WEAR, CLOUD_HUNT, CLOUD_RAVENS, CLOUD_STRIKE, CLOUD_STORM,
   CLOUD_WIND, CLOUD_GUST, CLOUD_POOL, CLOUD_MILESTONES, createCloudbaseRun,
 } from './cloudbase-state.js';
-import { BRAKE, FLIGHT, createFlight, stepFlight } from './flight.js';
+import { BRAKE, createFlight, stepFlight } from './flight.js';
+import { createRunWorld, startRun } from './run-step.js';
+import { createReferencePilot, flyPilot } from './pilots.js';
 import { surfaceAt } from './terrain.js';
 
 const STEP = 1 / 60;
@@ -1084,71 +1086,11 @@ test('a gust is in the sky more than six seconds before it reaches the zone, and
   }
 });
 
-// A reference pilot on the game's own flight model, in the run's own air and wind: it flies to
-// the nearest good lift and circles in its core, turning the way that thermal's ravens turn (or
-// against them), and never reacts to a raven, a cloud or a gust. `brake` is what its hands do
-// while it circles: 'none' keeps them up, 'eased' holds the light brake and lets go for a fifth
-// of a second just before it would go deep, 'late' does that two seconds after it has, and 'held'
-// never lets go. It bounds what a player can do; it is not a player.
-function flyReference(run, seed, { withFlock = true, brake = 'none' } = {}) {
-  run.reset(CLOUD_GATE.y, seed);
-  const { state } = run;
-  const g = createFlight({ x: CLOUD_GATE.x, y: CLOUD_GATE.y, z: CLOUD_GATE.z });
-  g.yaw = CLOUD_GATE.yaw;
-  const controls = { turn: 0, brake: false, bar: false, locked: false, harsh: false, linger: true, climb: null };
-  const air = { lift: 0, sink: 0, windX: 0, windZ: 0, calm: false, rough: 0, clearance: Infinity };
-  const forces = {};
-  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-  // A light-braked wing turns inside 9 m; hands up it needs 14.
-  const radius = brake === 'none' ? 14 : 9;
-  let hook = 1;
-  let reason = null;
-  let stalls = 0;
-  let deepFor = 0;
-  let tap = 0;
-  while (!reason && state.elapsed < 200) {
-    let target = null;
-    let nearest = Infinity;
-    for (const thermal of state.thermals) {
-      const distance = between(thermal, g.pos);
-      if (thermal.live && thermal.strength >= 0.3 && distance < nearest) [target, nearest] = [thermal, distance];
-    }
-    let turn = 0;
-    if (target) {
-      const bearing = Math.atan2(target.x - g.pos.x, -(target.z - g.pos.z));
-      const dir = target === state.thermals[0] ? 1 : withFlock ? target.dir : -target.dir;
-      // Head straight in, then hold a circle by aiming along it and a little inward.
-      const want = nearest > 30 ? bearing : bearing - dir * (Math.PI / 2) * clamp(1 - (nearest - radius) / 28, 0, 1.4);
-      turn = clamp(wrapAngle(want - g.yaw) * 2.5, -1, 1);
-    }
-    const collapsed = state.pilot.collapse > 0;
-    const within = run.inside(g.pos);
-    if (collapsed) turn = hook * FLIGHT.turn.hook;
-    if (!within) turn = clamp(wrapAngle(Math.atan2(CLOUD_ZONE.x - g.pos.x, -(CLOUD_ZONE.z - g.pos.z)) - g.yaw) * 2, -1, 1);
-    deepFor = g.brake >= BRAKE.shelf ? deepFor + STEP : 0;
-    if (tap <= 0 && ((brake === 'eased' && g.brake > BRAKE.shelf - 0.01) || (brake === 'late' && deepFor >= 2))) tap = 0.2;
-    tap -= STEP;
-    // What the game's own simulate() hands the flight model each step.
-    controls.turn = turn;
-    controls.brake = brake !== 'none' && target !== null && nearest <= 30 && within && tap <= 0 && g.stall === 0;
-    controls.locked = collapsed;
-    controls.harsh = g.pos.y >= CLOUD_RAVENS.grace;
-    run.sample(g.pos, g.yaw, forces);
-    air.lift = forces.lift;
-    air.sink = forces.sink;
-    air.windX = forces.windX;
-    air.windZ = forces.windZ;
-    air.rough = forces.rough;
-    air.clearance = g.pos.y - surfaceAt(g.pos.x, g.pos.z);
-    const stalled = g.stall > 0;
-    stepFlight(g, controls, air, STEP);
-    if (g.stall > 0 && !stalled) stalls++;
-    if (g.pos.y - surfaceAt(g.pos.x, g.pos.z) <= 1.4) reason = 'landed';
-    const strikes = state.pilot.strikes;
-    reason ??= run.step(STEP, g.pos);
-    if (state.pilot.strikes > strikes) hook = Math.sign(g.yawRate) || 1;
-  }
-  return { peak: state.peak, strikes: state.pilot.strikes, stalls, seconds: state.elapsed, cloud: state.pilot.cloudTime, reason };
+// A reference pilot on the game's own flight model, in the run's own air and wind (pilots.js),
+// flown through the one step every run takes (run-step.js). `brake` is what its hands do while
+// it circles: 'none', 'eased' (light, let go just before it would go deep), 'late' or 'held'.
+function flyReference(run, seed, options = {}) {
+  return flyPilot(startRun(createRunWorld({ sky: run }), seed), createReferencePilot(options));
 }
 
 const passing = (flights, altitude) => flights.filter((flight) => flight.peak >= altitude).length;
