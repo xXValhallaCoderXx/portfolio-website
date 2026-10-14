@@ -1150,7 +1150,8 @@ test('the marks of a flock stay bright from take-off until its new lift is full,
     if (thermal.move > 0) seen.leading = true;
     else if (thermal.strength >= 0.99) seen.leading = false;
     if (seen.leading) {
-      assert.equal(now, 1, `the marks are bright at ${state.elapsed.toFixed(2)} s, with ${thermal.move.toFixed(1)} s to fly and lift at ${thermal.strength.toFixed(2)}`);
+      // Within what the glow's 32-bit buffer holds of a bird partly faded at an end of the ladder.
+      assert.ok(Math.abs(now - 1) <= 1e-5, `the marks are ${now} bright at ${state.elapsed.toFixed(2)} s, with ${thermal.move.toFixed(1)} s to fly and lift at ${thermal.strength.toFixed(2)}`);
       if (moving && thermal.move === 0) {
         // The frame the last bird arrives: the lift is there in name and has no strength yet.
         assert.equal(thermal.live, true);

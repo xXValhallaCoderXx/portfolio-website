@@ -130,12 +130,112 @@
 .fj-hint {
   position: absolute;
   right: 0;
-  bottom: 22px;
+  bottom: 44px;
   left: 0;
   color: var(--dim);
   text-align: center;
   text-shadow: 0 0 6px var(--bg);
   pointer-events: none;
+}
+
+/* ---- the brake meter, under the hint */
+
+/* One track: the brake fills it from the left and the stall load grows in from the right in the
+   game's danger red, meeting the fill as the wing stalls. Its cyan part is the light brake and its
+   amber part the deep one, where they fall in stall-effects.js (BRAKE_METER: the first 10% is the
+   take-up, the next 40% the light brake). Only transforms and colours change while it is up. */
+.fj-brake {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(260px, calc(100% - 44px));
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 1;
+  text-shadow: 0 0 6px var(--bg);
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 0.25s;
+  pointer-events: none;
+  contain: layout style;
+}
+
+.fj-brake:not([data-state='']) {
+  opacity: 1;
+}
+
+.fj-brake b {
+  flex: none;
+  min-width: 5ch;
+  font-weight: normal;
+  text-align: right;
+}
+
+.fj-brake span {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  background:
+    linear-gradient(90deg, transparent 0 10%, rgba(45, 212, 238, 0.18) 10% 50%, rgba(255, 157, 74, 0.16) 50%),
+    rgba(6, 10, 19, 0.7);
+}
+
+.fj-brake i {
+  position: absolute;
+  inset: 0;
+  transform: scaleX(0);
+  will-change: transform;
+}
+
+.fj-brake i:first-child {
+  background: var(--cyan);
+  transform-origin: 0 50%;
+}
+
+.fj-brake i:last-child {
+  background: #ff546b;
+  transform-origin: 100% 50%;
+}
+
+.fj-brake[data-state='deep'] i:first-child,
+.fj-brake[data-state='near'] i:first-child {
+  background: var(--ember);
+}
+
+.fj-brake[data-state='late'] b,
+.fj-brake[data-state='deep'] b {
+  color: var(--ember);
+}
+
+.fj-brake[data-state='near'] b,
+.fj-brake[data-state='stalled'] b {
+  color: #ff546b;
+}
+
+.fj-brake[data-state='near'] span {
+  animation: fj-brake-near 0.28s steps(2, jump-none) infinite;
+}
+
+@keyframes fj-brake-near {
+  to {
+    border-color: #ff546b;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fj-brake[data-state='near'] span {
+    border-color: #ff546b;
+    animation: none;
+  }
+}
+
+.lost .fj-brake {
+  display: none;
 }
 
 .fj-labels {
@@ -428,11 +528,50 @@
     background: rgba(6, 10, 19, 0.45);
   }
 
-  /* Hints sit just above those buttons, not under them. */
+  /* Hints sit just above those buttons, not under them, and the brake meter between the two. */
   .fj-hint {
-    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 70px);
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 82px);
     padding: 0 22px;
     font-size: 12px;
+  }
+
+  .fj-brake {
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 63px);
+    font-size: 11px;
+  }
+
+  .fj-brake span {
+    height: 6px;
+  }
+
+  /* The ▼ under the thumb says it too: amber as the light brake runs out, red near the stall. */
+  .fj-touch[data-brake='late'] [data-input='brake'],
+  .fj-touch[data-brake='deep'] [data-input='brake'] {
+    border-color: var(--ember);
+    box-shadow: 0 0 0 3px rgba(255, 157, 74, 0.45);
+  }
+
+  .fj-touch[data-brake='near'] [data-input='brake'],
+  .fj-touch[data-brake='stalled'] [data-input='brake'] {
+    border-color: #ff546b;
+    box-shadow: 0 0 0 4px rgba(255, 84, 107, 0.55), 0 0 22px rgba(255, 84, 107, 0.6);
+  }
+}
+
+/* On a phone held sideways the pilot hangs just above the hint, so the meter drops into the gap
+   between the middle buttons instead, without its word. */
+@media (pointer: coarse) and (orientation: landscape) {
+  .fj-hint {
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 70px);
+  }
+
+  .fj-brake {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    width: clamp(84px, 15vw, 160px);
+  }
+
+  .fj-brake b {
+    display: none;
   }
 }
 
@@ -498,9 +637,15 @@
   }
 }
 
-/* Time does not speed up in a run, so the button that does it steps back. */
-.cloudbase .fj-touch [data-input='boost'] {
-  opacity: 0.3;
+/* Time does not speed up in a run, so its button is a second brake there, and the four sit as two
+   pairs: ◀ ▼ under the left thumb and ▼ ▶ under the right, so either hand can brake and steer. */
+.fj-touch.pairs {
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.fj-touch.pairs button:nth-child(3) {
+  margin-left: auto;
 }
 
 /* On a phone held sideways the pilot hangs just where the hint would be, and sinks lower still as

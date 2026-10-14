@@ -28,7 +28,7 @@ const STORM = { swell: 1.3, tall: 0.563, deep: 0.741, centre: [-0.074, -0.222, 0
 // drawn before it at 93%, in front of it or not, because none of them writes depth. That is right
 // for what the fog swallows. The glow that is always held above the fog is drawn later still, so
 // that it shows against the fog when the pilot looks down on it.
-const ORDER = { fog: 1, aboveFog: 2 };
+export const ORDER = Object.freeze({ fog: 1, aboveFog: 2 });
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const smoothstep = (from, to, value) => {

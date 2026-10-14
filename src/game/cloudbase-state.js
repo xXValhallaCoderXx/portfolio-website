@@ -1,7 +1,7 @@
-// Cloudbase's clock, air, ravens and storm clouds are independent of rendering. All distances are
-// metres, all rates are metres/second and all angles are radians; only step() advances the run,
-// so opening the map really pauses it. A run is laid out from its seed alone: the same seed and
-// the same flight always give the same sky.
+// Cloudbase's clock, air, wind, ravens and storm clouds are independent of rendering. All
+// distances are metres, all rates are metres/second and all angles are radians; only step()
+// advances the run, so opening the map really pauses it. A run is laid out from its seed alone:
+// the same seed and the same flight always give the same sky.
 export const CLOUD_ZONE = Object.freeze({ x: 125, z: 238, r: 135 });
 export const CLOUD_GATE = Object.freeze({ x: 85, y: 80, z: 320, yaw: Math.PI / 2 });
 export const CLOUD_DEFAULT_SEED = 1;
@@ -9,7 +9,7 @@ export const CLOUD_MILESTONES = Object.freeze([500, 1000, 1500]);
 
 // How many of each thing a run holds. The pools never grow or shrink, so the view can keep them.
 // Slot 0 of the thermals is the launch column; the other two are hunted, each with its own flock.
-export const CLOUD_POOL = Object.freeze({ thermals: 3, ravens: 10, clouds: 33 });
+export const CLOUD_POOL = Object.freeze({ thermals: 3, ravens: 10, clouds: 33, gusts: 4 });
 
 // The launch column lifts the pilot clear of the east-shore hillside. `s` is m/s across the core.
 export const CLOUD_LAUNCH = Object.freeze({ x: 125, z: 320, r: 34, s: 17 });
@@ -19,9 +19,11 @@ export const CLOUD_WEAR = Object.freeze({ full: 16, dead: 26 });
 // Hunted thermals: hidden, two at a time, found by the ravens circling in them. `margin` keeps a
 // whole column inside the zone, `separation` is between the two sites, `hop` between a thermal's
 // old site and its next, and `launchClear` keeps the flocks out of the launch climb. A thermal
-// lives `life` seconds, taking `bloom` to start and `fade` to die of old age.
+// lives `life` seconds, taking `bloom` to start and `fade` to die of old age. `s` is the lift
+// that pays for the wind: at 18 m/s, which balanced the game in still air, a breeze of 2 to 4 m/s
+// took 1,500 m from four runs in five that had reached it.
 export const CLOUD_HUNT = Object.freeze({
-  r: 38, s: 18, margin: 42, separation: 85, hop: 80, launchClear: 62, tries: 24, rimSteps: 120,
+  r: 38, s: 19.25, margin: 42, separation: 85, hop: 80, launchClear: 62, tries: 24, rimSteps: 120,
   life: [50, 66], bloom: 4, fade: 8,
 });
 
@@ -56,7 +58,27 @@ export const CLOUD_STORM = Object.freeze({
   layers: Object.freeze([580, 730, 870, 1060, 1180, 1290, 1380, 1560, 1670, 1770]),
   counts: Object.freeze([2, 2, 3, 3, 3, 4, 4, 4, 4, 4]),
   floor: 530, jitter: 24, long: [66, 107], tall: [0.85, 1.2], deep: [0.85, 1.2],
-  shape: Object.freeze({ y: 0.563, z: 0.741 }), edge: 0.3, cap: 2.5, sink: 6, wind: [2.5, 5], lane: 100, span: 440, seam: 30,
+  shape: Object.freeze({ y: 0.563, z: 0.741 }), edge: 0.3, cap: 2.5, sink: 6, wind: [2, 4], lane: 100, span: 440, seam: 30,
+});
+
+// The breeze the pilot flies in is the wind that carries the clouds: at each cloud layer it is
+// that layer's own (CLOUD_STORM.wind), turning evenly with height in between, so the clouds show
+// the wind a climbing pilot is about to meet. Each layer's wind points within `walk` of the one
+// below. Low down, the launch hill keeps it off: nothing under `lee[0]` and all of it by `lee[1]`.
+// Rising air carries its own, so inside lift only the share 1 - `shelter` of the breeze is felt,
+// and a circle in a core drifts a third as far as one in the open. Beyond the zone the wind stops
+// pushing outward within `edge`, so nothing can be blown away from the game.
+export const CLOUD_WIND = Object.freeze({ walk: 0.35, lee: Object.freeze([110, 300]), shelter: 0.65, edge: 30 });
+
+// Gusts cross the zone as straight bands that can be seen coming. The first sets off between
+// `first` seconds and after that one every `every`. A band starts `start` upwind of the zone
+// centre, on a line up to `lane` to either side of it, and travels at `speed` the way it blows,
+// which is within `spread` of the breeze where the pilot is. It blows at `strength`, rising over
+// its first `rise` and dying away over its last `fall` of `depth`, and is `half` wide to each
+// side, softening over the outer `soft`.
+export const CLOUD_GUST = Object.freeze({
+  first: Object.freeze([20, 33]), every: Object.freeze([16, 26]), start: 215, speed: 12, strength: Object.freeze([3, 5.5]),
+  spread: 0.35, depth: 55, rise: 6, fall: 30, half: 80, soft: 30, lane: 70,
 });
 
 const TAU = Math.PI * 2;
@@ -68,14 +90,19 @@ const profile = (distance, radius) => ease(clamp((radius - distance) / (radius *
 export const cloudThermalStrength = (wear) => ease(clamp((CLOUD_WEAR.dead - wear) / (CLOUD_WEAR.dead - CLOUD_WEAR.full), 0, 1));
 export const cloudFogSpeed = (fogHeight, elapsed) => 1.2 + 0.002 * fogHeight + 0.035 * elapsed + 0.95 * Math.max(elapsed - 110, 0);
 
-/** `hazards: false` flies the same sky with harmless ravens and no cloud, for tests and tuning. */
-export function createCloudbaseRun({ hazards = true } = {}) {
+/**
+ * `hazards: false` flies the same sky with harmless ravens and no cloud, and `wind: false` flies it
+ * in still air (the clouds still drift), for tests and tuning.
+ */
+export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
   const Z = CLOUD_ZONE;
   const L = CLOUD_LAUNCH;
   const H = CLOUD_HUNT;
   const R = CLOUD_RAVENS;
   const K = CLOUD_STRIKE;
   const S = CLOUD_STORM;
+  const W = CLOUD_WIND;
+  const G = CLOUD_GUST;
   // Keep this object, its pools and everything in them stable for the render loop; consumers only
   // read them. Everything is a plain number or boolean, so a run can be copied and compared.
   const state = {
@@ -103,11 +130,27 @@ export function createCloudbaseRun({ hazards = true } = {}) {
     clouds: Array.from({ length: CLOUD_POOL.clouds }, () => ({
       x: 0, y: 0, z: 0, rx: 1, ry: 1, rz: 1, turn: 0, cos: 1, sin: 0, fade: 0, lane: 0, along: 0, ux: 0, uz: -1, speed: 0,
     })),
-    // `collapse` and `shield` count down in seconds. `cloud` is depth inside a cloud from 0 to 1,
-    // `thermal` the slot the pilot is in (or -1), `danger` 1 while a raven is about to cross, and
-    // `headroom` the clear air up to a cloud base overhead (999 under open sky).
-    pilot: { y: CLOUD_GATE.y, collapse: 0, shield: 0, cloud: 0, cloudTime: 0, strikes: 0, thermal: -1, danger: 0, headroom: 999 },
+    // The breeze at each cloud layer's height: how fast it blows toward the east (x) and the south (z).
+    wind: Array.from({ length: S.layers.length }, (_, i) => ({ y: S.layers[i], x: 0, z: 0 })),
+    // Gust bands on their way across. `strength` 0 is an empty slot. A band blows and travels
+    // along `ux, uz`; its front is `at` metres past the zone centre along that line and its middle
+    // `lane` to the side of it. `born` is the run time it set off.
+    gusts: Array.from({ length: CLOUD_POOL.gusts }, () => ({ strength: 0, ux: 0, uz: -1, born: 0, lane: 0, at: 0 })),
+    gustDue: 0,
+    gustCount: 0,
+    // `x, y, z` is where the pilot was at the last step. `collapse` and `shield` count down in
+    // seconds. `cloud` is depth inside a cloud from 0 to 1, `thermal` the slot the pilot is in (or
+    // -1), `danger` 1 while a raven is about to cross, and `headroom` the clear air up to a cloud
+    // base overhead (999 under open sky). `gustAhead` is the metres between the pilot and the
+    // next gust front that will reach them (0 inside a band, 999 when none is coming), `gustIn`
+    // the seconds until it does at the speed it is closing (99 when none) and `gustSlot` which of
+    // the bands that is (-1 when none).
+    pilot: {
+      x: CLOUD_GATE.x, y: CLOUD_GATE.y, z: CLOUD_GATE.z, collapse: 0, shield: 0, cloud: 0, cloudTime: 0, strikes: 0, thermal: -1,
+      danger: 0, headroom: 999, gustAhead: 999, gustIn: 99, gustSlot: -1,
+    },
   };
+  const felt = { x: 0, z: 0, front: 0, rough: 0 };
 
   // The same generator the terrain scatters its forest with, kept as a bare counter in the state
   // so that a copied run carries on exactly where the original would.
@@ -118,8 +161,156 @@ export function createCloudbaseRun({ hazards = true } = {}) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
 
+  // Draws that leave the generator alone: the wind and the gusts take theirs from the seed and a
+  // number, so adding them moved no thermal, raven or cloud of any sky.
+  function pick(n) {
+    let t = (state.seed ^ Math.imul(n + 1, 0x9e3779b1)) | 0;
+    t = Math.imul(t ^ (t >>> 15), 1 | t);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+
   function inside(pos) {
     return Math.hypot(pos.x - Z.x, pos.z - Z.z) <= Z.r;
+  }
+
+  // The breeze at a height, before the hill's lee or any lift is counted: each layer's own at
+  // that layer, turning evenly between neighbours, and the lowest layer's below it.
+  function layerWind(y, out) {
+    const levels = state.wind;
+    let i = 0;
+    while (i < levels.length - 2 && y >= levels[i + 1].y) i++;
+    const amount = clamp((y - levels[i].y) / (levels[i + 1].y - levels[i].y), 0, 1);
+    out.x = mix(levels[i].x, levels[i + 1].x, amount);
+    out.z = mix(levels[i].z, levels[i + 1].z, amount);
+    return out;
+  }
+
+  // The air's own movement at a point, into `out`: `x, z` in m/s over the ground, `front` the
+  // strength of any gust band there from 0 to 1, and `rough` how much of that band is blowing on
+  // the tail of a glider heading along `hx, hz` (a gust from behind is the one that matters).
+  function airAt(x, y, z, hx, hz, out) {
+    out.x = out.z = out.front = out.rough = 0;
+    if (!wind || !state.active) return out;
+    const lee = ease(clamp((y - W.lee[0]) / (W.lee[1] - W.lee[0]), 0, 1));
+    // Behind the launch hill nothing blows, breeze or gust.
+    if (lee === 0) return out;
+    layerWind(y, out);
+    out.x *= lee;
+    out.z *= lee;
+    const dx = x - Z.x;
+    const dz = z - Z.z;
+    const reach = Math.hypot(dx, dz);
+    if (reach <= Z.r) {
+      // Rising air carries its own: the deeper in lift, the less of the breeze gets in. This is
+      // the lift that is there, whatever a cloud or a folded wing lets the pilot have of it.
+      let share = 0;
+      for (let i = 0; i < state.thermals.length; i++) {
+        const thermal = state.thermals[i];
+        if (thermal.live && thermal.strength > 0) share += thermal.strength * profile(Math.hypot(x - thermal.x, z - thermal.z), thermal.r);
+      }
+      const open = 1 - W.shelter * Math.min(1, share);
+      out.x *= open;
+      out.z *= open;
+    }
+    for (let i = 0; i < state.gusts.length; i++) {
+      const band = state.gusts[i];
+      if (band.strength === 0) continue;
+      // How far ahead of the front the point is; behind the front it is inside the band.
+      const ahead = dx * band.ux + dz * band.uz - band.at;
+      if (ahead >= 0 || ahead <= -G.depth) continue;
+      const aside = Math.abs(dz * band.ux - dx * band.uz - band.lane);
+      if (aside >= G.half) continue;
+      const blow = ease(clamp(-ahead / G.rise, 0, 1)) * ease(clamp((ahead + G.depth) / G.fall, 0, 1)) *
+        (1 - ease(clamp((aside - (G.half - G.soft)) / G.soft, 0, 1)));
+      out.x += band.ux * band.strength * lee * blow;
+      out.z += band.uz * band.strength * lee * blow;
+      out.front = Math.max(out.front, blow);
+      out.rough = Math.max(out.rough, blow * lee * Math.max(0, band.ux * hx + band.uz * hz));
+    }
+    if (reach > Z.r) {
+      // Past the edge the wind may carry the pilot along or back, never further out.
+      const outward = (out.x * dx + out.z * dz) / reach;
+      if (outward > 0) {
+        const cut = outward * ease(clamp((reach - Z.r) / W.edge, 0, 1));
+        out.x -= (dx / reach) * cut;
+        out.z -= (dz / reach) * cut;
+      }
+    }
+    return out;
+  }
+
+  /** The wind at a point, for whoever draws it: `out.x`, `out.z` in m/s and `out.front` from 0 to 1. */
+  function windAt(x, y, z, out) {
+    return airAt(x, y, z, 0, 0, out);
+  }
+
+  // Sets a gust band off across the zone. The scheduled ones blow within a spread of the breeze
+  // where the pilot is; gust() below sets one off by hand.
+  function launch(born, heading, lane, strength) {
+    let slot = state.gusts[0];
+    for (let i = 0; i < state.gusts.length; i++) {
+      const band = state.gusts[i];
+      // An empty slot if there is one, or else the band furthest on its way out.
+      if (band.strength === 0) { slot = band; break; }
+      if (band.at > slot.at) slot = band;
+    }
+    slot.ux = Math.sin(heading);
+    slot.uz = -Math.cos(heading);
+    slot.born = born;
+    slot.lane = lane;
+    slot.strength = strength;
+    slot.at = -G.start + G.speed * (state.elapsed - born);
+  }
+
+  /** Sets a gust off now along `heading` (as a yaw), `lane` metres aside of the zone centre. For tests and tuning. */
+  function gust(heading, lane = 0, strength = G.strength[1]) {
+    if (wind && state.active) launch(state.elapsed, heading, lane, strength);
+  }
+
+  // Moves the gust bands on, sets off any that are due, and works out which front the pilot
+  // should be warned of. `vx, vz` is how fast the pilot is moving over the ground.
+  function blowGusts(pos, vx, vz) {
+    const pilot = state.pilot;
+    pilot.gustAhead = 999;
+    pilot.gustIn = 99;
+    pilot.gustSlot = -1;
+    if (!wind) return;
+    for (let i = 0; i < state.gusts.length; i++) {
+      const band = state.gusts[i];
+      if (band.strength === 0) continue;
+      band.at = -G.start + G.speed * (state.elapsed - band.born);
+      if (band.at - G.depth > G.start) band.strength = 0;
+    }
+    // Set off by the clock, not by the step that happens to notice: a long step launches every
+    // band it has passed, each already as far along as it should be.
+    while (state.elapsed >= state.gustDue) {
+      const count = state.gustCount;
+      layerWind(Number.isFinite(pos.y) ? pos.y : CLOUD_GATE.y, felt);
+      const heading = Math.atan2(felt.x, -felt.z) + (pick(100 + 4 * count) * 2 - 1) * G.spread;
+      launch(state.gustDue, heading, (pick(102 + 4 * count) * 2 - 1) * G.lane, mix(G.strength[0], G.strength[1], pick(101 + 4 * count)));
+      state.gustDue += mix(G.every[0], G.every[1], pick(103 + 4 * count));
+      state.gustCount = count + 1;
+    }
+    const dx = pos.x - Z.x;
+    const dz = pos.z - Z.z;
+    for (let i = 0; i < state.gusts.length; i++) {
+      const band = state.gusts[i];
+      if (band.strength === 0 || Math.abs(dz * band.ux - dx * band.uz - band.lane) >= G.half) continue;
+      const ahead = dx * band.ux + dz * band.uz - band.at;
+      if (ahead <= -G.depth) continue;
+      if (ahead <= 0) {
+        pilot.gustAhead = pilot.gustIn = 0;
+        pilot.gustSlot = i;
+        continue;
+      }
+      // A front only arrives if it is gaining on the pilot.
+      const closing = G.speed - (vx * band.ux + vz * band.uz);
+      if (closing <= 0.5 || ahead >= pilot.gustAhead) continue;
+      pilot.gustAhead = ahead;
+      pilot.gustIn = Math.min(99, ahead / closing);
+      pilot.gustSlot = i;
+    }
   }
 
   // How far a candidate site is from breaking a rule, in metres; zero or more means it fits.
@@ -179,9 +370,14 @@ export function createCloudbaseRun({ hazards = true } = {}) {
 
   function layoutClouds() {
     let n = 0;
+    let heading = 0;
     for (let layer = 0; layer < S.layers.length; layer++) {
-      const heading = rand() * TAU;
+      // One wind to a layer, never far round from the layer below, so the breeze turns with
+      // height the way wind does and the pilot's drift changes on the way up.
+      heading = layer === 0 ? rand() * TAU : heading + (rand() * 2 - 1) * W.walk;
       const speed = mix(S.wind[0], S.wind[1], rand());
+      state.wind[layer].x = Math.sin(heading) * speed;
+      state.wind[layer].z = -Math.cos(heading) * speed;
       const count = S.counts[layer];
       for (let i = 0; i < count; i++, n++) {
         const cloud = state.clouds[n];
@@ -292,18 +488,28 @@ export function createCloudbaseRun({ hazards = true } = {}) {
     state.peak = Number.isFinite(startAltitude) ? Math.max(0, startAltitude) : CLOUD_GATE.y;
     state.active = true;
     const pilot = state.pilot;
+    pilot.x = CLOUD_GATE.x;
     pilot.y = state.peak;
+    pilot.z = CLOUD_GATE.z;
     pilot.collapse = pilot.shield = pilot.cloud = pilot.cloudTime = pilot.strikes = pilot.danger = 0;
-    pilot.thermal = -1;
-    pilot.headroom = 999;
-    const launch = state.thermals[0];
-    launch.x = launch.fromX = L.x;
-    launch.z = launch.fromZ = L.z;
-    launch.wear = launch.age = launch.move = launch.moveTime = launch.rise = launch.scatter = 0;
-    launch.life = Infinity;
-    launch.strength = 1;
-    launch.live = true;
-    launch.dir = 1;
+    pilot.thermal = pilot.gustSlot = -1;
+    pilot.headroom = pilot.gustAhead = 999;
+    pilot.gustIn = 99;
+    for (let i = 0; i < state.gusts.length; i++) {
+      const band = state.gusts[i];
+      band.strength = band.ux = band.born = band.lane = band.at = 0;
+      band.uz = -1;
+    }
+    state.gustCount = 0;
+    state.gustDue = mix(G.first[0], G.first[1], pick(4));
+    const column = state.thermals[0];
+    column.x = column.fromX = L.x;
+    column.z = column.fromZ = L.z;
+    column.wear = column.age = column.move = column.moveTime = column.rise = column.scatter = 0;
+    column.life = Infinity;
+    column.strength = 1;
+    column.live = true;
+    column.dir = 1;
     // The order of these draws is part of what a seed means.
     for (let i = 1; i < state.thermals.length; i++) {
       const thermal = state.thermals[i];
@@ -337,7 +543,9 @@ export function createCloudbaseRun({ hazards = true } = {}) {
     // Nothing of the last moment may outlive the run: the flight carries on after it.
     const pilot = state.pilot;
     pilot.collapse = pilot.shield = pilot.cloud = pilot.danger = 0;
-    pilot.thermal = -1;
+    pilot.thermal = pilot.gustSlot = -1;
+    pilot.gustAhead = 999;
+    pilot.gustIn = 99;
     for (let i = 0; i < state.ravens.length; i++) state.ravens[i].threat = false;
   }
 
@@ -365,10 +573,17 @@ export function createCloudbaseRun({ hazards = true } = {}) {
     if (Number.isFinite(pos.y)) state.peak = Math.max(state.peak, pos.y);
     state.fogHeight += cloudFogSpeed(state.fogHeight, state.elapsed) * dt;
     const pilot = state.pilot;
+    // How fast the pilot is moving, from where they were a step ago; a leap is not a speed.
+    let vx = (pos.x - pilot.x) / dt;
+    let vz = (pos.z - pilot.z) / dt;
+    if (!(Math.hypot(vx, vz) < 40)) vx = vz = 0;
+    pilot.x = pos.x;
     pilot.y = pos.y;
+    pilot.z = pos.z;
     pilot.collapse = Math.max(0, pilot.collapse - dt);
     pilot.shield = Math.max(0, pilot.shield - dt);
 
+    blowGusts(pos, vx, vz);
     driftClouds();
     const chest = pos.y + K.rise;
     pilot.cloud = depthAt(pos.x, chest, pos.z);
@@ -438,13 +653,23 @@ export function createCloudbaseRun({ hazards = true } = {}) {
     return null;
   }
 
-  function sample(pos, yaw = 0) {
-    if (!state.active) return { lift: 0, sink: 0, liftSide: 0 };
+  /**
+   * The air where the pilot is, heading `yaw`. `windX, windZ` is its own movement, breeze and gusts
+   * together, and `rough` how much of a gust band is on the glider's tail, from 0 to 1. Pass `out`
+   * to have the answer written into an object of the caller's instead of a new one.
+   */
+  function sample(pos, yaw = 0, out = {}) {
+    out.lift = out.sink = out.liftSide = out.windX = out.windZ = out.rough = 0;
+    if (!state.active) return out;
     const collapsed = state.pilot.collapse > 0;
     const depth = depthAt(pos.x, pos.y + K.rise, pos.z);
     // A folded wing and a storm cloud pull down wherever they are; lift only exists in the zone.
-    const sink = S.sink * depth + (collapsed ? K.sink : 0);
-    if (!inside(pos)) return { lift: 0, sink, liftSide: 0 };
+    out.sink = S.sink * depth + (collapsed ? K.sink : 0);
+    airAt(pos.x, pos.y, pos.z, Math.sin(yaw), -Math.cos(yaw), felt);
+    out.windX = felt.x;
+    out.windZ = felt.z;
+    out.rough = felt.rough;
+    if (!inside(pos)) return out;
     let lift = 0;
     let side = 0;
     for (let i = 0; i < state.thermals.length; i++) {
@@ -456,8 +681,10 @@ export function createCloudbaseRun({ hazards = true } = {}) {
       side += (rising * right) / thermal.r;
     }
     const open = collapsed ? 0 : 1 - Math.min(1, depth * S.cap);
-    return { lift: lift * open, sink, liftSide: lift > 0 ? clamp(side / lift, -1, 1) : 0 };
+    out.lift = lift * open;
+    out.liftSide = lift > 0 ? clamp(side / lift, -1, 1) : 0;
+    return out;
   }
 
-  return { reset, step, sample, inside, depthAt, strike, finish, get state() { return state; } };
+  return { reset, step, sample, inside, depthAt, windAt, gust, strike, finish, get state() { return state; } };
 }

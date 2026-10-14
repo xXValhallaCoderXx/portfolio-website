@@ -66,6 +66,7 @@ function CloudbaseResult({ result, onRetry, onBack, standalone = false }) {
           </p>
           <p className="fjord-cloudbase-run">
             {result.strikes ? `${result.strikes} raven strike${result.strikes === 1 ? '' : 's'}` : 'no raven strikes'}
+            {result.stalls > 0 && ` · ${result.stalls} stall${result.stalls === 1 ? '' : 's'}`}
             {result.cloud > 0 && ` · ${result.cloud} s in cloud`}
           </p>
         </div>
@@ -325,8 +326,8 @@ export default function Fjord({ flying, armed, target, lost, warping, onArm, onE
             </button>{' '}
             <button onClick={() => onExit(null)}>[ back to the page ]</button>
           </p>
-          <p className="dim for-keys">← → steer · space dive · shift speed up · click a pillar to fly there · m map · h controls</p>
-          <p className="dim for-touch">◀ ▶ steer · ▼ dive · » speed up · tap a lit pillar to fly there</p>
+          <p className="dim for-keys">← → steer · space brake · shift speed up · click a pillar to fly there · m map · h controls</p>
+          <p className="dim for-touch">◀ ▶ steer · ▼ brake · » speed up · tap a lit pillar to fly there</p>
         </div>
       )}
       {flying && panel && (

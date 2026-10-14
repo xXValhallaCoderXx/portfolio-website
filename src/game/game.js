@@ -8,13 +8,17 @@ import { WORLD, ZONES, STONES, THERMALS, START, GATEWAY, centerX, heightAt, surf
 import { PROJECT_PROPS, loadModel, buildSky, buildPlaces, buildScatter, buildThermals, buildGlider, buildGateway } from './scenery.js';
 import { ACHIEVEMENTS, beltFor, readProgress, writeProgress, emptyProgress } from './achievements.js';
 import { scoreLanding, createLandingLeg } from './landing.js';
-import { sampleApproach } from './approach.js';
+import { sampleApproach, fjordBreeze } from './approach.js';
 import { crossesGateway } from './gateway.js';
-import { createCloudbase } from './cloudbase.js';
-import { createCloudbaseRun, CLOUD_ZONE, CLOUD_MILESTONES, CLOUD_HUNT } from './cloudbase-state.js';
+import { createCloudbase, ORDER as CLOUD_ORDER } from './cloudbase.js';
+import { createCloudbaseRun, CLOUD_ZONE, CLOUD_MILESTONES, CLOUD_HUNT, CLOUD_RAVENS } from './cloudbase-state.js';
+import { FLIGHT, BRAKE, createFlight, releaseFlight, settleFlight, stepFlight } from './flight.js';
 import { runEffects } from './run-effects.js';
+import { stallEffects, brakeMeter } from './stall-effects.js';
 import { cloudbaseHint, holdHint } from './cloudbase-hints.js';
+import { fjordHint } from './fjord-hints.js';
 import { createLost } from './lost.js';
+import { createWindStreaks } from './wind-streaks.js';
 import './game.css';
 
 const { clamp } = THREE.MathUtils;
@@ -27,18 +31,6 @@ const smoothstep = (a, b, x) => {
 const NIGHT = 0x060a13;
 const STEP = 1 / 60;
 const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
-
-// Close to a real wing: about 41 km/h and a 9:1 glide at trim. Speeds are m/s, turn is rad/s.
-const FLIGHT = {
-  trim: { speed: 11.5, sink: 1.2 },
-  fast: { speed: 16, sink: 2.3 },
-  slow: { speed: 7.5, sink: 1.0 },
-  turn: 0.8,
-  turnSink: 0.8,
-  diveSink: 6.5,
-  // A collapsed wing keeps turning the way it was already going, at this share of a full turn.
-  hook: 0.6,
-};
 
 // How many times faster the flight runs while boosting or flying itself to a place.
 const HASTE = 3;
@@ -55,11 +47,12 @@ const KEYS = {
   KeyA: 'left',
   ArrowRight: 'right',
   KeyD: 'right',
-  ArrowUp: 'fast',
-  KeyW: 'fast',
-  ArrowDown: 'slow',
-  KeyS: 'slow',
-  Space: 'dive',
+  ArrowUp: 'bar',
+  KeyW: 'bar',
+  // One brake, whichever of these holds it: deeper the longer it is held.
+  ArrowDown: 'brake',
+  KeyS: 'brake',
+  Space: 'brake',
 };
 
 // Everything the game draws over its own canvas. The landing panel is not here: the page renders
@@ -87,8 +80,9 @@ const MARKUP = /* html */ `
         <p>controls</p>
         <dl>
           <dt>← →</dt><dd>steer <span>or A D</span></dd>
-          <dt>↑ ↓</dt><dd>faster · slower <span>or W S</span></dd>
-          <dt>space</dt><dd>hold to dive · take off again once landed</dd>
+          <dt>space</dt><dd>brake: the longer you hold, the deeper · ease off before the red <span>or ↓ S</span></dd>
+          <dt>↑</dt><dd>speed bar: hands up, faster and sinking more <span>or W</span></dd>
+          <dt>enter</dt><dd>take off again once landed <span>or space</span></dd>
           <dt>shift</dt><dd>hold to speed time up</dd>
           <dt>click</dt><dd>a lit pillar or its label, to fly there by itself</dd>
           <dt>n</dt><dd>once landed, fly to the next place</dd>
@@ -99,7 +93,7 @@ const MARKUP = /* html */ `
         </dl>
         <ul>
           <li>◀ ▶ steer</li>
-          <li>▼ hold to dive</li>
+          <li>▼ brake: hold longer to sink faster · let go before the red</li>
           <li>» hold to speed time up</li>
           <li>tap a lit pillar or its label to fly there by itself</li>
         </ul>
@@ -110,11 +104,12 @@ const MARKUP = /* html */ `
         </div>
         <button data-do="cloudbase" hidden>[ Cloudbase ]</button>
         <button data-do="quit-cloudbase" hidden>[ end run ]</button>
-        <p class="fj-keys-goal fj-keys-run" hidden>Cloudbase: ravens circle where the air rises · turn the way they turn and climb beside them · keep out of the storm clouds · time does not speed up in a run</p>
+        <p class="fj-keys-goal fj-keys-run" hidden>Cloudbase: ravens circle where the air rises · turn the way they turn and climb beside them · keep out of the storm clouds · streaks show the wind and its gusts · time does not speed up in a run</p>
       </aside>
     </nav>
   </div>
   <div class="fj-toasts"></div>
+  <div class="fj-brake" data-state="" aria-hidden="true"><b>brake</b><span><i></i><i></i></span></div>
   <div class="fj-hint"></div>
   <section class="fj-map window" hidden>
     <header><i></i><i></i><i></i><span>~/fjord/map — pick a place to fly to</span></header>
@@ -127,7 +122,7 @@ const MARKUP = /* html */ `
   </section>
   <div class="fj-touch">
     <button data-input="left" aria-label="Steer left">◀</button>
-    <button data-input="dive" aria-label="Dive">▼</button>
+    <button data-input="brake" aria-label="Brake">▼</button>
     <button data-input="boost" aria-label="Speed up">»</button>
     <button data-input="right" aria-label="Steer right">▶</button>
   </div>
@@ -247,20 +242,23 @@ export function createGame(stage, hooks = {}) {
 
   // ---------------------------------------------------------------- state
 
-  const g = {
-    pos: new THREE.Vector3(START.x, START.y, START.z),
-    yaw: START.yaw,
-    yawRate: 0,
-    bank: 0,
-    speed: FLIGHT.trim.speed,
-    sink: FLIGHT.trim.sink,
-    vy: 0,
-    // What the air and the pilot are doing right now, for the glider's sway.
-    turn: 0,
-    lift: 0,
-    liftSide: 0,
-  };
-  const input = { left: false, right: false, fast: false, slow: false, dive: false, boost: false };
+  // The glider's flight, stepped by flight.js. It keeps this vector, which the scene draws with.
+  const g = createFlight(new THREE.Vector3(START.x, START.y, START.z));
+  g.yaw = START.yaw;
+  // What the pilot asks of the wing and the air it is in, filled afresh at every step.
+  const controls = { turn: 0, brake: false, bar: false, locked: false, harsh: false, linger: false, climb: null };
+  const air = { lift: 0, sink: 0, windX: 0, windZ: 0, calm: true, rough: 0, clearance: Infinity };
+  // What a Cloudbase run says of the air where the pilot is, written afresh each step.
+  const forces = { lift: 0, sink: 0, liftSide: 0, windX: 0, windZ: 0, rough: 0 };
+  const input = { left: false, right: false, bar: false, brake: false, boost: false };
+  // Who is holding each control. Two keys, or a key and a button, can hold the same one, and it
+  // is only let go when the last of them is.
+  const holders = { left: new Set(), right: new Set(), bar: new Set(), brake: new Set(), boost: new Set() };
+  function press(name, by, down) {
+    if (down) holders[name].add(by);
+    else holders[name].delete(by);
+    input[name] = holders[name].size > 0;
+  }
   let mode = 'intro'; // intro | flying | cloudbase | cloudbase-ended | landed | launching | lost
   const isAirborne = () => mode === 'flying' || mode === 'cloudbase';
   const landingLeg = createLandingLeg();
@@ -285,14 +283,25 @@ export function createGame(stage, hooks = {}) {
   // by frame toward what run-effects.js asks for (`want`), with what the hints have seen so far:
   // strikes already answered, which way the folded wing hooks, seconds spent turning against a
   // flock and without lift, and the hunted thermals ridden. None of it may outlive the run.
+  // A stall does its own things to the wing in either kind of flying (`stall`, from
+  // stall-effects.js): `foldLeft` and `foldRight` are each half of the wing as shown, from a strike
+  // or a stall, and `fold` the more folded of the two. `stalled` is whether the stall has been
+  // heard, `stalls` how many there have been this run, `deep` seconds the brake has been deep, and
+  // `meter` what the brake meter shows (`meterShown`, what was last written to the page).
   const effects = {
     fold: 0, veil: 0, veilShown: 0, shake: 0, gaze: 0, want: { fold: 0, veil: 0, shake: 0, gaze: 0 },
     strikes: 0, hook: 1, against: 0, searching: 0, rides: 0, riding: 0, hint: { line: '', since: 0 }, gazeShown: -1,
+    foldLeft: 0, foldRight: 0, luff: 0, stall: { left: 0, right: 0, luff: 0, shake: 0 }, stalled: false, stallSide: 0, stalls: 0, deep: 0,
+    meter: { fill: 0, red: 0, state: '' }, meterShown: { fill: -1, red: -1, state: null }, fjordHint: { line: '', since: 0 },
   };
   const veilEl = $('.fj-veil');
   const strikeEl = $('.fj-strike');
   const hintEl = $('.fj-hint');
   const boostButton = $('.fj-touch [data-input="boost"]');
+  const touchEl = $('.fj-touch');
+  const meterEl = $('.fj-brake');
+  const [meterWord, meterTrack] = meterEl.children;
+  const [meterFill, meterRed] = meterTrack.children;
   // For looking at a run from the console: a seed to fly again, and the flight held still.
   let pinnedSeed = null;
   let held = false;
@@ -317,7 +326,10 @@ export function createGame(stage, hooks = {}) {
   }
 
   function clearInput() {
-    for (const key of Object.keys(input)) input[key] = false;
+    for (const key of Object.keys(input)) {
+      holders[key].clear();
+      input[key] = false;
+    }
   }
 
   function clearCloudResult() {
@@ -330,8 +342,16 @@ export function createGame(stage, hooks = {}) {
     for (const button of stage.querySelectorAll('[data-do="cloudbase"]')) button.hidden = !progress.cloudbase.discovered || mode === 'cloudbase';
     for (const button of stage.querySelectorAll('[data-do="quit-cloudbase"]')) button.hidden = mode !== 'cloudbase';
     $('.fj-keys-run').hidden = !progress.cloudbase.discovered;
-    // Time does not speed up in a run, and the button that asks for it should say so.
-    boostButton.toggleAttribute('aria-disabled', mode === 'cloudbase');
+    // Time does not speed up in a run, so its button becomes a second brake: one under each thumb,
+    // so the brake can be held while steering either way.
+    const second = mode === 'cloudbase';
+    if ((boostButton.dataset.input === 'brake') !== second) {
+      press(boostButton.dataset.input, boostButton, false);
+      boostButton.dataset.input = second ? 'brake' : 'boost';
+      boostButton.textContent = second ? '▼' : '»';
+      boostButton.setAttribute('aria-label', second ? 'Brake' : 'Speed up');
+    }
+    touchEl.classList.toggle('pairs', second);
   }
 
   function awardMilestones(peak) {
@@ -345,10 +365,12 @@ export function createGame(stage, hooks = {}) {
   function clearRunEffects() {
     effects.fold = effects.veil = effects.veilShown = effects.shake = 0;
     effects.strikes = effects.against = effects.searching = effects.rides = effects.riding = 0;
+    effects.foldLeft = effects.foldRight = effects.luff = effects.stalls = effects.deep = effects.stallSide = 0;
+    effects.stalled = false;
     effects.hook = 1;
+    releaseFlight(g);
     effects.hint.line = '';
     effects.hint.since = 0;
-    glider.gear.collapse = 0;
     veilEl.style.opacity = '0';
     strikeEl.classList.remove('on');
     hintEl.style.removeProperty('--gaze');
@@ -375,14 +397,14 @@ export function createGame(stage, hooks = {}) {
     progress.cloudbase.bestAltitude = Math.max(progress.cloudbase.bestAltitude, peak);
     awardMilestones(peak);
     const { strikes, cloudTime } = cloudRun.state.pilot;
-    const result = { peak, best: progress.cloudbase.bestAltitude, reason, strikes, cloud: Math.round(cloudTime) };
+    const result = { peak, best: progress.cloudbase.bestAltitude, reason, strikes, stalls: effects.stalls, cloud: Math.round(cloudTime) };
     persist();
     clearRunEffects();
     cloudView?.reset();
     thermals.group.visible = true;
     stage.classList.remove('cloudbase');
     mode = 'cloudbase-ended';
-    g.vy = g.yawRate = g.speed = 0;
+    settleFlight(g, 0);
     clearInput();
     if (show) {
       cloudResult = result;
@@ -406,6 +428,14 @@ export function createGame(stage, hooks = {}) {
     else closePanel();
     clearCloudResult();
     if (!throughGateway) clearInput();
+    else {
+      // Flown in through the arch, the steering carries on, but a boost or a brake held on the way
+      // does not: neither means the same in a run.
+      for (const name of ['boost', 'brake']) {
+        holders[name].clear();
+        input[name] = false;
+      }
+    }
     launchReveal = null;
     if (!progress.cloudbase.discovered) {
       progress.cloudbase.discovered = true;
@@ -466,7 +496,7 @@ export function createGame(stage, hooks = {}) {
     // A raven strike folds the wing: for a moment nothing the pilot does reaches it, and it keeps
     // hooking round the way it was already turning. Only a run can do this.
     const collapsed = cloudFlying && cloudRun.state.pilot.collapse > 0;
-    let turn = collapsed ? effects.hook * FLIGHT.hook : (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    let turn = collapsed ? effects.hook * FLIGHT.turn.hook : (input.right ? 1 : 0) - (input.left ? 1 : 0);
     if (auto) {
       const want = Math.atan2(auto.x - g.pos.x, -(auto.z - g.pos.z));
       turn = clamp(wrapAngle(want - g.yaw) * 2.5, -1, 1);
@@ -481,17 +511,8 @@ export function createGame(stage, hooks = {}) {
         : Math.atan2(centerX(tz) - g.pos.x, -(tz - g.pos.z));
       turn = clamp(wrapAngle(want - g.yaw) * 2, -1, 1);
     }
-    g.yawRate += (turn * FLIGHT.turn - g.yawRate) * Math.min(1, dt * 3.2);
-    g.yaw += g.yawRate * dt;
-    g.bank += (g.yawRate * 0.75 - g.bank) * Math.min(1, dt * 4);
 
-    const trim = auto || collapsed ? FLIGHT.trim : input.fast ? FLIGHT.fast : input.slow ? FLIGHT.slow : FLIGHT.trim;
-    g.speed += (trim.speed - g.speed) * Math.min(1, dt * 1.6);
-    g.sink += (trim.sink - g.sink) * Math.min(1, dt * 1.6);
-    let sink = g.sink + Math.abs(g.yawRate) * FLIGHT.turnSink;
-    if (input.dive && !auto && !collapsed) sink += FLIGHT.diveSink;
-
-    // Thermals are weak near the ground, so they never stop you landing.
+    // The air where the pilot is. Thermals are weak near the ground, so they never stop you landing.
     const agl = g.pos.y - surfaceAt(g.pos.x, g.pos.z);
     let lift = 0;
     let coreSide = 0;
@@ -506,21 +527,39 @@ export function createGame(stage, hooks = {}) {
     }
     const approach = !cloudFlying && landingLeg.eligible ? sampleApproach(g.pos.x, g.pos.y, g.pos.z) : { x: 0, z: 0, lift: 0 };
     if (cloudFlying) {
-      // The run's own air: its lift, and the pull of a folded wing or a storm cloud.
-      const forces = cloudRun.sample(g.pos, g.yaw);
+      // The run's own air: its lift, the pull of a folded wing or a storm cloud, and a wind that
+      // carries the pilot and gusts.
+      cloudRun.sample(g.pos, g.yaw, forces);
       lift = inZone ? forces.lift : 0;
-      sink += forces.sink;
+      air.sink = forces.sink;
+      air.windX = forces.windX;
+      air.windZ = forces.windZ;
+      air.rough = forces.rough;
       g.liftSide = forces.liftSide;
     } else {
+      // Over the fjord the only wind is the faint drift near each ring: it carries the pilot and
+      // is never a gust.
+      air.sink = 0;
+      air.windX = approach.x;
+      air.windZ = approach.z;
+      air.rough = 0;
       g.liftSide = lift > 0 ? clamp(coreSide / lift, -1, 1) : 0;
     }
+    air.calm = !cloudFlying;
     // Run cores must lift above the east-shore hillside immediately; normal air still fades near ground.
     lift *= inZone ? 1 : smoothstep(8, 45, agl) * (1 - smoothstep(WORLD.ceiling - 80, WORLD.ceiling, g.pos.y));
     lift += approach.lift;
-    g.lift = lift;
-    g.turn = turn;
+    g.lift = air.lift = lift;
+    air.clearance = agl;
 
-    let climb = lift - sink;
+    controls.turn = turn;
+    controls.brake = input.brake && !auto;
+    controls.bar = input.bar && !auto;
+    controls.locked = collapsed;
+    // A stall only costs real height high in a run; low over the launch hill it is the gentle kind.
+    controls.harsh = cloudFlying && g.pos.y >= CLOUD_RAVENS.grace;
+    controls.linger = cloudFlying;
+    controls.climb = null;
     if (auto) {
       // Flying itself, the glider holds a glide path that ends just above the ring, and stays
       // clear of any ground between here and there.
@@ -531,12 +570,20 @@ export function createGame(stage, hooks = {}) {
           path = Math.max(path, surfaceAt(g.pos.x + Math.sin(g.yaw) * ahead, g.pos.z - Math.cos(g.yaw) * ahead) + 22);
         }
       }
-      climb = clamp((path - g.pos.y) * 0.9, -6, 6);
+      controls.climb = clamp((path - g.pos.y) * 0.9, -6, 6);
     }
-    g.vy += (climb - g.vy) * Math.min(1, dt * 2.5);
-    g.pos.x += (Math.sin(g.yaw) * g.speed + approach.x) * dt;
-    g.pos.z += (-Math.cos(g.yaw) * g.speed + approach.z) * dt;
-    g.pos.y += g.vy * dt;
+    stepFlight(g, controls, air, dt);
+    // A stall beginning or ending is heard once, and counted.
+    if (g.stall > 0 && !effects.stalled) {
+      effects.stalled = true;
+      effects.stallSide = g.stallSide;
+      effects.stalls += 1;
+      playStall(g.stallSide, g.stallHarsh);
+    } else if (g.stall === 0 && effects.stalled) {
+      effects.stalled = false;
+      playRefill(effects.stallSide);
+    }
+    effects.deep = g.brake >= BRAKE.shelf ? effects.deep + dt : 0;
 
     if (lift > 1 && g.vy > 0) {
       climbStart ??= g.pos.y;
@@ -602,8 +649,12 @@ export function createGame(stage, hooks = {}) {
     mode = 'landed';
     stage.classList.remove('cloudbase-ended');
     setAuto(null);
-    g.vy = g.yawRate = g.speed = 0;
+    settleFlight(g, 0);
+    effects.stalled = false;
+    effects.deep = 0;
     g.pos.y = surfaceAt(g.pos.x, g.pos.z) + 1.4;
+    // A key still held from the approach is not a brake, or a turn, on the next flight.
+    clearInput();
     if (zone) {
       if (!progress.visited.includes(zone.id)) progress.visited.push(zone.id);
       places.setVisited(zone.id);
@@ -638,17 +689,22 @@ export function createGame(stage, hooks = {}) {
     launchReveal = null;
     g.pos.set(x, y, z);
     g.yaw = yaw;
-    g.yawRate = g.bank = g.vy = 0;
-    g.speed = FLIGHT.trim.speed;
-    g.sink = FLIGHT.trim.sink;
+    settleFlight(g);
     climbStart = null;
     effects.gaze = 0;
+    // A new flight starts with nothing said, and nothing of the last stall still showing.
+    effects.fjordHint.line = '';
+    effects.fjordHint.since = 0;
+    effects.stalled = false;
+    effects.deep = 0;
     mode = 'flying';
   }
 
   // Sends the glider to a place by itself, at boosted speed. Steering takes control back.
   function setAuto(zone) {
     auto = zone;
+    // Flying itself, the glider has no use for a brake or a stall left over from the pilot.
+    if (zone) releaseFlight(g);
     for (const { zone: each, el } of zoneLabels) el.classList.toggle('target', each === auto);
   }
 
@@ -683,6 +739,7 @@ export function createGame(stage, hooks = {}) {
     closePanel();
     closeMap();
     setAuto(null);
+    releaseFlight(g);
     mode = 'launching';
     fadeThen(() => {
       // Arrive on final approach from the water: left alone, the glide ends inside the ring.
@@ -695,6 +752,7 @@ export function createGame(stage, hooks = {}) {
     if (mode === 'intro') return;
     if (mode === 'cloudbase' || mode === 'cloudbase-ended' || cloudResult) return retryCloudbase();
     setAuto(null);
+    releaseFlight(g);
     mode = 'launching';
     fadeThen(() => launchFrom(START.x, START.y, START.z, START.yaw));
   }
@@ -985,7 +1043,10 @@ export function createGame(stage, hooks = {}) {
   const touch = matchMedia('(pointer: coarse)').matches;
   // Visitors who ask for less motion keep everything that tells them something and lose the rest.
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // The wind made visible, drawn after the run's fog so that a gust can be seen coming through it.
+  const streaks = createWindStreaks({ scene, order: CLOUD_ORDER.aboveFog, calm });
   const moment = {};
+  const fjordMoment = {};
 
   function hintText() {
     if (!isAirborne() || mapOpen) return '';
@@ -993,6 +1054,12 @@ export function createGame(stage, hooks = {}) {
       const { pilot, elapsed, fogHeight } = cloudRun.state;
       const column = pilot.thermal >= 0 ? cloudRun.state.thermals[pilot.thermal] : null;
       moment.collapse = pilot.collapse;
+      moment.stall = g.stall;
+      moment.stallSide = g.stallSide;
+      moment.brake = g.brake;
+      moment.deep = effects.deep;
+      moment.load = g.stallLoad;
+      moment.gustAhead = pilot.gustAhead;
       // The pilot's own depth: the picture can be grey while only the camera is in the cloud.
       moment.cloud = pilot.cloud;
       moment.outside = outOfBounds;
@@ -1011,19 +1078,41 @@ export function createGame(stage, hooks = {}) {
       moment.touch = touch;
       return holdHint(effects.hint, cloudbaseHint(moment), elapsed);
     }
-    if (auto) return `flying itself to ${auto.label} · steer to take over`;
-    if (!progress.cloudbase.discovered && airtime < 4 && landingLeg.eligible) return 'Cloudbase → hard right through the glowing arch';
-    if (outOfBounds) return 'the fog turns you back toward the fjord';
-    const agl = g.pos.y - surfaceAt(g.pos.x, g.pos.z);
     const near = nearestZone(false);
-    if (near.dist < near.zone.r * 2.5) {
-      const unvisited = !progress.visited.includes(near.zone.id);
-      return unvisited && agl > 28 ? `hold ${touch ? '▼' : 'space'} to dive · you land inside the ring` : '';
+    fjordMoment.stall = g.stall;
+    fjordMoment.stallSide = g.stallSide;
+    fjordMoment.auto = auto ? auto.label : '';
+    fjordMoment.arch = !progress.cloudbase.discovered && airtime < 4 && landingLeg.eligible;
+    fjordMoment.outside = outOfBounds;
+    fjordMoment.nearRing = near.dist < near.zone.r * 2.5;
+    fjordMoment.unvisited = !progress.visited.includes(near.zone.id);
+    fjordMoment.agl = g.pos.y - surfaceAt(g.pos.x, g.pos.z);
+    fjordMoment.sinking = g.vy < 0;
+    fjordMoment.airtime = airtime;
+    fjordMoment.touch = touch;
+    return holdHint(effects.fjordHint, fjordHint(fjordMoment), airtime);
+  }
+
+  // The brake meter: two bars scaled across one track, written only when they change and only as
+  // transforms, so the page never lays itself out again for them.
+  const SCALES = Array.from({ length: 201 }, (_, i) => `scaleX(${i / 200})`);
+  const METER_WORDS = { light: 'brake', late: 'brake', deep: 'deep', near: 'deep', stalled: 'stall' };
+  function updateMeter() {
+    // Nothing to show with the map open, while flying itself, or anywhere but in the air.
+    const shown = isAirborne() && !mapOpen && !auto;
+    brakeMeter(shown ? g.brake : 0, shown ? g.stallLoad : 0, shown ? g.stall : 0, effects.meter);
+    const was = effects.meterShown;
+    const fill = Math.round(effects.meter.fill * 200);
+    const red = Math.round(effects.meter.red * 200);
+    if (fill !== was.fill) meterFill.style.transform = SCALES[(was.fill = fill)];
+    if (red !== was.red) meterRed.style.transform = SCALES[(was.red = red)];
+    if (effects.meter.state !== was.state) {
+      was.state = effects.meter.state;
+      meterEl.dataset.state = was.state;
+      touchEl.dataset.brake = was.state;
+      // The word stays as it was while the meter fades out.
+      if (METER_WORDS[was.state]) meterWord.textContent = METER_WORDS[was.state];
     }
-    if (agl < 45 && g.vy < 0) return 'low — steer for the amber sparks to climb';
-    if (airtime < 9) return 'lit pillars are places to land · amber sparks are rising air';
-    if (airtime < 20) return `${touch ? 'tap' : 'click'} a pillar to fly there by itself · hold ${touch ? '»' : 'shift'} to speed up`;
-    return '';
   }
 
   function updateHud() {
@@ -1040,7 +1129,7 @@ export function createGame(stage, hooks = {}) {
     }
     if (mode === 'cloudbase') {
       // The altitude is the one readout every screen shows, so it carries what has hit the wing.
-      const plight = cloudRun.state.pilot.collapse > 0 ? 'collapsed' : cloudRun.state.pilot.cloud > 0.25 ? 'in cloud' : 'Cloudbase';
+      const plight = cloudRun.state.pilot.collapse > 0 ? 'collapsed' : g.stall > 0 ? 'stalled' : cloudRun.state.pilot.cloud > 0.25 ? 'in cloud' : 'Cloudbase';
       hud('alt').textContent = `${Math.floor(g.pos.y)} m · ${plight}`;
       const clearance = Math.max(0, Math.floor(g.pos.y - cloudRun.state.fogHeight));
       hud('next').textContent = `${touch || view.width <= 560 ? '' : `peak ${Math.floor(cloudRun.state.peak)} m · `}fog ${clearance} m below`;
@@ -1053,7 +1142,8 @@ export function createGame(stage, hooks = {}) {
       return;
     }
     $('.fj-toasts').style.removeProperty('top');
-    const pace = auto ? ` · auto ×${HASTE}` : input.boost ? ` · ×${HASTE}` : input.dive ? ' · dive' : '';
+    if (mode === 'flying' && g.stall > 0) hud('alt').textContent = `${Math.max(0, Math.round(g.pos.y))} m · stalled`;
+    const pace = auto ? ` · auto ×${HASTE}` : input.boost ? ` · ×${HASTE}` : g.brake > 0.05 ? ' · brake' : g.bar > 0.5 ? ' · bar' : '';
     hud('speed').textContent = `${Math.round(g.speed * 3.6)} km/h${mode === 'flying' ? pace : ''}`;
     const next = nearestZone(true) ?? nearestZone(false);
     const bearing = wrapAngle(Math.atan2(next.zone.x - g.pos.x, -(next.zone.z - g.pos.z)) - g.yaw);
@@ -1265,8 +1355,27 @@ export function createGame(stage, hooks = {}) {
     osc.connect(beep).connect(master);
     osc.start();
 
+    // The cloth of a wing near the stall: the same noise through a narrow band, switched on and
+    // off by a slow square wave (the raven's rasp, much slower), louder and quicker as it nears.
+    const flap = ctx.createBiquadFilter();
+    flap.type = 'bandpass';
+    flap.frequency.value = 900;
+    flap.Q.value = 0.9;
+    const shudder = ctx.createGain();
+    shudder.gain.value = 0.5;
+    const luff = ctx.createGain();
+    luff.gain.value = 0;
+    source.connect(flap).connect(shudder).connect(luff).connect(master);
+    const beat = ctx.createOscillator();
+    beat.type = 'square';
+    beat.frequency.value = 9;
+    const swing = ctx.createGain();
+    swing.gain.value = 0.5;
+    beat.connect(swing).connect(shudder.gain);
+    beat.start();
+
     // `next` holds when each one-off sound may play again, so none can pile up.
-    audio = { ctx, master, noise, wind, windFilter, osc, beep, rumble, nextBeep: 0, next: {} };
+    audio = { ctx, master, noise, wind, windFilter, osc, beep, rumble, flap, luff, beat, nextBeep: 0, next: {} };
   }
 
   // Plays a one-off sound unless it played less than `gap` seconds ago. Nothing new starts while
@@ -1351,6 +1460,117 @@ export function createGame(stage, hooks = {}) {
     play('strike', 1, thud, side * 0.4);
   }
 
+  // A stall: the wing slumps with a low drop and its cloth rattles loose, slowing as it goes. No
+  // call in it: a stall must never sound like a raven. `level` is softer for the forgiving kind.
+  function slump(ctx, at, pan, level) {
+    const out = panned(ctx, pan);
+    const body = ctx.createOscillator();
+    body.frequency.setValueAtTime(110, at);
+    body.frequency.exponentialRampToValueAtTime(34, at + 0.4);
+    const drop = ctx.createGain();
+    drop.gain.setValueAtTime(0.3 * level, at);
+    drop.gain.exponentialRampToValueAtTime(0.001, at + 0.5);
+    body.connect(drop).connect(out);
+    body.start(at);
+    body.stop(at + 0.52);
+    const cloth = ctx.createBufferSource();
+    cloth.buffer = audio.noise;
+    cloth.loop = true;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.setValueAtTime(950, at);
+    band.frequency.exponentialRampToValueAtTime(280, at + 1.3);
+    const chop = ctx.createGain();
+    chop.gain.value = 0.5;
+    const rattle = ctx.createOscillator();
+    rattle.type = 'square';
+    rattle.frequency.setValueAtTime(14, at);
+    rattle.frequency.linearRampToValueAtTime(6, at + 1.3);
+    const depth = ctx.createGain();
+    depth.gain.value = 0.5;
+    rattle.connect(depth).connect(chop.gain);
+    const shape = ctx.createGain();
+    shape.gain.setValueAtTime(0.2 * level, at);
+    shape.gain.exponentialRampToValueAtTime(0.04 * level, at + 1.3);
+    shape.gain.linearRampToValueAtTime(0, at + 1.7);
+    cloth.connect(band).connect(chop).connect(shape).connect(out);
+    cloth.start(at, Math.random());
+    rattle.start(at);
+    cloth.stop(at + 1.75);
+    rattle.stop(at + 1.75);
+  }
+
+  // The wing filling again: a soft thump of cloth taking the air.
+  function refill(ctx, at, pan) {
+    const out = panned(ctx, pan);
+    const body = ctx.createOscillator();
+    body.frequency.setValueAtTime(85, at);
+    body.frequency.exponentialRampToValueAtTime(60, at + 0.18);
+    const thump = ctx.createGain();
+    thump.gain.setValueAtTime(0.12, at);
+    thump.gain.exponentialRampToValueAtTime(0.001, at + 0.18);
+    body.connect(thump).connect(out);
+    body.start(at);
+    body.stop(at + 0.2);
+    const cloth = ctx.createBufferSource();
+    cloth.buffer = audio.noise;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = 520;
+    band.Q.value = 0.7;
+    const shape = ctx.createGain();
+    shape.gain.setValueAtTime(0, at);
+    shape.gain.linearRampToValueAtTime(0.16, at + 0.03);
+    shape.gain.setTargetAtTime(0, at + 0.06, 0.07);
+    cloth.connect(band).connect(shape).connect(out);
+    cloth.start(at, Math.random());
+    cloth.stop(at + 0.5);
+  }
+
+  // A gust front going over: a rush of air that rises, peaks as it arrives and dies away, moving
+  // across from the side it comes from so its direction is heard.
+  function whoosh(ctx, at, level, from) {
+    const air = ctx.createBufferSource();
+    air.buffer = audio.noise;
+    air.loop = true;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = 0.6;
+    band.frequency.setValueAtTime(320, at);
+    band.frequency.exponentialRampToValueAtTime(1100, at + 1);
+    band.frequency.exponentialRampToValueAtTime(420, at + 2.4);
+    const shape = ctx.createGain();
+    shape.gain.setValueAtTime(0, at);
+    shape.gain.linearRampToValueAtTime(level, at + 0.9);
+    shape.gain.linearRampToValueAtTime(0, at + 2.4);
+    const out = panned(ctx, 0.8 * from);
+    if (out !== audio.master) {
+      out.pan.setValueAtTime(clamp(0.8 * from, -1, 1), at);
+      out.pan.linearRampToValueAtTime(clamp(-0.8 * from, -1, 1), at + 2.2);
+    }
+    air.connect(band).connect(shape).connect(out);
+    air.start(at, Math.random());
+    air.stop(at + 2.45);
+  }
+
+  function playStall(side, harsh) {
+    play('stall', 1.2, slump, side * 0.5, harsh ? 1 : 0.7);
+  }
+
+  function playRefill(side) {
+    play('refill', 1, refill, side * 0.3);
+  }
+
+  // The front about to reach the pilot is heard coming a moment before it arrives.
+  function hearGust() {
+    const { pilot, gusts } = cloudRun.state;
+    if (pilot.gustSlot < 0 || pilot.gustIn <= 0 || pilot.gustIn > 0.8) return;
+    const band = gusts[pilot.gustSlot];
+    // It comes from upwind of the pilot: which side is that?
+    const from = -band.ux * Math.cos(g.yaw) - band.uz * Math.sin(g.yaw);
+    play('gust', 2.5, whoosh, 0.05 + 0.012 * band.strength, from);
+  }
+
   // The nearest raven calls now and then, from the side it is on, so a flock can be found by ear;
   // one about to cross the pilot's path calls sharply and often.
   function callRavens() {
@@ -1381,13 +1601,23 @@ export function createGame(stage, hooks = {}) {
     const flying = isAirborne() && !mapOpen;
     const running = mode === 'cloudbase' && !mapOpen;
     const rush = mode === 'lost' ? Math.min(0.14, 0.01 + Math.abs(g.vy) * 0.005) : 0.01;
+    // The wind in the lines follows the airspeed: louder and brighter on the bar, dull on the brake.
     audio.wind.gain.setTargetAtTime(flying ? 0.02 + g.speed * 0.004 : rush, now, 0.3);
     const fogNear = running ? 1 - clamp((g.pos.y - cloudRun.state.fogHeight) / 140, 0, 1) : 0;
     // Inside a storm cloud the same rumble swells and the wind goes dull.
     const inCloud = running ? effects.veil : 0;
     audio.rumble.gain.setTargetAtTime(Math.max(fogNear, inCloud * 0.8) * 0.35, now, 0.3);
-    audio.windFilter.frequency.setTargetAtTime(480 - 260 * inCloud, now, 0.3);
-    if (running) callRavens();
+    const pitch = flying ? clamp(480 + (g.speed - FLIGHT.speed.trim) * 28, 260, 900) : 480;
+    audio.windFilter.frequency.setTargetAtTime(Math.max(120, pitch - 260 * inCloud), now, 0.3);
+    // The cloth flutters harder and faster as the stall comes, and flaps loose in it.
+    const luff = flying ? effects.luff : 0;
+    audio.luff.gain.setTargetAtTime(0.11 * luff * luff, now, 0.08);
+    audio.beat.frequency.setTargetAtTime(8 + 9 * luff, now, 0.08);
+    audio.flap.frequency.setTargetAtTime(700 + 500 * luff, now, 0.08);
+    if (running) {
+      callRavens();
+      hearGust();
+    }
     if (flying && g.vy > 0.4 && now >= audio.nextBeep) {
       const gap = Math.max(0.11, 0.42 - g.vy * 0.05);
       audio.osc.frequency.setValueAtTime(620 + g.vy * 85, now);
@@ -1460,7 +1690,7 @@ export function createGame(stage, hooks = {}) {
     mode = 'intro';
     g.pos.set(START.x, START.y, START.z);
     g.yaw = START.yaw;
-    g.yawRate = g.bank = g.vy = 0;
+    settleFlight(g);
     clearInput();
     $('.fj-hud').hidden = true;
     stage.classList.remove('playing', 'lost', 'cloudbase', 'cloudbase-ended');
@@ -1491,15 +1721,17 @@ export function createGame(stage, hooks = {}) {
     if (event.target instanceof Element && event.target.closest('button, a, input, textarea, select, [contenteditable="true"]') && ['Space', 'Enter'].includes(event.code)) return;
     if (event.code in KEYS) {
       event.preventDefault();
-      if (event.code === 'Space') {
-        // Space takes off when landed; a held key must not turn into a dive the moment you launch.
+      const name = KEYS[event.code];
+      if (name === 'brake') {
+        // A brake key held since before the launch is not a brake until it is pressed again.
         if (event.repeat) return;
-        if (mode === 'landed') return takeOff();
+        // Space also takes off when landed.
+        if (event.code === 'Space' && mode === 'landed') return takeOff();
       }
       if (mapOpen || mode === 'launching') return;
-      input[KEYS[event.code]] = true;
+      press(name, event.code, true);
       // Steering by hand takes the glider back from flying itself.
-      if (KEYS[event.code] === 'left' || KEYS[event.code] === 'right') setAuto(null);
+      if (name === 'left' || name === 'right') setAuto(null);
       return;
     }
     if (event.repeat) return;
@@ -1515,7 +1747,7 @@ export function createGame(stage, hooks = {}) {
 
   on(window, 'keyup', (event) => {
     if (mode === 'intro' || !(event.code in KEYS)) return;
-    input[KEYS[event.code]] = false;
+    press(KEYS[event.code], event.code, false);
     if (event.target instanceof Element && event.target.closest('button, a, input, textarea, select, [contenteditable="true"]') && ['Space', 'Enter'].includes(event.code)) return;
     // Stops a held space from also clicking whichever button was last focused.
     event.preventDefault();
@@ -1530,8 +1762,8 @@ export function createGame(stage, hooks = {}) {
     const set = (down) => (event) => {
       event.preventDefault();
       if (down && (!isAirborne() || mapOpen)) return;
-      input[button.dataset.input] = down;
-      if (down && button.dataset.input !== 'boost' && button.dataset.input !== 'dive') setAuto(null);
+      press(button.dataset.input, button, down);
+      if (down && button.dataset.input !== 'boost' && button.dataset.input !== 'brake') setAuto(null);
     };
     on(button, 'pointerdown', set(true));
     on(button, 'pointerup', set(false));
@@ -1596,9 +1828,22 @@ export function createGame(stage, hooks = {}) {
       inRun ? cloudRun.depthAt(camera.position.x, camera.position.y, camera.position.z) : 0,
       effects.want,
     );
+    stallEffects(mode, g, effects.stall);
+    if (isAirborne()) {
+      // A raven strike folds the whole wing; a stall folds a little of both halves, or one of them
+      // hard. Each half goes fast and opens again more slowly. The 404 scene folds the wing by
+      // itself (lost.js), and nothing here reaches it.
+      const left = Math.max(effects.want.fold, effects.stall.left);
+      const right = Math.max(effects.want.fold, effects.stall.right);
+      effects.foldLeft += (left - effects.foldLeft) * Math.min(1, elapsed * (left > effects.foldLeft ? 18 : 4));
+      effects.foldRight += (right - effects.foldRight) * Math.min(1, elapsed * (right > effects.foldRight ? 18 : 4));
+      if (effects.foldLeft < 0.003) effects.foldLeft = 0;
+      if (effects.foldRight < 0.003) effects.foldRight = 0;
+      effects.luff += (effects.stall.luff - effects.luff) * Math.min(1, elapsed * 6);
+    } else effects.foldLeft = effects.foldRight = effects.luff = 0;
+    effects.fold = Math.max(effects.foldLeft, effects.foldRight);
+    effects.shake = !isAirborne() || calm || mapOpen || held ? 0 : Math.max(effects.want.shake, effects.stall.shake);
     if (inRun) {
-      effects.fold += (effects.want.fold - effects.fold) * Math.min(1, elapsed * (effects.want.fold > effects.fold ? 18 : 4));
-      glider.gear.collapse = effects.fold < 0.003 ? 0 : effects.fold;
       effects.veil += (effects.want.veil - effects.veil) * Math.min(1, elapsed * (effects.want.veil > effects.veil ? 6 : 2.5));
       // Below a trace the veil is put right out, so no see-through layer is left over the picture.
       const shown = effects.veil < 0.02 ? 0 : 0.88 * smoothstep(0, 1, effects.veil);
@@ -1606,7 +1851,6 @@ export function createGame(stage, hooks = {}) {
         effects.veilShown = shown;
         veilEl.style.opacity = shown.toFixed(2);
       }
-      effects.shake = calm || mapOpen || held ? 0 : effects.want.shake;
     }
 
     lens.warp = lens.rising ? Math.min(1, lens.warp + elapsed / 0.35) : Math.max(0, lens.warp - elapsed / 0.8);
@@ -1634,13 +1878,21 @@ export function createGame(stage, hooks = {}) {
       dt: elapsed,
       time,
       bank: g.bank + lean,
-      pace: airborne ? g.speed - FLIGHT.trim.speed : 0,
+      pace: airborne ? g.speed - FLIGHT.speed.trim : 0,
       turn: airborne ? g.turn : THREE.MathUtils.clamp(lean * 1.6, -1, 1),
-      slow: airborne && input.slow,
       lift: airborne ? g.lift : mode === 'intro' ? tug.y : 0,
       liftSide: g.liftSide,
       landed: mode === 'landed',
+      flying: airborne,
+      brake: airborne ? g.brake : 0,
+      bar: airborne ? g.bar : 0,
+      luff: effects.luff,
+      stall: airborne && g.stall > 0 ? 1 : 0,
+      foldLeft: effects.foldLeft,
+      foldRight: effects.foldRight,
+      rough: airborne ? air.rough : 0,
     });
+    updateMeter();
     updateCamera(elapsed);
 
     terrain.update(time);
@@ -1649,6 +1901,18 @@ export function createGame(stage, hooks = {}) {
     thermals.update(time);
     gateway.update(time);
     if (mode === 'cloudbase') cloudView?.update(cloudRun.state.elapsed, g.pos, cloudRun, camera.position);
+    // All of the wind in a run; over the fjord a sparse breeze that moves nothing, as the windsocks
+    // show it. Paused with the flight, and drawn brighter once the glow has been dropped.
+    streaks.update(
+      mapOpen || held ? 0 : elapsed,
+      g.pos,
+      camera.position,
+      inRun ? cloudRun.windAt : fjordBreeze,
+      inRun ? 1 : mode === 'flying' ? 0.35 : 0,
+      inRun ? cloudRun.state.fogHeight + 3 : 3,
+      inRun ? cloudRun.state.gusts : null,
+      !useBloom,
+    );
     placeLabels();
     updateAudio();
     hudClock += elapsed;
@@ -1682,11 +1946,22 @@ export function createGame(stage, hooks = {}) {
     get mode() { return mode; },
     cloudRun,
     get cloudView() { return cloudView; },
-    get effects() { return { seed: cloudRun.state.seed, fold: effects.fold, veil: effects.veil, gaze: effects.gaze, hook: effects.hook, haste }; },
+    get effects() {
+      return {
+        seed: cloudRun.state.seed, fold: effects.fold, foldLeft: effects.foldLeft, foldRight: effects.foldRight, luff: effects.luff,
+        veil: effects.veil, gaze: effects.gaze, hook: effects.hook, stalls: effects.stalls, meter: { ...effects.meter }, haste,
+      };
+    },
     // fjord.seed(n) flies the same Cloudbase sky every run until fjord.seed() lets it go;
     // fjord.hold() stops the flight where it is, without the map in the way, and fjord.hold(false) resumes.
     seed: (value) => (pinnedSeed = value == null ? null : value >>> 0),
     hold: (on = true) => (held = on),
+    // The flight's own clock, and what it was last handed: the pilot's controls and the air.
+    get airtime() { return airtime; },
+    controls,
+    air,
+    streaks,
+    fjordBreeze,
     camera,
     ZONES,
     STONES,
@@ -1733,6 +2008,7 @@ export function createGame(stage, hooks = {}) {
       sizeWatch.disconnect();
       audio?.ctx.close();
       cloudView?.dispose();
+      streaks.dispose();
       for (const pass of composer.passes) pass.dispose?.();
       composer.dispose();
       renderer.dispose();

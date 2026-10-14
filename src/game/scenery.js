@@ -5,6 +5,7 @@ import { clone as cloneModel } from 'three/addons/utils/SkeletonUtils.js';
 import { PROJECTS } from '../content.js';
 import { ZONES, STONES, THERMALS, TREES, BOULDERS, GATEWAY, heightAt } from './terrain.js';
 import { APPROACH_WINDS } from './approach.js';
+import { BRAKE } from './flight.js';
 
 const FILL = 0x0a1a2c;
 const LINE = 0x4fb8ff;
@@ -710,22 +711,51 @@ const PILOT = {
   hand: [-0.02, 0.56, 0.25],
   // The bones that carry those points and the ones the flight moves. `side` becomes L or R.
   bones: { chest: 'Spine02', waist: 'Spine01', head: 'Head', arm: 'side_Upperarm', fist: 'side_Forearm' },
+  // How far an upper arm may turn down and up from where the file has it, in radians, before its
+  // skin tears. The forearms and the knees tear far sooner, so they are never moved at all.
+  arms: [-0.75, 0.55],
 };
 
 // How lively the glider is in the air. Raise a number for more of that motion, set it to 0 to
-// switch it off. Angles are radians; the wing numbers are fractions of the wingspan.
+// switch it off. Angles are radians, pushes on the swing radians per second squared; the wing
+// numbers are fractions of the wingspan.
 const MOTION = {
   swingSpeed: 2.8, // how quickly the pilot swings back under the wing (higher is snappier)
   swingDamping: 0.35, // how soon a swing dies away (1 stops it without any overshoot)
   speedPitch: 0.02, // how far the wing sits ahead of the pilot per m/s above trim speed
+  brakePitch: 0.02, // how much further back the wing sits on the full brake, beyond what its slowness does
   turnLead: 0.1, // how far the wing rolls ahead of the pilot going into and out of a turn
   liftKick: 0.06, // how hard flying into rising air knocks the wing back and to the side
   gusts: 0.55, // how much rough air rocks the glider; rising air is rougher than still air
+  // Nearing a stall the wing hangs back a little and rocks to and fro (a push); kept small, so that
+  // the stall itself is seen to throw the wing back further than any of that.
+  luffPitch: 0.02,
+  luffRock: 0.3,
+  // How much further back the wing drops while it is stalled, where its lost airspeed already
+  // holds it 0.17 back, and how hard it is flung there the moment it goes (radians per second).
+  // In still air it peaks near 0.37, 0.12 beyond the rocking before; in the roughest air, a
+  // strong thermal, near 0.43. The swing's stops are at 0.5.
+  stallPitch: 0.12,
+  stallKick: 0.3,
+  spinRoll: 1.5, // how hard a wing folded on one side rolls toward that side (a push, per whole fold)
   pilotFollow: 0.6, // how much of each swing the pilot's body leans along with
   armPull: 0.7, // how far the pilot's arm comes down with a full pull on that side's brake
+  brakeShown: 0.6, // how much of that full pull the hands show at the light brake, so it is seen at all
+  steerDeep: 0.25, // how much a full steer still adds to the pull on top of the full brake
+  armRest: 0.2, // how much lower the hands rest while flying than in the hero picture
+  armRaise: 0.55, // how far the arms go up with the speed bar fully on
+  stallRaise: 0.8, // how high the hands are thrown in a stall, as a share of the speed bar's
+  armTremble: 0.03, // how much the arms tremble as the wing nears a stall
+  armFlail: 0.08, // how much they flail while it is stalled
   bodyLean: 0.06, // how far the pilot's upper body leans toward the side being steered
   headTurn: 0.4, // how far the pilot's head turns to look into a turn
-  brakePull: 0.035, // how far steering pulls the trailing edge down on that side
+  brakePull: 0.035, // how far a full steer pulls the trailing edge down on that side
+  // How far the full brake pulls the trailing edge down on both sides: 0.40 m where the real edge
+  // is, 70% of the way out to each tip, and `brakeCentre` of that (0.24 m) in the middle.
+  brakeDrop: 0.0466,
+  brakeCentre: 0.45,
+  luff: 0.0148, // how far the trailing edge flutters as the wing nears a stall
+  foldBlend: 0.2, // how far either side of the middle a fold of one half fades out
   tipFlutter: 0.012, // how much the wingtips shake in rough air
   ripple: 0.004, // how much the surface ripples along the span
   breathing: 0.008, // how much the whole arc flexes open and shut
@@ -739,18 +769,34 @@ const smooth = (from, to, x) => {
   return t * t * (3 - 2 * t);
 };
 
+// Eases `from` toward `to` by the share `rate`, landing on it exactly once within a hair of it, so
+// that a brake let go is let go to the last bit and the work it costs the wing stops.
+const settle = (from, to, rate) => (Math.abs(to - from) < 1e-4 ? to : from + (to - from) * rate);
+
 // Where a point of the wing sits right now, in the wing file's own units, written into `out`.
-// The same rule moves the wing's surface and the line ends attached to it.
-function flexWing(x, y, z, air, out) {
+// The same rule moves the wing's surface and the line ends attached to it. `air` is the glider's
+// (see buildGlider); the rule is exported so that a test can try it point by point.
+export function flexWing(x, y, z, air, out) {
   const reach = Math.min(1, Math.abs(x) * 2); // 0 at the centre, 1 at a tip
   const aft = THREE.MathUtils.clamp(0.5 - z / (2 * HALF_CHORD), 0, 1); // 0 at the leading edge, 1 at the trailing edge
-  const brake = x > 0 ? air.brakeLeft : air.brakeRight; // in the file, +x is the pilot's left
-  const lift =
-    -MOTION.brakePull * brake * smooth(0.08, 0.5, reach) * aft * aft * aft +
+  const steer = x > 0 ? air.trailLeft : air.trailRight; // in the file, +x is the pilot's left
+  const outer = smooth(0.08, 0.5, reach); // steering pulls only the outer part of the trailing edge
+  let lift =
+    -MOTION.brakePull * steer * outer * aft * aft * aft +
     MOTION.tipFlutter * air.rough * reach * reach * reach * Math.sin(air.time * 9 + x * 14) +
     MOTION.ripple * air.rough * Math.sin(x * 46 + air.time * 5) * Math.sin(aft * Math.PI) +
     MOTION.breathing * air.rough * reach * reach * Math.sin(air.time * 1.7);
-  const fold = air.collapse;
+  // The brake pulls all of the trailing edge, the middle less than the rest, and near a stall the
+  // edge flutters. This runs for every point of the wing in every frame, so neither costs
+  // anything while it is not happening.
+  if (air.trail > 0) lift -= MOTION.brakeDrop * air.trail * (outer + MOTION.brakeCentre * (1 - outer)) * aft * aft * aft;
+  if (air.luff > 0) lift += MOTION.luff * air.luff * aft * aft * Math.sin(air.time * 23 + x * 60);
+  // A collapse folds all of the wing. Each half can also fold on its own, fading out across the
+  // middle over a band wide enough that the cloth is never turned inside out.
+  let fold = air.collapse;
+  if (air.foldLeft > 0 || air.foldRight > 0) {
+    fold = Math.max(fold, air.foldRight + (air.foldLeft - air.foldRight) * smooth(-MOTION.foldBlend, MOTION.foldBlend, x));
+  }
   if (fold <= 0) return out.set(x, y + lift, z);
   // A collapsed wing folds in from its tips, lets them drop, and thrashes.
   const thrash = Math.sin(air.time * 17 + x * 31) * Math.cos(air.time * 11 + z * 43);
@@ -868,9 +914,9 @@ function turnJoint(joint, about, angle, more = false) {
 // is placed by whoever throws it; the lines are redrawn to follow.
 const RESERVE = { size: 7, lines: 12, rim: 0.45 };
 
-async function loadReserve() {
+async function loadReserve(load) {
   const canopy = new THREE.Group();
-  canopy.add(await loadModel('reserve', RESERVE.size, 0.25));
+  canopy.add(await load('reserve', RESERVE.size, 0.25));
   canopy.visible = false;
   const lines = new THREE.LineSegments(
     new THREE.BufferGeometry().setAttribute(
@@ -884,8 +930,8 @@ async function loadReserve() {
   return { canopy, lines };
 }
 
-async function loadGliderModels() {
-  const [wing, pilot] = await Promise.all([loadModel('wing', WING.span, 0.2), loadModel(PILOT.model, PILOT.length, 0.2)]);
+async function loadGliderModels(load) {
+  const [wing, pilot] = await Promise.all([load('wing', WING.span, 0.2), load(PILOT.model, PILOT.length, 0.2)]);
   wing.rotation.y = WING.turn;
   wing.position.y = WING.height;
   const { mesh, rest } = loosen(wing);
@@ -899,8 +945,38 @@ async function loadGliderModels() {
   return { wing, pilot, mesh, rest, anchors, joints };
 }
 
-// The origin is the pilot; the wing arcs overhead. Forward is -z.
-export function buildGlider() {
+// The places `measure` reads, found once on the real models: the line each fist holds, a point of
+// the trailing edge at 70% of each half of the span (the rearmost point there), and each tip.
+function landmarks(rest, anchors) {
+  const fist = (side) => anchors.find((anchor) => anchor.part === 'fist' && anchor.side === side) ?? null;
+  let tipLeft = 0;
+  let tipRight = 0;
+  let edgeLeft = -1;
+  let edgeRight = -1;
+  for (let i = 0; i < rest.length; i += 3) {
+    const x = rest[i];
+    // In the file, +x is the pilot's left.
+    if (x > rest[tipLeft]) tipLeft = i;
+    if (x < rest[tipRight]) tipRight = i;
+    if (Math.abs(Math.abs(x) * 2 - 0.7) > 0.01) continue;
+    if (x > 0 && (edgeLeft < 0 || rest[i + 2] < rest[edgeLeft + 2])) edgeLeft = i;
+    if (x < 0 && (edgeRight < 0 || rest[i + 2] < rest[edgeRight + 2])) edgeRight = i;
+  }
+  // A wing file with no point there gets the rule's own trailing edge instead.
+  const at = (i, side) => (i < 0 ? new THREE.Vector3(side * 0.35, 0, -HALF_CHORD) : new THREE.Vector3().fromArray(rest, i));
+  return {
+    fistLeft: fist(-1),
+    fistRight: fist(1),
+    edgeLeft: at(edgeLeft, 1),
+    edgeRight: at(edgeRight, -1),
+    tipLeft: at(tipLeft, 1),
+    tipRight: at(tipRight, -1),
+  };
+}
+
+// The origin is the pilot; the wing arcs overhead. Forward is -z. `loadModel` is this file's own
+// unless one is handed in, as a test does to build the real glider outside a browser.
+export function buildGlider({ loadModel: load = loadModel } = {}) {
   const group = new THREE.Group();
   group.rotation.order = 'YXZ';
   // The wing and the pilot each hang from the point between the pilot's shoulders, where the
@@ -911,7 +987,9 @@ export function buildGlider() {
   group.add(sling, seat, placeholder);
 
   let rig = null;
-  loadGliderModels()
+  // Settles once the models have taken the stand-in's place (true), or have failed to and left it
+  // up (false). The game does not wait for it.
+  const ready = loadGliderModels(load)
     .then(({ wing, pilot, mesh, rest, anchors, joints }) => {
       pilot.updateMatrix();
       const pivot = new THREE.Vector3(PILOT.shoulder[0], PILOT.shoulder[1], 0).applyMatrix4(pilot.matrix);
@@ -935,14 +1013,25 @@ export function buildGlider() {
       sling.add(wing);
       seat.add(pilot);
       group.add(lines);
-      rig = { wing, pilot, mesh, rest, anchors, joints, lines };
+      rig = { wing, pilot, mesh, rest, anchors, joints, lines, marks: landmarks(rest, anchors) };
+      return true;
     })
-    .catch((error) => console.warn('Glider models did not load; keeping the placeholder.', error));
+    .catch((error) => {
+      console.warn('Glider models did not load; keeping the placeholder.', error);
+      return false;
+    });
 
   // The swing is two springs, one fore-and-aft and one side to side, each pulled toward a resting
   // angle and pushed around by the air.
-  const sway = { pitch: 0, pitchRate: 0, roll: 0, rollRate: 0, collapse: 0, lastBank: 0, lastLift: 0 };
-  const air = { time: 0, rough: 0, brakeLeft: 0, brakeRight: 0, collapse: 0 };
+  const sway = { pitch: 0, pitchRate: 0, roll: 0, rollRate: 0, collapse: 0, lastBank: 0, lastLift: 0, lastStall: 0 };
+  // What `pose` has been handed, eased: the steering on each side, the brake, the speed bar, the
+  // flutter near a stall and the stall itself, each 0 to 1, and `rest`, the radians the hands sit
+  // lower while flying. From those, what the trailing edge feels: `trail` along all of it from the
+  // brake, and `trailLeft` and `trailRight` on each side from steering. The folds are as handed in.
+  const air = {
+    time: 0, rough: 0, steerLeft: 0, steerRight: 0, brake: 0, bar: 0, rest: 0, luff: 0, stall: 0,
+    trail: 0, trailLeft: 0, trailRight: 0, collapse: 0, foldLeft: 0, foldRight: 0,
+  };
   // What an emergency does to the gear, each from 0 to 1: the wing crumpling, being gathered in,
   // and the arm throwing the reserve. Whoever stages the emergency sets these.
   const gear = { collapse: 0, stow: 0, throwing: 0 };
@@ -952,13 +1041,47 @@ export function buildGlider() {
   const worldToGroup = new THREE.Matrix4();
   const point = new THREE.Vector3();
 
+  // How far an upper arm turns from the hands-off pose, in radians about the pilot's right axis
+  // (a hand goes up as it grows), given the steering on its side and `side`, -1 left or 1 right.
+  function armAngle(steer, side) {
+    const { clamp } = THREE.MathUtils;
+    // The light brake is drawn most of the way down, or it would hardly be seen at all.
+    const shown =
+      air.brake <= BRAKE.light
+        ? (MOTION.brakeShown * air.brake) / BRAKE.light
+        : MOTION.brakeShown + ((1 - MOTION.brakeShown) * (air.brake - BRAKE.light)) / (1 - BRAKE.light);
+    // How far the hand is down its line: the brake, and steering on top of it (only a little more
+    // on a deep brake). In a stall the hands let go of the lines altogether.
+    const pull = (1 - air.stall) * (shown + steer * (1 - (1 - MOTION.steerDeep) * shown));
+    // Hands up on the speed bar, or thrown up in a stall a little short of that, so that they can
+    // be seen to flail. A hand pulling its brake stays down, and a raised hand leaves its rest.
+    const up = Math.max(air.bar, air.stall);
+    const high = MOTION.armRaise * Math.max(air.bar, MOTION.stallRaise * air.stall);
+    const angle =
+      air.rest * (1 - Math.min(1, pull)) * (1 - up) +
+      high * (1 - Math.min(1, 3 * pull)) -
+      MOTION.armPull * pull +
+      MOTION.armTremble * air.luff * Math.sin(air.time * 19 + side) +
+      MOTION.armFlail * air.stall * Math.sin(air.time * 11 + 2 * side);
+    return clamp(angle, PILOT.arms[0], PILOT.arms[1]);
+  }
+
+  // Where a line meets the pilot, in the glider's frame, written into `out`. The matrices it reads
+  // must have been brought up to date first.
+  function pilotEnd({ onPilot, onBone, bone }, out) {
+    if (bone) return out.copy(onBone).applyMatrix4(bone.matrixWorld).applyMatrix4(worldToGroup);
+    return out.copy(onPilot).applyMatrix4(pilotToGroup);
+  }
+
   function redraw() {
     const { wing, pilot, mesh, rest, anchors, joints, lines } = rig;
     if (joints) {
-      // Each arm comes down with its brake; the body leans and the head looks toward the turn.
-      const steer = air.brakeRight - air.brakeLeft;
-      turnJoint(joints.leftArm, RIGHT, -air.brakeLeft * MOTION.armPull);
-      turnJoint(joints.rightArm, RIGHT, -air.brakeRight * MOTION.armPull);
+      // Each hand comes down with the brake, further on the side being steered, goes up with the
+      // speed bar and is thrown up in a stall. The body leans and the head looks toward the turn,
+      // whatever the brake is doing.
+      const steer = air.steerRight - air.steerLeft;
+      turnJoint(joints.leftArm, RIGHT, armAngle(air.steerLeft, -1));
+      turnJoint(joints.rightArm, RIGHT, armAngle(air.steerRight, 1));
       // Throwing the reserve: the right arm sweeps down and out to the side, then comes back.
       const sweep = Math.sin(Math.PI * gear.throwing);
       if (sweep > 0) {
@@ -987,13 +1110,13 @@ export function buildGlider() {
     wingToGroup.multiplyMatrices(sling.matrix, wing.matrix);
     pilotToGroup.multiplyMatrices(seat.matrix, pilot.matrix);
     const ends = lines.geometry.attributes.position;
-    anchors.forEach(({ onPilot, onBone, bone, onWing }, i) => {
-      if (bone) point.copy(onBone).applyMatrix4(bone.matrixWorld).applyMatrix4(worldToGroup);
-      else point.copy(onPilot).applyMatrix4(pilotToGroup);
+    for (let i = 0; i < anchors.length; i++) {
+      pilotEnd(anchors[i], point);
       ends.setXYZ(i * 2, point.x, point.y, point.z);
+      const { onWing } = anchors[i];
       flexWing(onWing.x, onWing.y, onWing.z, air, point).applyMatrix4(wingToGroup);
       ends.setXYZ(i * 2 + 1, point.x, point.y, point.z);
-    });
+    }
     ends.needsUpdate = true;
 
     if (reserve) {
@@ -1017,47 +1140,116 @@ export function buildGlider() {
     sway,
     air,
     gear,
+    ready,
     /** The reserve canopy, once `packReserve` has loaded it. Place and scale it in the glider's frame. */
     get reserve() {
       return reserve?.canopy ?? null;
     },
     async packReserve() {
-      reserve ??= await loadReserve();
+      reserve ??= await loadReserve(load);
       group.add(reserve.canopy, reserve.lines);
       return reserve.canopy;
+    },
+    /**
+     * For tests and QA: writes into `out`, in metres, how the glider stands after its last pose.
+     * `handLeft` and `handRight` are the heights of the brake lines' ends at each fist above the
+     * point between the shoulders, in the glider's frame. `edgeLeft` and `edgeRight` are how far
+     * the trailing edge is pulled down at 70% of each half of the span, and `tipLeft` and
+     * `tipRight` how far each tip has come in toward the middle, along the wing's own axes (so the
+     * swing plays no part in them). Hands back `out`, or null while the stand-in is shown.
+     */
+    measure(out = {}) {
+      if (!rig) return null;
+      const { pilot, wing, marks } = rig;
+      group.updateWorldMatrix(true, true);
+      worldToGroup.copy(group.matrixWorld).invert();
+      pilotToGroup.multiplyMatrices(seat.matrix, pilot.matrix);
+      out.handLeft = marks.fistLeft ? pilotEnd(marks.fistLeft, point).y - sling.position.y : 0;
+      out.handRight = marks.fistRight ? pilotEnd(marks.fistRight, point).y - sling.position.y : 0;
+      const metres = wing.scale.x * sling.scale.x;
+      const { edgeLeft, edgeRight, tipLeft, tipRight } = marks;
+      out.edgeLeft = (edgeLeft.y - flexWing(edgeLeft.x, edgeLeft.y, edgeLeft.z, air, point).y) * metres;
+      out.edgeRight = (edgeRight.y - flexWing(edgeRight.x, edgeRight.y, edgeRight.z, air, point).y) * metres;
+      // The left tip is the file's +x end, and the right tip its -x end.
+      out.tipLeft = (tipLeft.x - flexWing(tipLeft.x, tipLeft.y, tipLeft.z, air, point).x) * metres;
+      out.tipRight = (flexWing(tipRight.x, tipRight.y, tipRight.z, air, point).x - tipRight.x) * metres;
+      return out;
     },
     /**
      * Moves the glider for this frame. `pace` is speed above trim in m/s, `turn` is the steering
      * from -1 (left) to 1 (right), `lift` is the rising air in m/s and `liftSide` says which side
      * its core is on (-1 left, 1 right).
+     *
+     * The others are each 0 (or false) when left out, which is how the hero picture and the 404
+     * scene pose it. `flying` is a pilot in the air with the wing in hand, whose hands rest a
+     * little lower. `brake` is how deep the brake is and `bar` how far the speed bar is on
+     * (flight.js's, 0 to 1). `luff` is how near the wing is to a stall, 0 to 1, and `stall` is 1
+     * while it is stalled. `foldLeft` and `foldRight` are how far the pilot's left and right halves
+     * of the wing are folded, 0 to 1, already eased by whoever folds them (gear.collapse still
+     * folds all of it). `rough` is a gust on the tail, 0 to 1.
      */
-    pose({ dt, time, bank, pace, turn, slow, lift, liftSide, landed }) {
+    pose({
+      dt, time, bank, pace, turn, lift, liftSide, landed,
+      flying = false, brake = 0, bar = 0, luff = 0, stall = 0, foldLeft = 0, foldRight = 0, rough = 0,
+    }) {
       const { clamp } = THREE.MathUtils;
       const step = Math.min(dt, 0.1);
       if (step > 0) {
         const bankRate = clamp((bank - sway.lastBank) / step, -3, 3);
         const liftRate = clamp((lift - sway.lastLift) / step, -20, 20);
+        // The moment the wing stalls it is flung back, once.
+        const kick = stall > 0 && !(sway.lastStall > 0) ? MOTION.stallKick : 0;
         sway.lastBank = bank;
         sway.lastLift = lift;
+        sway.lastStall = stall;
 
         air.time = time;
         air.collapse = gear.collapse;
-        air.rough += ((landed ? 0 : 0.3 + Math.min(1, lift / 5) * 0.7) - air.rough) * Math.min(1, step * 2);
-        const both = slow ? 0.6 : 0;
+        air.foldLeft = clamp(foldLeft, 0, 1);
+        air.foldRight = clamp(foldRight, 0, 1);
+        // Rising air is rougher than still air, and a gust on the tail rougher still.
+        const rocking = 0.3 + Math.min(1, lift / 5) * 0.7;
+        const restless = rough > 0 ? Math.max(rocking, 0.3 + 0.7 * Math.min(1, rough)) : rocking;
+        air.rough += ((landed ? 0 : restless) - air.rough) * Math.min(1, step * 2);
         const ease = Math.min(1, step * 6);
-        air.brakeLeft += (Math.min(1, Math.max(0, -turn) + both) - air.brakeLeft) * ease;
-        air.brakeRight += (Math.min(1, Math.max(0, turn) + both) - air.brakeRight) * ease;
+        air.steerLeft += (Math.min(1, Math.max(0, -turn)) - air.steerLeft) * ease;
+        air.steerRight += (Math.min(1, Math.max(0, turn)) - air.steerRight) * ease;
+        air.brake = settle(air.brake, clamp(brake, 0, 1), ease);
+        air.bar = settle(air.bar, clamp(bar, 0, 1), ease);
+        air.rest = settle(air.rest, flying ? -MOTION.armRest : 0, ease);
+        air.luff = settle(air.luff, clamp(luff, 0, 1), Math.min(1, step * 5));
+        // A stall takes the wing at once and gives it back more slowly.
+        const stalled = clamp(stall, 0, 1);
+        air.stall = settle(air.stall, stalled, Math.min(1, step * (stalled > air.stall ? 10 : 3)));
+        // What the trailing edge feels: the brake all along it, and steering on its own side (only
+        // a little more of that on a deep brake). Stalled, the hands are off the lines.
+        const held = 1 - air.stall;
+        const steering = 1 - (1 - MOTION.steerDeep) * air.brake;
+        air.trail = air.brake * held;
+        air.trailLeft = air.steerLeft * steering * held;
+        air.trailRight = air.steerRight * steering * held;
 
         const pull = MOTION.swingSpeed ** 2;
         const drag = 2 * MOTION.swingDamping * MOTION.swingSpeed;
         const gust = MOTION.gusts * air.rough;
-        // Faster flight puts the wing ahead (negative pitch); a turn starting or ending rolls it first.
-        const pitchRest = -pace * MOTION.speedPitch;
+        // Faster flight puts the wing ahead (negative pitch) and the brake holds it back; a turn
+        // starting or ending rolls it first. Nearing a stall it hangs back and rocks to and fro,
+        // and once stalled it drops back further, rocking no more.
+        const hunting = air.luff * held;
+        const pitchRest =
+          -pace * MOTION.speedPitch + MOTION.brakePitch * air.brake + MOTION.luffPitch * hunting + MOTION.stallPitch * air.stall;
         const rollRest = -bankRate * MOTION.turnLead;
-        // Rising air knocks the wing back and lifts the side nearer its core.
-        const pitchPush = liftRate * MOTION.liftKick + gust * (Math.sin(time * 1.7) * 0.6 + Math.sin(time * 3.1 + 1.3) * 0.4);
+        // Rising air knocks the wing back and lifts the side nearer its core, and a wing folded on
+        // one side rolls toward it.
+        const pitchPush =
+          liftRate * MOTION.liftKick +
+          gust * (Math.sin(time * 1.7) * 0.6 + Math.sin(time * 3.1 + 1.3) * 0.4) +
+          MOTION.luffRock * hunting * Math.sin(time * 3.6);
         const rollPush =
-          liftRate * liftSide * MOTION.liftKick + gust * (Math.sin(time * 1.3 + 2.1) * 0.6 + Math.sin(time * 2.7 + 0.5) * 0.4);
+          liftRate * liftSide * MOTION.liftKick +
+          gust * (Math.sin(time * 1.3 + 2.1) * 0.6 + Math.sin(time * 2.7 + 0.5) * 0.4) +
+          MOTION.spinRoll * (air.foldLeft - air.foldRight);
+        sway.pitchRate += kick;
         const slices = Math.ceil(step * 90);
         const h = step / slices;
         for (let i = 0; i < slices; i++) {
