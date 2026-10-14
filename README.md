@@ -38,8 +38,53 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
 - The swap in either direction plays behind a short warp of star streaks.
 - In flight, `[ h: controls ]` at the top right lists every key. Shift speeds time up. Clicking a place's pillar or label makes the glider fly itself
   there, and steering takes control back.
+- Space, ↓ and S (▼ on a touch screen) are one brake that goes deeper the longer it is held. A
+  fifth of a second in it is light: the wing slows to where it sinks least and turns a circle of
+  about 8 m instead of 14. Held on, it goes deep (after about half a second over the fjord, eight
+  seconds in a Cloudbase run): slow and steep, the way down into a ring. A meter under the hint
+  shows it; red grows in from the right as the wing nears a stall, and letting go of the key for
+  a fifteenth of a second (70 ms) returns a deep brake to a light one. Held into the red the wing stalls, and in a turn it spins toward
+  the inside wing; it recovers by itself, sooner with the brake let go. Over the fjord a stall is
+  short and cheap and cannot begin near the ground. ↑ or W is the speed bar: hands up, faster,
+  sinking more and turning wider.
 - Landing at a place opens the same section the page shows. "Open on page" leaves the flight at
   that section; Escape, the exit button and the browser's back button leave it too.
+- A manual landing briefly shows distance from the centre, a grade, points and the best distance
+  for that place. Accuracy supplies 95 points and a soft arrival supplies up to five more.
+  Map travel, automatic flight and "fly me to next" do not score, including after taking control
+  back. A fresh manual takeoff starts a new scoring leg. Light approach wind is shown by each
+  windsock; the forge floats you longer, rune ridge has lee-side sink, and the beacon is a small island.
+- Cloudbase is an optional altitude game through the glowing east-shore arch: turn hard right
+  for roughly two seconds after launch, then glide east through it. After discovery, the map
+  and menu offer direct entry. The amber column beyond the arch lifts you clear of the hillside
+  and then wears out. After that the lift is hidden: a flock of ravens circles inside each live
+  thermal, so find the birds, fly to them and climb beside them. Sparks and the core ring show
+  only from close by. Two thermals are alive at a time; each fades with use and with age, and
+  when it dies its ravens fly on to the next, where the lift starts as they arrive. Turn the way
+  the ravens turn: touching one collapses the wing, which costs about 60 m and a moment of
+  steering, and then no bird can strike for a few seconds. Storm clouds drift through in layers
+  from about 580 m, thicker higher up. Inside one there is no lift, the wing sinks and the view
+  greys out until you fly clear, so a cloud over a thermal caps it for a while. Only the rising
+  fog, the ground or quitting ends a run. Each run draws a new sky from its own seed, and the
+  same seed always gives the same sky. The 500/1,000/1,500 m rings are visual milestones.
+  A breeze of 2-4 m/s blows through the run, the wind that carries that height's storm clouds,
+  so it turns as you climb; it carries the glider, and rising air shelters a pilot from two
+  thirds of it. Every 16-26 s a gust band crosses the zone, drawn as a curtain of bright streaks
+  well before it arrives; it adds 3-5.5 m/s for a few seconds and pushes a circling pilot off the
+  core. A front that reaches a braked wing from behind takes airspeed away and can tip a deep
+  brake into a stall, so the hint says to ease off when one is near. Above 260 m a stall in a run
+  costs about as much height as a raven strike; easing the brake once a circle keeps it light.
+  Altitude is measured above sea level. A run lasts about two and a half minutes; peak, personal
+  best, raven strikes and time in cloud appear at the end, with one-click retry. Landing at a
+  portfolio place opens its content immediately, with the run result inline. Map travel and page
+  exit also save the run. The map pauses movement, fog, ravens, clouds and thermal exhaustion
+  together; time boost is switched off in a run, because a raven at three times the speed gives
+  no warning. Escape ends a run, R retries, and the existing sound switch controls vario, wind,
+  fog rumble, raven calls and the sounds of the wing stalling and of a gust going over. Scores
+  and discovery are saved locally; Reset progress clears them. The result counts raven strikes,
+  stalls and time in cloud. Music and a shared leaderboard are deferred. Cloudbase uses the same
+  keyboard and touch controls as flight, except that on a touch screen the » button is a second
+  brake in a run, so the four buttons sit as two pairs, one under each thumb.
 - Phones, and visitors who ask for reduced motion, get a still image in the hero. The 3D code
   loads for them only if they choose to fly.
 - In an upright window the hero is two bands, the scene above the words, so the glider is never
@@ -71,9 +116,18 @@ the flight, to a project and to missing pages will show the host's own error pag
   images, captions and contribution highlights live in `PROJECTS` in `src/content.js`. Replace
   a screen's `src` and `alt` and remove `placeholder` when its real screenshot is available;
   highlights use percentages of the uncropped image. Runtime images belong in `public/projects/`.
-- `src/game/`: the flight. `game.js` is the flight model, HUD, map and sound; `terrain.js` is the
+- `src/game/`: the flight. `game.js` runs it: input, HUD, map and sound; `terrain.js` is the
   world; `scenery.js` is the sky, buildings and glider; `achievements.js` is progress and belts;
-  `ridge.js` is the small live view of rune ridge on the page.
+  `landing.js` scores a landing, `approach.js` is the wind at each place (and the breeze the
+  streaks draw over the fjord) and `gateway.js` the arch. `flight.js` is how the glider flies:
+  airspeed and sink, the brake, the speed bar, the stall and gusts, with no 3D code, so tests fly
+  it; `stall-effects.js` is what a stall does to the wing and camera and what the brake meter
+  shows; `fjord-hints.js` picks free flight's line of advice; `wind-streaks.js` draws the wind.
+  `cloudbase-state.js` is a Cloudbase run (seeded thermals, ravens, storm clouds, wind, gusts and
+  fog) with no 3D code, so `npm test` can fly it; `cloudbase.js` and `ravens.js` draw that run;
+  `run-effects.js` is what a run does to the wing, the picture and the camera;
+  `cloudbase-hints.js` picks its one line of advice. `lost.js` is the missing page and `ridge.js`
+  the small live view of rune ridge on the page.
 - `public/poster.jpg`: the still shown in the hero before the live scene loads.
 
 ## 3D models
@@ -87,6 +141,19 @@ npm run models
 A model's file name is the name the scene loads it by, so keep them short and stable (`hall.glb`,
 `pine-tree.glb`). Where each one stands is set in the `FURNITURE` table in `src/game/scenery.js`.
 `concepts/` holds the images the models were generated from.
+
+The optimizer maps the new generator filenames to `windsock.glb`, `gateway.glb`, `raven.glb`
+and `clouds.glb`. To process just these sources, run `npm run models -- windsock gateway raven clouds`.
+The windsock and gateway load with the fjord. The raven and the storm cloud load the first time
+a Cloudbase run starts, with simple stand-ins drawn until they arrive. The raven's file has a
+skeleton but no animation, so its wingbeat is posed in code (`src/game/ravens.js`); it is drawn
+about three and a half times life size and lit a little, because a real raven at 200 m against
+a night sky is four dark pixels.
+Run `npm test` for the scoring, progress, gateway, flight and Cloudbase checks. The Cloudbase
+tests include reference pilots that fly whole runs on `flight.js` in the run's own wind, with
+their hands up or circling on the brake, which catch a large shift in how hard the game is: if a
+tuning table in `cloudbase-state.js` or `flight.js` changes, they say whether 1,000 m and 1,500 m
+are still roughly where they were. The measured numbers are in a comment beside that test.
 
 `concepts/` and `models-raw/` are local source folders, ignored by Git and unused by the production
 build. Back them up separately if you want to regenerate or edit the models later. Keep
