@@ -38,28 +38,43 @@ function flyMeet(seed, options) {
   return { seed, ...flown, total: meet.state.total, plates: meet.state.plates, lifts, thrown: bells.state.thrown, hits: bells.state.hits };
 }
 
-// Measured over 80 skies (seeds 1 to 40, then 1001 to 1040) with the kettlebells and the meet:
-// kettlebells thrown a run and the share that hit; runs of 40 past 1,000 m; the share of lifts
-// (the fog's included) with two red lights or more; TOTAL median and runs of 40 in the 1,000 lb
-// club; plates loaded a run:
-//   no kettlebells, light brake eased          -           -            37 / 40   6.6 / 5.9%   238 / 219 kg    0 / 0    5.4 / 4.4
-//   holding its line, hands up                 4.0 / 3.9   78 / 79%     24 / 22    12 / 12%    169 / 155 kg    0 / 0    4.2 / 4.5
-//   holding its line, light brake eased        3.7 / 4.0   80 / 81%     24 / 23    13 / 16%    154 / 143 kg    0 / 0    4.4 / 3.7
-//   changing what it does 0.4 s in, hands up   4.3 / 4.1   1.7 / 3.1%   36 / 32   3.8 / 3.4%   219 / 215 kg    0 / 0    4.0 / 4.5
-//   TST: 0.4 s in, light brake eased           4.1 / 4.2   0.0 / 0.6%   36 / 38   7.0 / 5.1%   220 / 194 kg    0 / 0    4.4 / 3.6
-//   0.6 s in, light brake eased                4.4 / 4.2   1.1 / 0.6%   35 / 39   6.3 / 6.2%   258 / 233 kg    0 / 0    4.7 / 4.2
-//   TST following the plates: the collector    4.0 / 4.3   0.6 / 1.8%   32 / 36   5.9 / 5.8%   334 / 366 kg   10 / 11  12.3 / 12.7
-// and, not pinned:
-//   the collector with no kettlebells          -           -            40 / 39   4.0 / 4.0%   446 / 498 kg   18 / 25  14.3 / 15.4
-//   a collector that turns onto the trail
-//   first, on the bar once within 0.5 rad      4.1 / 4.4   1.2 / 0.6%   38 / 39   6.9 / 5.0%   496 / 546 kg   24 / 27  18.0 / 20.1
-// In all 720 runs the opener was the empty bar under three white lights, and the fog judged the bar
-// last, at ×1. Dodging costs little height (TST passes 1,000 m about as often as with no
-// kettlebells at all), and nobody but a collector made the 1,000 lb club on any sky. How a collector
-// boards a trail decides the club: flying the bar into its turn out of the dying lift, as the hint's
-// "follow the plates on the bar" reads, it misses the first plate on half the trails; turning onto
-// the trail first loads half as many plates again and makes the club on two skies in three. The pins
-// hold the first, the collector the plan's balance was measured with (335 / 305 kg there).
+// Measured over 80 skies (seeds 1 to 40, then 1001 to 1040) with the kettlebells and the meet,
+// under SIM_VERSION 1 and then 2: kettlebells thrown a run and the share that hit; runs of 40 past
+// 1,000 m; the share of lifts (the fog's included) with two red lights or more; TOTAL median and
+// runs of 40 in the 1,000 lb club; plates loaded a run:
+//   no kettlebells, light brake eased          1  -           -            37 / 40   6.6 / 5.9%   238 / 219 kg    0 / 0    5.4 / 4.4
+//                                              2  -           -            36 / 39   4.6 / 7.5%   278 / 258 kg    3 / 1    5.7 / 5.0
+//   holding its line, hands up                 1  4.0 / 3.9   78 / 79%     24 / 22    12 / 12%    169 / 155 kg    0 / 0    4.2 / 4.5
+//                                              2  3.3 / 3.0   73 / 79%      9 / 1     12 / 15%    148 / 125 kg    0 / 1    4.0 / 4.4
+//   holding its line, light brake eased        1  3.7 / 4.0   80 / 81%     24 / 23    13 / 16%    154 / 143 kg    0 / 0    4.4 / 3.7
+//                                              2  3.6 / 4.0   79 / 82%     25 / 24    10 / 11%    191 / 175 kg    0 / 0    5.2 / 4.2
+//   changing what it does 0.4 s in, hands up   1  4.3 / 4.1   1.7 / 3.1%   36 / 32   3.8 / 3.4%   219 / 215 kg    0 / 0    4.0 / 4.5
+//                                              2  3.4 / 3.5   0.7 / 1.4%   15 / 18   7.0 / 5.1%   180 / 196 kg    0 / 0    4.1 / 4.8
+//   TST: 0.4 s in, light brake eased           1  4.1 / 4.2   0.0 / 0.6%   36 / 38   7.0 / 5.1%   220 / 194 kg    0 / 0    4.4 / 3.6
+//                                              2  3.8 / 4.2   0.0 / 0.6%   35 / 35   5.0 / 4.7%   238 / 233 kg    1 / 0    4.8 / 4.2
+//   0.6 s in, light brake eased                1  4.4 / 4.2   1.1 / 0.6%   35 / 39   6.3 / 6.2%   258 / 233 kg    0 / 0    4.7 / 4.2
+//                                              2  3.9 / 4.3   0.6 / 1.2%   36 / 35   6.0 / 3.7%   248 / 261 kg    0 / 1    5.5 / 4.6
+//   TST following the plates: the collector    1  4.0 / 4.3   0.6 / 1.8%   32 / 36   5.9 / 5.8%   334 / 366 kg   10 / 11  12.3 / 12.7
+//                                              2  3.7 / 3.9   2.0 / 1.9%   31 / 31   4.9 / 6.2%   358 / 323 kg    6 / 11   8.9 / 10.8
+// and, not pinned (the second pilot's version 1 row is from its pilot rebuilt for version 2, as the
+// one first measured had gone: that one gave 496 / 546 kg and 24 / 27 in the club):
+//   the collector with no kettlebells          1  -           -            40 / 39   4.0 / 4.0%   446 / 498 kg   18 / 25  14.3 / 15.4
+//                                              2  -           -            35 / 37   7.1 / 8.4%   419 / 375 kg   17 / 11  11.3 / 11.3
+//   a collector that turns onto the trail      1  4.0 / 4.3   0.6 / 1.2%   40 / 38   5.1 / 5.9%   496 / 503 kg   27 / 23  17.6 / 19.4
+//   first, on the bar once within 0.5 rad      2  4.2 / 4.1   0.6 / 0.6%   37 / 37   6.8 / 10%    510 / 419 kg   27 / 17  18.8 / 16.9
+// Under version 2 nearly nine reps in ten are to depth, or more, for every one of these pilots: TST
+// turns 3.6 / 3.4 reps a run, 3.2 / 3.0 of them to depth, and the collector 3.7 / 3.5 with 3.4 / 3.2.
+// In all 1,440 runs the opener was the empty bar under three white lights, and the fog judged the
+// bar last, at ×1. Dodging costs little height (TST passes 1,000 m about as often as with no
+// kettlebells at all). Version 2's peaked cores cost the pilots circling hands up half or more of
+// their runs past 1,000 m, as they cost a new player who circles so (CLOUD_HUNT.peak), and its reps
+// to depth now put a pilot who never follows a plate in the 1,000 lb club on up to 3 skies of 40,
+// where under version 1 nobody but a collector made it. How a collector boards a trail decides the club:
+// flying the bar into its turn out of the dying lift, as the hint's "follow the plates on the bar"
+// reads, it misses the first plate on half the trails (three in five under version 2); turning
+// onto the trail first loads half as many plates again or more and makes the club on 17 to 27
+// skies of 40. The pins hold the first, the collector the plan's balance was measured with
+// (335 / 305 kg there).
 //
 // Here TST and the collector fly seeds 1 to 40, as their pins count skies of 40; the pilot holding
 // its line flies 12 and the 0.6 s dodger 16, bells enough for their shares, which keeps this file
@@ -84,8 +99,9 @@ test('a pilot who holds its line is hit by most kettlebells, and one who changes
   const dodger = hit('dodger');
   const slow = hit('slow');
   const collector = hit('collector');
-  // On these seeds: 35 of 43 bells hit the pilot holding its line, none of 162 hit TST, 2 of 69 hit
-  // the 0.6 s dodger and 1 of 161 the collector, whose dodge wins over the plate it is flying at.
+  // On these seeds: 36 of 42 bells hit the pilot holding its line, none of 153 hit TST, none of 66
+  // the 0.6 s dodger and 3 of 149 the collector, whose dodge wins over the plate it is flying at
+  // (under SIM_VERSION 1: 35 of 43, none of 162, 2 of 69 and 1 of 161).
   assert.ok(holding.thrown >= 30 && dodger.thrown >= 120 && slow.thrown >= 50, `${holding.thrown}, ${dodger.thrown} and ${slow.thrown} thrown`);
   assert.ok(holding.share >= 0.6, `${(holding.share * 100).toFixed(1)}% of the bells hit the pilot holding its line`);
   assert.ok(dodger.share <= 0.05, `${(dodger.share * 100).toFixed(1)}% of the bells hit TST`);
@@ -95,14 +111,14 @@ test('a pilot who holds its line is hit by most kettlebells, and one who changes
 
 test('TST, dodging every kettlebell thrown at it, still passes 1,000 m on three skies in four', () => {
   const passed = flown('dodger').filter((run) => run.peak >= 1000).length;
-  // On these seeds 36 of 40 (38 of 1001 to 1040). Should it fail, the first lever is BELLS.every
-  // at [18, 24]: fewer throws, each still as hard to dodge.
+  // On these seeds 35 of 40 (35 of 1001 to 1040; under SIM_VERSION 1, 36 and 38). Should it fail,
+  // the first lever is BELLS.every at [18, 24]: fewer throws, each still as hard to dodge.
   assert.ok(passed >= 30, `${passed} of 40 skies past 1,000 m`);
 });
 
 test('no pilot loses more than one lift in five to two red lights or three', () => {
-  // On these seeds: 7 of 58 lifts holding its line, 15 of 214 for TST, 4 of 91 at 0.6 s and 13 of
-  // 222 for the collector.
+  // On these seeds: 7 of 57 lifts holding its line, 11 of 222 for TST, 4 of 90 at 0.6 s and 10 of
+  // 206 for the collector (under SIM_VERSION 1: 7 of 58, 15 of 214, 4 of 91 and 13 of 222).
   for (const name of Object.keys(PILOTS)) {
     const lifts = flown(name).flatMap((run) => run.lifts);
     const dropped = lifts.filter(twoRed).length;
@@ -116,10 +132,17 @@ test('following the plates banks at least a quarter more than dodging alone, and
   const dodger = median(totals('dodger'));
   const club = totals('collector').filter((total) => total >= CLUB).length;
   const plates = (name) => sum(flown(name).map((run) => run.plates));
-  // On these seeds: medians of 333.75 kg and 220 kg (1.52 times), from 12.3 plates loaded a run
-  // against 4.4, and 10 of 40 skies in the club (none for TST).
+  // On these seeds: medians of 357.5 kg and 237.5 kg (1.51 times), from 8.9 plates loaded a run
+  // against 4.8, and 6 of 40 skies in the club (1 for TST). Under SIM_VERSION 1: 333.75 and 220 kg
+  // (1.52 times), 12.3 plates against 4.4, and 10 of 40 (none for TST).
   assert.ok(collector >= 1.25 * dodger, `the collector's median ${collector} kg against TST's ${dodger} kg`);
-  assert.ok(plates('collector') >= 2 * plates('dodger'), `${plates('collector')} plates collecting, ${plates('dodger')} not`);
+  // Following the plates loads nearly twice what TST flies through by chance: 357 against 193 here
+  // (1.85 times; 2.78 under version 1, when this pin was twice). Circling tighter round a peaked
+  // core, the collector now loads 2.1 plates a trail against 2.6 (the first of them on two trails
+  // in five, against half), and TST, circling tighter too, flies through a few more on its way.
+  // Nudging TST's aim by a millimetre or the core's peak by a thousandth moves this between 1.79
+  // and 2.13 times on these skies (2.19 over all 80), so the pin sits under that spread.
+  assert.ok(plates('collector') >= 1.6 * plates('dodger'), `${plates('collector')} plates collecting, ${plates('dodger')} not`);
   assert.ok(club >= 2 && club <= 15, `${club} of 40 skies in the 1,000 lb club`);
 });
 
@@ -208,6 +231,7 @@ test('a collector flies at the next plate still ahead on a laid trail, on the ba
     }
     loaded += world.meet.state.plates;
   }
-  // On these seeds: 110 s following trails, and 38 plates loaded in 3 runs.
+  // On these seeds: 136 s following trails, and 32 plates loaded in 3 runs (110 s and 38 plates
+  // under SIM_VERSION 1).
   assert.ok(following >= 50 * 60 && loaded >= 20, `${(following / 60).toFixed(1)} s following, ${loaded} plates loaded`);
 });

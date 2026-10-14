@@ -15,13 +15,15 @@ import { BELLS, BELL_PHASE, BELL_RESULT, createBells } from './bells.js';
 import { createMeetView } from './meet-view.js';
 import { resolveSky, seedFor, skyId } from './daily.js';
 import { featsFor } from './meet-card.js';
-import { dailyNumber, dayOf, gameHref } from './good-lift-address.js';
+import { DAY_MS, dailyNumber, dayOf, gameHref } from './good-lift-address.js';
 import { readStore, recordRun, setInitials as nameRuns, updateStore } from './good-lift-store.js';
 import { addRow, boardKey, rowsFor } from './board.js';
 import { SIM_VERSION } from './sim-version.js';
 import { createRecorder, decodeLog, encodeLog, inputBits } from './recorder.js';
 import { replayLog } from './replay.js';
 import { summariseRun } from './meet-sheet.js';
+import { createMusic } from './music.js';
+import { createSurge } from './run-surge.js';
 import './good-lift.css';
 
 // The meet sheet comes with the game, never with the page: the page draws it through the engine.
@@ -55,7 +57,18 @@ const metres = (value) => Math.round(value).toLocaleString('en-GB');
 const BAR_ROW = /* html */ '<dt class="fj-run">bar</dt><dd class="fj-run" data-hud="bar"></dd>';
 const MARKUP = /* html */ `
   <div class="fj-horn" aria-hidden="true"></div>
-  <div class="fj-chevron" aria-hidden="true" hidden></div>`;
+  <div class="fj-chevron" aria-hidden="true" hidden></div>
+  <div class="fj-title" aria-hidden="true" hidden>
+    <small></small>
+    <b data-text="GOOD LIFT">GOOD LIFT</b>
+    <div class="fj-barbell"><i></i><i></i><em></em><i></i><i></i></div>
+    <span></span>
+  </div>`;
+// The music's switch, beside the sounds' in the readouts and in the menu, shown only in the game.
+const MUSIC_BUTTON = /* html */ '<button data-do="music" hidden>[ music: on ]</button>';
+// Seconds the title card stays up as a run starts: the first of a visit in full, and shorter on
+// every run after it, which gets no typed line.
+const TITLE = Object.freeze({ full: 3.6, short: 2.2 });
 // The lights head the column the notifications stack in, which the engine keeps clear of the
 // readouts, so a milestone reached on a line never covers them.
 // The call is also said, in a status line that is always there (a live region that appears with
@@ -85,6 +98,8 @@ const LIGHTS = /* html */ `
  *   flash()                 the strike's flash over the picture
  *   sound                   { play, panned, audio }: the engine's one-off sounds and mixer
  *   touch, calm, bright()   a touch screen; reduced motion; whether the glow has been dropped
+ *   base                    where the site is served from, for the music's files
+ *   onMusic(on)             the music has been switched on or off, for the meet sheet's switch
  */
 export function createGoodLift(host) {
   const { g, controls, air, scene, camera, effects, stage } = host;
@@ -94,6 +109,8 @@ export function createGoodLift(host) {
   const meet = createMeet();
   const bells = createBells();
   const world = createRunWorld({ sky, g, controls, air, bells, meet });
+  // Feeling for the core: the lift surging as a circle closes on it (run-surge.js).
+  const surge = createSurge();
   const view = createCloudbase({ scene, loadModel: host.loadModel });
   const meetView = createMeetView({ scene, loadModel: host.loadModel });
   // The run's own streaks, with its gust fronts, drawn after its fog.
@@ -108,12 +125,13 @@ export function createGoodLift(host) {
   let lastRun = null;
   // What the hints and sounds have answered so far this run: strikes, and whether the last was a
   // kettlebell's; seconds turning against a flock and without lift; the hunted thermals ridden and
-  // the one being ridden now; the meet's and the bells' counts; when the last close call came, and
-  // the horn; and the pickups rung in a row and when the last of them was.
+  // the one being ridden now; the meet's and the bells' counts; when the last close call came, the
+  // horn and the run's first rep to depth, and whether this thermal's last rep missed its core; and
+  // the pickups rung in a row and when the last of them was.
   const seen = {
     strikes: 0, bellHit: false, against: 0, searching: 0, rides: 0, riding: 0,
-    thrown: 0, hits: 0, close: 0, count: 0, plates: 0, reps: 0, trails: 0, horn: false,
-    closeAt: -Infinity, hornAt: -Infinity, chain: 0, chainAt: -Infinity,
+    thrown: 0, hits: 0, close: 0, count: 0, plates: 0, reps: 0, deep: 0, trails: 0, horn: false, shallow: false,
+    closeAt: -Infinity, hornAt: -Infinity, deepAt: -Infinity, chain: 0, chainAt: -Infinity,
   };
   const held = { line: '', since: 0 };
   const moment = {};
@@ -121,37 +139,56 @@ export function createGoodLift(host) {
   // whether the glider is outside the sky.
   const last = { collapsed: false, outside: false };
 
+  // The game's music, only beyond the arch: it starts as a run does, plays on between runs, and
+  // stops as the pilot leaves for the fjord or the page (leave()). Its switch is its own (music.js).
+  const music = createMusic({ base: host.base ?? '/' });
+
   // The run's own readouts, made once and taken away by dispose().
   const rows = stage.querySelector('.fj-hud dl');
   rows.insertAdjacentHTML('beforeend', BAR_ROW);
   stage.querySelector('.fj-toasts').insertAdjacentHTML('beforebegin', MARKUP);
   stage.querySelector('.fj-toasts').insertAdjacentHTML('afterbegin', LIGHTS);
   const barCell = host.hud('bar');
+  const varioCell = host.hud('vario');
   const hornEl = stage.querySelector('.fj-horn');
   const lightsEl = stage.querySelector('.fj-lights');
   const lightEls = lightsEl.querySelectorAll('i');
   const callEl = lightsEl.querySelector('b');
   const detailEl = lightsEl.querySelector('small');
   const saidEl = stage.querySelector('.fj-said');
+  const titleEl = stage.querySelector('.fj-title');
+  const [titleSmall, titleBig, , titleLine] = titleEl.children;
   const chevronEl = stage.querySelector('.fj-chevron');
-  const ownEls = [...rows.querySelectorAll('.fj-run'), hornEl, lightsEl, saidEl, chevronEl];
+  for (const sound of stage.querySelectorAll('.fj-hud nav > [data-do="sound"], .fj-keys-more > [data-do="sound"]')) sound.insertAdjacentHTML('afterend', MUSIC_BUTTON);
+  const musicButtons = [...stage.querySelectorAll('[data-do="music"]')];
+  for (const button of musicButtons) button.addEventListener('click', () => toggleMusic());
+  const ownEls = [...rows.querySelectorAll('.fj-run'), hornEl, lightsEl, saidEl, chevronEl, titleEl, ...musicButtons];
   let lightsTimer = 0;
   let saidTimer = 0;
+  let titleTimer = 0;
+  // Whether this visit has had its full title card yet.
+  let titled = false;
   // When the run began, by the clock: the board ranks a tie by the earlier run.
   let startedAt = 0;
   const aimed = new Vector3();
   const chevron = { shown: false, x: NaN, y: NaN, turn: NaN };
 
-  /** Starts a run on the sky laid out from `seed`, settled at the gate, as every run starts. */
-  function begin(seed) {
+  /**
+   * Starts a run on the sky laid out from `seed`, settled at the gate, as every run starts. `sky`
+   * is what that sky is ({ kind, day, target }, daily.js), for the title card.
+   */
+  function begin(seed, sky = null) {
     startRun(world, seed);
     recorder.reset();
     whole = true;
     startedAt = Date.now();
     seen.strikes = seen.against = seen.searching = seen.rides = seen.riding = 0;
-    seen.thrown = seen.hits = seen.close = seen.count = seen.plates = seen.reps = seen.trails = seen.chain = 0;
-    seen.bellHit = seen.horn = false;
-    seen.closeAt = seen.hornAt = seen.chainAt = -Infinity;
+    seen.thrown = seen.hits = seen.close = seen.count = seen.plates = seen.reps = seen.deep = seen.trails = seen.chain = 0;
+    seen.bellHit = seen.horn = seen.shallow = false;
+    seen.closeAt = seen.hornAt = seen.deepAt = seen.chainAt = -Infinity;
+    surge.reset();
+    varioCell.classList.remove('surge');
+    barCell.classList.remove('depth');
     held.line = '';
     held.since = 0;
     last.collapsed = last.outside = false;
@@ -160,6 +197,69 @@ export function createGoodLift(host) {
     hideLights();
     hornEl.classList.remove('on');
     showChevron(false);
+    showTitle(seed, sky);
+    // The music joins the engine's sound (made by now, a click having asked for it) and plays on
+    // from run to run. On a phone the game keeps to its ambient sound, which the silent switch
+    // silences: a media element playing would otherwise take every sound of the game past it
+    // (Safari; one too old for navigator.audioSession still does). A page already out of sight, as
+    // the game can finish loading after a tab switch, waits for the visitor to come back.
+    if (navigator.audioSession) navigator.audioSession.type = 'ambient';
+    music.attach(sound.audio?.ctx);
+    music.hide(document.hidden);
+    music.start();
+    labelMusic(true);
+  }
+
+  /** The pilot has left Good Lift, for the fjord or the page: its music stops (`now`, at once). */
+  function leave(now = false) {
+    music.stop(now);
+    labelMusic(false);
+  }
+
+  // The music's switch: shown only in the game, and saying whether the music is on.
+  function labelMusic(shown) {
+    for (const button of musicButtons) {
+      button.hidden = !shown;
+      button.textContent = `[ music: ${music.on ? 'on' : 'off'} ]`;
+    }
+  }
+
+  /** The music's switch, from the readouts, the menu, B or the meet sheet: whether it is now on. */
+  function toggleMusic() {
+    music.toggle();
+    labelMusic(true);
+    host.onMusic?.(music.on);
+    return music.on;
+  }
+
+  // The card a run opens with: which sky it is, GOOD LIFT slammed in over a barbell, and (the first
+  // time a visit) a typed line saying what to lift, or who there is to beat.
+  function showTitle(seed, sky) {
+    clearTimeout(titleTimer);
+    const full = !titled;
+    titled = true;
+    const label = sky?.kind === 'daily'
+      ? `Daily #${dailyNumber(sky.day)} · ${new Date(sky.day * DAY_MS).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}`
+      : `${sky?.kind === 'practice' ? 'practice · ' : ''}sky ${skyId(seed)}`;
+    const rival = sky?.target && !sky.target.error ? sky.target : null;
+    const line = rival
+      ? `to beat: ${rival.who || 'a pilot'} · ${kg(rival.total)} kg · ${metres(rival.peak)} m`
+      : 'opener at 250 m · three white lights';
+    titleSmall.textContent = label;
+    titleLine.textContent = full ? line : '';
+    titleLine.style.setProperty('--chars', line.length);
+    titleEl.className = `fj-title ${full ? 'full' : 'short'}`;
+    titleEl.hidden = false;
+    // Reading the layout lets the card start over when a run follows straight on from another.
+    void titleEl.offsetWidth;
+    titleEl.classList.add('on');
+    titleTimer = setTimeout(() => {
+      titleEl.hidden = true;
+      titleEl.classList.remove('on');
+    }, (full ? TITLE.full : TITLE.short) * 1000);
+    clearTimeout(saidTimer);
+    saidEl.textContent = '';
+    saidTimer = setTimeout(() => (saidEl.textContent = `Good Lift. ${label}.${full ? ` ${rival ? line : 'The opener is at 250 metres.'}` : ''}`), 120);
   }
 
   /** One fixed step with the keys as `input`. Returns 'fog' or 'landed' if the run ended. */
@@ -198,10 +298,19 @@ export function createGoodLift(host) {
     const flock = pilot.thermal > 0 ? sky.state.thermals[pilot.thermal] : null;
     seen.against = flock && Math.abs(g.yawRate) > 0.2 && Math.sign(g.yawRate) !== flock.dir ? seen.against + dt : 0;
     // A thermal that has moved is a new one to ride; coming back to the same one is not.
-    const riding = flock ? pilot.thermal * 1000 + Math.round(flock.x) : seen.riding;
+    const riding = flock ? pilot.thermal * 1e6 + Math.round(flock.x) * 1e3 + Math.round(flock.z) : seen.riding;
     if (riding !== seen.riding) {
       seen.riding = riding;
       seen.rides += 1;
+      seen.shallow = false;
+      surge.reset();
+    }
+    // The lift surging as a circle closes on the core is heard from the core's side, and flares
+    // the vario for whoever has the sound off: the beat to straighten on.
+    const flying = !!flock && pilot.collapse === 0 && g.stall === 0 && pilot.cloud === 0;
+    if (surge.step(dt, g.lift, flock ? flock.strength : 1, g.yawRate, flying)) {
+      sound.play('surge', 0.8, swell, clamp(g.liftSide * 2, -0.7, 0.7));
+      flare(varioCell, 'surge');
     }
     awardMilestones(sky.state.peak);
     return ended;
@@ -216,7 +325,16 @@ export function createGoodLift(host) {
     }
     if (state.reps > seen.reps) {
       seen.reps = state.reps;
-      pickup(elapsed, 0.45);
+      // A rep to depth (its circle centred on the core) rings twice and stamps the bar. One off the
+      // core is a plain rep, and the hints say how to centre the next.
+      const deep = state.deep > seen.deep;
+      seen.shallow = !deep;
+      if (deep) {
+        if (seen.deep === 0) seen.deepAt = elapsed;
+        seen.deep = state.deep;
+        flare(barCell, 'depth');
+      }
+      pickup(elapsed, deep ? 0.7 : 0.45, deep ? twice : ting);
     }
     if (state.trails > seen.trails) {
       seen.trails = state.trails;
@@ -241,10 +359,18 @@ export function createGoodLift(host) {
   }
 
   // A plate (or a circle) onto the bar: a ting that climbs the scale while pickups come thick.
-  function pickup(elapsed, level) {
+  function pickup(elapsed, level, voice = ting) {
     seen.chain = elapsed - seen.chainAt < CHAIN ? Math.min(seen.chain + 1, 9) : 0;
     seen.chainAt = elapsed;
-    sound.play('ting', 0.05, ting, seen.chain, 0.09 * level);
+    sound.play('ting', 0.05, voice, seen.chain, 0.09 * level);
+  }
+
+  // Starts a readout's flare over, even while the last is still showing. It plays out by itself,
+  // and ends looking as the readout always does, so the class can stay.
+  function flare(cell, name) {
+    cell.classList.remove(name);
+    void cell.offsetWidth;
+    cell.classList.add(name);
   }
 
   function awardMilestones(peak) {
@@ -402,6 +528,8 @@ export function createGoodLift(host) {
     moment.closeCall = elapsed - seen.closeAt;
     moment.horn = elapsed - seen.hornAt;
     moment.trail = lift.trail.live && lift.trail.boarded < 0;
+    moment.shallow = seen.shallow;
+    moment.depth = elapsed - seen.deepAt;
     return holdHint(held, cloudbaseHint(moment), elapsed);
   }
 
@@ -482,6 +610,8 @@ export function createGoodLift(host) {
     result.feats = { earned: stored.feats, fresh: outcome.feats, streak };
     result.board = kind === 'daily' ? { rows: rowsFor(stored.board, boardKey(SIM_VERSION, result.day)), mine: result.log } : null;
     result.initials = stored.initials;
+    // The sheet covers the readouts' switch (on a phone, the menu too), so it has its own.
+    result.music = music.on;
     view.reset();
     meetView.reset();
     streaks.update(0, g.pos, camera.position, sky.windAt, 0, 0, null, false);
@@ -490,6 +620,9 @@ export function createGoodLift(host) {
     hideLights();
     hornEl.classList.remove('on');
     showChevron(false);
+    clearTimeout(titleTimer);
+    titleEl.hidden = true;
+    titleEl.classList.remove('on');
     return result;
   }
 
@@ -542,11 +675,14 @@ export function createGoodLift(host) {
   }
 
   function dispose() {
+    music.dispose();
     view.dispose();
     meetView.dispose();
     streaks.dispose();
     clearTimeout(lightsTimer);
     clearTimeout(saidTimer);
+    clearTimeout(titleTimer);
+    varioCell.classList.remove('surge');
     for (const el of ownEls) el.remove();
   }
 
@@ -689,9 +825,46 @@ export function createGoodLift(host) {
     }
   }
 
+  // A rep to depth: the ting, and another a step higher straight after it.
+  function twice(ctx, at, step, level) {
+    ting(ctx, at, step, level);
+    ting(ctx, at + 0.09, step + 2, level * 0.8);
+  }
+
   // A trail laid: three quick tings up the scale, to say there are plates to fetch.
   function sparkle(ctx, at) {
     for (let i = 0; i < 3; i++) ting(ctx, at + i * 0.07, 5 + i * 2, 0.05);
+  }
+
+  // The lift surging under the wing: a soft swell of air with a low note rising in it, from the
+  // side the core is on.
+  function swell(ctx, at, pan) {
+    const out = panned(ctx, pan);
+    const air = ctx.createBufferSource();
+    air.buffer = sound.audio.noise;
+    air.loop = true;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = 0.9;
+    band.frequency.setValueAtTime(260, at);
+    band.frequency.exponentialRampToValueAtTime(760, at + 0.4);
+    const shape = ctx.createGain();
+    shape.gain.setValueAtTime(0, at);
+    shape.gain.linearRampToValueAtTime(0.07, at + 0.14);
+    shape.gain.setTargetAtTime(0, at + 0.2, 0.12);
+    air.connect(band).connect(shape).connect(out);
+    air.start(at, Math.random());
+    air.stop(at + 0.9);
+    const note = ctx.createOscillator();
+    note.frequency.setValueAtTime(150, at);
+    note.frequency.exponentialRampToValueAtTime(240, at + 0.32);
+    const hum = ctx.createGain();
+    hum.gain.setValueAtTime(0, at);
+    hum.gain.linearRampToValueAtTime(0.05, at + 0.1);
+    hum.gain.exponentialRampToValueAtTime(0.001, at + 0.45);
+    note.connect(hum).connect(out);
+    note.start(at);
+    note.stop(at + 0.47);
   }
 
   // Hrungnir throwing: a giant's grunt, lower for a heavier bell, and a breath with it.
@@ -877,7 +1050,12 @@ export function createGoodLift(host) {
   }
 
   return {
-    begin, step, want, draw, sounds, hud, finish, dispose, last, setInitials,
+    begin, step, want, draw, sounds, hud, finish, dispose, last, setInitials, leave, toggleMusic,
+    /** A touch or a key: a play of the music the browser refused is tried again. */
+    nudgeMusic: () => music.nudge(),
+    /** The page went out of sight, or came back: the music waits for it. */
+    hideMusic: (hidden) => music.hide(hidden),
+    get musicState() { return { on: music.on, playing: music.playing, track: music.track, blocked: music.blocked }; },
     MeetSheet: GoodLiftResult,
     /** The sky an address asks for: { kind, seed, day }, and a challenge's `target`. */
     resolveSky: skyFor,
@@ -887,6 +1065,7 @@ export function createGoodLift(host) {
     get sky() { return sky; },
     get meet() { return meet; },
     get bells() { return bells; },
+    get surge() { return surge; },
     get view() { return view; },
     get meetView() { return meetView; },
     get streaks() { return streaks; },

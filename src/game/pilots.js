@@ -33,8 +33,13 @@ export const TST = Object.freeze({ withFlock: true, brake: 'eased', react: 0.4 }
  * it always has.
  */
 export function createReferencePilot({ withFlock = true, brake = 'none', react = null, collect = false } = {}) {
-  // A light-braked wing turns inside 9 m; hands up it needs 14.
-  const radius = brake === 'none' ? 14 : 9;
+  // The circle it aims for round the middle of the lift: 11 m hands up and 6 m on any brake, inside
+  // the 14.4 m and 8.2 m the wing turns at full rate, so that it circles as tight as it can. Aimed
+  // at 14 m and 9 m, on the light brake it settled 12 to 15 m out, which cost nothing while a
+  // hunted core stood flat out to 17 m. Now that one peaks at its middle (CLOUD_HUNT.peak), a circle
+  // out there gets a fifth less lift than one round the middle; aimed tighter, half its circling is
+  // within 13 m of it.
+  const radius = brake === 'none' ? 11 : 6;
   let deepFor = 0;
   let tap = 0;
   // Which way it turns off a kettlebell's line: picked once for each warning, when it reacts, and

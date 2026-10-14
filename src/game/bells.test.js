@@ -174,21 +174,43 @@ test('nothing is thrown before the pilot first reaches 550 m, and the first kett
 
 test('kettlebells come every 16 to 22 s, and every 10 to 14 s once the pilot has passed 1,000 m', () => {
   // On calm skies nothing holds a throw back but the shield after a hit, which is over before the
-  // next is due: a throw, its hit 2.2 s later, 8 s of shield and 2 quiet make 12.2 s.
+  // next is due (a throw, its hit 2.2 s later, 8 s of shield and 2 quiet make 12.2 s), and the rim:
+  // a glide between lifts can pass close to it, and a throw due then comes once the pilot has been
+  // clear of it for the quiet. Flown on the light brake eased, which passes 1,000 m on calm skies as
+  // hands up did before the cores peaked (SIM_VERSION 2); hands up, no throw here now comes that high.
   const gaps = { every: [], oftener: [] };
+  const reach = CLOUD_ZONE.r - BELLS.edge;
+  let held = 0;
   for (const seed of firstSkies(10)) {
-    const { throws } = flyThrows(runWorld(seed, { hazards: false, wind: false }), createReferencePilot());
+    // When the rim last held the giant's hand, the pilot by it or an aim by it refused, as each
+    // throw was made.
+    let rim = -Infinity;
+    const rims = [];
+    const each = (w) => {
+      const { pos } = w.g;
+      if ((pos.x - CLOUD_ZONE.x) ** 2 + (pos.z - CLOUD_ZONE.z) ** 2 > reach * reach || w.bells.state.retry > w.sky.state.elapsed) rim = w.sky.state.elapsed;
+      if (w.bells.state.thrown > rims.length) rims.push(rim);
+    };
+    const { throws } = flyThrows(runWorld(seed, { hazards: false, wind: false }), createReferencePilot({ brake: 'eased' }), { each });
     for (let i = 1; i < throws.length; i++) {
       const high = throws[i - 1].peak >= BELLS.often;
       const [least, most] = high ? BELLS.oftener : BELLS.every;
       const gap = throws[i].at - throws[i - 1].at;
-      assert.ok(gap >= least - 1e-9 && gap <= most + STEP + 1e-9, `seed ${seed}: ${gap.toFixed(2)} s between throws ${i} and ${i + 1}`);
+      assert.ok(gap >= least - 1e-9, `seed ${seed}: ${gap.toFixed(2)} s between throws ${i} and ${i + 1}`);
+      if (gap > most + STEP + 1e-9) {
+        // Later than its range only when the rim held it, and then the moment the quiet was up.
+        assert.ok(throws[i].at <= rims[i] + BELLS.quiet + 2 * STEP, `seed ${seed}: ${gap.toFixed(2)} s between throws ${i} and ${i + 1}`);
+        held += 1;
+      }
       // The next is due a drawn gap after each throw, in the range for how high the pilot has been.
       const drawn = throws[i - 1].due - throws[i - 1].at;
       assert.ok(drawn >= least && drawn <= most);
       gaps[high ? 'oftener' : 'every'].push(gap);
     }
   }
+  // On these skies: 35 gaps low down and 14 high, one of them held 0.45 s past its range by the rim
+  // (on seed 6). Under SIM_VERSION 1, hands up, 43 and 5, and none held.
+  assert.ok(held <= 2, `${held} throws held past their range by the rim`);
   assert.ok(gaps.every.length >= 10 && gaps.oftener.length >= 5, `${gaps.every.length} gaps low down, ${gaps.oftener.length} high`);
   assert.ok(Math.max(...gaps.every) - Math.min(...gaps.every) > 3, 'the gaps are drawn, not fixed');
 });
@@ -606,7 +628,9 @@ test('every number the kettlebells keep stays finite, every bell comes out as ne
     for (const [key, value] of numbers(state)) assert.ok(Number.isFinite(value), `${key} is ${value}`);
   };
   let settled = 0;
-  for (const seed of firstSkies(8)) {
+  // Ten skies, for 60 bells or more to look at: under SIM_VERSION 2 the dodger, circling hands up,
+  // climbs less and is thrown fewer, and eight skies settled 51.
+  for (const seed of firstSkies(10)) {
     for (const pilot of [createReferencePilot({ brake: 'eased' }), dodger(0.4)]) {
       const world = runWorld(seed, { bells });
       finite(bells.state);
@@ -643,9 +667,10 @@ test('every number the kettlebells keep stays finite, every bell comes out as ne
 });
 
 test('once the fog has ended a run nothing more is thrown, and the kettlebells stay as the run left them', () => {
-  const world = runWorld(2);
+  const world = runWorld(6);
   assert.equal(fly(world, createReferencePilot()), 'fog');
   const left = structuredClone(world.bells.state);
+  // Four thrown on this sky.
   assert.ok(left.thrown >= 3);
   // Stepped on regardless for longer than any gap between throws: the finished sky's step says
   // nothing has ended, so the kettlebells are stepped, and must do nothing.
@@ -659,8 +684,10 @@ test('the same seed throws the same kettlebells, a used set throws them as a new
     fly(world, createReferencePilot({ brake: 'eased' }));
     return world;
   };
-  const first = flown(4);
-  const again = flown(4);
+  // Seed 6, which throws five at the light brake: under SIM_VERSION 2 seed 4, flown here before,
+  // throws it only one.
+  const first = flown(6);
+  const again = flown(6);
   assert.ok(first.bells.state.thrown >= 3);
   assert.deepEqual(again.bells.state, first.bells.state);
   assert.deepEqual(again.sky.state, first.sky.state);
@@ -668,7 +695,7 @@ test('the same seed throws the same kettlebells, a used set throws them as a new
   const used = createBells();
   flown(9, used);
   assert.ok(used.state.hits > 0);
-  assert.deepEqual(flown(4, used).bells.state, first.bells.state);
+  assert.deepEqual(flown(6, used).bells.state, first.bells.state);
   assert.notDeepEqual(flown(5).bells.state, first.bells.state);
 });
 
@@ -694,17 +721,25 @@ test('what each kettlebell is comes from the seed and its number alone, however 
   }
 });
 
-// Measured with these rules over seeds 1-40 and 1001-1040: kettlebells thrown a run, the share
-// that hit, and runs of 40 that passed 1,000 m.
-//   no kettlebells                                  -            -            39 / 36
-//   holding its line, hands up                      4.0 / 3.9    78 / 79%     24 / 22
-//   holding its line, light brake eased             3.7 / 4.0    80 / 81%     24 / 23
-//   changing what it does 0.4 s in, hands up        4.3 / 4.1    0.6 / 3.1%   34 / 31
-//   changing what it does 0.4 s in, brake eased     4.1 / 4.3    0.6 / 0.6%   31 / 38
-//   changing what it does 0.6 s in, brake eased     4.2 / 4.3    1.8 / 0.6%   33 / 38
+// Measured over seeds 1-40 and 1001-1040 under SIM_VERSION 1, then 2: kettlebells thrown a run,
+// the share that hit, and runs of 40 that passed 1,000 m.
+//   no kettlebells                              1   -            -            39 / 36
+//                                               2   -            -            26 / 30
+//   holding its line, hands up                  1   4.0 / 3.9    78 / 79%     24 / 22
+//                                               2   3.3 / 3.0    73 / 79%      9 / 1
+//   holding its line, light brake eased         1   3.7 / 4.0    80 / 81%     24 / 23
+//                                               2   3.6 / 4.0    79 / 82%     25 / 24
+//   changing what it does 0.4 s in, hands up    1   4.3 / 4.1    0.6 / 3.1%   34 / 31
+//                                               2   3.5 / 3.5    0.7 / 0.7%   15 / 17
+//   changing what it does 0.4 s in, brake eased 1   4.1 / 4.3    0.6 / 0.6%   31 / 38
+//                                               2   3.9 / 4.1    0.0 / 1.2%   35 / 34
+//   changing what it does 0.6 s in, brake eased 1   4.2 / 4.3    1.8 / 0.6%   33 / 38
+//                                               2   3.7 / 4.0    3.4 / 0.6%   34 / 34
 // The first comes a median 6 to 14 s after the pilot reaches 550 m and the rest about every 21 s;
-// 54 to 73% are thrown at a circling pilot, aimed a median 27 to 42 degrees off its nose. The pins
-// in good-lift.test.js hold the balance; this only holds the promise that dodging works.
+// 54 to 73% are thrown at a circling pilot, aimed a median 27 to 42 degrees off its nose (under
+// version 2: 10 to 14 s, about every 22 s, 53 to 66% and 31 to 46 degrees). Hands up, the peaked
+// cores of version 2 keep a pilot lower, and a lower pilot is thrown fewer. The pins in
+// good-lift.test.js hold the balance; this only holds the promise that dodging works.
 test('a pilot who holds its line is hit by most kettlebells, and one who changes what it is doing 0.4 s into the warning hardly ever is', () => {
   const share = (pilot) => {
     let thrown = 0;

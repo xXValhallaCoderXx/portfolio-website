@@ -6,4 +6,6 @@
 // without loading the game.
 //
 // 1: Good Lift as it first shipped (the tables sim-version.test.js fingerprints as 145b525a).
-export const SIM_VERSION = 1;
+// 2: hunted thermals peak at their middle, and a rep centred on the core is a rep to depth and
+//    loads 5 kg (CLOUD_HUNT.core and .peak, MEET.depth and .deep).
+export const SIM_VERSION = 2;

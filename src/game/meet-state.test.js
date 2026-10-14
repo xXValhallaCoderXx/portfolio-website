@@ -333,6 +333,108 @@ test('drifting the other way slower than 0.2 rad/s keeps the circle in progress,
   assert.deepEqual([state.reps, state.bar], [1, MEET.rep]);
 });
 
+// The meet alone, with the glider put by hand on a light-brake circle (8.2 m round at 1.05 rad/s)
+// and the wing turning the flock's way: `turn(slot, radians, off)` turns it that far in thermal
+// `slot`, round a point `off` metres east of the thermal's middle, and `once(poke)` steps the meet
+// once with whatever `poke` does to the wing or the sky. `round` is a whole circle and a sliver,
+// which makes one rep from a circle begun afresh.
+function circling() {
+  const run = standing();
+  const { meet, world, sky, pilot } = run;
+  const rate = FLIGHT.turn.light;
+  const radius = FLIGHT.speed.light / FLIGHT.turn.light;
+  let angle = 0;
+  run.round = TAU + 0.05;
+  run.turn = (slot, radians, off = 0) => {
+    const thermal = sky.thermals[slot];
+    pilot.thermal = slot;
+    world.g.yawRate = rate * thermal.dir;
+    for (let i = 0; i < Math.round(radians / (rate * STEP)); i++) {
+      angle += rate * STEP;
+      Object.assign(world.g.pos, { x: thermal.x + off + Math.sin(angle) * radius, z: thermal.z - Math.cos(angle) * radius });
+      meet.step(STEP, world);
+    }
+  };
+  run.once = (poke) => {
+    poke(run);
+    meet.step(STEP, world);
+  };
+  assert.ok(sky.thermals[1].strength >= MEET.alive && sky.thermals[2].strength >= MEET.alive);
+  return run;
+}
+
+test('a rep whose circle was centred within 7 m of the core is a rep to depth and loads 5 kg, and one centred further off loads 2.5 kg', () => {
+  // Where a circle went is judged by its mean position over the turn it took: round the middle, or
+  // round a point 6.5 m off it either side, it is to depth; round a point 7.5 m off, or 20 m off,
+  // it is not, though every one of these circles passes within 12 m of the middle at its nearest.
+  for (const [off, deep] of [[0, true], [6.5, true], [-6.5, true], [7.5, false], [20, false]]) {
+    const { state, turn, round } = circling();
+    turn(2, round, off);
+    assert.deepEqual([state.reps, state.deep, state.bar], [1, deep ? 1 : 0, deep ? MEET.deep : MEET.rep], `${off} m off`);
+    // Each rep's lap starts afresh: what is left of it is the sliver turned since.
+    assert.ok(state.lap.n > 0 && state.lap.n < 5, `${state.lap.n} steps into the next lap`);
+  }
+  assert.deepEqual([MEET.depth, MEET.deep, MEET.rep], [7, 5, 2.5]);
+  // Reps to depth and the rest add up on the bar, and the reps count both.
+  const { state, turn, round } = circling();
+  turn(2, round, 0);
+  turn(2, TAU, 15);
+  turn(2, TAU, 0);
+  assert.deepEqual([state.reps, state.deep, state.bar], [3, 2, 2 * MEET.deep + MEET.rep]);
+});
+
+test('the lap a rep is judged by starts again wherever the circle does: on a new ride, a collapse, a stall, a turn back and each rep, and nowhere else', () => {
+  // Half a circle 30 m off the middle, then whatever is being tried, then a whole circle round the
+  // middle: to depth only if the half circle off it was forgotten with the circle it began.
+  const after = (between) => {
+    const run = circling();
+    run.turn(2, Math.PI, 30);
+    between(run);
+    run.turn(2, run.round, 0);
+    return run.state;
+  };
+  const forgotten = {
+    'a new ride': (run) => run.turn(1, Math.PI, 30),
+    'a collapse': (run) => {
+      run.once(({ pilot }) => { pilot.collapse = 1; });
+      run.pilot.collapse = 0;
+    },
+    'a stall': (run) => {
+      run.once(({ world }) => { world.g.stall = 1; });
+      run.world.g.stall = 0;
+    },
+    'a turn back': (run) => run.once(({ world, sky }) => { world.g.yawRate = -(MEET.against + 0.01) * sky.thermals[2].dir; }),
+    'a rep': (run) => run.turn(2, Math.PI + 0.05, 30),
+  };
+  for (const [what, between] of Object.entries(forgotten)) {
+    const state = after(between);
+    const reps = what === 'a rep' ? 2 : 1;
+    assert.deepEqual([state.reps, state.deep], [reps, 1], what);
+  }
+  // Out of the lift a while, or drifting back slower than `against`, the circle waits and so does
+  // its lap: the half circle off the middle still counts, and the rep is not to depth.
+  const kept = {
+    'out of the lift': (run) => {
+      run.pilot.thermal = -1;
+      for (let i = 0; i < 60; i++) run.meet.step(STEP, run.world);
+    },
+    'a slow drift back': (run) => {
+      for (let i = 0; i < 60; i++) run.once(({ world, sky }) => { world.g.yawRate = -0.1 * sky.thermals[2].dir; });
+    },
+    'a lift too weak to count': (run) => {
+      const { thermals } = run.sky;
+      const was = thermals[2].strength;
+      thermals[2].strength = MEET.alive - 0.01;
+      run.turn(2, Math.PI);
+      thermals[2].strength = was;
+    },
+  };
+  for (const [what, between] of Object.entries(kept)) {
+    const state = after(between);
+    assert.deepEqual([state.reps, state.deep, state.bar], [1, 0, MEET.rep], what);
+  }
+});
+
 test('a trail is laid when the lift ridden drops under 0.35 or moves on, toward a settled flock before one still flying in, and only once', () => {
   // The sky of seed 1 arranged by hand, with only the meet stepped: `ride(slot)` is a step in that
   // lift (or in none, at -1), and `site(slot, x, z)` puts a thermal's lift there, settled.
@@ -635,17 +737,18 @@ test('a run flies exactly the same with the meet as without it', () => {
   assert.deepEqual(met.world.sky.state, plain.sky.state);
   assert.deepEqual({ ...met.world.g, pos: { ...met.world.g.pos } }, { ...plain.g, pos: { ...plain.g.pos } });
   for (const part of ['controls', 'air', 'forces', 'hook', 'struck', 'stalls', 'steps']) assert.deepEqual(met.world[part], plain[part], part);
-  // And the meet had plenty to do: lines judged, reps turned, trails laid and plates loaded.
+  // And the meet had plenty to do: lines judged, reps turned (on this sky 7, all to depth), trails
+  // laid and plates loaded.
   const { state } = met;
   assert.equal(met.reason, 'fog');
-  assert.ok(state.count >= 5 && state.reps >= 2 && state.trails >= 3 && state.plates >= 3 && state.total > 200,
-    JSON.stringify({ count: state.count, reps: state.reps, trails: state.trails, plates: state.plates, total: state.total }));
+  assert.ok(state.count >= 5 && state.reps >= 2 && state.deep >= 1 && state.trails >= 3 && state.plates >= 3 && state.total > 200,
+    JSON.stringify({ count: state.count, reps: state.reps, deep: state.deep, trails: state.trails, plates: state.plates, total: state.total }));
 });
 
 test('the pools keep their length and identity run after run, and hold only plain data', () => {
   const meet = createMeet();
   const { state } = meet;
-  const parts = () => [state.lifts, state.since, state.ride, state.trail, state.trail.plates, ...state.lifts, ...state.trail.plates];
+  const parts = () => [state.lifts, state.since, state.lap, state.ride, state.trail, state.trail.plates, ...state.lifts, ...state.trail.plates];
   const kept = parts();
   const world = createRunWorld({ sky: createCloudbaseRun(), meet });
   for (const seed of firstSkies(8)) {
@@ -664,16 +767,18 @@ test('the pools keep their length and identity run after run, and hold only plai
 });
 
 test('the same sky and the same flying give the same meet, whatever it judged before', () => {
-  const fresh = flyMeet(5, { pilot: { brake: 'eased' } }).state;
+  const fresh = flyMeet(2, { pilot: { brake: 'eased' } }).state;
   // A meet that has flown another sky and been left in a mess starts the same run from scratch.
   const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet() }), 9);
   flyRun(world, { until: ({ sky }) => sky.state.elapsed > 70 });
-  Object.assign(world.meet.state, { total: 1234.5, bar: 40, next: 750, horn: true, turned: 3, ended: 'quit' });
+  Object.assign(world.meet.state, { total: 1234.5, bar: 40, next: 750, horn: true, turned: 3, deep: 6, ended: 'quit' });
+  Object.assign(world.meet.state.lap, { x: 9e3, z: -9e3, n: 120 });
   Object.assign(world.meet.state.trail, { live: true, ride: 99, boarded: 12 });
   world.meet.state.lifts[7].kg = 999;
   world.meet.state.trail.plates[5].live = true;
-  const used = flyRun(startRun(world, 5), { pilot: { brake: 'eased' } }).state;
+  const used = flyRun(startRun(world, 2), { pilot: { brake: 'eased' } }).state;
   assert.deepEqual(used, fresh);
+  // Eight lifts judged and five trails laid on this sky: a meet with plenty in it to differ.
   assert.ok(fresh.count >= 4 && fresh.trails >= 3);
 });
 
@@ -693,6 +798,8 @@ function obeysTheRules() {
         assert.ok(pilot.collapse === 0 && g.stall === 0, 'a rep with the wing flying');
         assert.ok(g.yawRate * thermal.dir > 0, 'a rep turning the flock\'s way');
       }
+      // A rep to depth is one of the reps, never one more.
+      assert.ok(state.deep - last.deep <= state.reps - last.reps && state.deep <= state.reps, 'a rep to depth is a rep');
       if (state.trails === last.trails) {
         const loaded = state.trail.plates.filter((plate, i) => last.live[i] && !plate.live);
         if (state.plates > last.plates) {
@@ -702,21 +809,30 @@ function obeysTheRules() {
       }
       if (state.count > last.count) assert.ok(state.lifts[state.count - 1].line <= peak && peak < state.next);
     }
-    last = { reps: state.reps, plates: state.plates, trails: state.trails, count: state.count, live: state.trail.plates.map((plate) => plate.live) };
+    last = { reps: state.reps, deep: state.deep, plates: state.plates, trails: state.trails, count: state.count, live: state.trail.plates.map((plate) => plate.live) };
     assert.ok(peak < state.next, 'every line reached is judged');
   };
 }
 
-// Measured over 80 skies (seeds 1 to 40, then 1001 to 1040), with no kettlebells: TOTAL median,
-// lines a run (median and range), the share of lines that were no lifts, and then reps, trails,
-// plates laid and plates loaded (by flying through them on the way, never on purpose) a run:
-//   hands up, with the flock      256 / 235 kg   5 (3-7)   1.5 / 2.1%    3.8 / 3.4   4.8 / 4.7   26 / 26   4.5 / 4.8
-//   light brake, eased            238 / 219 kg   5 (3-6)   6.3 / 4.6%    3.2 / 3.6   4.8 / 4.7   26 / 26   5.4 / 4.4
-//   hands up, against the flock   175 / 168 kg   4 (2-5)   6.8 / 6.6%    0   / 0     4.5 / 4.6   24 / 25   4.0 / 3.9
-//   brake never eased             110 / 120 kg   4 / 3 (2-5) 23 / 23%    0.4 / 0.3   4.7 / 4.7   26 / 26   5.4 / 5.0
-// In all 320 runs the opener was judged on the empty bar and banked, white but for the never-eased
-// brake's control light (it stalls on the way up), and the fog judged the bar last, at ×1. The
-// light brake meets more ravens, which costs it more lifts than its extra height wins.
+// Measured over 80 skies (seeds 1 to 40, then 1001 to 1040), with no kettlebells, under SIM_VERSION
+// 1 and then 2: TOTAL median, lines a run (median and range), the share of lines that were no
+// lifts, and then reps, trails, plates laid and plates loaded (by flying through them on the way,
+// never on purpose) a run:
+//   hands up, with the flock      1  256 / 235 kg   5 (3-7)       1.5 / 2.1%    3.8 / 3.4   4.8 / 4.7   26 / 26   4.5 / 4.8
+//                                 2  220 / 210 kg   4 (2-5)       2.0 / 3.9%    4.0 / 4.2   4.6 / 4.6   25 / 25   4.7 / 5.0
+//   light brake, eased            1  238 / 219 kg   5 (3-6)       6.3 / 4.6%    3.2 / 3.6   4.8 / 4.7   26 / 26   5.4 / 4.4
+//                                 2  278 / 258 kg   5 (2-7)       4.1 / 5.5%    4.6 / 4.4   4.7 / 4.7   26 / 26   5.7 / 5.0
+//   hands up, against the flock   1  175 / 168 kg   4 (2-5)       6.8 / 6.6%    0   / 0     4.5 / 4.6   24 / 25   4.0 / 3.9
+//                                 2  120 / 120 kg   3 (1-4)        10 / 5.5%    0   / 0     4.2 / 4.3   23 / 24   4.8 / 4.9
+//   brake never eased             1  110 / 120 kg   4 / 3 (2-5)    23 / 23%     0.4 / 0.3   4.7 / 4.7   26 / 26   5.4 / 5.0
+//                                 2  133 / 133 kg   3 / 4 (2-5)    22 / 25%     1.4 / 1.5   4.4 / 4.5   25 / 25   5.6 / 5.6
+// Under version 2 nearly every rep is to depth for the reference pilot, whose circle is centred on
+// the core: 4.0 / 4.1 a run hands up, 4.5 / 4.3 on the light brake and 1.3 / 1.5 never eased.
+// In all 640 runs the opener was judged on the empty bar and banked, white but for the never-eased
+// brake's control light (it stalls on the way up), and the fog judged the bar last, at ×1. Under
+// version 1 the light brake met more ravens, which cost it more lifts than its extra height won;
+// under version 2 its circle round the peaked middle of a core climbs so much faster, a rep to
+// depth every turn, that it banks the most, and hands up banks less for climbing less.
 // The tests below catch a large shift in any of these; the margins leave room to retune.
 test('the reference pilots bank more for turning with the flock, lose lifts to a brake never eased, and every sky opens on the empty bar and ends judged by the fog', () => {
   const fly = (pilot, count) => firstSkies(count).map((seed) => flyMeet(seed, { pilot, watch: obeysTheRules() }));
@@ -743,9 +859,10 @@ test('the reference pilots bank more for turning with the flock, lose lifts to a
   const all = (runs) => runs.flatMap(({ state }) => state.lifts.slice(0, state.count));
   const totals = (runs) => median(runs.map(({ state }) => state.total));
   const dropped = (runs) => all(runs).filter((lift) => !lift.good);
-  // On these seeds: medians of 291, 175 and 75 kg; reps 3 to 5 a run with the flock; 2 of 73
-  // lifts dropped with the flock, 5 of 58 against it and 11 of 26 with the brake never eased,
-  // 10 of those 11 with the control light among the reds.
+  // On these seeds: medians of 275, 102.5 and 112.5 kg; reps 3 to 5 a run with the flock, 51 of
+  // the 52 to depth; 1 of 60 lifts dropped with the flock, 7 of 44 against it and 9 of 25 with the
+  // brake never eased, all 9 with the control light among the reds. Under SIM_VERSION 1: 291, 175
+  // and 75 kg; reps 3 to 5; 2 of 73, 5 of 58 and 11 of 26, 10 of those 11 with the control light.
   assert.ok(withFlock.every(({ state }) => state.reps >= 2), 'every circling run turns reps with the flock');
   assert.ok(against.every(({ state }) => state.reps === 0), 'and none against it');
   assert.ok(totals(withFlock) >= 200 && totals(withFlock) - totals(against) >= 60, `${totals(withFlock)} kg with the flock, ${totals(against)} kg against`);

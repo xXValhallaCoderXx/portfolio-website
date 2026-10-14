@@ -5,7 +5,7 @@ import { build } from 'vite';
 import { gzipSync } from 'node:zlib';
 import { basename } from 'node:path';
 
-const RUN_ONLY = /^(cloudbase|ravens|run-|good-lift|pilots|meet-|bells|recorder|replay|daily|board)/;
+const RUN_ONLY = /^(cloudbase|ravens|run-|good-lift|pilots|meet-|bells|recorder|replay|daily|board|music)/;
 const PAGE_MAY = new Set(['good-lift-address.js', 'sim-version.js']);
 const runOnly = (id) => id.includes('/src/game/') && RUN_ONLY.test(basename(id)) && !PAGE_MAY.has(basename(id));
 

@@ -146,6 +146,8 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
   const [live, setLive] = useState(false);
   const [panel, setPanel] = useState(null);
   const [result, setResult] = useState(null);
+  // Good Lift's music switch as last thrown, anywhere (null until it is), for the meet sheet's own.
+  const [music, setMusic] = useState(null);
   // Whether the game beyond the arch is still on its way ('loading') or would not come ('failed').
   const [sky, setSky] = useState('');
   // A challenge link's run to beat, once read and replayed: { who, total, peak } or { error }.
@@ -166,6 +168,7 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
         onProgress: (progress) => latest.current.onProgress(progress),
         onLost: setLostStage,
         onResult: setResult,
+        onMusic: setMusic,
         onPortal: () => latest.current.onPortal(),
         onFjord: () => latest.current.onFjord(),
         onPanel: (next) => {
@@ -348,7 +351,7 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
             </button>{' '}
             <button onClick={() => onExit(null)}>[ back to the page ]</button>
           </p>
-          <p className="dim for-keys">← → steer · space brake · ↑ (or ← and → together) speed bar · esc end run · r again</p>
+          <p className="dim for-keys">← → steer · space brake · ↑ (or ← and → together) speed bar · esc end run · r again · b music</p>
           <p className="dim for-touch">◀ ▶ steer · ▼ brake · ◀ and ▶ together for the speed bar</p>
         </div>
       )}
@@ -387,6 +390,8 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
           onFjord={() => onFjord()}
           onPage={() => onExit(null)}
           onInitials={(text) => game.current?.setInitials(text)}
+          music={music}
+          onMusic={() => game.current?.toggleMusic()}
         />
       )}
     </div>

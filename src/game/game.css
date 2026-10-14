@@ -416,9 +416,11 @@
   display: none !important;
 }
 
-/* Sound and the way out, repeated inside the menu for when the row above has no room for them. */
+/* Sound and the way out, repeated inside the menu for when the row above has no room for them.
+   In a run the music's switch joins them, so they wrap rather than run off a phone's menu. */
 .fj-keys-more {
   display: none;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
 }
@@ -464,6 +466,7 @@
   }
 
   .fj-hud nav > [data-do='sound'],
+  .fj-hud nav > [data-do='music'],
   .fj-hud nav > [data-do='fullscreen'],
   .fj-hud nav > [data-do='exit'] {
     display: none;

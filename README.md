@@ -70,12 +70,30 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     birds, fly to them and climb beside them, turning the way they turn. Sparks and the core ring
     show only from close by. Two thermals are alive at a time; each fades with use and with age,
     and when it dies its ravens fly on to the next.
+  - **Centring.** A hunted thermal lifts hardest at its very middle, so a circle drifted off it
+    climbs harder on the side nearest the core than across from it. In a run the vario's beep
+    keeps rising in pitch and pace all the way up a core (`src/game/vario.js`). As the lift surges
+    on the near side, a soft swell is heard from the core's side and the vario readout flares
+    (`run-surge.js`, which feels for it with the thermal's own waxing and wearing out taken away).
+    Straighten for a beat in the surge and turn again as it fades, and the circle moves onto the
+    core. From the second thermal on, a circle that missed the core gets the hint for it.
+  - **Music.** Once through the rune gate, and only there, quiet background music plays: the two
+    tracks in `public/music/`, one after the other, each brought to the same low level
+    (`src/game/music.js`, where each track's measured loudness is kept). It plays on between runs
+    and stops as you leave for the fjord or the page. It has its own switch, `[ music: on ]` or B,
+    apart from the sounds' (`[ sound: on ]` or L), and switched off it stays off on the next visit.
+    The fjord and the page never play or fetch any of it.
+  - **The title card.** A run opens with a card over the scene: the sky (`Daily #12 · 14 Oct`),
+    GOOD LIFT slammed in over a barbell being loaded, and a typed line saying what to lift, or who
+    there is to beat. Retries get a shorter card.
   - **The meet.** Every 250 m is a line where three judges' lights check the lift since the last:
     contact (any raven or kettlebell strike), control (any stall or spin) and airspace (more than
     1.5 s in cloud). Two or more white lights make a good lift and bank the bar into the TOTAL;
     otherwise the plates drop into the mist. Either way the next bar starts empty at 25 kg. Plates
-    come from full circles turned the flock's way in lift (2.5 kg each), from a trail of 5 to 25 kg
-    plates laid on the bar's glide from a dying thermal toward the next flock, and from close calls.
+    come from full circles turned the flock's way in lift (reps: 2.5 kg each, or 5 kg for a rep to
+    depth, a circle whose middle stayed within 7 m of the core, stamped DEPTH beside the bar), from
+    a trail of 5 to 25 kg plates laid on the bar's glide from a dying thermal toward the next
+    flock, and from close calls.
   - **Hrungnir.** From 550 m the giant throws kettlebells, each with 2.4 s of warning: a grunt from
     his side, a red ring where it will land and, if that is off the screen, a chevron at its edge.
     It is aimed where the wing will be if the pilot holds what they are doing, so changing that
@@ -92,10 +110,12 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     curtain of bright streaks before it arrives. A front that reaches a braked wing from behind can
     tip a deep brake into a stall. Above 260 m a stall costs about as much height as a strike.
   - **The meet sheet.** When a run ends, the sheet shows the TOTAL, the peak and the best, the
-    climb drawn over the rising fog, a row of lights for every lift (a filled white disc or a
-    hollow red ring, with the judge's name, so colour is never the only sign), the feats, and a
-    line to share the run by, such as `Good Lift · Daily #12 · 512.5 kg · 1,412 m · ⚪⚪⚪ ⚪🔴⚪`.
-    R flies again, `[ new sky ]` gives practice and `[ today's sky ]` returns to the Daily Sky.
+    reps flown and how many were to depth, the climb drawn over the rising fog, a row of lights for
+    every lift (a filled white disc or a hollow red ring, with the judge's name, so colour is never
+    the only sign), the feats, and a line to share the run by, such as
+    `Good Lift · Daily #12 · 512.5 kg · 1,412 m · ⚪⚪⚪ ⚪🔴⚪`. R flies again, `[ new sky ]` gives
+    practice and `[ today's sky ]` returns to the Daily Sky. The sheet covers the game's own
+    switches, so it carries the music's (`[ music: on ]`, or B).
   - **Replays and challenges.** A run is its seed and its four controls (left, right, brake, bar)
     step by step, and nothing else: every run is recorded (`src/game/recorder.js`) and, as it ends,
     replayed in the page (`replay.js`), and only a run that replays to the very same sheet gets a
@@ -106,9 +126,10 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     the challenger on the day's board. `SIM_VERSION` (`src/game/sim-version.js`) names the rules a
     run was flown under: a test fingerprints every tuning table, so changing how a run flies without
     a new version fails `npm test`, and a link from other rules is refused rather than misread.
+    Version 2 brought the peaked cores and reps to depth.
   - **Feats and the board.** Opener, Under the horn, Giant-dodger, Clean meet, the 1,000 lb club
-    and Training block (the Daily Sky seven days in a row) are Good Lift's own feats: they show as
-    toasts when the sheet opens, never during a run, and they never move the fjord's belt. Each
+    and Training block (the Daily Sky seven days in a row) are Good Lift's own feats: the sheet
+    names any new ones when it opens, never during a run, and they never move the fjord's belt. Each
     Daily Sky keeps a board of this browser's ten best runs, ranked by total, then peak, then the
     earlier run, under three initials. Good Lift keeps all of this under its own `good-lift-v1`
     key (`src/game/good-lift-store.js`, `board.js`), apart from the fjord's progress.
@@ -154,7 +175,8 @@ the flight, to a project and to missing pages will show the host's own error pag
   streaks draw over the fjord) and `gateway.js` the arch. `flight.js` is how the glider flies:
   airspeed and sink, the brake, the speed bar, the stall and gusts, with no 3D code, so tests fly
   it; `stall-effects.js` is what a stall does to the wing and camera and what the brake meter
-  shows; `fjord-hints.js` picks free flight's line of advice; `wind-streaks.js` draws the wind.
+  shows; `fjord-hints.js` picks free flight's line of advice; `wind-streaks.js` draws the wind;
+  `vario.js` is the variometer's beep.
   `hints.js` holds what every hint shares. `lost.js` is the missing page and `ridge.js` the small
   live view of rune ridge on the page.
 - `src/game/good-lift.js` and everything it imports: Good Lift, loaded through one `import()` in
@@ -163,8 +185,9 @@ the flight, to a project and to missing pages will show the host's own error pag
   sky (seeded thermals, ravens, storm clouds, wind, gusts and fog); `meet-state.js` is the meet
   (plates, lines, lights, the horn) and `bells.js` Hrungnir's kettlebells. None of these has 3D
   code, so `npm test` flies them. `cloudbase.js`, `ravens.js` and `meet-view.js` draw a run;
-  `run-effects.js` is what it does to the wing, the picture and the camera; `cloudbase-hints.js`
-  picks its one line of advice; `daily.js` is the Daily Sky; `meet-card.js` works out the meet
+  `run-effects.js` is what it does to the wing, the picture and the camera; `run-surge.js` feels
+  for the lift surging as a circle closes on a core; `cloudbase-hints.js` picks its one line of
+  advice; `daily.js` is the Daily Sky; `meet-card.js` works out the meet
   sheet (feats, the share line, the barogram) and `src/components/GoodLiftResult.jsx` draws it,
   shipped with the game; `good-lift.css` styles its readouts and the sheet.
   `good-lift-address.js` reads the game's addresses and imports nothing, so the page can use it.

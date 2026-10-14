@@ -169,15 +169,25 @@ test('a recorder keeps every step of the longest run in one buffer, counts each 
   assert.deepEqual([...recorder.bits], [INPUT.right]);
 });
 
-// Measured over 20 skies (seeds 1 to 20) with the meet and the kettlebells, every run to the fog:
-// changes of the controls a run, then characters of link (median / most).
-//   arrows held 150 ms at a time, bar key on the glide     123 / 142     350 /   400
-//   the same on the light brake, eased                     200 / 261     539 /   692
-//   arrows held 67 ms at a time                            165 / 208     446 /   563
-//   light brake, both arrows for the bar, held 100 ms      240 / 279     631 /   736
-//   arrows tapped three times a second, steering by share  624 / 692    1300 / 1452
-//   tapped five times a second                             873 / 1111   1678 / 2112
-//   tapped five times a second, light brake, eased         1130 / 1383  1942 / 2355
+// Measured over 20 skies (seeds 1 to 20) with the meet and the kettlebells, every run to the fog,
+// under SIM_VERSION 1 and then 2: changes of the controls a run, then characters of link (median /
+// most).
+//   arrows held 150 ms at a time, bar key on the glide     1   123 / 142     350 /   400
+//                                                          2    91 / 115     264 /   328
+//   the same on the light brake, eased                     1   200 / 261     539 /   692
+//                                                          2   176 / 205     474 /   551
+//   arrows held 67 ms at a time                            1   165 / 208     446 /   563
+//                                                          2   116 / 148     320 /   394
+//   light brake, both arrows for the bar, held 100 ms      1   240 / 279     631 /   736
+//                                                          2   200 / 221     532 /   583
+//   arrows tapped three times a second, steering by share  1   624 / 692    1300 / 1452
+//                                                          2   482 / 580    1016 / 1222
+//   tapped five times a second                             1   873 / 1111   1678 / 2112
+//                                                          2   697 / 927    1356 / 1819
+//   tapped five times a second, light brake, eased         1  1130 / 1383   1942 / 2355
+//                                                          2  1011 / 1295   1838 / 2350
+// Under version 2 the reference pilot aims inside the tightest circle its wing can turn (pilots.js),
+// so it asks for a full turn more of the time and its keys change less.
 // A stretch of steps holding the same controls costs one byte up to seven steps long and two up to
 // 1,023, so a link grows with how often the pilot changes what it holds, not with how long it
 // flies. Even a pilot tapping five times a second for the whole run stays far inside MAX_LINK;

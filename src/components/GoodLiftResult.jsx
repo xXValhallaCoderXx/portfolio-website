@@ -57,9 +57,11 @@ function Barogram({ result }) {
  * The meet sheet at the end of a run of Good Lift. `result` is what the run controller hands over:
  * summariseRun's numbers (total, peak, lifts, stats, trace, reason), the sky's `label` and `kind`,
  * the bests, the feats (`earned` ever, `fresh` this run, `streak` days), the day's `board`
- * ({ rows, mine }) for a Daily Sky, and the challenge `link` it can be shared by.
+ * ({ rows, mine }) for a Daily Sky, the challenge `link` it can be shared by, and whether the
+ * `music` was on. The sheet covers the game's own switch for the music, so it carries one: `music`
+ * is the switch as last thrown, from anywhere (null until it is), and `onMusic` throws it.
  */
-export default function GoodLiftResult({ result, onRetry, onSky, onFjord, onPage, onInitials }) {
+export default function GoodLiftResult({ result, music = null, onRetry, onSky, onFjord, onPage, onInitials, onMusic }) {
   const heading = useRef(null);
   const words = useRef(null);
   const buttons = useRef([]);
@@ -68,6 +70,8 @@ export default function GoodLiftResult({ result, onRetry, onSky, onFjord, onPage
   const [shared, setShared] = useState('');
   // The initials as typed; they are kept (onInitials) once they are three letters, or none.
   const [initials, setInitials] = useState(result.initials ?? '');
+  const musicOn = music ?? result.music ?? true;
+  const switchMusic = () => onMusic?.();
   const text = shareText(result, { label: result.label, link: result.link });
 
   useEffect(() => {
@@ -75,9 +79,12 @@ export default function GoodLiftResult({ result, onRetry, onSky, onFjord, onPage
     setShared('');
   }, [result]);
 
-  // R, M and L go on to the game; Escape goes back to the fjord; every other key stays here.
+  // R, M and L go on to the game; B switches the music here, so the sheet's switch says what it
+  // is; Escape goes back to the fjord; every other key stays here.
   const guardKeys = (event) => {
-    if (!['KeyR', 'KeyM', 'KeyL'].includes(event.code) || event.target.closest?.('input, textarea')) event.stopPropagation();
+    const typing = event.target.closest?.('input, textarea');
+    if (event.code === 'KeyB' && !typing && event.type === 'keydown' && !event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey) switchMusic();
+    if (!['KeyR', 'KeyM', 'KeyL'].includes(event.code) || typing) event.stopPropagation();
     if (event.type === 'keydown' && event.key === 'Escape') {
       event.preventDefault();
       onFjord();
@@ -151,6 +158,7 @@ export default function GoodLiftResult({ result, onRetry, onSky, onFjord, onPage
           {result.stats.stalls > 0 && ` · ${result.stats.stalls} stall${result.stats.stalls === 1 ? '' : 's'}`}
           {result.stats.cloud > 0 && ` · ${result.stats.cloud} s in cloud`}
           {result.stats.thrown > 0 && ` · ${result.stats.thrown - result.stats.hits} of ${result.stats.thrown} kettlebells dodged`}
+          {result.stats.reps > 0 && ` · ${result.stats.reps} rep${result.stats.reps === 1 ? '' : 's'}, ${result.stats.deep || 'none'} to depth`}
         </p>
 
         {rival && (
@@ -307,6 +315,9 @@ export default function GoodLiftResult({ result, onRetry, onSky, onFjord, onPage
         <button onClick={() => onSky(result.kind === 'daily' ? 'practice' : 'daily')}>{result.kind === 'daily' ? '[ new sky ]' : "[ today's sky ]"}</button>
         <button onClick={onFjord}>[ back to the fjord ]</button>
         <button onClick={onPage}>[ back to the portfolio ]</button>
+        <button onClick={switchMusic}>
+          [ <kbd>b: </kbd>music: {musicOn ? 'on' : 'off'} ]
+        </button>
       </footer>
     </section>
   );

@@ -4,12 +4,14 @@ import {
   CLOUD_ZONE, CLOUD_GATE, CLOUD_LAUNCH, CLOUD_WEAR, CLOUD_HUNT, CLOUD_RAVENS, CLOUD_STRIKE, CLOUD_STORM,
   CLOUD_WIND, CLOUD_GUST, CLOUD_POOL, CLOUD_MILESTONES, createCloudbaseRun,
 } from './cloudbase-state.js';
-import { BRAKE, createFlight, stepFlight } from './flight.js';
+import { BRAKE, FLIGHT, createFlight, stepFlight } from './flight.js';
 import { createRunWorld, startRun } from './run-step.js';
 import { createReferencePilot, flyPilot } from './pilots.js';
 import { surfaceAt } from './terrain.js';
 
 const STEP = 1 / 60;
+// The lift at the very middle of a hunted thermal at full strength, where its core peaks.
+const CORE = CLOUD_HUNT.s * CLOUD_HUNT.peak;
 // High above every cloud layer and every thermal's ravens: plain air to test the lift in.
 const position = (point = CLOUD_ZONE, y = 5000) => ({ x: point.x, z: point.z, y });
 const outside = (y = 5000) => ({ x: CLOUD_ZONE.x + CLOUD_ZONE.r + 60, z: CLOUD_ZONE.z, y });
@@ -55,7 +57,7 @@ test('render sampling does not consume a thermal, move a raven or advance fog', 
   const before = structuredClone(run.state);
   for (let i = 0; i < 120; i++) {
     assert.equal(run.sample(position(CLOUD_LAUNCH)).lift, CLOUD_LAUNCH.s);
-    assert.equal(run.sample(position(run.state.thermals[1]), i).lift, CLOUD_HUNT.s);
+    assert.equal(run.sample(position(run.state.thermals[1]), i).lift, CORE);
     run.depthAt(125, 600 + i, 238);
     run.windAt(125 + i, 600 + i, 238, {});
   }
@@ -102,6 +104,43 @@ test('Cloudbase lift is restricted to its zone and keeps the normal ceiling irre
   assert.equal(run.inside({ ...edge, x: edge.x + 0.01 }), false);
   assert.deepEqual(lifted(run.sample(position({ ...edge, x: edge.x + 1 }))), { lift: 0, sink: 0, liftSide: 0 });
   assert.equal(run.sample(position(CLOUD_LAUNCH)).lift, 17);
+});
+
+test('a hunted core peaks at its middle, so a light-brake circle round it rides 30% more than a hands-up one and a circle off it less, while the launch column stays flat and the wing still feels which side the core is on', () => {
+  const run = createCloudbaseRun();
+  run.reset(80, 2);
+  const thermal = run.state.thermals[1];
+  assert.equal(thermal.strength, 1);
+  // The air `distance` from the middle, high above every cloud, by default out along the line from
+  // the launch column through the middle, away from it, where no other lift reaches.
+  const away = Math.atan2(thermal.x - CLOUD_LAUNCH.x, -(thermal.z - CLOUD_LAUNCH.z));
+  const at = (distance, angle = away) => run.sample({ x: thermal.x + Math.sin(angle) * distance, y: 5000, z: thermal.z - Math.cos(angle) * distance });
+  // A full-rate circle's radius is the wing's airspeed over its turn rate: 14.4 m hands up and 8.2 m
+  // on the light brake. Centred on the middle, hands up rides the `s` every circle in the core rode
+  // before the cores peaked, the light brake about 25 m/s, 30% more, and 20 m out there is only 13.
+  const handsUp = FLIGHT.speed.trim / FLIGHT.turn.trim;
+  const light = FLIGHT.speed.light / FLIGHT.turn.light;
+  assert.equal(at(0).lift, CORE);
+  assert.ok(Math.abs(at(handsUp).lift - CLOUD_HUNT.s) < 0.1, `${at(handsUp).lift.toFixed(2)} m/s round a centred hands-up circle`);
+  assert.ok(Math.abs(at(light).lift - 25) < 0.1, `${at(light).lift.toFixed(2)} m/s round a centred light-brake circle`);
+  assert.ok(Math.abs(at(light).lift / at(handsUp).lift - 1.3) < 0.01);
+  assert.ok(Math.abs(at(20).lift - 13) < 0.1, `${at(20).lift.toFixed(2)} m/s 20 m out`);
+  // The same all the way round, and less with every half metre off the middle, to none at the edge.
+  for (let k = 1; k < 8; k++) assert.ok(Math.abs(at(light, away + (k * Math.PI) / 4).lift - at(light).lift) < 1e-9);
+  for (let distance = 0.5; distance <= thermal.r; distance += 0.5) assert.ok(at(distance).lift < at(distance - 0.5).lift, `${distance} m out`);
+  assert.ok(at(thermal.r).lift < 1e-9);
+  assert.equal(at(thermal.r + 0.01).lift, 0);
+  // The launch column is as it was: flat out to 45% of its radius, half at 72.5% and none at its edge.
+  const column = (distance) => run.sample({ x: CLOUD_LAUNCH.x, y: 5000, z: CLOUD_LAUNCH.z + distance }).lift;
+  for (const distance of [0, 5, 10, 15]) assert.equal(column(distance), CLOUD_LAUNCH.s);
+  assert.ok(Math.abs(column(CLOUD_LAUNCH.r * 0.725) - CLOUD_LAUNCH.s / 2) < 1e-9);
+  assert.equal(column(CLOUD_LAUNCH.r), 0);
+  // And the wing feels the core's side as before: 10 m east of the middle, heading north the core
+  // lies to the left, heading south to the right, a quarter of the radius over, and dead ahead west.
+  const side = (yaw) => run.sample({ x: thermal.x + 10, y: 5000, z: thermal.z }, yaw).liftSide;
+  assert.ok(Math.abs(side(0) + 10 / thermal.r) < 1e-12);
+  assert.ok(Math.abs(side(Math.PI) - 10 / thermal.r) < 1e-12);
+  assert.ok(Math.abs(side(-Math.PI / 2)) < 1e-12);
 });
 
 test('the gateway departure reaches the first core above the actual east-shore hillside under every sky', () => {
@@ -234,7 +273,7 @@ test('a relocated thermal gives no lift until its ravens arrive, then blooms', (
   assert.equal(thermal.live, true);
   assert.equal(run.sample(position(thermal)).lift, 0);
   advance(run, CLOUD_HUNT.bloom + 0.1, outside());
-  assert.ok(Math.abs(run.sample(position(thermal)).lift - CLOUD_HUNT.s) < 1e-8);
+  assert.ok(Math.abs(run.sample(position(thermal)).lift - CORE) < 1e-8);
 });
 
 test('a thermal that has begun to fade burns out even after the pilot leaves', () => {
@@ -321,7 +360,7 @@ test('a raven strike collapses the wing, cuts lift, adds the collapse sink and s
   advance(run, CLOUD_STRIKE.collapse + STEP, outside(300));
   assert.equal(pilot.collapse, 0);
   assert.ok(pilot.shield > 0);
-  assert.equal(run.sample(position(flock, 300)).lift, CLOUD_HUNT.s);
+  assert.equal(run.sample(position(flock, 300)).lift, CORE);
 });
 
 test('a strike reaches exactly as far as the cylinder around the pilot and no further', () => {
@@ -510,11 +549,11 @@ test('a cloud cuts lift and adds sink by depth and does nothing outside its shel
   // 6% of the way in from the underside: a fifth of the edge, which already takes a quarter of the lift.
   const shallow = run.sample(chest(700 - cloud.ry * 0.94));
   const depth = 0.2 * 0.2 * (3 - 2 * 0.2);
-  assert.ok(Math.abs(shallow.lift - CLOUD_HUNT.s * (1 - depth * CLOUD_STORM.cap)) < 1e-6);
+  assert.ok(Math.abs(shallow.lift - CORE * (1 - depth * CLOUD_STORM.cap)) < 1e-6);
   assert.ok(Math.abs(shallow.sink - CLOUD_STORM.sink * depth) < 1e-6);
   // Lift is gone well before the heart of the cloud, so a capped pilot tops out near its base.
   assert.equal(run.sample(chest(700 - cloud.ry * 0.8)).lift, 0);
-  assert.deepEqual(lifted(run.sample(chest(700 - cloud.ry - 1))), { lift: CLOUD_HUNT.s, sink: 0, liftSide: 0 });
+  assert.deepEqual(lifted(run.sample(chest(700 - cloud.ry - 1))), { lift: CORE, sink: 0, liftSide: 0 });
   run.step(STEP, chest(700 - cloud.ry - 30));
   assert.ok(Math.abs(run.state.pilot.headroom - 30) < 1e-6);
   run.step(STEP, outside(700));
@@ -534,7 +573,7 @@ test('a cloud cuts lift and adds sink by depth and does nothing outside its shel
   calm.reset(80, 10);
   park(calm.state.clouds[0], calm.state.thermals[1].x, 700, calm.state.thermals[1].z);
   calm.step(STEP, outside());
-  assert.equal(calm.sample(chest(700)).lift, CLOUD_HUNT.s);
+  assert.equal(calm.sample(chest(700)).lift, CORE);
 });
 
 test('no cloud hazard lies within 70 m below a milestone or below the cloud floor, and clouds come round outside the zone', () => {
@@ -655,7 +694,7 @@ test('a sample can be written into the caller\'s own object, and carries the win
   assert.equal(run.sample(point, 0.4, out), out);
   assert.deepEqual(out, run.sample(point, 0.4));
   assert.deepEqual(Object.keys(out), Object.keys(STILL));
-  assert.equal(out.lift, CLOUD_HUNT.s);
+  assert.equal(out.lift, CORE);
   assert.ok(Math.hypot(out.windX, out.windZ) > 0.5);
   assert.equal(out.rough, 0);
 });
@@ -1097,36 +1136,57 @@ const passing = (flights, altitude) => flights.filter((flight) => flight.peak >=
 const total = (flights, key) => flights.reduce((sum, flight) => sum + flight[key], 0);
 const firstSkies = (count) => Array.from({ length: count }, (_, i) => i + 1);
 
-// Measured over 120 other skies (seeds 1001 to 1120) with these rules (peak min / median / max;
-// share passing 500, 1,000 and 1,500 m; strikes and stalls a run):
-//   hands up, no hazards             1092 / 1495 / 1821 m   100 / 100 / 48%   0     0
-//   hands up, with the flock          770 / 1280 / 1671 m   100 /  92 / 13%   1.0   0
-//   hands up, turning at random       643 / 1152 / 1669 m   100 /  73 /  6%   1.9   0
-//   hands up, against the flock       505 / 1069 / 1496 m   100 /  61 /  0%   2.7   0
-//   light brake, no hazards          1307 / 1708 / 2002 m   100 / 100 / 93%   0     0
-//   light brake, with the flock       899 / 1345 / 1730 m   100 /  97 / 19%   1.6   0
-//   eased 2 s late, with the flock    616 / 1254 / 1638 m   100 /  91 / 10%   1.8   0
-//   never eased, with the flock       721 / 1015 / 1309 m   100 /  54 /  0%   1.9   3.9
-// The light brake climbs faster and holds the core against the wind, and its tighter circle
-// meets more birds: over 400 skies it passed 1,500 m in 23% of runs against 14% with hands up.
-// Before there was any wind, with the hidden lift at 18 m/s, the first two rows were
+// Measured over 80 skies (seeds 1 to 40 and 1001 to 1040) under SIM_VERSION 1, then 2: peak min /
+// median / max; the share passing 500, 1,000 and 1,500 m; strikes and stalls a run. Turning at
+// random, each lift's way is a coin toss made once for its site.
+//   hands up, no hazards           1   1092 / 1531 / 1770 m   100 / 100 / 63%   0     0
+//                                  2    983 / 1254 / 1565 m   100 /  99 /  1%   0     0
+//   hands up, with the flock       1    815 / 1338 / 1765 m   100 /  94 / 19%   0.8   0
+//                                  2    619 / 1106 / 1381 m   100 /  70 /  0%   1.0   0
+//   hands up, turning at random    1    500 / 1175 / 1698 m    99 /  76 /  8%   1.8   0
+//                                  2    403 /  965 / 1341 m    99 /  41 /  0%   2.1   0
+//   hands up, against the flock    1    616 / 1056 / 1496 m   100 /  61 /  0%   2.7   0
+//                                  2    366 /  801 / 1208 m    96 /  16 /  0%   3.2   0
+//   light brake, no hazards        1   1292 / 1731 / 2008 m   100 / 100 / 93%   0     0
+//                                  2   1163 / 1766 / 2073 m   100 / 100 / 90%   0     0
+//   light brake, with the flock    1    883 / 1329 / 1749 m   100 /  96 / 20%   1.8   0
+//                                  2    625 / 1358 / 1938 m   100 /  94 / 28%   1.8   0
+//   eased 2 s late, with the flock 1    616 / 1262 / 1638 m   100 /  86 /  8%   1.8   0
+//                                  2    835 / 1254 / 1800 m   100 /  86 / 14%   1.8   0
+//   never eased, with the flock    1    721 / 1023 / 1368 m   100 /  51 /  0%   1.9   3.7
+//                                  2    640 / 1027 / 1359 m   100 /  54 /  0%   2.0   3.8
+// Version 2's hunted cores peak at their middle. A light-brake circle round it rides 30% more than
+// a hands-up one, which gets what the whole core gave before, so the light brake climbs as high as
+// it did or a little higher, while hands up, the way a new player circles, comes down 210 to 280 m
+// at the median and passes 1,500 m on hardly a sky, hazards or none. That cost is meant
+// (CLOUD_HUNT.peak), so where the tests below pin how high the sky lets a pilot climb, they fly the
+// light brake eased on time, as TST does (pilots.js).
+// Under version 1 the light brake climbed faster and held the core against the wind, and its
+// tighter circle met more birds: over 400 skies it passed 1,500 m in 23% of runs against 14% with
+// hands up. Before there was any wind, with the hidden lift at 18 m/s, the first two rows were
 // 1176 / 1543 / 1756 m (67% past 1,500 m) and 740 / 1343 / 1644 m (95 / 14%). The same wind on
-// that lift gave 19% and 3%, which is what CLOUD_HUNT.s is now set to pay back.
+// that lift gave 19% and 3%, which is what CLOUD_HUNT.s is set to pay back.
 // The tests below catch a large shift in any of these; the margins leave room to retune.
 test('a reference pilot who turns with each flock usually passes 1,000 m, the hazards are what hold it under 1,500 m, and the fog ends every run inside three minutes', () => {
-  const withFlock = firstSkies(30).map((seed) => flyReference(createCloudbaseRun(), seed));
-  const against = firstSkies(20).map((seed) => flyReference(createCloudbaseRun(), seed, { withFlock: false }));
-  // The sky with no hazards is flown over more seeds: passing 1,500 m there is close to a coin toss.
-  const calm = firstSkies(40).map((seed) => flyReference(createCloudbaseRun({ hazards: false }), seed));
+  // On the light brake eased on time (see above): hands up, the peaked cores of SIM_VERSION 2 hold
+  // it under 1,500 m on 39 of these 40 skies with no hazards at all, so the hazards could not be
+  // what holds it there.
+  const pilot = { brake: 'eased' };
+  const withFlock = firstSkies(30).map((seed) => flyReference(createCloudbaseRun(), seed, pilot));
+  const against = firstSkies(20).map((seed) => flyReference(createCloudbaseRun(), seed, { ...pilot, withFlock: false }));
+  // The sky with no hazards is flown over more seeds.
+  const calm = firstSkies(40).map((seed) => flyReference(createCloudbaseRun({ hazards: false }), seed, pilot));
   for (const flight of [...withFlock, ...against, ...calm]) {
     assert.equal(flight.reason, 'fog');
     assert.ok(flight.seconds < 180);
-    assert.equal(flight.stalls, 0, 'hands up, the wing never stalls');
+    assert.equal(flight.stalls, 0, 'eased on time, the wing never stalls');
   }
   for (const flight of [...withFlock, ...calm]) assert.ok(flight.peak >= 400, `a run peaked at ${flight.peak.toFixed(0)} m`);
   assert.ok(calm.every((flight) => flight.strikes === 0 && flight.cloud === 0));
-  // On these seeds: 28 of the 40 with no hazards pass 1,500 m; with the flock 29 of 30 pass
-  // 1,000 m and 10 pass 1,500 m, with 13 strikes in the first 20 against 58 when turning against it.
+  // On these seeds: 35 of the 40 with no hazards pass 1,500 m; with the flock 27 of 30 pass
+  // 1,000 m and 7 pass 1,500 m, with 26 strikes in the first 20 against 71 when turning against it.
+  // Hands up they are 1 of 40; 22 and none of 30; 21 strikes against 55. Under SIM_VERSION 1, when
+  // this flew hands up: 28 of 40; 29 and 10 of 30; 13 strikes against 58.
   assert.ok(passing(calm, 1500) >= 18, `${passing(calm, 1500)} of 40 runs with no hazards passed 1,500 m`);
   assert.ok(passing(withFlock, 1000) >= 22, `${passing(withFlock, 1000)} of 30 runs with the flock passed 1,000 m`);
   assert.ok(passing(withFlock, 1500) <= 17, `${passing(withFlock, 1500)} of 30 runs with the flock passed 1,500 m`);
@@ -1142,8 +1202,8 @@ test('the wind costs the reference pilot height, and the light brake eased on ti
   const still = fly({ wind: false });
   const windy = fly({});
   const braked = fly({}, { brake: 'eased' });
-  // On these seeds the means are 1684 m in still air, 1573 m in the wind and 1756 m on the brake,
-  // which beats hands up in 19 of the 20 skies.
+  // On these seeds the means are 1360 m in still air, 1239 m in the wind and 1789 m on the brake,
+  // which beats hands up in all 20 skies (under SIM_VERSION 1: 1684, 1573 and 1756 m, and 19 of 20).
   assert.ok(mean(still) - mean(windy) > 50, `the wind cost ${(mean(still) - mean(windy)).toFixed(0)} m`);
   assert.ok(mean(braked) - mean(windy) > 90, `the light brake won ${(mean(braked) - mean(windy)).toFixed(0)} m`);
   assert.ok(braked.filter((flight, i) => flight.peak > windy[i].peak).length >= 14);
@@ -1165,16 +1225,21 @@ test('among the ravens a brake eased on time or two seconds late does not stall,
     assert.equal(flight.reason, 'fog');
     assert.ok(flight.seconds < 180);
   }
-  // On these seeds: no stall eased or late; held, 72 stalls in 20 runs and never fewer than 3,
-  // peaking 370 m lower on average than hands up (1,018 m against 1,386 m) and 310 m under eased.
+  // On these seeds: no stall eased or late; held, 74 stalls in 20 runs and never none, peaking
+  // 460 m under eased on average (958 m against 1,420 m) and 90 m under hands up (1,051 m). Under
+  // SIM_VERSION 1 it was 310 m under eased and 370 m under hands up (1,018 m against 1,331 and
+  // 1,386 m): hands up now circles off the peak of a core, which the brake never eased still
+  // circles tight round between its stalls, so it is that much nearer hands up.
   assert.equal(total(eased, 'stalls'), 0);
   assert.ok(total(late, 'stalls') <= 2, `${total(late, 'stalls')} stalls easing two seconds late`);
   assert.ok(held.every((flight) => flight.stalls >= 1));
   assert.ok(total(held, 'stalls') >= 40, `${total(held, 'stalls')} stalls with the brake never eased`);
-  assert.ok(mean(handsUp) - mean(held) > 150, `holding the brake cost ${(mean(handsUp) - mean(held)).toFixed(0)} m`);
-  assert.ok(mean(eased) - mean(held) > 150);
-  // Eased on time it is no worse a way to fly than hands up, even though it meets more birds.
-  assert.ok(mean(eased) > mean(handsUp) - 150);
+  assert.ok(mean(eased) - mean(held) > 150, `holding the brake cost ${(mean(eased) - mean(held)).toFixed(0)} m against easing it`);
+  assert.ok(mean(handsUp) - mean(held) > 50, `holding the brake cost ${(mean(handsUp) - mean(held)).toFixed(0)} m against hands up`);
+  // Eased on time it is much the better way to fly, even though it meets more birds: its circle
+  // round the peaked middle of a core climbs 30% faster than hands up (370 m higher here; under
+  // SIM_VERSION 1 it was only no worse, 55 m lower).
+  assert.ok(mean(eased) - mean(handsUp) > 150, `the light brake eased on time won ${(mean(eased) - mean(handsUp)).toFixed(0)} m`);
   assert.ok(passing(eased, 1000) >= 14, `${passing(eased, 1000)} of 20 runs on the light brake passed 1,000 m`);
 });
 

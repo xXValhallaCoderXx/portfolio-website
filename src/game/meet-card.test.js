@@ -4,7 +4,7 @@ import { FEATS, JUDGES, THOUSAND_POUNDS, barogram, featsFor, kilos, lightsOf, me
 
 const lift = (line, red, { kg = 25, double = false } = {}) => ({ line, kg, red, good: (red & (red - 1)) === 0, double, at: 0 });
 const run = (lifts, { total = 0, stats = {} } = {}) => ({
-  total, peak: 0, lifts, stats: { strikes: 0, stalls: 0, cloud: 0, reps: 0, trails: 0, close: 0, thrown: 0, dodged: 0, hits: 0, ...stats },
+  total, peak: 0, lifts, stats: { strikes: 0, stalls: 0, cloud: 0, reps: 0, deep: 0, trails: 0, close: 0, thrown: 0, dodged: 0, hits: 0, ...stats },
 });
 
 test('kilos print a decimal only for a half, and both mark their thousands', () => {

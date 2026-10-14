@@ -19,6 +19,77 @@
   color: var(--ember);
 }
 
+/* ---- feeling for the core: a surge flares the vario, and a rep to depth stamps the bar */
+
+/* For whoever has the sound off: the climb's readout flares white as the lift surges. */
+.cloudbase .fj-hud > dl [data-hud='vario'].surge {
+  animation: fj-surge 0.7s ease-out both;
+}
+
+@keyframes fj-surge {
+  from {
+    color: #fff;
+    text-shadow: 0 0 10px var(--ember), 0 0 2px #fff;
+  }
+}
+
+/* DEPTH, stamped just after the bar's weight and gone again. It takes no room of its own, so the
+   readouts never shift for it. Hidden or shown, it is not read out with the bar: the hint says it. */
+.cloudbase .fj-hud > dl [data-hud='bar']::after {
+  content: 'depth';
+  content: 'depth' / '';
+  display: inline-block;
+  width: 0;
+  margin-left: 0.8em;
+  color: var(--cyan);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-shadow: 0 0 8px rgba(45, 212, 238, 0.7);
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  transform-origin: left center;
+}
+
+.cloudbase .fj-hud > dl [data-hud='bar'].depth::after {
+  animation: fj-depth 1.4s ease-out both;
+}
+
+@keyframes fj-depth {
+  0% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+
+  12%,
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+@keyframes fj-depth-still {
+  0%,
+  75% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cloudbase .fj-hud > dl [data-hud='bar'].depth::after {
+    animation-name: fj-depth-still;
+  }
+}
+
 /* ---- the judges' lights: three, lit 150 ms apart, then the call, all gone in 2.5 s */
 
 /* They head the notifications' column (game.js keeps it under the readouts), so a toast can only
@@ -157,6 +228,295 @@
   .fj-lights.on i {
     border-color: var(--lit);
     background: var(--lit);
+  }
+}
+
+/* ---- the title card a run opens with: which sky, GOOD LIFT slammed in over a barbell, and a typed
+   line. It takes no clicks and covers nothing for long. */
+
+.fj-title {
+  position: absolute;
+  /* Under the notifications' column, which a first flight's achievement may be showing. */
+  top: 38%;
+  left: 50%;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  width: min(92vw, 760px);
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.fj-title.on {
+  animation: fj-title 3.6s ease both;
+}
+
+.fj-title.short.on {
+  animation-duration: 2.2s;
+}
+
+.fj-title small {
+  color: var(--cyan);
+  font-size: clamp(12px, 1.6vw, 15px);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(6, 10, 19, 0.9);
+}
+
+.fj-title b {
+  position: relative;
+  display: block;
+  color: #f4f6fa;
+  font-size: clamp(40px, min(10vw, 15vh), 104px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  text-shadow: 0 0 18px rgba(45, 212, 238, 0.55), 0 0 46px rgba(255, 157, 74, 0.35), 0 2px 0 rgba(6, 10, 19, 0.9);
+}
+
+/* A red and a cyan copy of the title, split apart and coming together as it lands. */
+.fj-title b::before,
+.fj-title b::after {
+  position: absolute;
+  inset: 0;
+  content: attr(data-text);
+  opacity: 0;
+  text-shadow: none;
+  mix-blend-mode: screen;
+}
+
+.fj-title b::before {
+  color: #ff546b;
+}
+
+.fj-title b::after {
+  color: var(--cyan);
+}
+
+/* The bar and its plates, competition colours, loaded from the collars outward. */
+.fj-barbell {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  width: min(70vw, 420px);
+  height: 30px;
+}
+
+.fj-barbell em {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #8fa4bb, #e6edf5 50%, #8fa4bb);
+  box-shadow: 0 0 10px rgba(230, 237, 245, 0.45);
+  transform-origin: center;
+}
+
+.fj-barbell i {
+  display: block;
+  width: 7px;
+  height: 30px;
+  border-radius: 2px;
+  background: #f04848;
+  box-shadow: 0 0 10px rgba(240, 72, 72, 0.55);
+}
+
+.fj-barbell i:nth-child(2),
+.fj-barbell i:nth-child(4) {
+  height: 24px;
+  background: #3a7ff0;
+  box-shadow: 0 0 10px rgba(58, 127, 240, 0.55);
+}
+
+/* Typed out a character at a time behind a blinking cursor, as the terminal the page is. */
+.fj-title span {
+  overflow: hidden;
+  width: calc(var(--chars, 0) * 1ch + 2px);
+  /* The cursor shows only once the typing starts. */
+  border-right: 2px solid transparent;
+  color: var(--ember);
+  font-size: clamp(13px, 1.8vw, 17px);
+  white-space: nowrap;
+  text-shadow: 0 0 10px rgba(6, 10, 19, 0.9);
+}
+
+.fj-title.short span {
+  display: none;
+}
+
+.fj-title.on small {
+  animation: fj-title-rise 0.45s ease-out 0.05s both;
+}
+
+.fj-title.on b {
+  animation: fj-title-slam 0.55s cubic-bezier(0.2, 1.3, 0.4, 1) 0.15s both;
+}
+
+.fj-title.on b::before {
+  animation: fj-title-split-red 0.7s ease-out 0.15s both;
+}
+
+.fj-title.on b::after {
+  animation: fj-title-split-cyan 0.7s ease-out 0.15s both;
+}
+
+.fj-title.on .fj-barbell em {
+  animation: fj-title-bar 0.35s ease-out 0.55s both;
+}
+
+.fj-title.on .fj-barbell i {
+  animation: fj-title-plate-left 0.28s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.fj-title.on .fj-barbell i:nth-child(2) {
+  animation-delay: 0.8s;
+}
+
+.fj-title.on .fj-barbell i:nth-child(1) {
+  animation-delay: 0.92s;
+}
+
+.fj-title.on .fj-barbell i:nth-child(4),
+.fj-title.on .fj-barbell i:nth-child(5) {
+  animation-name: fj-title-plate-right;
+}
+
+.fj-title.on .fj-barbell i:nth-child(4) {
+  animation-delay: 0.8s;
+}
+
+.fj-title.on .fj-barbell i:nth-child(5) {
+  animation-delay: 0.92s;
+}
+
+.fj-title.on span {
+  animation:
+    fj-title-type calc(var(--chars, 0) * 32ms) steps(var(--chars, 1)) 1.1s both,
+    fj-title-caret 0.55s steps(1) 1.1s infinite;
+}
+
+@keyframes fj-title {
+  0% {
+    opacity: 0;
+  }
+  5%,
+  85% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -62%);
+  }
+}
+
+@keyframes fj-title-rise {
+  from {
+    opacity: 0;
+    letter-spacing: 0.7em;
+  }
+}
+
+@keyframes fj-title-slam {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+    letter-spacing: 0.45em;
+    transform: scale(1.9);
+  }
+  60% {
+    opacity: 1;
+  }
+}
+
+@keyframes fj-title-split-red {
+  from {
+    opacity: 0.9;
+    transform: translateX(-14px);
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes fj-title-split-cyan {
+  from {
+    opacity: 0.9;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes fj-title-bar {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes fj-title-plate-left {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+}
+
+@keyframes fj-title-plate-right {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+}
+
+@keyframes fj-title-type {
+  from {
+    width: 0;
+  }
+}
+
+@keyframes fj-title-caret {
+  0% {
+    border-right-color: var(--ember);
+  }
+  50% {
+    border-right-color: transparent;
+  }
+}
+
+/* Asking for less motion: the card is simply there, and simply gone. */
+@media (prefers-reduced-motion: reduce) {
+  .fj-title.on,
+  .fj-title.on *,
+  .fj-title.on b::before,
+  .fj-title.on b::after {
+    animation: none !important;
+  }
+}
+
+/* On a phone held sideways the card sits in the middle, under the readouts. */
+@media (pointer: coarse) and (orientation: landscape) {
+  .fj-title {
+    top: 46%;
+    gap: 6px;
+  }
+
+  .fj-title b {
+    font-size: clamp(32px, 7vw, 64px);
+  }
+
+  /* Held sideways, the card stands where the hint rides, so the hint waits for it to go. */
+  .fj-title.on ~ .fj-hint {
+    visibility: hidden;
+  }
+}
+
+/* A short window has the readouts reaching a third of the way down: the card goes lower. */
+@media (pointer: fine) and (max-height: 600px) {
+  .fj-title {
+    top: 56%;
   }
 }
 

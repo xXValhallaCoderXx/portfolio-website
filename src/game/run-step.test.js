@@ -8,73 +8,75 @@ import { FLIGHT } from './flight.js';
 import { MEET, createMeet } from './meet-state.js';
 import { createBells } from './bells.js';
 
-// What the reference pilot did on these skies before its flying moved into run-step.js and
-// pilots.js, to the last bit: seed, options, then peak (m), strikes, stalls, seconds, seconds in
-// cloud and how the run ended. Any change to how a run flies shows up here first.
+// What the reference pilot does on these skies, to the last bit: seed, options, then peak (m),
+// strikes, stalls, seconds, seconds in cloud and how the run ended. First taken before its flying
+// moved into run-step.js and pilots.js, to hold the move to the bit; re-captured for SIM_VERSION 2,
+// on purpose, since its hunted cores peak at their middle and the pilot circles tighter in them
+// (pilots.js). Any change to how a run flies shows up here first.
 const GOLDENS = [
-  [1, {"brake": "none"}, 996.2989765025334, 2, 0, 139.23333333333628, 5.916666666666651, 'fog'],
-  [2, {"brake": "none"}, 1305.9580025568073, 1, 0, 146.9333333333424, 11.700000000000161, 'fog'],
-  [3, {"brake": "none"}, 1169.7512665002475, 2, 0, 143.71666666667318, 3.2499999999999933, 'fog'],
-  [4, {"brake": "none"}, 1086.5458425559648, 3, 0, 139.98333333333687, 6.733333333333315, 'fog'],
-  [5, {"brake": "none"}, 1423.875355734372, 0, 0, 149.86666666667807, 8.666666666666677, 'fog'],
-  [6, {"brake": "none"}, 1552.2927974936028, 0, 0, 152.51666666668018, 1.2500000000000004, 'fog'],
-  [7, {"brake": "none"}, 1511.9621274293086, 0, 0, 151.43333333334598, 0, 'fog'],
-  [8, {"brake": "none"}, 1250.5259126771448, 0, 0, 145.8500000000082, 8.950000000000024, 'fog'],
-  [9, {"brake": "none"}, 1611.3577074570273, 0, 0, 153.68333333334778, 0, 'fog'],
-  [10, {"brake": "none"}, 1765.4116513118822, 0, 0, 156.60000000001676, 0, 'fog'],
-  [11, {"brake": "none"}, 1520.4012655713802, 1, 0, 151.86666666667966, 4.583333333333322, 'fog'],
-  [12, {"brake": "none"}, 1124.0967403234783, 1, 0, 142.65000000000566, 5.166666666666654, 'fog'],
-  [1, {"brake": "eased"}, 1018.9172722853599, 2, 0, 140.00000000000355, 15.716666666667027, 'fog'],
-  [2, {"brake": "eased"}, 1714.3057379958937, 2, 0, 155.61666666668265, 0, 'fog'],
-  [3, {"brake": "eased"}, 1579.8441259232372, 2, 0, 153.06666666668062, 5.7666666666666515, 'fog'],
-  [4, {"brake": "eased"}, 882.8100421042086, 1, 0, 136.1333333333338, 25.63333333333316, 'fog'],
-  [5, {"brake": "eased"}, 1600.7815461176488, 1, 0, 152.6666666666803, 0, 'fog'],
-  [6, {"brake": "eased"}, 918.4900001330244, 5, 0, 137.3833333333348, 0, 'fog'],
-  [7, {"brake": "eased"}, 1299.4822585415643, 4, 0, 145.5333333333413, 4.883333333333321, 'fog'],
-  [8, {"brake": "eased"}, 1282.148072656388, 2, 0, 145.6833333333414, 17.950000000000262, 'fog'],
-  [9, {"brake": "eased"}, 1366.003747672035, 3, 0, 146.5166666666754, 7.599999999999978, 'fog'],
-  [10, {"brake": "eased"}, 1444.0531253021209, 3, 0, 150.30000000001175, 9.05000000000003, 'fog'],
-  [11, {"brake": "eased"}, 1583.480935527558, 3, 0, 152.46666666668014, 2.9833333333333276, 'fog'],
-  [12, {"brake": "eased"}, 1156.0120794234242, 2, 0, 143.76666666667322, 8.71666666666668, 'fog'],
-  [1, {"brake": "late"}, 1475.0303702746673, 1, 0, 150.95000000001227, 2.6999999999999953, 'fog'],
-  [2, {"brake": "late"}, 1275.0047141207133, 1, 0, 146.21666666667517, 12.5000000000002, 'fog'],
-  [3, {"brake": "late"}, 1283.5238560049304, 2, 0, 146.78333333334228, 8.299999999999992, 'fog'],
-  [4, {"brake": "late"}, 1357.4712306016172, 2, 0, 147.83333333334312, 10.816666666666784, 'fog'],
-  [5, {"brake": "late"}, 1446.462377307394, 1, 0, 150.3500000000118, 0, 'fog'],
-  [6, {"brake": "late"}, 1528.3352481652212, 1, 0, 152.03333333334646, 1.8499999999999983, 'fog'],
-  [7, {"brake": "late"}, 1000.9748377495918, 2, 0, 139.73333333333667, 13.733333333333595, 'fog'],
-  [8, {"brake": "late"}, 1245.9631249499482, 2, 0, 144.65000000000725, 16.583333333333673, 'fog'],
-  [9, {"brake": "late"}, 1452.3122399084311, 2, 0, 150.46666666667855, 0, 'fog'],
-  [10, {"brake": "late"}, 1159.9740393192171, 3, 0, 143.71666666667318, 11.150000000000134, 'fog'],
-  [11, {"brake": "late"}, 1300.0095398038673, 2, 0, 147.16666666667592, 7.14999999999998, 'fog'],
-  [12, {"brake": "late"}, 1134.4467944857422, 1, 0, 143.18333333333942, 18.183333333333582, 'fog'],
-  [1, {"brake": "held"}, 983.5552861387732, 1, 4, 139.00000000000276, 10.433333333333431, 'fog'],
-  [2, {"brake": "held"}, 939.4967333518237, 2, 3, 137.83333333333516, 5.6833333333333185, 'fog'],
-  [3, {"brake": "held"}, 1164.9808606936697, 2, 4, 143.98333333334006, 1.4, 'fog'],
-  [4, {"brake": "held"}, 876.6186230994585, 1, 3, 135.86666666666693, 12.516666666666868, 'fog'],
-  [5, {"brake": "held"}, 838.3195595527299, 2, 3, 131.3166666666633, 15.600000000000355, 'fog'],
-  [6, {"brake": "held"}, 1225.4066874229402, 0, 5, 145.33333333334113, 6.416666666666649, 'fog'],
-  [7, {"brake": "held"}, 1022.352113061101, 1, 4, 140.31666666667047, 15.983333333333707, 'fog'],
-  [8, {"brake": "held"}, 1080.805013457979, 2, 3, 140.2166666666704, 1.2833333333333337, 'fog'],
-  [9, {"brake": "held"}, 1287.0250342451372, 1, 4, 146.2833333333419, 4.149999999999991, 'fog'],
-  [10, {"brake": "held"}, 1078.107556514802, 4, 3, 141.80000000000499, 0, 'fog'],
-  [11, {"brake": "held"}, 1023.5645865513303, 3, 3, 140.35000000000383, 4.149999999999991, 'fog'],
-  [12, {"brake": "held"}, 921.0261379061529, 1, 4, 137.31666666666808, 2.166666666666664, 'fog'],
-  [1, {"brake": "none", "withFlock": false}, 1194.1635020497963, 1, 0, 142.80000000000578, 14.316666666666958, 'fog'],
-  [2, {"brake": "none", "withFlock": false}, 1118.3372666052683, 3, 0, 142.83333333333914, 1.5333333333333328, 'fog'],
-  [3, {"brake": "none", "withFlock": false}, 1221.283097539665, 2, 0, 143.96666666667338, 5.2166666666666535, 'fog'],
-  [4, {"brake": "none", "withFlock": false}, 1073.1129345030931, 3, 0, 141.66666666667155, 0, 'fog'],
-  [5, {"brake": "none", "withFlock": false}, 697.2445412486134, 4, 0, 127.34999999999405, 0, 'fog'],
-  [6, {"brake": "none", "withFlock": false}, 1048.4935514688452, 2, 0, 141.01666666667103, 0, 'fog'],
-  [1, {"brake": "none", "hazards": false}, 1528.2147533718248, 0, 0, 152.03333333334646, 0, 'fog'],
-  [2, {"brake": "none", "hazards": false}, 1596.240448103384, 0, 0, 153.38333333334754, 0, 'fog'],
-  [3, {"brake": "none", "hazards": false}, 1718.3153695303497, 0, 0, 155.71666666668273, 0, 'fog'],
-  [4, {"brake": "none", "hazards": false}, 1530.4863795879419, 0, 0, 152.06666666667982, 0, 'fog'],
-  [5, {"brake": "none", "hazards": false}, 1510.3106229482482, 0, 0, 151.6666666666795, 0, 'fog'],
-  [6, {"brake": "none", "hazards": false}, 1509.8601202352431, 0, 0, 151.51666666667938, 0, 'fog'],
+  [1, {"brake": "none"}, 954.7750248206488, 1, 0, 137.98333333333528, 1.016666666666668, 'fog'],
+  [2, {"brake": "none"}, 1119.8860489703784, 0, 0, 142.8666666666725, 8.333333333333327, 'fog'],
+  [3, {"brake": "none"}, 1173.664463905874, 1, 0, 143.55000000000638, 4.016666666666658, 'fog'],
+  [4, {"brake": "none"}, 1011.790963020544, 0, 0, 140.0333333333369, 8.31666666666666, 'fog'],
+  [5, {"brake": "none"}, 836.6584401662902, 0, 0, 134.6499999999993, 28.433333333333, 'fog'],
+  [6, {"brake": "none"}, 1294.3309777858697, 0, 0, 146.91666666667572, 1.4999999999999996, 'fog'],
+  [7, {"brake": "none"}, 1212.6758340143692, 1, 0, 145.13333333334097, 5.733333333333318, 'fog'],
+  [8, {"brake": "none"}, 1105.8320520429368, 1, 0, 141.23333333333787, 3.1166666666666605, 'fog'],
+  [9, {"brake": "none"}, 1071.2837623848254, 2, 0, 139.7000000000033, 5.083333333333321, 'fog'],
+  [10, {"brake": "none"}, 1277.0105798981194, 0, 0, 146.61666666667548, 4.383333333333323, 'fog'],
+  [11, {"brake": "none"}, 1194.1444236272332, 2, 0, 144.7000000000073, 7.116666666666647, 'fog'],
+  [12, {"brake": "none"}, 1109.828949131752, 0, 0, 142.48333333333886, 0, 'fog'],
+  [1, {"brake": "eased"}, 1357.947489083276, 0, 0, 147.8500000000098, 23.349999999999955, 'fog'],
+  [2, {"brake": "eased"}, 1937.8051570632454, 0, 0, 159.66666666668587, 2.0499999999999976, 'fog'],
+  [3, {"brake": "eased"}, 1486.6848406055367, 2, 0, 149.6000000000112, 6.766666666666648, 'fog'],
+  [4, {"brake": "eased"}, 1153.9111330830503, 3, 0, 143.71666666667318, 2.33333333333333, 'fog'],
+  [5, {"brake": "eased"}, 835.754823102484, 0, 0, 134.84999999999945, 31.9333333333328, 'fog'],
+  [6, {"brake": "eased"}, 1750.6401559351195, 1, 0, 156.3166666666832, 0, 'fog'],
+  [7, {"brake": "eased"}, 1338.9905700394065, 3, 0, 147.86666666667648, 0, 'fog'],
+  [8, {"brake": "eased"}, 1370.4420437330152, 1, 0, 147.3500000000094, 22.133333333333358, 'fog'],
+  [9, {"brake": "eased"}, 1501.5376723250254, 0, 0, 151.48333333334602, 5.983333333333317, 'fog'],
+  [10, {"brake": "eased"}, 1429.5073940986829, 3, 0, 148.75000000001052, 5.716666666666652, 'fog'],
+  [11, {"brake": "eased"}, 1758.2625562273704, 1, 0, 156.066666666683, 11.883333333333503, 'fog'],
+  [12, {"brake": "eased"}, 1259.757421368203, 1, 0, 146.15000000000845, 0, 'fog'],
+  [1, {"brake": "late"}, 1030.1870397646355, 2, 0, 140.23333333333707, 12.56666666666687, 'fog'],
+  [2, {"brake": "late"}, 1159.926492680537, 3, 0, 143.13333333333938, 6.966666666666647, 'fog'],
+  [3, {"brake": "late"}, 1597.8399721303697, 1, 0, 153.4166666666809, 0, 'fog'],
+  [4, {"brake": "late"}, 871.3366326490473, 3, 0, 135.28333333333313, 8.98333333333336, 'fog'],
+  [5, {"brake": "late"}, 835.2395103572198, 2, 0, 134.66666666666598, 19.16666666666686, 'fog'],
+  [6, {"brake": "late"}, 1526.7547870392154, 1, 0, 151.81666666667962, 5.2999999999999865, 'fog'],
+  [7, {"brake": "late"}, 1122.3699434082077, 3, 0, 142.25000000000534, 12.866666666666886, 'fog'],
+  [8, {"brake": "late"}, 1268.5947443079558, 1, 0, 146.45000000000869, 16.883333333333656, 'fog'],
+  [9, {"brake": "late"}, 1216.5992900165456, 3, 0, 144.06666666667346, 1.0000000000000013, 'fog'],
+  [10, {"brake": "late"}, 1300.4414305101068, 1, 0, 147.16666666667592, 20.166666666666803, 'fog'],
+  [11, {"brake": "late"}, 1324.1285646071428, 3, 0, 146.91666666667572, 6.966666666666647, 'fog'],
+  [12, {"brake": "late"}, 1216.6893489987856, 2, 0, 145.23333333334105, 11.100000000000131, 'fog'],
+  [1, {"brake": "held"}, 930.2679193251835, 2, 4, 137.65000000000168, 0, 'fog'],
+  [2, {"brake": "held"}, 879.900978199669, 4, 4, 135.3833333333332, 3.8333333333333246, 'fog'],
+  [3, {"brake": "held"}, 1003.2957475457524, 2, 5, 139.8000000000034, 1.866666666666665, 'fog'],
+  [4, {"brake": "held"}, 991.3290925033358, 1, 4, 139.18333333333624, 3.599999999999992, 'fog'],
+  [5, {"brake": "held"}, 836.5690866932515, 0, 3, 134.66666666666598, 27.816666666666368, 'fog'],
+  [6, {"brake": "held"}, 884.0515281900673, 1, 4, 136.35000000000065, 0, 'fog'],
+  [7, {"brake": "held"}, 890.635304604717, 2, 3, 136.5500000000008, 5.916666666666651, 'fog'],
+  [8, {"brake": "held"}, 846.4878523683851, 3, 4, 131.28333333332995, 0, 'fog'],
+  [9, {"brake": "held"}, 1179.9850039692517, 0, 4, 144.25000000000693, 1.8833333333333315, 'fog'],
+  [10, {"brake": "held"}, 1119.9652817609185, 2, 4, 142.66666666667234, 0, 'fog'],
+  [11, {"brake": "held"}, 826.3512719884055, 4, 3, 134.41666666666578, 3.949999999999991, 'fog'],
+  [12, {"brake": "held"}, 1188.4567730960262, 0, 4, 144.46666666667377, 6.866666666666648, 'fog'],
+  [1, {"brake": "none", "withFlock": false}, 589.27792616958, 4, 0, 121.68333333332771, 3.183333333333327, 'fog'],
+  [2, {"brake": "none", "withFlock": false}, 484.2786476682587, 4, 0, 113.09999999999486, 0, 'fog'],
+  [3, {"brake": "none", "withFlock": false}, 1158.9082984351166, 2, 0, 141.91666666667174, 1.5833333333333326, 'fog'],
+  [4, {"brake": "none", "withFlock": false}, 756.3576999538873, 2, 0, 132.11666666666395, 5.2999999999999865, 'fog'],
+  [5, {"brake": "none", "withFlock": false}, 773.0991918632551, 3, 0, 130.71666666666283, 2.6499999999999955, 'fog'],
+  [6, {"brake": "none", "withFlock": false}, 911.5709841624083, 2, 0, 134.94999999999953, 0, 'fog'],
+  [1, {"brake": "none", "hazards": false}, 1195.0774268008515, 0, 0, 144.71666666667397, 0, 'fog'],
+  [2, {"brake": "none", "hazards": false}, 1208.5019603176609, 0, 0, 145.0333333333409, 0, 'fog'],
+  [3, {"brake": "none", "hazards": false}, 1237.168287310611, 0, 0, 145.71666666667477, 0, 'fog'],
+  [4, {"brake": "none", "hazards": false}, 1058.1785187033117, 0, 0, 141.2833333333379, 0, 'fog'],
+  [5, {"brake": "none", "hazards": false}, 1084.5629913922016, 0, 0, 141.68333333333823, 0, 'fog'],
+  [6, {"brake": "none", "hazards": false}, 1280.9131189817397, 0, 0, 146.65000000000884, 0, 'fog'],
 ];
 
-test('the one step flies the reference pilot exactly as it flew before it was shared, to the last bit', () => {
+test('the one step flies the reference pilot exactly as recorded under this SIM_VERSION, to the last bit', () => {
   for (const [seed, options, peak, strikes, stalls, seconds, cloud, reason] of GOLDENS) {
     const { hazards = true, ...pilot } = options;
     const world = startRun(createRunWorld({ sky: createCloudbaseRun({ hazards }) }), seed);
@@ -88,35 +90,36 @@ test('the one step flies the reference pilot exactly as it flew before it was sh
 // the light brake eased (whom most kettlebells hit) came to on these skies. Seed and pilot, then
 // the peak (m, to the last bit), fixed steps flown, the TOTAL (kg), each lift's red lights in
 // order (1 contact, 2 control and 4 airspace, added up; `x` judged under the horn, at ×2; the
-// fog's lift last), reps, trails and plates loaded, and the kettlebells thrown, hit, close and
-// dodged. Every link already shared replays through these rules, so none of it may change
-// without a new SIM_VERSION.
+// fog's lift last), reps and how many of them were to depth, trails and plates loaded, and the
+// kettlebells thrown, hit, close and dodged. Every link already shared replays through these
+// rules, so none of it may change without a new SIM_VERSION. Re-captured for SIM_VERSION 2, on
+// purpose, with the reps to depth added.
 const MEET_GOLDENS = [
-  [1, 'TST', 1060.5814785518598, 8395, 165, '0 0 5 0x 1', 3, 4, 3, 3, 0, 2, 1],
-  [3, 'TST', 1276.935201631682, 8796, 162.5, '0 0 0 0 5x 4', 4, 5, 5, 3, 0, 0, 3],
-  [5, 'TST', 1515.976467501136, 9107, 357.5, '0 0 0 0 1x 0x 0', 4, 5, 6, 6, 0, 1, 5],
-  [10, 'TST', 1184.2510233398732, 8661, 125, '0 1 0 0 5', 3, 5, 4, 3, 0, 0, 3],
-  [1, 'collector', 948.2051597291712, 8295, 235, '0 1 5 1', 2, 4, 14, 3, 0, 0, 3],
-  [3, 'collector', 1689.2909743535454, 9311, 630, '0 0 0 1 0x 0x 0', 5, 6, 16, 6, 0, 2, 4],
-  [5, 'collector', 1559.5930908956768, 9069, 407.5, '0 0 1 0 0 0x 1', 5, 5, 14, 5, 0, 1, 4],
-  [10, 'collector', 1516.9381877557373, 9108, 302.5, '0 0 1 0 0 5x 0', 4, 5, 10, 4, 0, 0, 4],
-  [1, 'holding', 1018.4023139687791, 8325, 140, '0 0 5 1x 1', 4, 4, 2, 3, 3, 0, 0],
-  [3, 'holding', 1320.2137767916802, 8843, 280, '0 0 0 1x 4x 0', 3, 5, 3, 5, 3, 1, 1],
-  [5, 'holding', 957.2435093787765, 8146, 132.5, '0 0 1 5', 2, 4, 7, 3, 2, 0, 1],
-  [10, 'holding', 1143.4820189222767, 8602, 135, '0 1 1 0 5', 3, 5, 4, 5, 3, 2, 0],
+  [1, 'TST', 1177.3941804846224, 8633, 215, '0 0 4 0x 0', 5, 4, 4, 4, 4, 0, 0, 4],
+  [3, 'TST', 1294.2978147845135, 8808, 290, '0 0 0 1 4x 0', 4, 4, 5, 4, 4, 0, 1, 3],
+  [5, 'TST', 819.865337186954, 7978, 225, '0 0 4x 1', 2, 2, 4, 5, 2, 0, 0, 2],
+  [10, 'TST', 1510.7623209975627, 9036, 310, '0 0 0 0 4x 4x 1', 5, 5, 5, 2, 3, 0, 0, 3],
+  [1, 'collector', 1042.159583275864, 8361, 230, '0 0 5 0x 1', 5, 5, 4, 6, 2, 0, 0, 2],
+  [3, 'collector', 1278.3785827907298, 8762, 460, '0 1 1 0x 0x 0', 3, 3, 5, 11, 6, 0, 0, 6],
+  [5, 'collector', 1299.0490711260957, 8821, 590, '0 1 4 1x 1x 0', 4, 4, 5, 15, 1, 0, 0, 1],
+  [10, 'collector', 1144.416219193201, 8609, 157.5, '0 0 0 5x 0', 5, 4, 4, 2, 4, 0, 0, 4],
+  [1, 'holding', 1024.9181718515536, 8409, 255, '0 0 5 1x 0', 3, 3, 4, 7, 3, 3, 0, 0],
+  [3, 'holding', 1055.748106358312, 8467, 350, '0 0 0 1x 1', 2, 2, 5, 11, 3, 3, 0, 0],
+  [5, 'holding', 835.7077318719834, 8091, 125, '0 0 5x 4', 4, 4, 4, 5, 2, 1, 0, 0],
+  [10, 'holding', 1379.8091126777167, 8936, 155, '0 0 0 0 5x 1', 6, 6, 4, 9, 3, 3, 0, 0],
 ];
 const MEET_PILOTS = { TST, collector: { ...TST, collect: true }, holding: { brake: 'eased' } };
 
-test('with the meet and the kettlebells, each sky comes out as it always has: the same flight to the last bit, the same lights, plates and kettlebells', () => {
-  for (const [seed, pilot, peak, steps, total, lights, reps, trails, plates, thrown, hits, close, dodged] of MEET_GOLDENS) {
+test('with the meet and the kettlebells, each sky comes out as recorded under this SIM_VERSION: the same flight to the last bit, the same lights, plates and kettlebells', () => {
+  for (const [seed, pilot, peak, steps, total, lights, reps, deep, trails, plates, thrown, hits, close, dodged] of MEET_GOLDENS) {
     const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells() }), seed);
     const flown = flyPilot(world, createReferencePilot(MEET_PILOTS[pilot]));
     const { state } = world.meet;
     const bells = world.bells.state;
     const shown = state.lifts.slice(0, state.count).map(({ red, double }) => `${red}${double ? 'x' : ''}`).join(' ');
     assert.deepEqual(
-      [flown.reason, flown.peak, world.steps, state.total, shown, state.reps, state.trails, state.plates, bells.thrown, bells.hits, bells.close, bells.dodged],
-      ['fog', peak, steps, total, lights, reps, trails, plates, thrown, hits, close, dodged],
+      [flown.reason, flown.peak, world.steps, state.total, shown, state.reps, state.deep, state.trails, state.plates, bells.thrown, bells.hits, bells.close, bells.dodged],
+      ['fog', peak, steps, total, lights, reps, deep, trails, plates, thrown, hits, close, dodged],
       `seed ${seed}, ${pilot}`,
     );
     // The meet paid for every close call the kettlebells counted.

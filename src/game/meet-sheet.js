@@ -17,8 +17,8 @@
  *   lifts             the lifts judged, in order, the bar judged as the run ended last (`line`
  *                     0): { line, kg, red (bit 0 contact, bit 1 control, bit 2 airspace), good,
  *                     double, at }
- *   stats             strikes, stalls, seconds in cloud (rounded), reps, trails, close calls, and
- *                     kettlebells thrown, dodged and hit
+ *   stats             strikes, stalls, seconds in cloud (rounded), reps and those of them to depth,
+ *                     trails, close calls, and kettlebells thrown, dodged and hit
  *   trace             the barogram: `alt`, `fog` and `total` for each run second, `n` of them
  */
 export function summariseRun(world, reason) {
@@ -48,6 +48,7 @@ export function summariseRun(world, reason) {
       stalls: world.stalls,
       cloud: Math.round(pilot.cloudTime),
       reps: met ? met.reps : 0,
+      deep: met ? met.deep : 0,
       trails: met ? met.trails : 0,
       close: met ? met.close : thrown ? thrown.close : 0,
       thrown: thrown ? thrown.thrown : 0,

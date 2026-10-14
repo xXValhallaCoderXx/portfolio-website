@@ -15,9 +15,10 @@ const DOOR = join(GAME, 'good-lift.js');
 const CARD = join(SRC, 'components', 'GoodLiftResult.jsx');
 
 // What only the game beyond the arch may load, by name: everything for the run's sky and its
-// views, the shared step, the reference pilots and the meet. The two leaf modules the page itself
-// reads (the address and the sim version) are the exceptions.
-const RUN_ONLY = /^(cloudbase|ravens|run-|good-lift|pilots|meet-|bells|recorder|replay|daily|board)/;
+// views, the shared step, the reference pilots, the meet and the game's music (which never plays
+// over the fjord). The two leaf modules the page itself reads (the address and the sim version)
+// are the exceptions.
+const RUN_ONLY = /^(cloudbase|ravens|run-|good-lift|pilots|meet-|bells|recorder|replay|daily|board|music)/;
 const PAGE_MAY = new Set(['good-lift-address.js', 'sim-version.js']);
 const runOnly = (file) => file.startsWith(GAME + '/') && RUN_ONLY.test(file.slice(GAME.length + 1)) && !PAGE_MAY.has(file.slice(GAME.length + 1)) && !file.endsWith('.test.js');
 

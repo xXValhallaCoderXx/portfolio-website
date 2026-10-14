@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEEP_WARN, FOG_NEAR, GUST_NEAR, HINT_HOLD, HINT_WIDTH, cloudbaseHint, holdHint, stallHint } from './cloudbase-hints.js';
+import { CENTRE_RIDES, DEEP_WARN, FOG_NEAR, GUST_NEAR, HINT_HOLD, HINT_WIDTH, cloudbaseHint, holdHint, stallHint } from './cloudbase-hints.js';
 import { BRAKE } from './flight.js';
+import { MEET } from './meet-state.js';
 
 // A quiet moment well into a run: gliding in still air with nothing near and the hands up.
 const quiet = {
@@ -174,7 +175,11 @@ test('a close call, the horn and a waiting trail each have a line of their own, 
 });
 
 test('every line the meet adds fits one line of a narrow phone, and a kettlebell is said at once', () => {
-  const moments = [{ collapse: 1, bellHit: true }, { bell: 1 }, { bell: 1, touch: true }, { bell: 2 }, { closeCall: 0 }, { horn: 0 }, { trail: true }];
+  const moments = [
+    { collapse: 1, bellHit: true }, { bell: 1 }, { bell: 1, touch: true }, { bell: 2 }, { closeCall: 0 }, { horn: 0 }, { trail: true }, { depth: 0 },
+    { thermal: 1, rides: 2, shallow: true }, { thermal: 1, rides: 2, shallow: true, touch: true },
+    { thermal: 1, rides: 2, shallow: true, touch: true, flockDir: -1 },
+  ];
   const lines = new Set(moments.map(hint));
   assert.equal(lines.size, moments.length, 'each moment has its own line');
   for (const line of lines) assert.ok([...line].length <= HINT_WIDTH, `"${line}" is ${[...line].length} characters`);
@@ -183,4 +188,34 @@ test('every line the meet adds fits one line of a narrow phone, and a kettlebell
     holdHint(held, 'climb beside the ravens, never through', 10);
     assert.equal(holdHint(held, hint(moment), 10.1), hint(moment));
   }
+});
+
+test('from the second thermal on, a circle that missed the core is taught to centre, by the flock\'s way on a phone', () => {
+  assert.equal(hint({ thermal: 1, rides: 2, shallow: true, lift: 14 }), 'straighten in the surge, turn as it fades');
+  assert.equal(hint({ thermal: 2, rides: 3, shallow: true, lift: 14, touch: true, flockDir: 1 }), 'surge — lift your thumb off ▶ for a beat');
+  assert.equal(hint({ thermal: 1, rides: CENTRE_RIDES, shallow: true, touch: true, flockDir: -1 }), 'surge — lift your thumb off ◀ for a beat');
+  // Not on the first thermal, which teaches where to circle, nor once circles are centred, nor for ever.
+  assert.equal(hint({ thermal: 1, rides: 1, shallow: true }), 'climb beside the ravens, never through');
+  assert.equal(hint({ thermal: 1, rides: 2, shallow: false }), 'climb beside the ravens, never through');
+  assert.equal(hint({ thermal: 2, rides: 3, shallow: false }), 'ease the brake each circle or it goes deep');
+  assert.equal(hint({ thermal: 1, rides: CENTRE_RIDES + 1, shallow: true }), '');
+  // The launch column has no core to find.
+  assert.equal(hint({ thermal: 0, rides: 3, shallow: true }), 'circling ravens mark the next lift');
+  // Turning against the flock, a trail to follow and a dying thermal all come first.
+  assert.match(hint({ thermal: 1, rides: 3, shallow: true, against: 2 }), /^ravens turn/);
+  assert.match(hint({ thermal: 1, rides: 3, shallow: true, trail: true }), /^lift dying — follow/);
+  assert.match(hint({ thermal: 1, rides: 3, shallow: true, dying: true }), /^lift dying — leave/);
+});
+
+test('the run\'s first rep to depth is news for a moment, after a close call and the horn', () => {
+  assert.equal(hint({ depth: 0.5, thermal: 1, rides: 3 }), 'depth — centred circle, 5 kg on the bar');
+  assert.equal(hint({ depth: 2.6, thermal: 1, rides: 9 }), '');
+  assert.match(hint({ depth: 0.5, closeCall: 0.5 }), /^close call/);
+  assert.match(hint({ depth: 0.5, horn: 1 }), /^Gjallarhorn/);
+  assert.match(hint({ depth: 0.5, outside: true }), /turns you back/);
+});
+
+test('the meet\'s news names the weights the meet itself loads', () => {
+  assert.ok(hint({ closeCall: 0 }).includes(` ${MEET.close} kg `));
+  assert.ok(hint({ depth: 0 }).includes(` ${MEET.deep} kg `));
 });

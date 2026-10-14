@@ -15,8 +15,11 @@ import { FLIGHT } from './flight.js';
 // the flock's way in lift loads `rep` kg and a close call `close` kg. The airspace judge shows red
 // after more than `cloud` seconds in cloud during one lift. `alive` is the strength (0 to 1) a
 // thermal needs to count as lift, and turning the other way faster than `against` (rad/s) undoes
-// a circle in progress.
-export const MEET = Object.freeze({ bar: 25, every: 250, horn: 110, double: 2, rep: 2.5, close: 10, cloud: 1.5, alive: 0.3, against: 0.2 });
+// a circle in progress. A circle whose mean position was within `depth` metres of the core is a
+// rep to depth, and loads `deep` kg instead of `rep`.
+export const MEET = Object.freeze({
+  bar: 25, every: 250, horn: 110, double: 2, rep: 2.5, close: 10, cloud: 1.5, alive: 0.3, against: 0.2, depth: 7, deep: 5,
+});
 
 // Trails. When the lift being ridden (the launch column or a hunted thermal) relocates, or its
 // strength drops under `dying` from at or above it, and the pilot was in it within `recent`
@@ -64,8 +67,12 @@ const BAR_SINK = FLIGHT.sink.least + CURVE * (FLIGHT.speed.bar - FLIGHT.speed.li
  *                                 control, bit 2 airspace), good, double, at (run seconds) }
  *   horn                          Gjallarhorn has sounded and good lifts bank double
  *   reps, trails, close, plates   circles loaded, trails laid, close calls, plates loaded
+ *   deep                          of those reps, the ones to depth (centred within MEET.depth of
+ *                                 the core), which loaded MEET.deep kg rather than MEET.rep
  *   since                         strikes, stalls and seconds in cloud at the last line
  *   turned                        rad turned the flock's way toward the next rep
+ *   lap                           where that circle has gone: the glider's `x, z` summed over the
+ *                                 `n` steps it has turned the flock's way, whose mean judges depth
  *   ride                          the lift last ridden: `n` rides so far, thermal `slot` (-1 for
  *                                 none yet), the site `x, z` it was ridden at, `seen`, when the
  *                                 pilot was last in it, and `strong`, whether it was seen at or
@@ -91,6 +98,8 @@ export function createMeet() {
     plates: 0,
     since: { strikes: 0, stalls: 0, cloud: 0 },
     turned: 0,
+    deep: 0,
+    lap: { x: 0, z: 0, n: 0 },
     ride: { n: 0, slot: -1, x: 0, z: 0, seen: 0, strong: false },
     trail: {
       live: false, ride: 0, target: 0, x: 0, z: 0, ux: 0, uz: 0, gap: 0, slope: 0, born: 0, boarded: -1,
@@ -122,7 +131,8 @@ export function createMeet() {
     state.horn = false;
     state.reps = state.trails = state.close = state.plates = 0;
     state.since.strikes = state.since.stalls = state.since.cloud = 0;
-    state.turned = 0;
+    state.turned = state.deep = 0;
+    state.lap.x = state.lap.z = state.lap.n = 0;
     const { ride, trail } = state;
     ride.n = ride.x = ride.z = ride.seen = 0;
     ride.slot = -1;
@@ -283,7 +293,7 @@ export function createMeet() {
         ride.x = thermal.x;
         ride.z = thermal.z;
         ride.strong = false;
-        state.turned = 0;
+        state.turned = state.lap.x = state.lap.z = state.lap.n = 0;
       }
       if (thermal.strength >= TRAIL.dying) ride.strong = true;
       ride.seen = elapsed;
@@ -292,18 +302,30 @@ export function createMeet() {
     // Reps: the wing's own turning, counted the flock's way in a hunted thermal that still lifts.
     // A collapse or a stall (a spin with it) loses the circle in progress, and so does turning the
     // other way; the launch column has no flock to turn with.
+    // A rep is judged for depth on where the circle went while it turned: centred on the core
+    // (its mean position within `depth`), it loads the heavier plate.
+    const { lap } = state;
     if (pilot.collapse > 0 || g.stall > 0) {
-      state.turned = 0;
+      state.turned = lap.x = lap.z = lap.n = 0;
     } else if (slot > 0 && thermals[slot].strength >= MEET.alive) {
-      const way = g.yawRate * thermals[slot].dir;
+      const thermal = thermals[slot];
+      const way = g.yawRate * thermal.dir;
       if (way < -MEET.against) {
-        state.turned = 0;
+        state.turned = lap.x = lap.z = lap.n = 0;
       } else if (way > 0) {
         state.turned += way * dt;
+        lap.x += g.pos.x;
+        lap.z += g.pos.z;
+        lap.n += 1;
         if (state.turned >= TAU) {
           state.turned -= TAU;
+          const dx = lap.x / lap.n - thermal.x;
+          const dz = lap.z / lap.n - thermal.z;
+          const deep = dx * dx + dz * dz <= MEET.depth * MEET.depth;
           state.reps += 1;
-          state.bar += MEET.rep;
+          if (deep) state.deep += 1;
+          state.bar += deep ? MEET.deep : MEET.rep;
+          lap.x = lap.z = lap.n = 0;
         }
       }
     }

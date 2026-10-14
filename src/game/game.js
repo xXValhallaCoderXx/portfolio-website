@@ -16,6 +16,7 @@ import { holdHint } from './hints.js';
 import { fjordHint } from './fjord-hints.js';
 import { createLost } from './lost.js';
 import { createWindStreaks } from './wind-streaks.js';
+import { varioTone } from './vario.js';
 import { sameGame } from './good-lift-address.js';
 import './game.css';
 
@@ -110,7 +111,7 @@ const MARKUP = /* html */ `
         </div>
         <button data-do="cloudbase" hidden>[ Good Lift ]</button>
         <button data-do="quit-cloudbase" hidden>[ end run ]</button>
-        <p class="fj-keys-goal fj-keys-run" hidden>Good Lift: climb through a line every 250 m, where three judges light the lift · ravens circle where the air rises: turn the way they turn and climb beside them · Hrungnir throws kettlebells: push the bar, or turn off your line · ← and → together push the bar, as ◀ and ▶ do · keep out of the storm clouds · past the arch the brake can stall the wing · time does not speed up in a run</p>
+        <p class="fj-keys-goal fj-keys-run" hidden>Good Lift: climb through a line every 250 m, where three judges light the lift · ravens circle where the air rises: turn the way they turn and climb beside them · a circle centred on the core is a rep to depth, 5 kg: straighten as the lift surges, turn as it fades · Hrungnir throws kettlebells: push the bar, or turn off your line · ← and → together push the bar, as ◀ and ▶ do · keep out of the storm clouds · past the arch the brake can stall the wing · time does not speed up in a run<span class="for-keys"> · B switches the music</span></p>
       </aside>
     </nav>
   </div>
@@ -148,6 +149,7 @@ const MARKUP = /* html */ `
  *                                     Lift and calls play()
  * hooks.onFjord()                     the visitor asked to leave Good Lift for the fjord: the page
  *                                     changes the address and calls fly()
+ * hooks.onMusic(on)                   Good Lift's music was switched on or off, from anywhere
  */
 export function createGame(stage, hooks = {}) {
   stage.insertAdjacentHTML('beforeend', MARKUP);
@@ -474,7 +476,9 @@ export function createGame(stage, hooks = {}) {
     // console pins overrides them all.
     if (!gameSky || gameSky.kind === 'practice') gameSky = run.resolveSky(game);
     flownSky = pinnedSeed == null || pinnedSeed === gameSky.seed ? gameSky : { kind: 'sky', seed: pinnedSeed, day: 0 };
-    run.begin(flownSky.seed);
+    // The sound first: the run's music joins it as the run begins.
+    startAudio();
+    run.begin(flownSky.seed, flownSky);
     portal = false;
     mode = 'cloudbase';
     stage.classList.add('cloudbase');
@@ -537,9 +541,10 @@ export function createGame(stage, hooks = {}) {
     return beginCloudbase();
   }
 
-  // Out of Good Lift and back over the fjord, from the launch.
+  // Out of Good Lift and back over the fjord, from the launch: the game's music stops with it.
   function backToFjord() {
     finishCloudbase('quit', false);
+    run?.leave();
     game = gameSky = flownSky = null;
     portal = false;
     closeMap();
@@ -1115,6 +1120,8 @@ export function createGame(stage, hooks = {}) {
   // What the game beyond the arch shares with the engine (see good-lift.js).
   const host = {
     g, controls, air, scene, camera, loadModel, effects, touch, calm, hud, unlock, stage, view,
+    base: import.meta.env.BASE_URL,
+    onMusic: (on) => hooks.onMusic?.(on),
     compact: () => touch || view.width <= 560,
     best: () => progress.cloudbase.bestAltitude,
     flash: flashStrike,
@@ -1181,8 +1188,18 @@ export function createGame(stage, hooks = {}) {
     if (mode === 'cloudbase') {
       // The run writes its own readouts, and says nothing while the map is open.
       $('.fj-hint').textContent = run.hud(mapOpen);
-      // The compact HUD can wrap on small phones; notifications must start below its real height.
-      $('.fj-toasts').style.top = `${Math.ceil($('.fj-hud dl').getBoundingClientRect().bottom + 8)}px`;
+      // The notifications, with the judges' lights at their head, run down the middle of the screen.
+      // Wherever they would cross the readouts (which can wrap on small phones) they start below
+      // the readouts' real height, and below the buttons wherever they would cross those. A screen
+      // wide enough to keep them apart keeps them at the top, clear of the title card a run opens
+      // with.
+      const readouts = $('.fj-hud dl').getBoundingClientRect();
+      const buttons = $('.fj-hud nav').getBoundingClientRect();
+      const toasts = $('.fj-toasts');
+      const column = toasts.getBoundingClientRect();
+      if (host.compact() || column.left < readouts.right + 8) toasts.style.top = `${Math.ceil(readouts.bottom + 8)}px`;
+      else if (column.right > buttons.left - 8) toasts.style.top = `${Math.ceil(buttons.bottom + 8)}px`;
+      else toasts.style.removeProperty('top');
       if (mapOpen) drawMap();
       return;
     }
@@ -1364,6 +1381,8 @@ export function createGame(stage, hooks = {}) {
 
   let audio = null;
   let soundOn = true;
+  // The vario's next beep, written in place each time it sounds.
+  const tone = { pitch: 0, gap: 0 };
 
   function startAudio() {
     const Ctx = window.AudioContext ?? window.webkitAudioContext;
@@ -1540,11 +1559,12 @@ export function createGame(stage, hooks = {}) {
     audio.flap.frequency.setTargetAtTime(700 + 500 * luff, now, 0.08);
     if (running) run.sounds();
     if (flying && g.vy > 0.4 && now >= audio.nextBeep) {
-      const gap = Math.max(0.11, 0.42 - g.vy * 0.05);
-      audio.osc.frequency.setValueAtTime(620 + g.vy * 85, now);
+      // A run's thermals lift far harder than the fjord's, so its vario has a longer scale.
+      varioTone(g.vy, mode === 'cloudbase', tone);
+      audio.osc.frequency.setValueAtTime(tone.pitch, now);
       audio.beep.gain.setValueAtTime(0.05, now);
-      audio.beep.gain.setValueAtTime(0, now + gap * 0.5);
-      audio.nextBeep = now + gap;
+      audio.beep.gain.setValueAtTime(0, now + tone.gap * 0.5);
+      audio.nextBeep = now + tone.gap;
     } else if (!flying || g.vy <= 0.4) audio.beep.gain.setTargetAtTime(0, now, 0.03);
   }
 
@@ -1624,6 +1644,7 @@ export function createGame(stage, hooks = {}) {
     clearInput();
     $('.fj-hud').hidden = true;
     stage.classList.remove('playing', 'lost', 'cloudbase', 'cloudbase-ended');
+    run?.leave(true);
     audio?.ctx.suspend();
     if (document.fullscreenElement) document.exitFullscreen();
   }
@@ -1632,6 +1653,9 @@ export function createGame(stage, hooks = {}) {
 
   on(window, 'keydown', (event) => {
     if (mode === 'intro' || event.metaKey || event.ctrlKey || event.altKey) return;
+    run?.nudgeMusic();
+    // Good Lift's music has its own switch, only beyond the arch.
+    if (event.code === 'KeyB' && !event.repeat && inGame()) run?.toggleMusic();
     // Through the arch, nothing is asked of the flight until Good Lift begins.
     if (portal) return;
     if (mode === 'lost') {
@@ -1689,6 +1713,9 @@ export function createGame(stage, hooks = {}) {
     clearInput();
   });
   on(window, 'pagehide', () => finishCloudbase('quit', false));
+  on(stage, 'pointerdown', () => run?.nudgeMusic());
+  // Out of sight, Good Lift's music waits for the page to come back.
+  on(document, 'visibilitychange', () => run?.hideMusic(document.hidden));
 
   for (const button of stage.querySelectorAll('.fj-touch button')) {
     const set = (down) => (event) => {
@@ -1886,6 +1913,8 @@ export function createGame(stage, hooks = {}) {
     get meet() { return run?.meet ?? null; },
     get bells() { return run?.bells ?? null; },
     get meetView() { return run?.meetView ?? null; },
+    // Feeling for the core: how fast the lift is climbing, and the surges felt so far.
+    get surge() { return run?.surge.state ?? null; },
     get effects() {
       return {
         seed: run?.sky.state.seed ?? null, fold: effects.fold, foldLeft: effects.foldLeft, foldRight: effects.foldRight, luff: effects.luff,
@@ -1902,6 +1931,8 @@ export function createGame(stage, hooks = {}) {
     air,
     // The streaks being drawn: the run's while one is flown, otherwise the fjord's.
     get streaks() { return mode === 'cloudbase' && run ? run.streaks : streaks; },
+    // Good Lift's music: switched on, playing now, which track, and whether the browser refused it.
+    get music() { return run?.musicState ?? null; },
     fjordBreeze,
     camera,
     ZONES,
@@ -1929,6 +1960,8 @@ export function createGame(stage, hooks = {}) {
     play: playGame,
     /** The initials Good Lift's board writes this browser's runs under. */
     setInitials: (text) => run?.setInitials(text),
+    /** Good Lift's music switched over, from the meet sheet: whether it is now on. */
+    toggleMusic: () => run?.toggleMusic() ?? false,
     /** The meet sheet, a component that comes with Good Lift: null until it has loaded. */
     get meetSheet() { return run?.MeetSheet ?? null; },
     /**

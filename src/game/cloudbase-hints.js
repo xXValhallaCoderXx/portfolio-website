@@ -15,6 +15,8 @@ export const GUST_NEAR = 60;
 // The brake has been past the light brake's shelf this long (s) before the pilot is told: the
 // meter has already said it, and a moment's dip on purpose is not a mistake.
 export const DEEP_WARN = 0.5;
+// How to centre a circle on a thermal's core is taught from the second thermal ridden to this one.
+export const CENTRE_RIDES = 6;
 
 /**
  * `facts` describes the moment:
@@ -45,6 +47,8 @@ export const DEEP_WARN = 0.5;
  *   closeCall     seconds since a kettlebell missed by a whisker
  *   horn          seconds since Gjallarhorn sounded
  *   trail         plates lie on the bar's glide from the dying lift, waiting to be followed
+ *   shallow       the last circle in this thermal was off its core: a rep, but not to depth
+ *   depth         seconds since the run's first rep to depth
  */
 export function cloudbaseHint(facts) {
   if (facts.collapse > 0) return facts.bellHit ? 'kettlebell hit — wing collapsed, hold on' : 'raven strike — wing collapsed, hold on';
@@ -63,6 +67,7 @@ export function cloudbaseHint(facts) {
   // A moment's news from the meet, each said for a moment only.
   if (facts.closeCall < 2) return 'close call — 10 kg on the bar';
   if (facts.horn < 3) return 'Gjallarhorn — every lift counts double';
+  if (facts.depth < 2.5) return 'depth — centred circle, 5 kg on the bar';
   if (facts.elapsed < 8) return 'circle in the amber column to climb';
   if (facts.fogClearance < FOG_NEAR) return facts.lift > 3 ? 'fog closing in — keep climbing' : 'fog closing in — fly to the ravens';
   if (facts.headroom < 70 && facts.climbing) return 'storm cloud above — lift ends at its base';
@@ -70,6 +75,11 @@ export function cloudbaseHint(facts) {
   if (facts.thermal > 0 && facts.against > 1 && !facts.dying) return `ravens turn ${facts.flockDir > 0 ? '▶' : '◀'} here — turn with them`;
   if (facts.trail) return 'lift dying — follow the plates on the bar';
   if (facts.thermal >= 0 && facts.dying) return facts.thermal === 0 ? 'lift dying — fly to the circling ravens' : 'lift dying — leave when the ravens leave';
+  // Once circling is learnt, how to centre it: the lift surges on the side of a circle nearest the
+  // core, and straightening there for a beat moves the circle onto it. Said while circles miss it.
+  if (facts.thermal > 0 && facts.shallow && facts.rides >= 2 && facts.rides <= CENTRE_RIDES) {
+    return facts.touch ? `surge — lift your thumb off ${facts.flockDir > 0 ? '▶' : '◀'} for a beat` : 'straighten in the surge, turn as it fades';
+  }
   if (facts.thermal > 0 && facts.rides <= 2) return 'climb beside the ravens, never through';
   // Then how the brake helps: held light it tightens the circle, and left on it goes deep.
   if (facts.thermal > 0 && facts.rides <= 4) return facts.touch ? 'ease off ▼ once a circle or it goes deep' : 'ease the brake each circle or it goes deep';
