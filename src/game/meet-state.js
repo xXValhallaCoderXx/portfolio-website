@@ -730,12 +730,12 @@ export function createMeet() {
     }
 
     // Reps: the wing's own turning, counted the flock's way in a hunted thermal that still lifts.
-    // A collapse or a stall (a spin with it) loses the circle in progress, and so does turning the
-    // other way; the launch column has no flock to turn with.
+    // A collapse, a stall (a spin with it) or a front tuck loses the circle in progress, and so
+    // does turning the other way; the launch column has no flock to turn with.
     // A rep is judged for depth on where the circle went while it turned: centred on the core
     // (its mean position within `depth`), it loads the heavier plate.
     const { lap } = state;
-    if (pilot.collapse > 0 || g.stall > 0) {
+    if (pilot.collapse > 0 || g.stall > 0 || g.tuck > 0) {
       state.turned = lap.x = lap.z = lap.n = 0;
     } else if (slot > 0 && thermals[slot].strength >= MEET.alive) {
       const thermal = thermals[slot];

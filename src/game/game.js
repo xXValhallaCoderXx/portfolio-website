@@ -61,6 +61,8 @@ const KEYS = {
   ArrowDown: 'brake',
   KeyS: 'brake',
   Space: 'brake',
+  // Big ears, in a run: under the left hand while the right is on the arrows.
+  KeyE: 'ears',
 };
 
 // Everything the game draws over its own canvas. The landing panel is not here: the page renders
@@ -90,6 +92,7 @@ const MARKUP = /* html */ `
           <dt>← →</dt><dd>steer <span>or A D</span></dd>
           <dt>space</dt><dd>brake: the longer you hold, the deeper you sink <span>or ↓ S</span></dd>
           <dt>↑</dt><dd>speed bar: hands up, faster and sinking more <span>or W</span></dd>
+          <dt>e</dt><dd>big ears, in Good Lift: fold the tips to sink fast, and the brake opens them</dd>
           <dt>enter</dt><dd>take off again once landed <span>or space</span></dd>
           <dt>shift</dt><dd>hold to speed time up</dd>
           <dt>click</dt><dd>a lit pillar or its label, to fly there by itself</dd>
@@ -102,6 +105,7 @@ const MARKUP = /* html */ `
         <ul>
           <li>◀ ▶ steer</li>
           <li>▼ brake: hold longer to sink faster</li>
+          <li>▼ ▼ pressed together in Good Lift: big ears, held by either</li>
           <li>» hold to speed time up</li>
           <li>tap a lit pillar or its label to fly there by itself</li>
         </ul>
@@ -112,7 +116,7 @@ const MARKUP = /* html */ `
         </div>
         <button data-do="cloudbase" hidden>[ Good Lift ]</button>
         <button data-do="quit-cloudbase" hidden>[ end run ]</button>
-        <p class="fj-keys-goal fj-keys-run" hidden>Good Lift: climb through a line every 250 m, where three judges light the lift · ravens circle where the air rises: turn the way they turn and climb beside them · a circle centred on the core is a rep to depth, 5 kg: straighten as the lift surges, turn as it fades · Hrungnir throws kettlebells: push the bar, or turn off your line, and from 1,000 m the Beast, heavier, with longer warning · a strike sprays your plates: catch them as they sink · plates ride the gust fronts, hide under storm clouds and, after the horn, bait you down to the fog · at 500 m and 1,000 m rune stones rise: fly through one for its blessing · ← and → together push the bar, as ◀ and ▶ do · keep out of the storm clouds: their lightning shows every thermal for a moment · the ring round you is how far you glide before the fog: cyan, a flock is in reach; amber, climb first · past the arch the brake can stall the wing · time does not speed up in a run<span class="for-keys"> · B switches the music</span></p>
+        <p class="fj-keys-goal fj-keys-run" hidden>Good Lift: climb through a line every 250 m, where three judges light the lift · ravens circle where the air rises: turn the way they turn and climb beside them · fly past a flock's core on the side it turns to, and turn as that wing lifts: the first circle goes round the core · a circle centred on the core is a rep to depth, 5 kg: straighten as the lift surges, turn as it fades · the wing dives as the air drops away: tap the brake to catch it, or it tucks · a struck wing is pumped open: hold the brake a moment and let go, twice · Hrungnir throws kettlebells: push the bar, or turn off your line, and from 1,000 m the Beast, heavier, with longer warning · a strike sprays your plates: catch them as they sink · plates ride the gust fronts, hide under storm clouds and, after the horn, bait you down to the fog · at 500 m and 1,000 m rune stones rise: fly through one for its blessing · ← and → together push the bar, as ◀ and ▶ do · keep out of the storm clouds: their lightning shows every thermal for a moment · the ring round you is how far you glide before the fog: cyan, a flock is in reach; amber, climb first · big ears (E, or ▼ ▼ together) sink you fast and cannot stall: fly out of the lift with them, they will not beat a core · past the arch the brake can stall the wing, and a high stall ends in a dive to catch: let go, then tap · time does not speed up in a run<span class="for-keys"> · B switches the music</span></p>
       </aside>
     </nav>
   </div>
@@ -292,12 +296,12 @@ export function createGame(stage, hooks = {}) {
   const g = createFlight(new THREE.Vector3(START.x, START.y, START.z));
   g.yaw = START.yaw;
   // What the pilot asks of the wing and the air it is in, filled afresh at every step.
-  const controls = { turn: 0, brake: false, bar: false, locked: false, harsh: false, linger: false, climb: null };
+  const controls = { turn: 0, brake: false, bar: false, ears: false, locked: false, harsh: false, linger: false, dive: false, climb: null };
   const air = { lift: 0, sink: 0, windX: 0, windZ: 0, calm: true, rough: 0, clearance: Infinity };
-  const input = { left: false, right: false, bar: false, brake: false, boost: false };
+  const input = { left: false, right: false, bar: false, brake: false, ears: false, boost: false };
   // Who is holding each control. Two keys, or a key and a button, can hold the same one, and it
   // is only let go when the last of them is.
-  const holders = { left: new Set(), right: new Set(), bar: new Set(), brake: new Set(), boost: new Set() };
+  const holders = { left: new Set(), right: new Set(), bar: new Set(), brake: new Set(), ears: new Set(), boost: new Set() };
   function press(name, by, down) {
     if (down) holders[name].add(by);
     else holders[name].delete(by);
@@ -331,15 +335,21 @@ export function createGame(stage, hooks = {}) {
   // folded of the two. `stalled` is whether the stall has been heard, `deep` seconds the brake has
   // been deep, and `meter` what the brake meter shows (`meterShown`, what was last written to the page).
   // `stop` is the wall seconds a good lift still holds the flight still for (written by the run).
+  // `dive` and `tuck` are how far the wing is shown dived ahead and tucked under, and `heave` the
+  // side of the wing over a core lifted as the moment to turn in comes (-1 left to 1 right, written
+  // by the run and dying away).
   const effects = {
     fold: 0, veil: 0, veilShown: 0, shake: 0, gaze: 0, want: { fold: 0, veil: 0, shake: 0, gaze: 0 }, floor: -Infinity, gazeShown: -1, stop: 0,
-    foldLeft: 0, foldRight: 0, luff: 0, stall: { left: 0, right: 0, luff: 0, shake: 0 }, stalled: false, stallSide: 0, deep: 0,
+    foldLeft: 0, foldRight: 0, luff: 0, stall: { left: 0, right: 0, luff: 0, shake: 0, dive: 0, tuck: 0 }, stalled: false, stallSide: 0, deep: 0,
+    dive: 0, tuck: 0, heave: 0,
     meter: { fill: 0, red: 0, state: '' }, meterShown: { fill: -1, red: -1, state: null }, fjordHint: { line: '', since: 0 },
   };
   const veilEl = $('.fj-veil');
   const strikeEl = $('.fj-strike');
   const hintEl = $('.fj-hint');
   const boostButton = $('.fj-touch [data-input="boost"]');
+  // The first ▼, told apart from the second (boostButton, in a run) for the big ears: both pressed together.
+  const brakeButton = $('.fj-touch [data-input="brake"]');
   const touchEl = $('.fj-touch');
   const meterEl = $('.fj-brake');
   const [meterWord, meterTrack] = meterEl.children;
@@ -405,6 +415,7 @@ export function createGame(stage, hooks = {}) {
   function clearRunEffects() {
     effects.fold = effects.veil = effects.veilShown = effects.shake = 0;
     effects.foldLeft = effects.foldRight = effects.luff = effects.deep = effects.stallSide = 0;
+    effects.dive = effects.tuck = effects.heave = 0;
     effects.want.fold = effects.want.veil = effects.want.shake = effects.want.gaze = 0;
     effects.floor = -Infinity;
     effects.stop = 0;
@@ -644,6 +655,9 @@ export function createGame(stage, hooks = {}) {
     controls.turn = turn;
     controls.brake = input.brake && !auto;
     controls.bar = input.bar && !auto;
+    // The big ears and the wing's dives are a run's: over the fjord neither is ever asked for.
+    controls.ears = false;
+    controls.dive = false;
     controls.locked = false;
     controls.harsh = false;
     controls.linger = false;
@@ -679,7 +693,8 @@ export function createGame(stage, hooks = {}) {
   // One step of a run: the keys go to the shared step (run-step.js), which flies the wing and the
   // sky together exactly as the tests and the replays do; the game only answers what happened.
   function simulateRun(dt) {
-    const ended = run.step(dt, input);
+    // Which ▼ is held as well, for the big ears on a touch screen: both pressed together.
+    const ended = run.step(dt, input, holders.brake.has(brakeButton), holders.brake.has(boostButton));
     outOfBounds = run.last.outside;
     afterStep(dt, run.last.collapsed);
     if (ended === 'landed') {
@@ -790,6 +805,8 @@ export function createGame(stage, hooks = {}) {
     effects.deep = 0;
     holders.brake.clear();
     input.brake = false;
+    holders.ears.clear();
+    input.ears = false;
     mode = 'flying';
   }
 
@@ -1175,12 +1192,14 @@ export function createGame(stage, hooks = {}) {
   // The brake meter: two bars scaled across one track, written only when they change and only as
   // transforms, so the page never lays itself out again for them.
   const SCALES = Array.from({ length: 201 }, (_, i) => `scaleX(${i / 200})`);
-  const METER_WORDS = { light: 'brake', late: 'brake', deep: 'deep', near: 'deep', stalled: 'stall' };
+  const METER_WORDS = { light: 'brake', late: 'brake', deep: 'deep', near: 'deep', stalled: 'stall', ears: 'ears', dive: 'catch' };
   function updateMeter() {
     // Nothing to show with the map open, while flying itself, or anywhere but in the air.
     const shown = isAirborne() && !mapOpen && !auto;
-    // Only a run can stall, so only a run's meter ever shows red.
-    brakeMeter(shown ? g.brake : 0, shown && mode === 'cloudbase' ? g.stallLoad : 0, shown ? g.stall : 0, effects.meter);
+    // Only a run can stall, so only a run's meter ever shows red; and only a run's wing dives or
+    // takes its ears in.
+    const running = shown && mode === 'cloudbase';
+    brakeMeter(shown ? g.brake : 0, running ? g.stallLoad : 0, shown ? g.stall : 0, effects.meter, running ? g.ears : 0, running ? g.dive : 0);
     const was = effects.meterShown;
     const fill = Math.round(effects.meter.fill * 200);
     const red = Math.round(effects.meter.red * 200);
@@ -1462,8 +1481,26 @@ export function createGame(stage, hooks = {}) {
     beat.connect(swing).connect(shudder.gain);
     beat.start();
 
+    // The folded tips of big ears: the same noise lower and in a wider band, beating slower and
+    // softer than a stall's flutter, so the two are never taken for each other.
+    const tipBand = ctx.createBiquadFilter();
+    tipBand.type = 'bandpass';
+    tipBand.frequency.value = 340;
+    tipBand.Q.value = 1.2;
+    const tipBeat = ctx.createGain();
+    tipBeat.gain.value = 0.6;
+    const tips = ctx.createGain();
+    tips.gain.value = 0;
+    source.connect(tipBand).connect(tipBeat).connect(tips).connect(master);
+    const tipWave = ctx.createOscillator();
+    tipWave.frequency.value = 5.5;
+    const tipDepth = ctx.createGain();
+    tipDepth.gain.value = 0.4;
+    tipWave.connect(tipDepth).connect(tipBeat.gain);
+    tipWave.start();
+
     // `next` holds when each one-off sound may play again, so none can pile up.
-    audio = { ctx, master, noise, wind, windFilter, osc, beep, rumble, flap, luff, beat, nextBeep: 0, next: {} };
+    audio = { ctx, master, noise, wind, windFilter, osc, beep, rumble, flap, luff, beat, tips, nextBeep: 0, next: {} };
   }
 
   // Plays a one-off sound unless it played less than `gap` seconds ago. Nothing new starts while
@@ -1579,6 +1616,7 @@ export function createGame(stage, hooks = {}) {
     audio.luff.gain.setTargetAtTime(0.11 * luff * luff, now, 0.08);
     audio.beat.frequency.setTargetAtTime(8 + 9 * luff, now, 0.08);
     audio.flap.frequency.setTargetAtTime(700 + 500 * luff, now, 0.08);
+    audio.tips.gain.setTargetAtTime(running ? 0.05 * g.ears : 0, now, 0.12);
     if (running) run.sounds();
     if (flying && g.vy > 0.4 && now >= audio.nextBeep) {
       // A run's thermals lift far harder than the fjord's, so its vario has a longer scale.
@@ -1700,8 +1738,9 @@ export function createGame(stage, hooks = {}) {
     if (event.code in KEYS) {
       event.preventDefault();
       const name = KEYS[event.code];
-      if (name === 'brake') {
-        // A brake key held since before the launch is not a brake until it is pressed again.
+      if (name === 'brake' || name === 'ears') {
+        // A brake key held since before the launch is not a brake until it is pressed again, nor
+        // the ears.
         if (event.repeat) return;
         // Space also takes off when landed.
         if (event.code === 'Space' && mode === 'landed') return takeOff();
@@ -1834,7 +1873,16 @@ export function createGame(stage, hooks = {}) {
       // Put right out once it is a trace, as the folds are: while it is above nought the wing works
       // out a flutter for every point of its cloth.
       if (effects.luff < 0.003 && effects.stall.luff === 0) effects.luff = 0;
-    } else effects.foldLeft = effects.foldRight = effects.luff = 0;
+      // A dive throws the wing ahead fast and it comes back as it is caught; a tuck folds the
+      // leading edge under at once and opens over a few tenths of a second.
+      effects.dive += (effects.stall.dive - effects.dive) * Math.min(1, elapsed * (effects.stall.dive > effects.dive ? 9 : 4));
+      effects.tuck += (effects.stall.tuck - effects.tuck) * Math.min(1, elapsed * (effects.stall.tuck > effects.tuck ? 18 : 3));
+      if (effects.dive < 0.003 && effects.stall.dive === 0) effects.dive = 0;
+      if (effects.tuck < 0.003 && effects.stall.tuck === 0) effects.tuck = 0;
+    } else effects.foldLeft = effects.foldRight = effects.luff = effects.dive = effects.tuck = 0;
+    // The lift of the wing over a core is a moment's: it dies away, and is put right out once a trace.
+    effects.heave -= effects.heave * Math.min(1, elapsed * 3);
+    if (Math.abs(effects.heave) < 0.001) effects.heave = 0;
     effects.fold = Math.max(effects.foldLeft, effects.foldRight);
     effects.shake = !isAirborne() || calm || mapOpen || held ? 0 : Math.max(effects.want.shake, effects.stall.shake);
     if (inRun) {
@@ -1886,6 +1934,11 @@ export function createGame(stage, hooks = {}) {
       foldRight: effects.foldRight,
       // A gust rocking the wing is only motion; the flutter of a coming stall says something, and stays.
       rough: airborne && !calm ? air.rough : 0,
+      ears: airborne ? g.ears : 0,
+      dive: effects.dive,
+      tuck: effects.tuck,
+      // Gentler for whoever asks for less motion, and still there.
+      heave: calm ? effects.heave * 0.5 : effects.heave,
     });
     updateMeter();
     updateCamera(elapsed);
@@ -1936,14 +1989,17 @@ export function createGame(stage, hooks = {}) {
     get meet() { return run?.meet ?? null; },
     get bells() { return run?.bells ?? null; },
     get meetView() { return run?.meetView ?? null; },
-    // Feeling for the core: how fast the lift is climbing, and the surges felt so far.
+    // Feeling for the core: how fast the lift is climbing, and the surges felt so far; and the
+    // moment to turn into one (run-entry.js), and the moments called so far.
     get surge() { return run?.surge.state ?? null; },
+    get entry() { return run?.entry.state ?? null; },
     // What the run's hint was last chosen from: its facts, as the readouts last wrote them.
     get hintFacts() { return run?.hintFacts ?? null; },
     get effects() {
       return {
         seed: run?.sky.state.seed ?? null, fold: effects.fold, foldLeft: effects.foldLeft, foldRight: effects.foldRight, luff: effects.luff,
         veil: effects.veil, gaze: effects.gaze, hook: run?.world.hook ?? 1, stalls: run?.world.stalls ?? 0, meter: { ...effects.meter }, haste, stop: effects.stop,
+        tucks: run?.world.tucks ?? 0, pumps: run?.world.pump.n ?? 0, dive: effects.dive, tuck: effects.tuck, heave: effects.heave,
       };
     },
     // fjord.seed(n) flies the same Cloudbase sky every run until fjord.seed() lets it go;

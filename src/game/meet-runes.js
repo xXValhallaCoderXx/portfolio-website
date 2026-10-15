@@ -9,7 +9,7 @@
 //   ᚠ Fehu    every plate loads from much further off (meet-state.js)
 //   ᛉ Algiz   the next kettlebell that would hit glances off instead, and the blessing is spent
 //             (bells.js)
-//   ᚨ Ansuz   the thermals' sparks are seen twice as far: for the view alone, the sim only keeps it
+//   ᚨ Ansuz   the thermals' motes are seen twice as far: for the view alone, the sim only keeps it
 //   ᛏ Tiwaz   everything loaded counts double, but a strike loses the whole bar (meet-state.js)
 //
 // Pure: no 3D, no page, no clock, and no randomness but its own draws from the run's seed, never
@@ -51,11 +51,12 @@ export const GATES = Object.freeze({
 });
 
 // What the blessings do. Fehu loads every plate from within `reach`; Tiwaz loads each plate
-// `double` times over; Ansuz shows the thermals' sparks `sparks` times as far off (the view's).
+// `double` times over; Ansuz shows the thermals' motes `sparks` times as far off (the view's; the key
+// keeps the name it shipped with, as the rules' fingerprint reads it).
 export const BLESSING = Object.freeze({
   reach: 12,                        // m, in 3-D, from which a plate loads under Fehu (6 without)
   double: 2,                        // times each plate counts under Tiwaz
-  sparks: 2,                        // times as far the sparks are seen under Ansuz
+  sparks: 2,                        // times as far the thermals' motes are seen under Ansuz
 });
 
 const TAU = Math.PI * 2;

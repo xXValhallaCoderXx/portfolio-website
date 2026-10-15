@@ -21,9 +21,11 @@ test('digest is SHA-256 in hex, cut to the digits asked for, as the page and the
 test('a run\'s id is a digest of the run alone: its rules, seed and controls, never its initials, claims, day or flags', async () => {
   const id = await runId(log());
   assert.match(id, new RegExp(`^[0-9a-f]{${WORLD_BOARD.id}}$`));
-  // Its controls each as the step reads them: both arrows are the bar, and the brake wins over it.
+  // Its controls each as the step reads them: the brake and the bar bits together are the ears, both
+  // arrows are the bar, and the brake wins over it.
   const read = Uint8Array.from(BITS, (bits) => {
     const both = (bits & 3) === 3;
+    if ((bits & 12) === 12) return 12 | (both ? 0 : bits & 3);
     const brake = bits & 4;
     return (both ? 0 : bits & 3) | brake | (!brake && (both || bits & 8) ? 8 : 0);
   });
@@ -63,14 +65,17 @@ test('a row of the world board is kept clean: named, never blocked, its numbers 
 });
 
 test('a run keeps its id however its keys are written, where the step flies them the same', async () => {
-  const log = (bits) => ({ simVersion: 3, seed: 7, steps: bits.length, bits: Uint8Array.from(bits) });
-  const plain = await runId(log([0, 2, 2, 8, 4, 4, 1, 9, 0]));
-  // Both arrows are the bar; the brake wins over the bar, held alone or with both arrows.
-  assert.equal(await runId(log([0, 2, 2, 3, 12, 4, 1, 9, 0])), plain);
-  assert.equal(await runId(log([0, 2, 2, 11, 4, 15, 1, 9, 0])), plain);
-  assert.equal(await runId(log([0, 2, 2, 8, 7, 12, 1, 9, 0])), plain);
-  // A step the wing flies differently is another run.
-  assert.notEqual(await runId(log([0, 2, 2, 8, 4, 4, 2, 9, 0])), plain);
-  assert.notEqual(await runId(log([0, 2, 2, 0, 4, 4, 1, 9, 0])), plain);
-  assert.notEqual(await runId({ ...log([0, 2, 2, 8, 4, 4, 1, 9, 0]), seed: 8 }), plain);
+  const log = (bits) => ({ simVersion: 4, seed: 7, steps: bits.length, bits: Uint8Array.from(bits) });
+  const plain = await runId(log([0, 2, 2, 8, 4, 4, 1, 9, 12, 13, 0]));
+  // Both arrows are the bar, and the brake wins over the bar they make; the ears with both arrows
+  // are the ears held straight.
+  assert.equal(await runId(log([0, 2, 2, 3, 7, 4, 1, 9, 15, 13, 0])), plain);
+  assert.equal(await runId(log([0, 2, 2, 11, 4, 7, 1, 9, 12, 13, 0])), plain);
+  // A step the wing flies differently is another run: the brake and the bar bits together are the
+  // big ears, not the brake, and the ears steer as the arrows say.
+  assert.notEqual(await runId(log([0, 2, 2, 8, 12, 4, 1, 9, 12, 13, 0])), plain);
+  assert.notEqual(await runId(log([0, 2, 2, 8, 4, 4, 1, 9, 12, 14, 0])), plain);
+  assert.notEqual(await runId(log([0, 2, 2, 8, 4, 4, 2, 9, 12, 13, 0])), plain);
+  assert.notEqual(await runId(log([0, 2, 2, 0, 4, 4, 1, 9, 12, 13, 0])), plain);
+  assert.notEqual(await runId({ ...log([0, 2, 2, 8, 4, 4, 1, 9, 12, 13, 0]), seed: 8 }), plain);
 });

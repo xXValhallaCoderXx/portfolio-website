@@ -279,15 +279,23 @@ test('a run is never on the board twice: sent again from its device it keeps its
 });
 
 test('a copy of a run whose keys differ only where the wing cannot feel them is the same run, and a duplicate', async () => {
-  const { column } = runs();
+  // The run circling on the light brake, which holds the brake straight on many steps.
+  const { eased: column } = runs();
   const fn = service();
   assert.equal((await fn.send(column.text)).status, 200);
-  // Its keys changed on every step its wing was folded, and the bar put under every brake.
+  // Its arrows changed on every step its wing was folded, and both arrows put under every brake held
+  // straight: the brake wins over the bar they make. (The bar's own key under a brake is the ears.)
   const steps = folded(column);
   assert.ok(steps.length > 0, 'the run was struck at least once');
   const bits = Uint8Array.from(column.log.bits);
   for (const step of steps) bits[step] ^= 3;
-  for (let i = 0; i < column.log.steps; i++) if (bits[i] & 4) bits[i] |= 8;
+  let braked = 0;
+  for (let i = 0; i < column.log.steps; i++) {
+    if (bits[i] !== 4) continue;
+    bits[i] = 7;
+    braked += 1;
+  }
+  assert.ok(braked > 0, 'the run held the brake straight on some steps');
   const copy = encodeLog({ ...column.log, initials: 'XYZ' }, bits, column.log.steps);
   const sent = await fn.send(copy, { token: YOU, ip: AWAY });
   assert.deepEqual([sent.status, sent.body.why], [409, 'duplicate']);

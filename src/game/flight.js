@@ -60,6 +60,27 @@ export const STALL = Object.freeze({
   harsh: Object.freeze({ time: 2.4, sink: 24, yaw: 1.2, cut: 1, floor: 0 }),
 });
 
+// Big ears: the outer cells of both tips pulled down and in by their lines, a steep way down that
+// cannot stall. Folded all the way they add `sink` and take `slow` off the airspeed, and the wing
+// turns at only `turn`, by weight shift, however the hands were set. They come in over `fold`
+// seconds while held and open by themselves over `open` once let go, or in `dab` with a touch of
+// the brake, which bites only once they are out: the brake is off the wing while they are in, so
+// no stall can build. Measured in a run: straight they come down at 6.05 m/s and 10 m/s, 2.6 times
+// the speed bar's sink and still under the deep brake's 7, and in a core's 20 m/s they climb 13.6,
+// so they are the way to fly out of lift and sink, never a way out of a core where it stands.
+export const EARS = Object.freeze({ sink: 5, slow: 1.5, turn: 0.5, fold: 0.6, open: 1.5, dab: 0.25 });
+
+// A wing dives when the air drops away under it, as it does flying out of a core or up into the
+// sink at a storm cloud's base, and when a deep brake is let go or a harsh stall flies again: it
+// pitches forward and wants catching with the brake. `under` is the air it has been flying in
+// (lift less sink, followed `feel` seconds behind); a fall of `drop` from that, to `floor` or less,
+// dives it. A brake biting at any step of the next `catch` seconds holds it, and so does asking for
+// the ears; left alone it tucks its leading edge under for `tuck.time` seconds, `tuck.sink` the
+// faster down, with the hands off it and its heading held. Another dive comes only once the air has
+// stopped falling (under half of `drop`) and `rest` seconds have gone. The floor keeps a circle out
+// of it: a lap 14 m off a core never falls below about 4 m/s, and every way out of lift ends near 0.
+export const DIVE = Object.freeze({ feel: 0.5, drop: 2.5, floor: 4, catch: 0.8, rest: 1.5, tuck: Object.freeze({ time: 0.8, sink: 12 }) });
+
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const smooth = (from, to, value) => {
   const t = clamp((value - from) / (to - from), 0, 1);
@@ -86,17 +107,25 @@ const MUSH = FLIGHT.sink.deep - sinkAt(FLIGHT.speed.deep);
  *   stallHarsh                whether the stall in progress is the costly kind
  *   grip                      false after a harsh stall until the brake is let go
  *   windX, windZ, felt        the wind at the last step, and whether there has been one
+ *   ears                      how far the big ears are in, 0 to 1
+ *   under                     the air the wing has been flying in (lift less sink), a dive's measure
+ *   dive, tuck                seconds left to catch a dive, and of a tuck
+ *   diveRest, diveArmed       seconds before another dive may come, and whether the air has
+ *                             stopped falling since the last
  */
 export function createFlight(pos = { x: 0, y: 0, z: 0 }) {
   return {
     pos, yaw: 0, yawRate: 0, bank: 0, speed: FLIGHT.speed.trim, sink: FLIGHT.sink.trim, vy: 0, turn: 0, lift: 0, liftSide: 0,
     brake: 0, bar: 0, stallLoad: 0, stall: 0, stallSide: 0, stallHarsh: false, grip: true, windX: 0, windZ: 0, felt: false,
+    ears: 0, under: 0, dive: 0, tuck: 0, diveRest: 0, diveArmed: true,
   };
 }
 
-/** Lets go of everything: hands up, bar off, nothing stalled or about to. Attitude and speed stay. */
+/** Lets go of everything: hands up, bar off, ears out, nothing stalled, diving or about to. Attitude and speed stay. */
 export function releaseFlight(g) {
   g.brake = g.bar = g.stallLoad = g.stall = g.stallSide = 0;
+  g.ears = g.under = g.dive = g.tuck = g.diveRest = 0;
+  g.diveArmed = true;
   g.stallHarsh = false;
   g.grip = true;
   // The next wind it meets is where it starts from, not a gust.
@@ -120,9 +149,12 @@ export function settleFlight(g, speed = FLIGHT.speed.trim) {
  *   turn     -1 (left) to 1 (right), whoever it comes from: keys, the autopilot, the edge of the map
  *   brake    the brake is held
  *   bar      the speed bar is held; the brake wins over it
+ *   ears     the big ears are held in (a Good Lift run); the brake's first work is letting them go
  *   locked   something else has the wing (a raven strike): the pilot's hands do nothing
  *   harsh    a stall here costs real height (high in a Cloudbase run)
  *   linger   the light brake is held long (a Cloudbase run)
+ *   dive     the wing dives as the air drops away and a harsh stall ends with one to catch (high
+ *            in a Good Lift run); left out, nothing ever dives
  *   safe     the wing cannot stall here (over the fjord): the load stops short of it, as it
  *            does near the ground
  *   climb    a climb rate to hold instead of flying the air, or null; set, the glider is flying
@@ -137,8 +169,9 @@ export function settleFlight(g, speed = FLIGHT.speed.trim) {
  */
 export function stepFlight(g, controls, air, dt) {
   const auto = controls.climb != null;
-  // One disaster at a time: a raven strike or the autopilot ends a stall.
+  // One disaster at a time: a raven strike or the autopilot ends a stall, a dive and a tuck.
   if (g.stall > 0 && (controls.locked || auto)) g.stall = g.stallSide = g.stallLoad = 0;
+  if (controls.locked || auto) g.dive = g.tuck = 0;
   const wasStalled = g.stall > 0;
   // What kind of stall it is was settled as it began.
   const fall = g.stallHarsh ? STALL.harsh : STALL.forgiving;
@@ -147,9 +180,40 @@ export function stepFlight(g, controls, air, dt) {
   const falling = g.stall > STALL.surge;
   if (wasStalled && !stalled) g.stallSide = g.stallLoad = 0;
   if (!controls.brake) g.grip = true;
-  // Whether the pilot's hands reach the wing at all.
-  const hands = !wasStalled && !controls.locked && !auto;
-  const pulling = hands && controls.brake && g.grip;
+  // A tucked wing is the air's until its leading edge opens again.
+  const tucked = g.tuck > 0;
+  if (tucked) g.tuck = Math.max(0, g.tuck - dt);
+  // Whether the pilot's hands reach the wing at all, and whether the brake bites: not until the
+  // ears are out, its first work being to let them go.
+  const hands = !wasStalled && !controls.locked && !auto && !tucked;
+  const pulling = hands && controls.brake && g.grip && g.ears === 0;
+
+  // The air the wing has been flying in, and how far it has just fallen away from that. The first
+  // air after a release is where it starts from, as with the wind.
+  const net = air.lift - air.sink;
+  const drop = g.felt ? g.under - net : 0;
+  g.under = g.felt ? g.under + (net - g.under) * Math.min(1, dt / DIVE.feel) : net;
+  if (drop < DIVE.drop / 2) g.diveArmed = true;
+  g.diveRest = Math.max(0, g.diveRest - dt);
+  if (!controls.dive) {
+    g.dive = 0;
+  } else if (g.dive > 0) {
+    // A dive is caught by the brake biting, or the hands on the ears, at any step before it tucks.
+    if (pulling || (hands && controls.ears)) g.dive = 0;
+    else if ((g.dive = Math.max(0, g.dive - dt)) === 0) g.tuck = DIVE.tuck.time;
+  } else if (!tucked && g.ears === 0) {
+    // The air falling away, a deep brake let go, or a harsh stall flying again. A brake already
+    // biting, or the ears asked for, holds the wing as it dives; a stall's comes after the hands
+    // were off it, and always wants catching.
+    const refly = wasStalled && !stalled && g.stallHarsh;
+    const released = hands && !pulling && g.brake >= BRAKE.shelf;
+    const fell = hands && g.diveArmed && g.diveRest === 0 && drop >= DIVE.drop && net <= DIVE.floor;
+    if (refly || released || fell) {
+      g.diveArmed = false;
+      g.diveRest = DIVE.rest;
+      if (refly || !(pulling || controls.ears)) g.dive = DIVE.catch;
+    }
+  }
 
   if (pulling) {
     // Each stage stops at its own mark, so a quick take-up never eats into the linger after it.
@@ -160,19 +224,27 @@ export function stepFlight(g, controls, air, dt) {
   } else {
     g.brake = Math.max(0, g.brake - (g.brake > BRAKE.light ? BRAKE.dump : BRAKE.release) * dt);
   }
-  const barWant = hands && controls.bar && !controls.brake ? 1 : 0;
+  // The ears come in while asked for with the hands on the wing and the brake off it, and open once
+  // let go: slowly by themselves, quickly with a touch of the brake, and at once whenever the wing
+  // is not the pilot's (a stall, a strike, a tuck, the autopilot).
+  if (!hands) g.ears = 0;
+  else if (controls.ears && !controls.brake) g.ears = Math.min(1, g.ears + dt / EARS.fold);
+  else if (g.ears > 0) g.ears = Math.max(0, g.ears - dt / (controls.brake ? EARS.dab : EARS.open));
+  const barWant = hands && controls.bar && !controls.brake && !controls.ears ? 1 : 0;
   g.bar = clamp(g.bar + clamp(barWant - g.bar, -FLIGHT.ease.bar * dt, FLIGHT.ease.bar * dt), 0, 1);
   // How much of the light brake is on, and how much of the deep.
   const light = clamp(g.brake / BRAKE.light, 0, 1);
   const deep = smooth(BRAKE.shelf, 1, g.brake);
 
-  const turnMax = hands
+  let turnMax = hands
     ? FLIGHT.turn.trim + (FLIGHT.turn.light - FLIGHT.turn.trim) * light + (FLIGHT.turn.deep - FLIGHT.turn.light) * deep +
       (FLIGHT.turn.bar - FLIGHT.turn.trim) * g.bar
     : FLIGHT.turn.trim;
-  // A falling wing turns by itself or not at all; in the surge it only holds its heading.
-  g.turn = falling ? g.stallSide : stalled ? 0 : controls.turn;
-  const yawWant = falling ? g.stallSide * fall.yaw : stalled ? 0 : controls.turn * turnMax;
+  // With the ears in the wing turns by weight shift alone.
+  if (g.ears > 0) turnMax += (EARS.turn - turnMax) * g.ears;
+  // A falling wing turns by itself or not at all; in the surge, and tucked, it only holds its heading.
+  g.turn = falling ? g.stallSide : stalled || tucked ? 0 : controls.turn;
+  const yawWant = falling ? g.stallSide * fall.yaw : stalled || tucked ? 0 : controls.turn * turnMax;
   g.yawRate += (yawWant - g.yawRate) * Math.min(1, dt * FLIGHT.ease.yaw);
   g.yaw += g.yawRate * dt;
   g.bank += (g.yawRate * FLIGHT.bank * (g.speed / FLIGHT.speed.trim) - g.bank) * Math.min(1, dt * FLIGHT.ease.bank);
@@ -189,18 +261,21 @@ export function stepFlight(g, controls, air, dt) {
   g.windZ = air.windZ;
   g.felt = true;
 
-  const speedWant = falling
+  let speedWant = falling
     ? FLIGHT.speed.stall
     : FLIGHT.speed.trim + (FLIGHT.speed.bar - FLIGHT.speed.trim) * g.bar - (FLIGHT.speed.trim - FLIGHT.speed.light) * light -
       (FLIGHT.speed.light - FLIGHT.speed.deep) * deep;
+  if (g.ears > 0) speedWant -= EARS.slow * g.ears;
   // The gust's own jump is the air's doing, so it is no part of the speed traded for height below.
   const before = Math.max(0, g.speed - gust);
   g.speed = before + (speedWant - before) * Math.min(1, dt * (falling ? FLIGHT.ease.stall : FLIGHT.ease.speed));
   const swap = falling ? 0 : (-FLIGHT.swap * (g.speed / GRAVITY) * (g.speed - before)) / dt;
 
   g.sink = sinkAt(Math.max(g.speed, FLIGHT.speed.deep)) + MUSH * deep * deep;
+  if (g.ears > 0) g.sink += EARS.sink * g.ears;
   let sink = g.sink + Math.abs(g.yawRate) * FLIGHT.sink.turn * (g.speed / FLIGHT.speed.trim) + air.sink;
   if (falling) sink += fall.sink;
+  if (tucked) sink += DIVE.tuck.sink;
 
   if (stalled) {
     // The meter empties as the wing comes back.

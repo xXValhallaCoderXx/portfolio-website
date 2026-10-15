@@ -9,13 +9,14 @@ import { createCloudbaseRun } from '../../src/game/cloudbase-state.js';
 import { createMeet } from '../../src/game/meet-state.js';
 import { createBells } from '../../src/game/bells.js';
 import { summariseRun } from '../../src/game/meet-sheet.js';
-import { INPUT, MAX_STEPS, createRecorder, decodeLog, encodeLog } from '../../src/game/recorder.js';
+import { INPUT, MAX_STEPS, createRecorder, decodeLog, encodeLog, inputBits } from '../../src/game/recorder.js';
 import { seedFor } from '../../src/game/daily.js';
 import { SIM_VERSION } from '../../src/game/sim-version.js';
 
 // The reference pilot at the keys, as replay.test.js has it: every `hold` steps it picks which way
 // to steer and holds that arrow until it picks again, for any turn of more than a third, with its
-// brake following its hands, and between lifts it pushes the speed bar.
+// brake following its hands, and between lifts it pushes the speed bar. Its keys are written as the
+// game writes them (inputBits), so the bar it still holds while its brake catches a dive stays the brake.
 function keys(options = {}, hold = 9) {
   const pilot = createReferencePilot(options);
   const intent = { turn: 0, brake: false, bar: false };
@@ -30,9 +31,8 @@ function keys(options = {}, hold = 9) {
       on = Math.abs(intent.turn) > 1 / 3 ? hold : 0;
       glide = world.sky.state.pilot.thermal < 0 && !intent.brake;
     }
-    let bits = phase < on ? side : 0;
-    if (glide) bits |= INPUT.bar;
-    return bits | (intent.brake ? INPUT.brake : 0);
+    const bits = phase < on ? side : 0;
+    return inputBits({ left: bits === INPUT.left, right: bits === INPUT.right, brake: intent.brake, bar: glide });
   };
 }
 
@@ -70,13 +70,18 @@ export function fly(day, pilot, { initials = 'REN', quit = MAX_STEPS } = {}) {
 /** A flown run's log written again with `meta` changed: the run itself, its seed and controls, the same. */
 export const rewrite = ({ log }, meta) => encodeLog({ ...log, ...meta }, log.bits, log.steps);
 
-/** The steps of a flown run on which its wing was folded, flown again from its log: the hands are off it then. */
+/**
+ * The steps of a flown run on which its wing was folded, flown again from its log: the hands are off
+ * it then. Read after each step, so a step on which a pump opened the wing, and gave the hands back,
+ * is not one of them.
+ */
 export function folded({ seed, log }) {
   const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells() }), seed);
   const steps = [];
   for (let i = 0; i < log.steps; i++) {
-    if (world.sky.state.pilot.collapse > 0) steps.push(i);
-    if (stepBits(world, log.bits[i])) break;
+    const ended = stepBits(world, log.bits[i]);
+    if (world.controls.locked) steps.push(i);
+    if (ended) break;
   }
   return steps;
 }

@@ -48,6 +48,22 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
   the red it stalls, and in a turn it spins toward the inside wing; it recovers by itself, sooner
   with the brake let go. ↑ or W is the speed bar: hands up, faster, sinking more and turning
   wider. In Good Lift, ← and → held together push the bar as well, as ◀ and ▶ do on a phone.
+- In Good Lift the wing is flown, not only held:
+  - **Big ears.** E (both ▼ pressed together on a phone, then either keeps them in so the other
+    thumb can steer) folds the outer cells of both tips down: about 6 m/s down at 36 km/h, a
+    20 m circle by weight shift, and no stall, for the brake is off the wing. They open by
+    themselves over 1.5 s once let go, or at once with a touch of the brake. They fly a pilot out
+    of lift and down, never out of a core where it stands: in 20 m/s of lift they still climb.
+  - **The dive.** Above 260 m, as the air drops away under the wing (climbing into a storm
+    cloud's base, leaving lift late, dodging on the bar out of a core) or a deep brake is let
+    go, the wing pitches ahead of the pilot: tap the brake within 0.8 s to catch it, or its
+    leading edge tucks under for 0.8 s, about 10 m. A brake already biting catches it, and so do
+    the ears. No light is lost to a tuck.
+  - **The stall's second beat.** A stall above 260 m ends in a dive to catch: let go, then tap.
+    A brake held all through the stall has lost its grip, so it must be let go and pressed again.
+  - **Pumping a fold.** A wing folded by a raven or a kettlebell opens 0.4 s sooner for each time
+    the brake is held for at least 0.3 s and let go, twice at most: about 55 m lost becomes about
+    31 m. Taps shorter than that, or a brake held all through, do nothing.
 - Landing at a place opens the same section the page shows. "Open on page" leaves the flight at
   that section; Escape, the exit button and the browser's back button leave it too.
 - A manual landing briefly shows distance from the centre, a grade, points and the best distance
@@ -67,9 +83,11 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     page. Opened directly, an address shows a start screen first, because sound needs a click.
   - **Lift.** The amber column beyond the arch lifts you clear of the hillside and then wears out.
     After that the lift is hidden: a flock of ravens circles inside each live thermal, so find the
-    birds, fly to them and climb beside them, turning the way they turn. Sparks and the core ring
-    show only from close by. Two thermals are alive at a time; each fades with use and with age,
-    and when it dies its ravens fly on to the next.
+    birds, fly to them and climb beside them, turning the way they turn. From close by, rising
+    motes show the air itself (`src/game/thermal-motes.js`): small gold comets carried up by the
+    lift where they are, crowded and fastest at the core, swirling the flock's way, filling out as a
+    thermal blooms and thinning from the rim as it weakens. Two thermals are alive at a time; each
+    fades with use and with age, and when it dies its ravens fly on to the next.
   - **Centring.** A hunted thermal lifts hardest at its very middle, so a circle drifted off it
     climbs harder on the side nearest the core than across from it. In a run the vario's beep
     keeps rising in pitch and pace all the way up a core (`src/game/vario.js`). As the lift surges
@@ -77,6 +95,11 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     (`run-surge.js`, which feels for it with the thermal's own waxing and wearing out taken away).
     Straighten for a beat in the surge and turn again as it fades, and the circle moves onto the
     core. From the second thermal on, a circle that missed the core gets the hint for it.
+  - **Turning in.** Flying at the flock's middle and turning there puts the core on the rim of
+    the first circle. Pass the core instead on the side the flock turns to, a few metres off its
+    middle, and turn as the lift stops building: a low thump from the core's side, the vario
+    readout flaring cyan and that wingtip lifting say the moment (`run-entry.js`), and the first
+    circle goes round the core. The hint teaches it on the way into the first thermals.
   - **Music.** Once through the rune gate, and only there, quiet background music plays: the two
     tracks in `public/music/`, one after the other, each brought to the same low level
     (`src/game/music.js`, where each track's measured loudness is kept). It plays on between runs
@@ -114,13 +137,13 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     One blessing is held at a time, its rune beside the bar's weight, and the 1,000 m stone's
     replaces the 500 m one. ᚠ Fehu loads every plate from 12 m instead of 6, and they fly in to
     the wing; ᛉ Algiz turns the next kettlebell that would hit aside, and is spent; ᚨ Ansuz shows
-    the hunted thermals' sparks and rings from twice as far; ᛏ Tiwaz counts everything loaded
+    the hunted thermals' motes from twice as far; ᛏ Tiwaz counts everything loaded
     twice, but a strike, at any height, loses the whole bar. A stone costs a dash out of the core
     and back, some 80 m of climb, so it is a choice, not a toll.
   - **Hrungnir.** From 550 m the giant throws kettlebells, each with 2.4 s of warning: a grunt from
     his side, a red ring where it will land and, if that is off the screen, a chevron at its edge.
     It is aimed where the wing will be if the pilot holds what they are doing, so changing that
-    dodges it: circling, push the bar; flying straight or on the bar, turn. A hit folds the wing
+    dodges it: circling, push the bar; flying straight, on the bar or with the ears in, turn. A hit folds the wing
     as a raven strike does; a miss under 9 m is a close call, worth 10 kg. Once a run the first
     throw at or past 1,000 m is the Beast, his 48 kg bell of cracked stone: half as big again,
     with a lower, longer grunt and 3.2 s of warning (its ring has a second ring of teeth turning
@@ -130,7 +153,7 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     face value; Escape ends a run and forfeits it. Retrying, Back and leaving the page end a run
     silently.
   - **Hazards.** Touching a raven collapses the wing, which costs about 60 m and a moment of
-    steering, and then nothing can strike for a few seconds. Storm clouds drift through in layers
+    steering (about 30 m pumped open twice), and then nothing can strike for a few seconds. Storm clouds drift through in layers
     from about 580 m; inside one there is no lift, the wing sinks and the view greys out. A breeze
     of 2-4 m/s turns as you climb, and every 16-26 s a gust band crosses the zone, drawn as a
     curtain of bright streaks before it arrives. A front that reaches a braked wing from behind can
@@ -138,7 +161,7 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
   - **Lightning.** Once the pilot is up among the storm clouds (above 530 m), every 9 to 20 seconds
     spent there one they can see flashes: a bolt runs down out of it, the cloud lights from within,
     the sky behind it brightens, and the thunder rolls in as long after as sound takes from the
-    nearest part of the bolt. For half a second every hidden thermal's sparks show as if close by:
+    nearest part of the bolt. For half a second every hidden thermal's motes show as if close by:
     a glimpse of where the lift is. Visitors who ask for less motion get one soft swell, with no
     flicker and no flash of the sky. It is the view's alone, on random numbers of its own that the
     run never reads (`src/game/run-lightning.js`); `fjord.lightning.fire()` strikes at once.
@@ -187,8 +210,9 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     the challenger on the day's board. `SIM_VERSION` (`src/game/sim-version.js`) names the rules a
     run was flown under: a test fingerprints every tuning table, so changing how a run flies without
     a new version fails `npm test`, and a link from other rules is refused rather than misread.
-    Version 2 brought the peaked cores and reps to depth, and version 3 the iron in the sky, the
-    rune stones and the Beast.
+    Version 2 brought the peaked cores and reps to depth, version 3 the iron in the sky, the rune
+    stones and the Beast, and version 4 the wing flown, not only held: big ears, the dive and its
+    tuck, the stall's second beat and pumping a fold open.
   - **Feats and the board.** Opener, Under the horn, Giant-dodger, Clean meet, the 1,000 lb club,
     Training block (the Daily Sky seven days in a row) and Beat the bot are Good Lift's own feats:
     the sheet names any new ones when it opens (Beat the bot when the bots land), never during a

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { INPUT, LOG_FORMAT, MAX_LINK, MAX_STEPS, createRecorder, decodeLog, encodeLog, inputBits } from './recorder.js';
+import { INPUT, LOG_FORMAT, MAX_LINK, MAX_STEPS, TOUCH_EARS, createRecorder, createTouchEars, decodeLog, encodeLog, inputBits } from './recorder.js';
 import { createRunWorld, finishRun, startRun, stepBits } from './run-step.js';
 import { createReferencePilot } from './pilots.js';
 import { createCloudbaseRun } from './cloudbase-state.js';
@@ -47,7 +47,8 @@ function madeUp(seed, steps, longest) {
 // until it picks again, for any turn of more than a third; or, with `pulse`, taps the arrow for the
 // share of those steps its turn asks for. Its brake follows its hands at once. Between lifts it
 // pushes the speed bar, with the bar's own key or, with `chord`, both arrows at once, as a phone
-// does, and only when it has no turning to do.
+// does, and only when it has no turning to do. Its keys are written as the game writes them
+// (inputBits), so the bar it still holds while its brake catches a dive stays the brake.
 function keys(options = {}, { hold = 9, pulse = false, chord = false } = {}) {
   const pilot = createReferencePilot(options);
   const intent = { turn: 0, brake: false, bar: false };
@@ -63,8 +64,8 @@ function keys(options = {}, { hold = 9, pulse = false, chord = false } = {}) {
       glide = world.sky.state.pilot.thermal < 0 && !intent.brake;
     }
     let bits = phase < on ? side : 0;
-    if (glide) bits |= chord ? (bits ? 0 : INPUT.left | INPUT.right) : INPUT.bar;
-    return bits | (intent.brake ? INPUT.brake : 0);
+    if (glide && chord && !bits) bits = INPUT.left | INPUT.right;
+    return inputBits({ left: (bits & INPUT.left) !== 0, right: (bits & INPUT.right) !== 0, brake: intent.brake, bar: glide && !chord });
   };
 }
 
@@ -144,9 +145,9 @@ test('a log is written byte for byte as format 1 says, as every link already sha
 });
 
 test('a recorder keeps every step of the longest run in one buffer, counts each change of the controls, and says when it is full', () => {
-  assert.deepEqual([{}, { left: true }, { right: true }, { left: true, right: true }, { brake: true }, { right: true, bar: true }, { left: true, right: true, brake: true, bar: true }].map(inputBits),
-    [0, 1, 2, 3, 4, 10, 15]);
-  assert.deepEqual(INPUT, { left: 1, right: 2, brake: 4, bar: 8 });
+  assert.deepEqual([{}, { left: true }, { right: true }, { left: true, right: true }, { brake: true }, { right: true, bar: true }, { ears: true }, { left: true, ears: true }].map(inputBits),
+    [0, 1, 2, 3, 4, 10, 12, 13]);
+  assert.deepEqual(INPUT, { left: 1, right: 2, brake: 4, bar: 8, ears: 12 });
   assert.ok(Object.isFrozen(INPUT));
   const recorder = createRecorder();
   const { buffer } = recorder.bits;
@@ -194,6 +195,55 @@ test('a recorder keeps every step of the longest run in one buffer, counts each 
 // 1,023, so a link grows with how often the pilot changes what it holds, not with how long it
 // flies. Even a pilot tapping five times a second for the whole run stays far inside MAX_LINK;
 // one changing its controls every step for two and a half minutes would not, and is refused.
+
+test('the brake wins over the ears and the ears over the bar, so the brake and the bar are only ever written together as the ears', () => {
+  const all = [];
+  for (let held = 0; held < 32; held++) {
+    const input = { left: !!(held & 1), right: !!(held & 2), brake: !!(held & 4), bar: !!(held & 8), ears: !!(held & 16) };
+    const bits = inputBits(input);
+    all.push(bits);
+    // The arrows are always written as they are held.
+    assert.equal(bits & 3, held & 3, JSON.stringify(input));
+    if (input.brake) assert.equal(bits & 12, INPUT.brake, `the brake wins: ${JSON.stringify(input)}`);
+    else if (input.ears) assert.equal(bits & 12, INPUT.ears, `the ears win over the bar: ${JSON.stringify(input)}`);
+    else assert.equal(bits & 12, input.bar ? INPUT.bar : 0, JSON.stringify(input));
+  }
+  // The bar still held while braking, the way fingers on keys often are, stays the brake.
+  assert.equal(inputBits({ brake: true, bar: true }), INPUT.brake);
+  assert.equal(inputBits({ left: true, brake: true, bar: true }), INPUT.left | INPUT.brake);
+  // Every code is written by some controls, but the brake and the bar together only as the ears.
+  assert.deepEqual([...new Set(all)].sort((a, b) => a - b), [...Array(16).keys()]);
+});
+
+test('both ▼ pressed together are the ears, held in by either, and a change of thumb or a quick handover stays the brake', () => {
+  const ears = createTouchEars();
+  // Steps of [first ▼, second ▼], and what each says.
+  const fly = (presses) => presses.map(([a, b]) => ears.step(a, b));
+  const hold = (steps, a, b) => Array.from({ length: steps }, () => [a, b]);
+  // Pressed in the same step: the ears once both have been held TOUCH_EARS.hold steps.
+  let said = fly(hold(TOUCH_EARS.hold + 2, true, true));
+  assert.deepEqual(said, [...Array(TOUCH_EARS.hold - 1).fill(false), ...Array(3).fill(true)]);
+  // Either ▼ alone keeps them in, so the other thumb can steer, and letting go of both ends them.
+  assert.deepEqual(fly([...hold(5, true, false), ...hold(5, false, true)]).every(Boolean), true);
+  assert.equal(fly([[false, false]])[0], false);
+  assert.equal(ears.on, false);
+  // The second ▼ landing as long after the first as TOUCH_EARS.together allows is still together.
+  ears.reset();
+  said = fly([...hold(TOUCH_EARS.together, true, false), ...hold(TOUCH_EARS.hold, true, true)]);
+  assert.equal(said.at(-1), true);
+  // A change of thumb: one ▼ held long, the other pressed, the first let go, however long they overlap.
+  for (const overlap of [1, 6, 18, 60]) {
+    ears.reset();
+    said = fly([...hold(40, true, false), ...hold(overlap, true, true), ...hold(40, false, true)]);
+    assert.equal(said.some(Boolean), false, `a change of thumb overlapping ${overlap} steps`);
+  }
+  // Both pressed together but let go within the hold: a quick handover, never the ears.
+  ears.reset();
+  said = fly([...hold(TOUCH_EARS.hold - 1, true, true), ...hold(30, false, true)]);
+  assert.equal(said.some(Boolean), false);
+  assert.deepEqual(TOUCH_EARS, { together: 12, hold: 6 });
+  assert.ok(Object.isFrozen(TOUCH_EARS));
+});
 test('a whole run fits in under two kilobytes of link', () => {
   const pilots = {
     'arrows held 150 ms': () => keys({}, { hold: 9 }),

@@ -4,7 +4,7 @@
 // reacts to a raven, a cloud or a gust. Reflexes can be added for Good Lift's meet: one for
 // Hrungnir's kettlebells, one for the trail of plates, one for the rune gates and one for the
 // plates a strike sprays off the bar. It bounds what a player can do; it is not a player.
-import { BRAKE, FLIGHT } from './flight.js';
+import { BRAKE, DIVE, FLIGHT } from './flight.js';
 import { RUN, finishRun, stepRun } from './run-step.js';
 import { PLATE_KIND } from './meet-state.js';
 import { GATE, GATES, RUNE } from './meet-runes.js';
@@ -18,6 +18,12 @@ const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 // plate and seeks no gate.
 export const TST = Object.freeze({ withFlock: true, brake: 'eased', react: 0.4 });
 
+// How every reference pilot catches its own wing, as the hints tell a player to: the brake on
+// `react` seconds into a dive, and a fold pumped open twice, each pump held `hold` seconds and let
+// go for `gap` before the next (CLOUD_STRIKE.pump). Counted in whole steps, from the step the wing
+// dived or folded.
+export const CATCH = Object.freeze({ react: 0.4, hold: 0.35, gap: 0.1 });
+
 // How a gate-taker times its dash out of its climb to a rune stone and back.
 //   ahead    rad: how far off its nose a stone may be for it to set off for it
 //   carry    how much of its climb the wing keeps on the way out: it sets off when its height, with
@@ -27,7 +33,7 @@ export const TST = Object.freeze({ withFlock: true, brake: 'eased', react: 0.4 }
 export const DASH = Object.freeze({ ahead: 0.8, carry: 1, low: 4, home: 12 });
 
 // The runes worth a dash to a pilot that flies as TST does: Fehu and Tiwaz. Algiz turns aside a
-// bell that changing what it does 0.4 s into the warning dodges anyway, and Ansuz's sparks are for
+// bell that changing what it does 0.4 s into the warning dodges anyway, and Ansuz's motes are for
 // a player's eyes, worth nothing to a pilot that steers by the thermals' own numbers. Every dash
 // costs about the same climb, a tenth of a pass of 1,000 m for each stone taken (over 800 skies TST
 // dashing for any stone took 597 and passed on 577 skies to TST's 640), so the rune decides whether
@@ -72,12 +78,16 @@ export const WORTH_RUNES = Object.freeze([RUNE.fehu, RUNE.tiwaz]);
  * brake for the nearest while they last, which sweeps the tight circle that flies back through
  * them: the way to catch them back, though not one that pays this pilot (above).
  *
+ * `catches`, on for every pilot unless told otherwise, catches a dive with the brake and pumps a
+ * fold open (CATCH) over whatever else it was doing: the wing comes first. Told not to, it flies as a
+ * player who knows none of it.
+ *
  * `decide(world, intent)` writes what it asks of the wing this step into `intent`. Without the
  * kettlebells and the meet in the world, or without `react`, `collect`, `gates` and `recover`, it
- * flies exactly as it always has.
+ * flies exactly as it always has, but for catching its wing.
  */
 export function createReferencePilot({
-  withFlock = true, brake = 'none', react = null, collect = false, gates = collect ? WORTH_RUNES : false, recover = false,
+  withFlock = true, brake = 'none', react = null, collect = false, gates = collect ? WORTH_RUNES : false, recover = false, catches = true,
 } = {}) {
   // The circle it aims for round the middle of the lift: 11 m hands up and 6 m on any brake, inside
   // the 14.4 m and 8.2 m the wing turns at full rate, so that it circles as tight as it can. Aimed
@@ -97,6 +107,12 @@ export function createReferencePilot({
   // which stone, and how far it has got: 0 waiting for its moment, 1 out to the stone, 2 back. A
   // pilot is made for one run, as its other reflexes are.
   const dash = { line: 0, gate: -1, phase: 0 };
+  // Steps the wing has been folded, and its pumps as steps: the first press `lead` steps in, each
+  // held `hold` steps and let go for `gap`.
+  let folded = 0;
+  const lead = Math.round(CATCH.react / RUN.step);
+  const hold = Math.round(CATCH.hold / RUN.step);
+  const gap = Math.round(CATCH.gap / RUN.step);
 
   // Steers straight at a point, hands up and off the bar.
   function steer(world, intent, x, z) {
@@ -231,6 +247,24 @@ export function createReferencePilot({
     }
   }
 
+  // Catches its own wing: the brake `react` seconds into a dive, and two pumps into a fold.
+  function catchWing(world, intent) {
+    const { g } = world;
+    if (world.sky.state.pilot.collapse > 0) {
+      const k = folded - lead;
+      folded += 1;
+      intent.brake = k >= 0 && k < 2 * (hold + gap) && k % (hold + gap) < hold;
+      intent.bar = false;
+      return;
+    }
+    folded = 0;
+    // The run clock is a sum of fixed steps, so it is given half a step to spare, as the dodge is.
+    if (g.dive > 0 && DIVE.catch - g.dive >= CATCH.react - RUN.step / 2) {
+      intent.brake = true;
+      intent.bar = false;
+    }
+  }
+
   return {
     decide(world, intent) {
       const { sky, g } = world;
@@ -259,6 +293,7 @@ export function createReferencePilot({
       // plates, the trail, and a kettlebell over them all.
       if (!(gates && gate(world, intent)) && !(recover && circleBack(world, intent)) && collect) follow(world, intent);
       if (react !== null) dodge(world, intent);
+      if (catches) catchWing(world, intent);
       return intent;
     },
   };
@@ -279,5 +314,5 @@ export function flyPilot(world, pilot, { limit = 200 } = {}) {
     reason = stepRun(world, intent, RUN.step);
   }
   if (reason) finishRun(world, reason);
-  return { peak: state.peak, strikes: state.pilot.strikes, stalls: world.stalls, seconds: state.elapsed, cloud: state.pilot.cloudTime, reason };
+  return { peak: state.peak, strikes: state.pilot.strikes, stalls: world.stalls, tucks: world.tucks, seconds: state.elapsed, cloud: state.pilot.cloudTime, reason };
 }

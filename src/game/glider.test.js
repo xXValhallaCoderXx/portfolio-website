@@ -577,8 +577,8 @@ test('however far either half folds, the cloth is never turned inside out along 
   for (const z of [-Math.PI / 80, Math.PI / 80]) {
     for (let left = 0; left <= 1; left += 0.25) {
       for (let right = 0; right <= 1; right += 0.25) {
-        for (const collapse of [0, 0.5]) {
-          const air = { time: 0, rough: 0, trail: 0, trailLeft: 0, trailRight: 0, luff: 0, collapse, foldLeft: left, foldRight: right };
+        for (const [collapse, ears] of [[0, 0], [0.5, 0], [0, 0.5], [0, 1], [0.5, 1]]) {
+          const air = { time: 0, rough: 0, trail: 0, trailLeft: 0, trailRight: 0, luff: 0, collapse, foldLeft: left, foldRight: right, ears, tuck: ears };
           let before = -Infinity;
           for (let i = 0; i <= 2000; i++) {
             const x = -0.5 + i / 2000;
@@ -702,6 +702,7 @@ test('nothing it is handed, however wild, puts a number astray or turns an arm p
       liftSide: roll() < 0.5 ? -1 : 1, landed: roll() < 0.1,
       flying: roll() < 0.8, brake: pick(-0.2, 1.2), bar: pick(-0.2, 1.2), luff: pick(-0.2, 1.2), stall: roll() < 0.3 ? 1 : 0,
       foldLeft: pick(-0.2, 1.2), foldRight: pick(-0.2, 1.2), rough: pick(-0.2, 1.2),
+      ears: pick(-0.2, 1.2), dive: pick(-0.2, 1.2), tuck: pick(-0.2, 1.2), heave: pick(-1.5, 1.5),
     });
     glider.measure(measured);
     for (const [key, value] of [...Object.entries(glider.sway), ...Object.entries(glider.air), ...Object.entries(measured)]) {
@@ -720,3 +721,101 @@ test('nothing it is handed, however wild, puts a number astray or turns an arm p
     if (part.isLineSegments) assert.ok(part.geometry.attributes.position.array.every(Number.isFinite), 'every line end is a number');
   });
 });
+
+test('big ears fold each tip down and in from 70% of the way out, leave the middle of the wing alone, and keep still in calm air', async () => {
+  const { glider, rest, fly, still } = await hangGlider();
+  fly(1.5, { flying: true, ears: 1 });
+  const folded = still({ flying: true, ears: 1 });
+  for (const side of ['Left', 'Right']) {
+    assert.ok(folded[`tip${side}`] > 0.8, `the ${side.toLowerCase()} tip comes in ${folded[`tip${side}`]} m`);
+    assert.ok(folded[`drop${side}`] > 1, `and drops ${folded[`drop${side}`]} m`);
+  }
+  // Inside the hinges nothing moves for the ears.
+  const out = new THREE.Vector3();
+  const open = new THREE.Vector3();
+  const without = { ...glider.air, ears: 0 };
+  let checked = 0;
+  for (let i = 0; i < rest.length; i += 3) {
+    if (Math.abs(rest[i]) > 0.35) continue;
+    flexWing(rest[i], rest[i + 1], rest[i + 2], glider.air, out);
+    flexWing(rest[i], rest[i + 1], rest[i + 2], without, open);
+    assert.ok(out.equals(open), `point ${i / 3} inside the hinges`);
+    checked++;
+  }
+  assert.ok(checked > 2000, `${checked} points checked`);
+  // In calm air the folded tips hang still: a while later they are where they were.
+  glider.air.rough = 0;
+  const now = still({ flying: true, ears: 1 });
+  fly(0.7, { flying: true, ears: 1 });
+  glider.air.rough = 0;
+  const later = still({ flying: true, ears: 1 });
+  assert.ok(Math.abs(later.tipLeft - now.tipLeft) < 1e-9 && Math.abs(later.dropRight - now.dropRight) < 1e-9);
+  // Let go, they open again.
+  fly(2, { flying: true });
+  glider.air.rough = 0;
+  const opened = still({ flying: true });
+  assert.ok(Math.abs(opened.tipLeft) < 1e-6 && Math.abs(opened.dropLeft) < 1e-6);
+});
+
+test('with the ears in the hands come up to the outer lines, and steering no longer pulls a hand down to its brake', async () => {
+  const { glider, fly, still } = await hangGlider();
+  fly(1, { flying: true });
+  const open = still({ flying: true });
+  fly(1.5, { flying: true, turn: 1 });
+  const steered = still({ flying: true, turn: 1 });
+  fly(1.5, { flying: true, ears: 1, turn: 1 });
+  const ears = still({ flying: true, ears: 1, turn: 1 });
+  assert.ok(ears.handLeft > open.handLeft + 0.1 && ears.handRight > open.handRight + 0.1, `hands up: ${ears.handLeft}, ${ears.handRight}`);
+  // Steering right pulls the right hand far down; with the ears in it stays up with the left, the
+  // body's lean into the turn all that is left between them.
+  const pulled = steered.handLeft - steered.handRight;
+  const leaned = Math.abs(ears.handLeft - ears.handRight);
+  assert.ok(leaned < pulled / 3, `${leaned} m between the hands with the ears in, ${pulled} m steering on the brakes`);
+  // And the steering pulls no edge of the wing down.
+  assert.deepEqual([glider.air.trailLeft, glider.air.trailRight], [0, 0]);
+});
+
+test('a tuck folds the leading edge down and back under the wing and leaves the trailing edge where it was', () => {
+  const air = { time: 0, rough: 0, trail: 0, trailLeft: 0, trailRight: 0, luff: 0, collapse: 0, foldLeft: 0, foldRight: 0, ears: 0, tuck: 0 };
+  const tucked = { ...air, tuck: 1 };
+  const open = new THREE.Vector3();
+  const under = new THREE.Vector3();
+  const chord = 0.139;
+  for (const x of [-0.4, 0, 0.25]) {
+    flexWing(x, 0, chord, air, open);
+    flexWing(x, 0, chord, tucked, under);
+    assert.ok(under.y < open.y - 0.04 && under.z < open.z - 0.02, `the leading edge at ${x} folds down and back`);
+    flexWing(x, 0, -chord, air, open);
+    flexWing(x, 0, -chord, tucked, under);
+    assert.ok(under.equals(open), `the trailing edge at ${x} stays`);
+  }
+});
+
+test('a dive throws the wing ahead of the pilot until it is caught, and the moment to turn in lifts the side of the wing over the core', () => {
+  // Each against a twin posed the same without it: the air rocks them both alike.
+  const pair = () => {
+    const both = [swingOnly(), swingOnly()];
+    for (let i = 0; i < 300; i++) for (const glider of both) glider.pose({ ...CALM, dt: STEP, time: i * STEP, flying: true });
+    return both;
+  };
+  const [diving, twin] = pair();
+  const fly = (steps, from, dive) => {
+    for (let i = 0; i < steps; i++) {
+      diving.pose({ ...CALM, dt: STEP, time: from + i * STEP, flying: true, dive });
+      twin.pose({ ...CALM, dt: STEP, time: from + i * STEP, flying: true });
+    }
+  };
+  fly(120, 5, 1);
+  assert.ok(diving.sway.pitch < twin.sway.pitch - 0.15, `the wing ahead of the pilot: ${diving.sway.pitch} against ${twin.sway.pitch}`);
+  // Caught, it swings back over the pilot.
+  fly(300, 7, 0);
+  close(diving.sway.pitch, twin.sway.pitch, 0.01, 'back over the pilot:');
+  // A heave toward the right lifts the right side first: the swing rolls that way.
+  const [heaved, still] = pair();
+  for (let i = 0; i < 12; i++) {
+    heaved.pose({ ...CALM, dt: STEP, time: 5 + i * STEP, flying: true, heave: 1 - i / 12 });
+    still.pose({ ...CALM, dt: STEP, time: 5 + i * STEP, flying: true });
+  }
+  assert.ok(heaved.sway.roll > still.sway.roll + 0.02, `rolled ${heaved.sway.roll} against ${still.sway.roll}`);
+});
+

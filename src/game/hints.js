@@ -7,15 +7,23 @@ export const HINT_WIDTH = 43;
 // A line stays up at least this many seconds, so that it can be read before the next.
 export const HINT_HOLD = 1.5;
 
-/** The line for a wing that has stalled, in a run or over the fjord, or '' while it flies. */
-export function stallHint(stall, stallSide) {
+/**
+ * The line for a wing that has stalled, in a run or over the fjord, or '' while it flies. A `harsh`
+ * stall (high in a run) ends in a dive to catch, so it says both beats.
+ */
+export function stallHint(stall, stallSide, harsh = false) {
   if (!(stall > 0)) return '';
+  if (harsh) return stallSide ? 'spin — let go, then tap as it dives' : 'stalled — let go, then tap as it dives';
   return stallSide ? 'spin — too much brake in the turn, let go' : 'stalled — let go, the wing flies again';
 }
 
-// The wing has folded or stalled, is about to, a kettlebell is coming or the pilot is in cloud:
-// these cannot wait their turn. Nor can Gjallarhorn, said with its call for its three seconds.
-export const URGENT = Object.freeze(['raven strike', 'kettlebell', 'stalled', 'spin', 'brake in the red', 'gust coming', 'brake going deep', 'in cloud', 'Gjallarhorn']);
+// The wing has folded, stalled, dived or tucked, is about to stall, a kettlebell is coming or the
+// pilot is in cloud: these cannot wait their turn. Nor can Gjallarhorn, said with its call for its
+// three seconds, nor the moment to turn into a core, which is gone within the second.
+export const URGENT = Object.freeze([
+  'raven strike', 'kettlebell', 'stalled', 'spin', 'wing diving', 'front tuck', 'brake in the red', 'gust coming', 'brake going deep',
+  'in cloud', 'Gjallarhorn', 'turn ▶ now', 'turn ◀ now',
+]);
 const urgent = (line) => URGENT.some((start) => line.startsWith(start));
 
 /**

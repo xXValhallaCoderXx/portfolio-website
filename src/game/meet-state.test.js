@@ -7,7 +7,7 @@ import { TST } from './pilots.js';
 import { createRunWorld, startRun, stepRun } from './run-step.js';
 import { createReferencePilot } from './pilots.js';
 import { CLOUD_POOL, cloudFogSpeed, createCloudbaseRun } from './cloudbase-state.js';
-import { FLIGHT, STALL } from './flight.js';
+import { DIVE, FLIGHT, STALL } from './flight.js';
 
 const STEP = 1 / 60;
 const TAU = Math.PI * 2;
@@ -292,6 +292,22 @@ test('a full circle the flock\'s way in a hunted thermal loads 2.5 kg, and the l
     `${collapse.state.turned.toFixed(2)} rad after the collapse and ${hooked.toFixed(2)} in it`);
   assert.ok(collapse.circles > 1.6);
   assert.equal(collapse.state.reps, 0);
+});
+
+test('a front tuck, like a stall, loses the circle in progress', () => {
+  // Tucked 6 s into a circle: what the wing turns after the tuck is short of a circle, where the
+  // same flight without it makes a rep.
+  const tucked = circle(1, 13, {
+    before: ({ g }, i) => {
+      if (i === 360) g.tuck = DIVE.tuck.time;
+    },
+    after: ({ g, meet }) => {
+      if (g.tuck > 0) assert.equal(meet.state.turned, 0);
+    },
+  });
+  assert.ok(tucked.state.turned > 0 && tucked.state.turned < TAU, `${tucked.state.turned.toFixed(2)} rad after the tuck`);
+  assert.equal(tucked.state.reps, 0);
+  assert.equal(circle(1, 13).state.reps, 1);
 });
 
 test('a new ride starts its own circle, and flying out of a lift and back into it does not', () => {

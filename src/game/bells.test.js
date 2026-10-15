@@ -545,6 +545,8 @@ test('no kettlebell is thrown while anything blocks it, and one comes once every
     ['cloud, however thin', (world) => { world.sky.state.pilot.cloud = 0.01; }, (world) => { world.sky.state.pilot.cloud = 0; }],
     ['a raven about to cross', (world) => { world.sky.state.pilot.danger = 1; }, (world) => { world.sky.state.pilot.danger = 0; }],
     ['a stall', (world) => { world.g.stall = 1; }, (world) => { world.g.stall = 0; }],
+    ['a dive still to catch', (world) => { world.g.dive = 0.5; }, (world) => { world.g.dive = 0; }],
+    ['a front tuck', (world) => { world.g.tuck = 0.5; }, (world) => { world.g.tuck = 0; }],
     ['a gust front 5.9 s off', (world) => { world.sky.state.pilot.gustIn = BELLS.gust - 0.1; }, (world) => { world.sky.state.pilot.gustIn = BELLS.gust; }],
     ['the rim 14 m away', nearRim(BELLS.edge - 1), nearRim(BELLS.edge + 1)],
   ];
@@ -794,7 +796,9 @@ test('the same seed throws the same kettlebells, a used set throws them as a new
 test('what each kettlebell is comes from the seed and its number alone, however the run is flown', () => {
   // The same sky flown two ways: the throws come at other moments and at other aims, but the k-th
   // bell's side, weight and drawn gap are the same, and so is the first one's wait.
-  const ways = [createReferencePilot(), dodger(0.4, { brake: 'eased' })].map((pilot) => flyThrows(runWorld(17), pilot));
+  // Sky 9, where both meet five bells (under SIM_VERSION 3 it was sky 17, where one of them now
+  // meets the Beast second: thrown further out, as every Beast is, it would not be the same bell).
+  const ways = [createReferencePilot(), dodger(0.4, { brake: 'eased' })].map((pilot) => flyThrows(runWorld(9), pilot));
   const [one, other] = ways;
   const count = Math.min(one.throws.length, other.throws.length);
   assert.ok(count >= 3);
@@ -813,35 +817,43 @@ test('what each kettlebell is comes from the seed and its number alone, however 
   }
 });
 
-// Measured over seeds 1-40 and 1001-1040 under SIM_VERSION 1, 2 and then 3: kettlebells thrown a
-// run, the share that hit, and runs of 40 that passed 1,000 m; under version 3, then, how many of
+// Measured over seeds 1-40 and 1001-1040 under SIM_VERSION 1, 2, 3 and then 4: kettlebells thrown
+// a run, the share that hit, and runs of 40 that passed 1,000 m; from version 3, then, how many of
 // the Beasts thrown hit.
 //   no kettlebells                              1   -            -            39 / 36
 //                                               2   -            -            26 / 30
 //                                               3   -            -            26 / 30
+//                                               4   -            -            25 / 35
 //   holding its line, hands up                  1   4.0 / 3.9    78 / 79%     24 / 22
 //                                               2   3.3 / 3.0    73 / 79%      9 / 1
 //                                               3   3.3 / 3.0    73 / 79%      9 / 1     5 of 6 / none thrown
+//                                               4   3.5 / 3.6    73 / 80%     14 / 13    8 of 11 / 6 of 8
 //   holding its line, light brake eased         1   3.7 / 4.0    80 / 81%     24 / 23
 //                                               2   3.6 / 4.0    79 / 82%     25 / 24
 //                                               3   3.6 / 4.0    75 / 80%     25 / 24    14 of 23 / 13 of 17
+//                                               4   3.8 / 4.2    74 / 69%     35 / 36    16 of 29 / 16 of 35
 //   changing what it does 0.4 s in, hands up    1   4.3 / 4.1    0.6 / 3.1%   34 / 31
 //                                               2   3.5 / 3.5    0.7 / 0.7%   15 / 17
 //                                               3   3.5 / 3.5    0.7 / 0.7%   15 / 17    0 of 10 / 0 of 10
+//                                               4   3.5 / 3.7    0.7 / 0.7%   18 / 24    0 of 12 / 0 of 16
 //   changing what it does 0.4 s in, brake eased 1   4.1 / 4.3    0.6 / 0.6%   31 / 38
 //                                               2   3.9 / 4.1    0.0 / 1.2%   35 / 34
 //                                               3   3.8 / 4.2    0.0 / 0.6%   35 / 34    0 of 30 / 0 of 33
+//                                               4   4.0 / 4.3    0.0 / 0.0%   35 / 39    0 of 33 / 0 of 35
 //   changing what it does 0.6 s in, brake eased 1   4.2 / 4.3    1.8 / 0.6%   33 / 38
 //                                               2   3.7 / 4.0    3.4 / 0.6%   34 / 34
 //                                               3   3.7 / 4.0    2.7 / 1.3%   34 / 34    0 of 30 / 0 of 27
+//                                               4   3.9 / 4.3    1.3 / 1.2%   37 / 37    0 of 34 / 1 of 35
 // The first comes a median 6 to 14 s after the pilot reaches 550 m and the rest about every 21 s;
 // 54 to 73% are thrown at a circling pilot, aimed a median 27 to 42 degrees off its nose (under
 // version 2: 10 to 14 s, about every 22 s, 53 to 66% and 31 to 46 degrees). Hands up, the peaked
 // cores of version 2 keep a pilot lower, and a lower pilot is thrown fewer. Version 3's Beast, the
 // first bell past 1,000 m, is aimed as far ahead as its warning is long, so holding on still meets
 // it, and changing what you do 0.4 s in leaves even more of its warning to get clear: no dodger was
-// hit by one. The pins in good-lift.test.js hold the balance; this only holds the promise that
-// dodging works.
+// hit by one under version 3, and one Beast in 69 hit the 0.6 s dodger under version 4. Version 4's
+// wing, which dives and is caught, and pumps a fold open, lifts the line-holders past 1,000 m more
+// often: catching its wing costs a pilot little, and a fold pumped open costs it less height. The
+// pins in good-lift.test.js hold the balance; this only holds the promise that dodging works.
 test('a pilot who holds its line is hit by most kettlebells, and one who changes what it is doing 0.4 s into the warning hardly ever is', () => {
   const share = (pilot) => {
     let thrown = 0;

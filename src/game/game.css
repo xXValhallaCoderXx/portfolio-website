@@ -217,6 +217,31 @@
   color: #ff546b;
 }
 
+/* The big ears fill the track in a violet of their own: not the light brake's cyan, the deep
+   brake's amber or the stall's red. */
+.fj-brake[data-state='ears'] i:first-child {
+  background: #b9a4ff;
+}
+
+.fj-brake[data-state='ears'] b {
+  color: #b9a4ff;
+}
+
+/* A dive to catch: the word says so in white, and the track's edge blinks until the brake bites. */
+.fj-brake[data-state='dive'] b {
+  color: #fff;
+}
+
+.fj-brake[data-state='dive'] span {
+  animation: fj-brake-dive 0.2s steps(2, jump-none) infinite;
+}
+
+@keyframes fj-brake-dive {
+  to {
+    border-color: #fff;
+  }
+}
+
 .fj-brake[data-state='near'] span {
   animation: fj-brake-near 0.28s steps(2, jump-none) infinite;
 }
@@ -230,6 +255,11 @@
 @media (prefers-reduced-motion: reduce) {
   .fj-brake[data-state='near'] span {
     border-color: #ff546b;
+    animation: none;
+  }
+
+  .fj-brake[data-state='dive'] span {
+    border-color: #fff;
     animation: none;
   }
 }
@@ -558,6 +588,17 @@
   .fj-touch[data-brake='stalled'] [data-input='brake'] {
     border-color: #ff546b;
     box-shadow: 0 0 0 4px rgba(255, 84, 107, 0.55), 0 0 22px rgba(255, 84, 107, 0.6);
+  }
+
+  /* Violet with the ears in, both ▼ holding them; white while a dive waits for a tap. */
+  .fj-touch[data-brake='ears'] [data-input='brake'] {
+    border-color: #b9a4ff;
+    box-shadow: 0 0 0 3px rgba(185, 164, 255, 0.45);
+  }
+
+  .fj-touch[data-brake='dive'] [data-input='brake'] {
+    border-color: #fff;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.5), 0 0 18px rgba(255, 255, 255, 0.45);
   }
 }
 

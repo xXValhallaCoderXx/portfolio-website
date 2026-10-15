@@ -674,9 +674,10 @@ test('a whole run with the meet, the stones and the bells can be drawn frame by 
   const view = createMeetView({ scene: new THREE.Scene() });
   const meet = createMeet();
   const bells = createBells();
-  // Sky 20 flown as TST with its gate and trail reflexes: it takes Algiz at 500 m and a bell glances
-  // off it, the Beast is thrown at 1,000 m, and every kind of loose plate turns up.
-  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet, bells }), 20);
+  // Sky 299 flown as TST with its gate and trail reflexes: it takes Algiz and a bell glances off it,
+  // the Beast is thrown at 1,000 m, and every kind of loose plate turns up. (Under SIM_VERSION 3 sky
+  // 20 did all of it; under version 4 only 299 of the first 300 does.)
+  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet, bells }), 299);
   view.begin();
   const flyer = createReferencePilot({ ...TST, gates: true, collect: true });
   const intent = { turn: 0, brake: false, bar: false };

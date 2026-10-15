@@ -1,19 +1,13 @@
 import * as THREE from 'three';
 import { CLOUD_ZONE, CLOUD_MILESTONES, CLOUD_POOL, CLOUD_STRIKE } from './cloudbase-state.js';
 import { RAVEN, createRavens } from './ravens.js';
+import { createThermalMotes } from './thermal-motes.js';
 
 export { CLOUD_MILESTONES, CLOUD_POOL, CLOUD_STRIKE, createCloudbaseRun } from './cloudbase-state.js';
 
 // Self-light handed to loadModel for the storm cloud, so that the underside a climbing pilot
 // flies up toward is dark grey and not black.
 export const CLOUD_GLOW = 0.3;
-
-// Sparks rise through a window `span` metres tall that starts `below` the pilot. The launch
-// column is lit from anywhere. A hunted thermal is only a short stretch of sparks, and it and its
-// ring show in full within `sight[0]` metres of its axis and not at all beyond `sight[1]`: from
-// further off it is the ravens that give it away. Ansuz's blessing (meet-runes.js) stretches both
-// by BLESSING.sparks, and draws the sparks as large as they would be that much nearer.
-const SPARKS = { launch: { span: 240, below: 100 }, hunted: { span: 120, below: 40 }, sight: [46, 85] };
 
 // A storm cloud is drawn `swell` times the size of its hazard, because the cloud in the file is
 // waisted and overhangs and would otherwise leave half of the hazard in clear air. The file is 1
@@ -28,8 +22,10 @@ const STORM = { swell: 1.3, tall: 0.563, deep: 0.741, centre: [-0.074, -0.222, 0
 // The fog's surface is see-through and drawn late, so it paints over every see-through thing
 // drawn before it at 93%, in front of it or not, because none of them writes depth. That is right
 // for what the fog swallows. The glow that is always held above the fog is drawn later still, so
-// that it shows against the fog when the pilot looks down on it.
-export const ORDER = Object.freeze({ fog: 1, aboveFog: 2 });
+// that it shows against the fog when the pilot looks down on it. The thermals' motes (`lift`,
+// thermal-motes.js) come in between: after the fog, and before the ravens' glints, the threat
+// rings, the glide ring and the plates' marks, so that a crowded core never paints over those.
+export const ORDER = Object.freeze({ fog: 1, lift: 1.5, aboveFog: 2 });
 
 // The fog's surface is a disc `radius` metres across its middle, over the zone's centre: solid
 // out to `edge` of that radius and fading to nothing at its rim. The glide ring (run-glide.js) is
@@ -40,15 +36,11 @@ export const FOG_SURFACE = Object.freeze({ radius: CLOUD_ZONE.r * 1.15, edge: 0.
 // a copy of its material whose own light rises from CLOUD_GLOW by up to `glow`, toward the bolt's
 // pale violet `tint`. That light comes through the file's own picture, which is dark underneath:
 // rendered at night with the glow pass, half as much hardly showed. And for a moment every hunted
-// thermal shows as if close: its sparks are then never drawn smaller than `flare` pixels across,
-// so that from a long way off they are still seen.
+// thermal shows as if close: its motes' heads are then never drawn narrower than `flare` CSS
+// pixels, so that from a long way off they are still seen.
 export const CLOUD_LIT = Object.freeze({ glow: 4.5, tint: 0xd7dbff, flare: 3 });
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-const smoothstep = (from, to, value) => {
-  const t = clamp((value - from) / (to - from), 0, 1);
-  return t * t * (3 - 2 * t);
-};
 
 // Whether the straight line from `eye` to the point (px, py, pz) touches a cloud, which includes
 // either end being inside it. `grow` is how many times the size of its hazard the cloud is taken
@@ -83,8 +75,9 @@ function inTheWay(cloud, grow, eye, px, py, pz) {
 //
 // `loadModel` is scenery.js's loader, handed in because it cannot run outside a browser. Without
 // it, or until the models arrive, or if they never do, ravens are paper darts and storm clouds
-// are plain lumps.
-export function createCloudbase({ scene, loadModel = null }) {
+// are plain lumps. `calm` is for a visitor who asks for reduced motion: the thermals' motes then
+// rise at the air's own pace, swirl slower and do not twinkle.
+export function createCloudbase({ scene, loadModel = null, calm = false }) {
   let root = null;
   let disposed = false;
   let ready = null;
@@ -92,8 +85,8 @@ export function createCloudbase({ scene, loadModel = null }) {
   let floor = null;
   let boundary = null;
   let flock = null;
+  let motes = null;
   const loaded = { raven: false, clouds: false };
-  const thermalViews = [];
   const threatViews = [];
   const cloudViews = [];
   // Lightning's doing: the cloud slot struck and how brightly it is lit (0 to 1), the level its
@@ -151,65 +144,12 @@ export function createCloudbase({ scene, loadModel = null }) {
     floor.position.set(CLOUD_ZONE.x, -45, CLOUD_ZONE.z);
     root.add(floor);
 
-    const particleGeometry = ownGeometry(new THREE.BufferGeometry());
-    const seeds = new Float32Array(72 * 3);
-    // A fixed sequence keeps the columns stable on retries and avoids per-frame randomness.
-    for (let i = 0; i < 72; i++) {
-      const angle = i * 2.399963229728653;
-      const radius = 6 + ((i * 17) % 23);
-      seeds[i * 3] = Math.cos(angle) * radius;
-      seeds[i * 3 + 1] = i / 72 * 240;
-      seeds[i * 3 + 2] = Math.sin(angle) * radius;
-    }
-    particleGeometry.setAttribute('position', new THREE.BufferAttribute(seeds, 3));
-    // Slot 0 is the launch column, the one thermal that stands tall. The others are hunted and
-    // have no column: where each one is, and whether it shows at all, is read from the run on
-    // every frame, because they move.
-    for (let i = 0; i < CLOUD_POOL.thermals; i++) {
-      const hunted = i > 0;
-      let column = null;
-      if (!hunted) {
-        column = new THREE.Mesh(ownGeometry(new THREE.CylinderGeometry(24, 24, 1800, 20, 1, true)), ownMaterial(new THREE.MeshBasicMaterial({
-          color: 0xffbd69, opacity: 0.035, side: THREE.DoubleSide, ...transparent,
-        })));
-        column.name = `column-${i}`;
-        root.add(column);
-      }
-      const points = new THREE.Points(particleGeometry, ownMaterial(new THREE.ShaderMaterial({
-        uniforms: {
-          time: { value: 0 }, strength: { value: 0 }, near: { value: 0 }, sight: { value: 1 }, flare: { value: 0 },
-          span: { value: hunted ? SPARKS.hunted.span : SPARKS.launch.span },
-        },
-        // `sight` is how far Ansuz lets the sparks be seen (they are drawn larger for their distance by
-        // as much), and `flare` (0 to 1) is lightning's: it holds them to a larger least size.
-        vertexShader: `uniform float time; uniform float span; uniform float sight; uniform float flare; varying float edge;
-          void main() {
-            vec3 p = position;
-            p.y = mod(p.y * span / 240.0 + time * 15.0, span);
-            edge = smoothstep(0.0, 22.0, p.y) * (1.0 - smoothstep(span - 28.0, span, p.y));
-            vec4 view = modelViewMatrix * vec4(p, 1.0);
-            gl_Position = projectionMatrix * view;
-            gl_PointSize = clamp(170.0 * sight / max(1.0, -view.z), 1.0 + ${(CLOUD_LIT.flare - 1).toFixed(1)} * flare, 7.0);
-          }`,
-        fragmentShader: `uniform float strength; uniform float near; varying float edge;
-          void main() {
-            float distance = length(gl_PointCoord - 0.5) * 2.0;
-            gl_FragColor = vec4(1.0, 0.76, 0.36, (1.0 - smoothstep(0.0, 1.0, distance)) * strength * near * edge * 0.85);
-          }`,
-        ...transparent,
-      })));
-      points.name = `sparks-${i}`;
-      // The shader moves sparks beyond their static geometry bounds.
-      points.frustumCulled = false;
-      // One metre across, and stretched to its thermal's radius when it is placed.
-      const core = ring(1, 0xffc777, 0.32);
-      core.name = `core-${i}`;
-      // Neither is ever placed below the fog, so both can be drawn after it. The column stays in
-      // the ordinary order: it stands in the fog, which has to cover the foot of it.
-      points.renderOrder = core.renderOrder = ORDER.aboveFog;
-      root.add(points, core);
-      thermalViews.push({ hunted, column, points, core, phase: i * 37, below: hunted ? SPARKS.hunted.below : SPARKS.launch.below });
-    }
+    // Every thermal is a stream of rising motes (thermal-motes.js): slot 0 the launch column, seen
+    // from anywhere in the zone, and the others hunted, seen only from close by. Where each one is,
+    // and whether it shows at all, is read from the run on every frame, because they move. None is
+    // ever drawn below the fog, so all of them can be drawn after it.
+    motes = createThermalMotes({ sites: CLOUD_POOL.thermals, order: ORDER.lift, calm, flare: CLOUD_LIT.flare, ownGeometry, ownMaterial });
+    root.add(motes.group);
 
     CLOUD_MILESTONES.forEach((altitude, i) => {
       const marker = ring(CLOUD_ZONE.r, [0x7cefd3, 0xb9bbff, 0xffd69a][i % 3], 0.48);
@@ -356,19 +296,16 @@ export function createCloudbase({ scene, loadModel = null }) {
     struck.slot = -1;
     struck.level = 0;
     revealed = 0;
-    for (let i = 0; i < thermalViews.length; i++) {
-      const view = thermalViews[i];
-      view.points.visible = view.core.visible = false;
-      if (view.column) view.column.visible = false;
-    }
+    motes.clear();
     return ready;
   }
 
   // `time` is the run's clock, `pos` the pilot, `run` the run (or its bare state) and `eye` the
   // camera's position if clouds in its way should be thinned. `sight` is how many times as far as
-  // usual a hunted thermal's sparks and ring are seen: BLESSING.sparks under Ansuz, otherwise 1.
-  // Nothing is allocated here.
-  function update(time, pos, run, eye = null, sight = 1) {
+  // usual a hunted thermal's motes are seen: BLESSING.sparks under Ansuz, otherwise 1. `bright` is
+  // true once the game has dropped its glow, and the motes are then drawn brighter to make up for
+  // it. Nothing is allocated here.
+  function update(time, pos, run, eye = null, sight = 1, bright = false) {
     if (!root || !root.visible || disposed) return;
     const state = run.state ?? run;
     const fogHeight = state.fogHeight;
@@ -377,37 +314,9 @@ export function createCloudbase({ scene, loadModel = null }) {
     floor.position.y = fogHeight - 45;
     boundary.position.y = Math.max(fogHeight + 3, pos.y - 8);
 
-    for (let i = 0; i < thermalViews.length; i++) {
-      const view = thermalViews[i];
-      const thermal = state.thermals[i];
-      // While a flock is still on its way, `x, z` is only where the lift is going to be.
-      const strength = thermal.live && thermal.move === 0 ? thermal.strength : 0;
-      const far = view.hunted ? sight : 1;
-      const near = view.hunted ? 1 - smoothstep(SPARKS.sight[0] * far, SPARKS.sight[1] * far, Math.hypot(pos.x - thermal.x, pos.z - thermal.z)) : 1;
-      // While lightning lasts, a hunted thermal shows from anywhere as if close by; lift that is
-      // not there yet (its flock still on the way) has nothing to show.
-      const seen = Math.max(near, revealed);
-      const lit = strength * seen > 0.01;
-      if (view.column) {
-        view.column.visible = lit;
-        view.column.position.set(thermal.x, 900, thermal.z);
-        view.column.material.opacity = 0.035 * strength;
-      }
-      view.points.visible = view.core.visible = lit;
-      view.points.material.uniforms.strength.value = strength;
-      view.points.material.uniforms.near.value = seen;
-      view.points.material.uniforms.sight.value = far;
-      view.points.material.uniforms.flare.value = view.hunted ? revealed : 0;
-      view.points.material.uniforms.time.value = time + view.phase;
-      view.core.material.opacity = 0.32 * strength * seen;
-      // The sparks wrap in a window around the pilot, with independent phases. Only object
-      // transforms change; particle buffers and materials are reused throughout the run.
-      view.points.position.set(thermal.x, Math.max(fogHeight, pos.y - view.below), thermal.z);
-      view.points.rotation.y = time * 0.12 + i;
-      view.core.position.set(thermal.x, Math.max(fogHeight + 2, pos.y - 10), thermal.z);
-      view.core.scale.set(thermal.r, 1, thermal.r);
-    }
-
+    // While lightning lasts, a hunted thermal shows from anywhere as if close by; lift that is not
+    // there yet (its flock still on the way) has nothing to show.
+    motes.update(time, state, pos, sight, revealed, bright);
     flock.update(time, state);
     const chest = pos.y + CLOUD_STRIKE.rise;
     let marked = 0;
@@ -476,9 +385,9 @@ export function createCloudbase({ scene, loadModel = null }) {
     flock?.dispose();
     geometries.clear();
     materials.clear();
-    thermalViews.length = threatViews.length = cloudViews.length = 0;
+    threatViews.length = cloudViews.length = 0;
     lits = [];
-    root = fog = floor = boundary = flock = null;
+    root = fog = floor = boundary = flock = motes = null;
   }
 
   return {

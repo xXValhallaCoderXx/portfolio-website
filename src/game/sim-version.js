@@ -12,4 +12,8 @@
 //    strike sprays the bar's plates for the pilot to catch again, rune gates at 500 and 1,000 m
 //    bless the pilot who flies through one, and the first bell past 1,000 m is the Beast (WIND,
 //    THUNDER, BAIT, SCATTER, GATES, BLESSING, BEAST, MEET.beast and .iron).
-export const SIM_VERSION = 3;
+// 4: the wing is flown, not only held: big ears for a steep way down (EARS, the brake and the bar
+//    bits together), a wing that dives as the air drops away and tucks unless the brake catches it,
+//    a harsh stall ending in a dive to catch (DIVE), and a folded wing pumped open sooner
+//    (CLOUD_STRIKE.pump).
+export const SIM_VERSION = 4;

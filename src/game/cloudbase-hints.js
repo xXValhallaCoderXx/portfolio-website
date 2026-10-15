@@ -19,6 +19,14 @@ export const GUST_NEAR = 60;
 export const DEEP_WARN = 0.5;
 // How to centre a circle on a thermal's core is taught from the second thermal ridden to this one.
 export const CENTRE_RIDES = 6;
+// How to fly into a thermal (past its core on the flock's side, turning as that wing lifts) is
+// taught on the way to the first this many, and the moment to turn is said for `TURN_SAID` seconds.
+export const ENTRY_RIDES = 4;
+export const TURN_SAID = 1.5;
+// A front tuck is explained for this many seconds after it, for the next dive.
+export const TUCK_SAID = 2;
+// Seconds of big ears held in climbing air before the pilot is told they will not beat it.
+export const EARS_CLIMB = 1.5;
 // The plates riding a gust front are pointed out on this many fronts of a run, and then left to be
 // seen: some four fronts a run carry plates, and every one said would talk over the brake's lesson.
 // A front that comes while circling beside the ravens is still being taught goes unsaid.
@@ -38,7 +46,7 @@ export const BLESSED = Object.freeze([
   '',
   'ᚠ Fehu — plates come to you from further',
   'ᛉ Algiz — the next kettlebell glances off',
-  'ᚨ Ansuz — thermal sparks seen twice as far',
+  'ᚨ Ansuz — thermal motes seen twice as far',
   'ᛏ Tiwaz — plates ×2; a hit takes the bar',
 ]);
 
@@ -64,6 +72,15 @@ export const BLESSED = Object.freeze([
  *   rides         hunted thermals entered so far in this run
  *   searching     seconds without lift
  *   touch         the on-screen buttons are in use
+ *   harsh         a stall here is the costly kind, with a dive to catch as it ends
+ *   dive          seconds left to catch the wing as it dives (0 while it is not diving)
+ *   tucked        seconds since the wing last tucked for a dive left uncaught
+ *   ears          how far the big ears are in, 0 to 1; `earsUsed` they have been pulled this run,
+ *                 and `earsClimb` seconds they have been held fully in climbing air
+ *   approach      a hunted thermal's flock is ahead to fly into, turning `approachDir`
+ *   turnIn        seconds since the moment came to turn into a core, `turnSide` the way to turn
+ *   trailHigh     the next plate on a followed trail is too far under the wing for the bar, in air
+ *                 the ears can sink through
  *
  * And the meet's, each of which says nothing when left out:
  *   bellHit       it was a kettlebell that folded the wing, not a raven
@@ -89,24 +106,41 @@ export const BLESSED = Object.freeze([
  *   shallow       the last circle in this thermal was off its core: a rep, but not to depth
  */
 export function cloudbaseHint(facts) {
-  if (facts.collapse > 0) return facts.bellHit ? 'kettlebell hit — wing collapsed, hold on' : 'raven strike — wing collapsed, hold on';
-  const stalled = stallHint(facts.stall, facts.stallSide);
+  // A folded wing is pumped open: the brake held a moment and let go, twice.
+  if (facts.collapse > 0) {
+    const pump = facts.touch ? 'hold ▼, let go, twice' : 'hold brake, let go, twice';
+    return facts.bellHit ? `kettlebell hit — ${pump}` : `raven strike — ${pump}`;
+  }
+  const stalled = stallHint(facts.stall, facts.stallSide, facts.harsh);
   if (stalled) return stalled;
+  // A dive is caught with a touch of the brake, and the tuck it ends in says so for the next one.
+  if (facts.dive > 0) return facts.touch ? 'wing diving — tap ▼ to catch it' : 'wing diving — tap the brake to catch it';
+  if (facts.tucked < TUCK_SAID) return facts.touch ? 'front tuck — tap ▼ as the wing dives' : 'front tuck — tap the brake as it dives';
   // A kettlebell is dodged by changing what the wing is doing. Circling, the bar is the change
   // that works (straightening fails in a gentle circle); flying straight, or on the bar, a turn is.
   // The Beast is dodged the same way, said in the fewest words: by the time it comes at 1,000 m
   // the pilot has dodged a few, and its line still has to start with the word that says it at once.
-  if (facts.bell === 1) {
+  // With the ears in, the bar is not to be had: the turn off the line is what dodges.
+  const bell = facts.bell === 1 && facts.ears >= 0.5 ? 2 : facts.bell;
+  if (bell === 1) {
     if (facts.beast) return facts.touch ? 'kettlebell — the Beast: ◀▶ or straighten' : 'kettlebell — the Beast: bar or straighten';
     return facts.touch ? 'kettlebell — ◀▶ for the bar, or straighten' : 'kettlebell — push the bar or straighten';
   }
-  if (facts.bell === 2) return facts.beast ? 'kettlebell — the Beast: turn off your line' : 'kettlebell — turn off your line';
+  if (bell === 2) return facts.beast ? 'kettlebell — the Beast: turn off your line' : 'kettlebell — turn off your line';
   if (facts.load >= 0.6) return 'brake in the red — ease off or it stalls';
   // A front on the tail of a held brake is what tips it over; any front may come round to the tail.
   if (facts.gustAhead < GUST_NEAR && facts.brake > BRAKE.light) return 'gust coming — ease the brake';
-  if (facts.deep >= DEEP_WARN) return 'brake going deep — ease off now';
+  // Out of lift a deep brake is usually a way down being looked for: the ears are the one that
+  // cannot stall, said until they have been tried.
+  if (facts.deep >= DEEP_WARN) {
+    if (facts.lift < 1 && !facts.earsUsed) return facts.touch ? 'brake going deep — let go; ▼▼ sinks fast' : 'brake going deep — let go; E to sink fast';
+    return 'brake going deep — ease off now';
+  }
   if (facts.cloud > 0.25) return 'in cloud — let go, fly straight out';
   if (facts.outside) return 'the wind turns you back toward the lift';
+  // The moment a core passes beside the wing on the flock's side: turned into now, the first circle
+  // goes round the core.
+  if (facts.turnIn < TURN_SAID) return `turn ${facts.turnSide > 0 ? '▶' : '◀'} now — into the lifted wing`;
   // A moment's news from the meet, each said for a moment only, with what it put on the bar.
   const times = facts.double ? BLESSING.double : 1;
   if (facts.glanced < 2) return 'ᛉ Algiz turned the kettlebell aside';
@@ -121,6 +155,7 @@ export function cloudbaseHint(facts) {
   if (facts.elapsed < 8) return 'circle in the amber column to climb';
   if (facts.fogClearance < FOG_NEAR) return facts.lift > 3 ? 'fog closing in — keep climbing' : 'fog closing in — fly to the ravens';
   if (facts.headroom < 70 && facts.climbing) return 'storm cloud above — lift ends at its base';
+  if (facts.earsClimb > EARS_CLIMB) return 'ears won\'t beat this lift — fly out too';
   // What is there to be had for a few seconds, and gone if it waits: a strike's own plates, the
   // stones (as they are raised, and as the climb comes level with them), and the plate under a
   // storm cloud, which waits while the climb toward the cloud is still being warned off it.
@@ -133,9 +168,16 @@ export function cloudbaseHint(facts) {
   if (facts.thunder) return '25 kg under the cloud — grab it and leave';
   // Leaving dying lift the short way round is not a mistake to correct.
   if (facts.thermal > 0 && facts.against > 1 && !facts.dying) return `ravens turn ${facts.flockDir > 0 ? '▶' : '◀'} here — turn with them`;
+  if (facts.trailHigh) return facts.touch ? 'too high for the plates — ▼▼ big ears' : 'too high for the plates — big ears (E)';
   if (facts.trail) return 'lift dying — follow the plates on the bar';
   if (facts.bait) return 'fog bait — be over it as the fog lifts it';
   if (facts.thermal >= 0 && facts.dying) return facts.thermal === 0 ? 'lift dying — fly to the circling ravens' : 'lift dying — leave when the ravens leave';
+  // On the way into the first thermals, how to enter one: past its core on the side its ravens turn
+  // to, turning as the wing on that side lifts, so the first circle goes round the core.
+  if (facts.approach && facts.rides < ENTRY_RIDES) {
+    const side = facts.approachDir > 0 ? '▶' : '◀';
+    return `ravens on your ${side}; turn ${side} as that wing lifts`;
+  }
   // Once circling is learnt, how to centre it: the lift surges on the side of a circle nearest the
   // core, and straightening there for a beat moves the circle onto it. Said while circles miss it.
   if (facts.thermal > 0 && facts.shallow && facts.rides >= 2 && facts.rides <= CENTRE_RIDES) {

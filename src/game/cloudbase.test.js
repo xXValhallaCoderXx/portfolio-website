@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { CLOUD_GLOW, CLOUD_LIT, CLOUD_MILESTONES, CLOUD_POOL, CLOUD_STRIKE, FOG_SURFACE, createCloudbase, createCloudbaseRun } from './cloudbase.js';
-import { CLOUD_STORM, CLOUD_ZONE } from './cloudbase-state.js';
+import { CLOUD_GLOW, CLOUD_LIT, CLOUD_MILESTONES, CLOUD_POOL, CLOUD_STRIKE, FOG_SURFACE, ORDER, createCloudbase, createCloudbaseRun } from './cloudbase.js';
+import { CLOUD_HUNT, CLOUD_STORM, CLOUD_ZONE } from './cloudbase-state.js';
 import { RAVEN, rigRaven, poseRaven, ravenEffort } from './ravens.js';
+import { THERMAL_MOTES, layoutMotes, moteAt } from './thermal-motes.js';
 import { BLESSING } from './meet-runes.js';
 import { createTestLoader, readModel } from './test-models.js';
+import { arraysMadeBy } from './test-alloc.js';
 
 const STEP = 1 / 60;
 // How the view is asked to draw a storm cloud: 1.3 times its hazard, around a file that is 1
@@ -30,6 +32,12 @@ const dice = (seed) => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 const named = (view, name) => view.root.getObjectByName(name);
+// A thermal's uniforms as plain numbers, with where its motes' mesh stands: what moteAt reads.
+const valuesOf = (mesh) => {
+  const values = { x: mesh.position.x, z: mesh.position.z };
+  for (const [name, uniform] of Object.entries(mesh.material.uniforms)) values[name] = uniform.value;
+  return values;
+};
 const meshesIn = (object) => {
   const found = [];
   object.traverse((part) => { if (part.isMesh) found.push(part); });
@@ -148,7 +156,7 @@ test('a new run opens with nothing of the last one showing until its first updat
   Object.assign(run.state.ravens[0], { x: 120, y: 410, z: 230, fade: 1, threat: true });
   const pos = { x: 125, y: 400, z: 500 };
   view.update(1, pos, run, { x: cloud.x, y: 400, z: -100 });
-  const showing = ['raven-0', 'cloud-2', 'threat-0', 'sparks-0', 'core-0', 'column-0'].map((name) => named(view, name));
+  const showing = ['raven-0', 'cloud-2', 'threat-0', 'motes-0'].map((name) => named(view, name));
   for (const object of showing) assert.equal(object.visible, true, `${object.name} shows during the run`);
   assert.equal(named(view, 'cloud-2').children[0].material.alphaHash, true);
   assert.ok(named(view, 'glints').geometry.attributes.glow.getX(0) > 0);
@@ -163,14 +171,25 @@ test('a new run opens with nothing of the last one showing until its first updat
   view.dispose();
 });
 
-test('the pieces are named for what they are, and nothing stands tall but the launch column', () => {
+test('the pieces are named for what they are, every thermal is one instanced mesh of motes, and nothing stands tall', () => {
   const view = createCloudbase({ scene: new THREE.Scene() });
   view.begin();
+  const thermals = named(view, 'thermals');
+  assert.equal(thermals.isGroup, true);
+  assert.deepEqual(thermals.children.map((part) => part.name), ['motes-0', 'motes-1', 'motes-2']);
   for (let i = 0; i < CLOUD_POOL.thermals; i++) {
-    assert.equal(named(view, `sparks-${i}`).isPoints, true);
-    assert.equal(named(view, `core-${i}`).isLineLoop, true);
-    assert.equal(named(view, `column-${i}`)?.isMesh, i === 0 ? true : undefined);
+    const motes = named(view, `motes-${i}`);
+    assert.equal(motes.isMesh && motes.geometry.isInstancedBufferGeometry, true);
+    assert.equal(motes.geometry.instanceCount, i === 0 ? THERMAL_MOTES.count.launch : THERMAL_MOTES.count.hunted);
+    assert.equal(motes.geometry.attributes.seed.count, motes.geometry.instanceCount);
+    // The sparks, the rings at the cores and the launch column's cylinder are gone.
+    for (const old of ['sparks', 'core', 'column']) assert.equal(named(view, `${old}-${i}`), undefined);
   }
+  // The two hunted thermals share one layout, phased apart; the launch column has its own.
+  assert.equal(named(view, 'motes-1').geometry, named(view, 'motes-2').geometry);
+  assert.notEqual(named(view, 'motes-0').geometry, named(view, 'motes-1').geometry);
+  assert.equal(named(view, `motes-${CLOUD_POOL.thermals}`), undefined);
+  assert.equal(view.root.getObjectsByProperty('isPoints', true).length, 1, 'only the ravens\' glints are points');
   for (let i = 0; i < CLOUD_POOL.ravens; i++) assert.equal(named(view, `raven-${i}`).rotation.order, 'YXZ');
   for (let i = 0; i < CLOUD_POOL.clouds; i++) assert.equal(named(view, `cloud-${i}`).isGroup, true);
   assert.equal(named(view, `raven-${CLOUD_POOL.ravens}`), undefined);
@@ -179,9 +198,10 @@ test('the pieces are named for what they are, and nothing stands tall but the la
   const wide = view.root.children.filter((part) => part.isLineLoop && !part.name);
   assert.deepEqual(wide.map((part) => part.position.y).slice(0, CLOUD_MILESTONES.length), [...CLOUD_MILESTONES]);
   assert.equal(wide.length, CLOUD_MILESTONES.length + 1);
-  // The only full-height cylinder left is the launch column: the dark sink columns are gone.
+  // No full-height cylinder is left: the dark sink columns went before, and the launch column is
+  // its motes now.
   const tall = meshesIn(view.root).filter((mesh) => mesh.geometry.type === 'CylinderGeometry' && mesh.geometry.parameters.height > 1000);
-  assert.deepEqual(tall.map((mesh) => mesh.name), ['column-0']);
+  assert.deepEqual(tall, []);
   view.dispose();
 });
 
@@ -398,7 +418,7 @@ test('a whole run can be drawn frame by frame, models and all, without a number 
   const pos = { x: 85, y: 80, z: 320 };
   const eye = { x: 60, y: 90, z: 320 };
   const seen = { ravens: 0, clouds: 0, hunted: 0, launch: 0, frames: 0 };
-  const hunted = [named(view, 'sparks-1'), named(view, 'sparks-2')];
+  const hunted = [named(view, 'motes-1'), named(view, 'motes-2')];
   const clouds = view.root.children.filter((part) => /^cloud-/.test(part.name));
   const ravens = view.root.getObjectByName('ravens').children.filter((part) => /^raven-/.test(part.name));
   const { glow } = named(view, 'glints').geometry.attributes;
@@ -420,14 +440,20 @@ test('a whole run can be drawn frame by frame, models and all, without a number 
     ended = run.step(STEP, pos);
     view.update(state.elapsed, pos, run, eye);
     seen.frames += 1;
-    seen.launch += named(view, 'sparks-0').visible ? 1 : 0;
-    seen.hunted += hunted.some((sparks) => sparks.visible) ? 1 : 0;
+    seen.launch += named(view, 'motes-0').visible ? 1 : 0;
+    seen.hunted += hunted.some((motes) => motes.visible) ? 1 : 0;
     seen.ravens += ravens.some((holder) => holder.visible) ? 1 : 0;
     seen.clouds += clouds.some((holder) => holder.visible) ? 1 : 0;
     if (seen.frames % 20) continue;
     view.root.updateMatrixWorld(true);
     view.root.traverse((part) => {
       if (!part.matrixWorld.elements.every(Number.isFinite)) assert.fail(`${part.name || part.type} is somewhere impossible at ${state.elapsed.toFixed(1)} s`);
+      // Every number the motes' shader is handed, too.
+      for (const [name, uniform] of Object.entries(part.material?.uniforms ?? {})) {
+        const value = uniform.value;
+        const numbers = typeof value === 'number' ? [value] : value?.toArray?.() ?? [];
+        if (!numbers.every(Number.isFinite)) assert.fail(`${part.name}'s ${name} is ${value} at ${state.elapsed.toFixed(1)} s`);
+      }
     });
     assert.equal(glow.array.every((value) => value >= 0 && value <= 1), true);
   }
@@ -438,119 +464,104 @@ test('a whole run can be drawn frame by frame, models and all, without a number 
   view.dispose();
 });
 
-test('hunted sparks and rings are dark beyond 85 m and lit on the axis, while the launch column is lit from anywhere', () => {
+test('hunted thermals\' motes are dark beyond 85 m and lit on the axis, while the launch column is lit from anywhere', () => {
   const view = createCloudbase({ scene: new THREE.Scene() });
   view.begin();
   const run = createCloudbaseRun();
   run.reset(80, 3);
   const [launch, first, second] = run.state.thermals;
-  const sparks = [0, 1, 2].map((i) => named(view, `sparks-${i}`));
-  const cores = [0, 1, 2].map((i) => named(view, `core-${i}`));
-  const column = named(view, 'column-0');
-  const uniform = (i, name) => sparks[i].material.uniforms[name].value;
+  const motes = [0, 1, 2].map((i) => named(view, `motes-${i}`));
+  const uniform = (i, name) => motes[i].material.uniforms[name].value;
   const launchLit = () => {
-    assert.equal(sparks[0].visible && cores[0].visible && column.visible, true);
+    assert.equal(motes[0].visible, true);
     assert.equal(uniform(0, 'near'), 1);
     assert.equal(uniform(0, 'strength'), 1);
-    close(cores[0].material.opacity, 0.32);
-    close(column.material.opacity, 0.035);
   };
 
   // 90 m from the first hunted thermal and further still from the other: nothing of either.
   let pos = pilotAt(beyond(first, second, 90), 300);
   view.update(1, pos, run);
   for (const i of [1, 2]) {
-    assert.equal(sparks[i].visible, false);
-    assert.equal(cores[i].visible, false);
+    assert.equal(motes[i].visible, false);
     assert.equal(uniform(i, 'near'), 0);
-    assert.equal(cores[i].material.opacity, 0);
   }
   launchLit();
 
-  // On the axis: full sparks in a short window just under the pilot, and the ring at its radius.
+  // On the axis: every mote in a short window just under the pilot, spread over its radius.
   pos = pilotAt(first, 300);
   view.update(2, pos, run);
-  assert.equal(sparks[1].visible && cores[1].visible, true);
+  assert.equal(motes[1].visible, true);
   assert.equal(uniform(1, 'near'), 1);
   assert.equal(uniform(1, 'strength'), first.strength);
   assert.equal(first.strength, 1);
   assert.equal(uniform(1, 'span'), 120);
-  assert.deepEqual(sparks[1].position.toArray(), [first.x, 260, first.z]);
-  assert.deepEqual(cores[1].position.toArray(), [first.x, 290, first.z]);
-  assert.deepEqual(cores[1].scale.toArray(), [first.r, 1, first.r]);
-  cores[1].geometry.computeBoundingSphere();
-  close(cores[1].geometry.boundingSphere.radius, 1, 1e-6);
-  close(cores[1].material.opacity, 0.32);
-  assert.equal(sparks[1].frustumCulled, false);
-  assert.equal(sparks[2].visible || cores[2].visible, false, 'the other thermal is at least 85 m away and stays dark');
+  assert.equal(uniform(1, 'radius'), first.r);
+  assert.deepEqual(motes[1].position.toArray(), [first.x, 260, first.z]);
+  assert.equal(uniform(1, 'foot'), 260);
+  assert.equal(motes[1].frustumCulled, false);
+  assert.equal(motes[2].visible, false, 'the other thermal is at least 85 m away and stays dark');
   launchLit();
   // The launch column keeps its tall window, well below the pilot, and its own radius.
   assert.equal(uniform(0, 'span'), 240);
-  assert.deepEqual(sparks[0].position.toArray(), [launch.x, 200, launch.z]);
-  assert.deepEqual(cores[0].scale.toArray(), [launch.r, 1, launch.r]);
-  assert.deepEqual(column.position.toArray(), [launch.x, 900, launch.z]);
+  assert.equal(uniform(0, 'radius'), launch.r);
+  assert.deepEqual(motes[0].position.toArray(), [launch.x, 200, launch.z]);
 
-  // Coming closer, the sparks come up between 85 m and 46 m.
+  // Coming closer, the motes come up between 85 m and 46 m.
   view.update(3, pilotAt(beyond(first, second, 86), 300), run);
-  assert.equal(sparks[1].visible, false);
+  assert.equal(motes[1].visible, false);
   view.update(3, pilotAt(beyond(first, second, 65.5), 300), run);
   close(uniform(1, 'near'), 0.5);
-  assert.equal(sparks[1].visible, true);
-  close(cores[1].material.opacity, 0.16);
+  assert.equal(motes[1].visible, true);
   view.update(3, pilotAt(beyond(first, second, 46), 300), run);
   assert.equal(uniform(1, 'near'), 1);
 
-  // The fog lifts the bottom of every window, and a weakening thermal dims.
+  // The fog lifts the foot of every window, and a weakening thermal is handed its strength.
   run.state.fogHeight = 280;
   first.strength = 0.25;
   view.update(4, pos, run);
-  assert.equal(sparks[1].position.y, 280);
-  assert.equal(sparks[0].position.y, 280);
-  assert.equal(cores[1].position.y, 290);
+  assert.equal(motes[1].position.y, 280);
+  assert.equal(motes[0].position.y, 280);
   assert.equal(uniform(1, 'strength'), 0.25);
-  close(cores[1].material.opacity, 0.08);
   launch.strength = 0.5;
   view.update(4, pos, run);
   assert.equal(uniform(0, 'strength'), 0.5);
-  close(column.material.opacity, 0.0175);
   Object.assign(launch, { strength: 0, live: false });
   view.update(4, pos, run);
-  assert.equal(sparks[0].visible || cores[0].visible || column.visible, false, 'a spent launch column is gone');
+  assert.equal(motes[0].visible, false, 'a spent launch column is gone');
   view.dispose();
 });
 
-test('under Ansuz a hunted thermal\'s sparks and ring are seen twice as far, drawn as large as that much nearer, and the launch column is as it was', () => {
+test('under Ansuz a hunted thermal\'s motes are seen twice as far, drawn as large as that much nearer, and the launch column is as it was', () => {
   const view = createCloudbase({ scene: new THREE.Scene() });
   view.begin();
   const run = createCloudbaseRun();
   run.reset(80, 3);
   const [, first, second] = run.state.thermals;
-  const sparks = [0, 1].map((i) => named(view, `sparks-${i}`));
-  const core = named(view, 'core-1');
-  const uniform = (i, name) => sparks[i].material.uniforms[name].value;
+  const motes = [0, 1].map((i) => named(view, `motes-${i}`));
+  const uniform = (i, name) => motes[i].material.uniforms[name].value;
   // 131 m off, half way into the stretched fade (92 to 170 m): dark without the blessing.
   const far = pilotAt(beyond(first, second, 131), 300);
   view.update(1, far, run);
-  assert.equal(sparks[1].visible || core.visible, false);
+  assert.equal(motes[1].visible, false);
   assert.equal(uniform(1, 'sight'), 1);
   view.update(1, far, run, null, BLESSING.sparks);
   assert.equal(BLESSING.sparks, 2);
-  assert.ok(sparks[1].visible && core.visible);
+  assert.ok(motes[1].visible);
   close(uniform(1, 'near'), 0.5, 1e-6);
-  close(core.material.opacity, 0.16, 1e-6);
-  assert.equal(uniform(1, 'sight'), 2, 'its sparks drawn twice the size for their distance');
+  assert.equal(uniform(1, 'sight'), 2, 'its motes drawn twice the size for their distance');
+  assert.match(motes[1].material.vertexShader, /170\.0 \* sight \/ away/);
   // Twice 85 m out it is dark even so, and within twice 46 m it is all there.
   view.update(1, pilotAt(beyond(first, second, 171), 300), run, null, BLESSING.sparks);
-  assert.equal(sparks[1].visible, false);
+  assert.equal(motes[1].visible, false);
   view.update(1, pilotAt(beyond(first, second, 92), 300), run, null, BLESSING.sparks);
   assert.equal(uniform(1, 'near'), 1);
-  // The launch column is lit from anywhere anyway, and its sparks keep their size.
+  // The launch column is lit from anywhere anyway, and its motes keep their size.
   assert.equal(uniform(0, 'sight'), 1);
   assert.equal(uniform(0, 'near'), 1);
   view.dispose();
 });
 
-test('sparks and rings are drawn after the fog, which would otherwise paint over them, and are never put under it', () => {
+test('the motes are drawn after the fog, which would otherwise paint over them, and before the ravens\' glints, and are never put under the fog', () => {
   const view = createCloudbase({ scene: new THREE.Scene() });
   view.begin();
   const run = createCloudbaseRun();
@@ -560,10 +571,18 @@ test('sparks and rings are drawn after the fog, which would otherwise paint over
   const fog = meshesIn(view.root).find((mesh) => mesh.geometry.type === 'CircleGeometry');
   assert.deepEqual([fog.material.transparent, fog.material.depthWrite], [true, false]);
   assert.ok(fog.renderOrder > 0);
-  const marks = [0, 1, 2].flatMap((i) => [named(view, `sparks-${i}`), named(view, `core-${i}`)]);
-  for (const mark of marks) assert.ok(mark.renderOrder > fog.renderOrder, `${mark.name} is drawn after the fog`);
-  // The launch column stands in the fog, which has to cover the foot of it.
-  assert.ok(named(view, 'column-0').renderOrder < fog.renderOrder);
+  // And whatever is drawn after the motes is drawn over them: every mark that must never be lost
+  // in a crowded core comes later, the glints, the threat rings and the glide ring among them.
+  const glints = named(view, 'glints');
+  const marks = [0, 1, 2].map((i) => named(view, `motes-${i}`));
+  for (const mark of marks) {
+    assert.ok(mark.renderOrder > fog.renderOrder && mark.renderOrder < glints.renderOrder, `${mark.name} is drawn after the fog and before the glints`);
+    assert.equal(mark.renderOrder, ORDER.lift);
+    assert.deepEqual([mark.material.transparent, mark.material.depthWrite, mark.material.fog], [true, false, false]);
+    assert.equal(mark.material.blending, THREE.NormalBlending);
+  }
+  assert.equal(named(view, 'threat-0').renderOrder, ORDER.aboveFog);
+  assert.ok(ORDER.fog < ORDER.lift && ORDER.lift < ORDER.aboveFog);
 
   // Drawn after the fog, they would show through it from above if they were ever below it.
   // On the axis of a hunted thermal, with the fog far below, just under the pilot and above.
@@ -572,30 +591,38 @@ test('sparks and rings are drawn after the fog, which would otherwise paint over
     run.state.fogHeight = fogHeight;
     view.update(1, pos, run);
     assert.equal(fog.position.y, fogHeight);
-    // Sparks only rise from where their object is, and a ring lies flat at its own height.
-    for (const mark of marks) assert.ok(mark.position.y >= fogHeight, `${mark.name} is at ${mark.position.y} m over fog at ${fogHeight} m`);
+    // The motes only rise from where their mesh stands, the foot of their window.
+    for (const mark of marks) {
+      assert.ok(mark.position.y >= fogHeight, `${mark.name} is at ${mark.position.y} m over fog at ${fogHeight} m`);
+      assert.equal(mark.material.uniforms.foot.value, mark.position.y);
+    }
   }
   view.dispose();
 });
 
-test('nothing is drawn at a hunted site while its flock is still flying there, and the sparks follow the thermal when it lands', () => {
+test('nothing is drawn at a hunted site while its flock is still flying there, and the motes follow the thermal when it lands', () => {
   const view = createCloudbase({ scene: new THREE.Scene() });
   view.begin();
   const run = createCloudbaseRun();
   run.reset(80, 3);
   const thermal = run.state.thermals[1];
-  const sparks = named(view, 'sparks-1');
-  const core = named(view, 'core-1');
+  const motes = named(view, 'motes-1');
+  const rise = () => motes.material.uniforms.rise.value;
   const old = { x: thermal.x, z: thermal.z };
 
-  // By plain numbers first: lift that is switched on but still has a flock on its way shows nothing.
+  // By plain numbers first: lift that is switched on but still has a flock on its way shows
+  // nothing, and its motes are carried nowhere.
   thermal.move = 6;
   view.update(1, pilotAt(thermal, 300), run);
-  assert.equal(sparks.visible || core.visible, false);
-  assert.equal(sparks.material.uniforms.strength.value, 0);
+  const still = rise();
+  view.update(1.05, pilotAt(thermal, 300), run);
+  assert.equal(motes.visible, false);
+  assert.equal(motes.material.uniforms.strength.value, 0);
+  assert.equal(rise(), still);
   thermal.move = 0;
-  view.update(1, pilotAt(thermal, 300), run);
-  assert.equal(sparks.visible && core.visible, true);
+  view.update(1.1, pilotAt(thermal, 300), run);
+  assert.equal(motes.visible, true);
+  assert.ok(rise() > still);
 
   // Then for real: sit in it until it is used up and its ravens leave for somewhere else.
   let pos = pilotAt(old, 300);
@@ -604,18 +631,265 @@ test('nothing is drawn at a hunted site while its flock is still flying there, a
   assert.ok(Math.hypot(thermal.x - old.x, thermal.z - old.z) > 79);
   for (const point of [old, thermal]) {
     view.update(run.state.elapsed, pilotAt(point, 300), run);
-    assert.equal(sparks.visible || core.visible, false, 'neither the old site nor the new one shows anything');
+    assert.equal(motes.visible, false, 'neither the old site nor the new one shows anything');
   }
-  // Wait at the new site for the flock to arrive and the lift to bloom.
+  // Wait at the new site for the flock to arrive and the lift to bloom, drawing every frame: the
+  // motes are carried by exactly a frame of the lift there is, which is none while the flock flies.
   pos = pilotAt(thermal, 300);
-  for (let i = 0; i < 30 * 60 && !(thermal.move === 0 && thermal.strength > 0.9); i++) run.step(STEP, pos);
+  const held = rise();
+  let flying = 0;
+  for (let i = 0; i < 30 * 60 && !(thermal.move === 0 && thermal.strength > 0.9); i++) {
+    run.step(STEP, pos);
+    const before = rise();
+    view.update(run.state.elapsed, pos, run);
+    const lifting = thermal.live && thermal.move === 0 ? thermal.strength : 0;
+    close(rise() - before, THERMAL_MOTES.flow * thermal.s * CLOUD_HUNT.peak * lifting * STEP, 1e-9);
+    if (thermal.move > 0) {
+      flying += 1;
+      assert.equal(rise(), held);
+      assert.equal(motes.visible, false);
+    }
+  }
+  assert.ok(flying > 60, `the flock flew for ${flying} frames`);
   assert.equal(thermal.live && thermal.move === 0, true);
+  assert.equal(motes.visible, true);
+  assert.deepEqual([motes.position.x, motes.position.z], [thermal.x, thermal.z]);
+  assert.equal(motes.material.uniforms.strength.value, thermal.strength);
+  assert.ok(rise() > held, 'and the air carries the motes up again');
+  view.dispose();
+});
+
+test('one second at full strength lifts a core mote 1.5 × 28.3 m', () => {
+  const view = createCloudbase({ scene: new THREE.Scene() });
+  view.begin();
+  const run = createCloudbaseRun();
+  run.reset(80, 3);
+  const thermal = run.state.thermals[1];
+  // Only this thermal lifts, so that the run's lift anywhere near it is its own.
+  for (const other of [0, 2]) Object.assign(run.state.thermals[other], { live: false, strength: 0 });
+  assert.equal(thermal.strength, 1);
+  const motes = named(view, 'motes-1');
+  const pos = pilotAt(thermal, 300);
+  view.update(5, pos, run);
+  const from = motes.material.uniforms.rise.value;
+  for (let n = 1; n <= 60; n++) view.update(5 + n / 60, pos, run);
+  const core = CLOUD_HUNT.s * CLOUD_HUNT.peak;
+  close(core, 28.3, 0.01);
+  close(motes.material.uniforms.rise.value - from, 1.5 * core, 1e-9);
+  // Each mote rises at its share of that, which is half as fast again as the run's lift where it is.
+  const layout = layoutMotes(true, THERMAL_MOTES.count.hunted);
+  const u = valuesOf(motes);
+  const there = { x: 0, y: 300, z: 0 };
+  for (let i = 0; i < layout.count; i += 3) {
+    const mote = moteAt(layout, i, u);
+    there.x = mote.x;
+    there.z = mote.z;
+    close(mote.vy, 1.5 * run.sample(there, 0).lift, 1e-4);
+  }
+  view.dispose();
+});
+
+test('a weakening thermal slows its motes without a jump: rise only grows, by one frame of its lift at a time', () => {
+  const view = createCloudbase({ scene: new THREE.Scene() });
+  view.begin();
+  const run = createCloudbaseRun();
+  run.reset(80, 3);
+  const thermal = run.state.thermals[1];
+  const motes = named(view, 'motes-1');
+  const rise = () => motes.material.uniforms.rise.value;
+  // Sit in its core, drawing every frame, until it wears out and its flock moves on.
+  const pos = pilotAt(thermal, 300);
   view.update(run.state.elapsed, pos, run);
-  assert.equal(sparks.visible && core.visible, true);
-  assert.deepEqual([sparks.position.x, sparks.position.z], [thermal.x, thermal.z]);
-  assert.deepEqual([core.position.x, core.position.z], [thermal.x, thermal.z]);
-  assert.equal(sparks.material.uniforms.strength.value, thermal.strength);
-  assert.equal(sparks.material.uniforms.time.value, run.state.elapsed + 37);
+  let weakest = 1;
+  let most = 0;
+  for (let i = 0; i < 40 * 60 && thermal.move === 0; i++) {
+    run.step(STEP, pos);
+    const before = rise();
+    view.update(run.state.elapsed, pos, run);
+    const lifting = thermal.live && thermal.move === 0 ? thermal.strength : 0;
+    const moved = rise() - before;
+    assert.ok(moved >= 0, 'the motes never slide back down their ladder');
+    close(moved, THERMAL_MOTES.flow * thermal.s * CLOUD_HUNT.peak * lifting * STEP, 1e-9);
+    most = Math.max(most, moved);
+    weakest = Math.min(weakest, lifting);
+  }
+  assert.ok(thermal.move > 0 && weakest < 0.05, 'the thermal wore all the way out');
+  // Never more than a frame of the best lift there is. Worked out from the clock instead, every
+  // mote would jump by the change in speed times the whole time flown, metres in a frame.
+  assert.ok(most <= 1.5 * CLOUD_HUNT.s * CLOUD_HUNT.peak * STEP + 1e-9, `${most.toFixed(3)} m in one frame`);
+  view.dispose();
+});
+
+test('strength 0, or a flock on its way, draws nothing; past the first mote\'s strength it draws', () => {
+  const view = createCloudbase({ scene: new THREE.Scene() });
+  view.begin();
+  const run = createCloudbaseRun();
+  run.reset(80, 3);
+  const [launch, thermal] = run.state.thermals;
+  const motes = [named(view, 'motes-0'), named(view, 'motes-1')];
+  const pos = pilotAt(thermal, 300);
+  const drawn = (strength, move = 0) => {
+    Object.assign(thermal, { strength, move });
+    launch.strength = strength;
+    view.update(1, pos, run);
+    return motes.map((mesh) => mesh.visible);
+  };
+  const { first } = THERMAL_MOTES;
+  assert.deepEqual(drawn(0), [false, false]);
+  assert.deepEqual(drawn(first), [false, false]);
+  assert.deepEqual(drawn(first + 1e-3), [true, true]);
+  assert.deepEqual(drawn(1), [true, true]);
+  assert.deepEqual(drawn(1, 4), [true, false], 'a flock on its way');
+  assert.equal(motes[1].material.uniforms.strength.value, 0);
+  // Below the first mote's strength not one mote would show anyway, so nothing is lost.
+  const layout = layoutMotes(true, THERMAL_MOTES.count.hunted);
+  for (let i = 0; i < layout.count; i++) assert.ok(layout.seed[i * 4 + 3] >= first);
+  view.dispose();
+});
+
+test('paused, the motes hold still', () => {
+  const view = createCloudbase({ scene: new THREE.Scene() });
+  view.begin();
+  const run = createCloudbaseRun();
+  run.reset(80, 3);
+  const pos = pilotAt(run.state.thermals[1], 300);
+  const motes = [0, 1, 2].map((i) => named(view, `motes-${i}`));
+  const phases = () => motes.map((mesh) => ['rise', 'turn', 'clock'].map((name) => mesh.material.uniforms[name].value));
+  // A new run's first frame moves nothing: each thermal starts from its own place.
+  view.update(run.state.elapsed, pos, run);
+  assert.deepEqual(phases().map(([rise, turn]) => [rise, turn]), [[0, 0], [37, 2.4], [74, 4.8]]);
+  for (let n = 0; n < 30; n++) {
+    run.step(STEP, pos);
+    view.update(run.state.elapsed, pos, run);
+  }
+  const held = phases();
+  // With the map open or the flight held, the run's clock stands still while frames are drawn,
+  // and the pilot and camera may still move (the map, the spy camera).
+  for (let n = 0; n < 30; n++) {
+    pos.y += 1;
+    view.update(run.state.elapsed, pos, run, { x: pos.x - 26, y: pos.y + 9.5, z: pos.z });
+  }
+  assert.deepEqual(phases(), held);
+  // And a new run starts afresh, whatever the clock read at the last one.
+  view.begin();
+  view.update(run.state.elapsed + 30, pos, run);
+  assert.deepEqual(phases().map(([rise, turn]) => [rise, turn]), [[0, 0], [37, 2.4], [74, 4.8]]);
+  view.dispose();
+});
+
+test('all three thermals draw with one shader, and the launch\'s is drawn on a run\'s first update', () => {
+  const view = createCloudbase({ scene: new THREE.Scene() });
+  view.begin();
+  const motes = [0, 1, 2].map((i) => named(view, `motes-${i}`));
+  const [first, ...rest] = motes.map((mesh) => mesh.material);
+  // three builds one program for materials whose text and settings are the same.
+  for (const material of rest) {
+    assert.notEqual(material, first, 'each with uniforms of its own');
+    assert.equal(material.vertexShader, first.vertexShader);
+    assert.equal(material.fragmentShader, first.fragmentShader);
+    assert.deepEqual(material.defines, first.defines);
+    for (const setting of ['side', 'blending', 'transparent', 'depthWrite', 'depthTest', 'fog']) assert.equal(material[setting], first[setting], setting);
+    assert.equal(material.customProgramCacheKey(), first.customProgramCacheKey());
+  }
+  assert.equal(first.side, THREE.DoubleSide);
+  // Colours leave in the screen's colour space, as the glints' do (the sparks' never did).
+  assert.match(first.fragmentShader, /#include <colorspace_fragment>\s*\}\s*$/);
+  // The look the table names is the one worn, shared by all three.
+  const look = THERMAL_MOTES.looks[THERMAL_MOTES.look];
+  for (const material of [first, ...rest]) {
+    for (const name of ['gold', 'amber', 'ash']) assert.equal(material.uniforms[name].value.getHex(), look[name]);
+    assert.equal(material.uniforms.opacity.value, look.head);
+  }
+  // Nothing shows before the run's first update, and that update draws the launch column from
+  // anywhere in the zone, 250 m away and more, so the program is built on the first frame and
+  // never in the middle of a flight.
+  assert.equal(motes.some((mesh) => mesh.visible), false);
+  const run = createCloudbaseRun();
+  run.reset(80, 3);
+  const [launch] = run.state.thermals;
+  const far = { x: launch.x, y: 120, z: launch.z - 250 };
+  view.update(0, far, run);
+  assert.equal(motes[0].visible, true);
+  assert.equal(motes[0].material.uniforms.near.value, 1);
+  view.dispose();
+});
+
+test('drawing the motes makes no arrays and never rewrites their buffers, frame after frame', () => {
+  assert.ok(arraysMadeBy(() => new Float32Array(1)) > 0, 'the counter sees what it should');
+  const view = createCloudbase({ scene: new THREE.Scene() });
+  view.begin();
+  const run = createCloudbaseRun();
+  run.reset(80, 7);
+  const motes = [0, 1, 2].map((i) => named(view, `motes-${i}`));
+  const parts = motes.map((mesh) => [mesh.geometry, mesh.material]);
+  const pos = pilotAt(run.state.thermals[1], 300);
+  const eye = { x: pos.x - 26, y: pos.y + 9.5, z: pos.z };
+  let made = 0;
+  for (let n = 0; n < 600; n++) {
+    run.step(STEP, pos);
+    pos.y += 0.2;
+    eye.y += 0.2;
+    if (n === 300) view.reveal(1);
+    // Ansuz on and off, and the glow dropped every other frame: every way of drawing them.
+    made += arraysMadeBy(() => view.update(run.state.elapsed, pos, run, eye, n % 200 < 100 ? 1 : BLESSING.sparks, n % 2 === 0));
+  }
+  assert.equal(made, 0, `${made} arrays were made while drawing`);
+  assert.ok(motes[0].visible && motes[1].visible, 'and they were drawn all the while');
+  motes.forEach((mesh, i) => {
+    assert.equal(mesh.geometry, parts[i][0]);
+    assert.equal(mesh.material, parts[i][1]);
+    for (const [name, attribute] of Object.entries(mesh.geometry.attributes)) assert.equal(attribute.version, 0, `${mesh.name}'s ${name} is never rewritten`);
+    assert.equal(mesh.geometry.index.version, 0);
+  });
+  view.dispose();
+});
+
+test('under reduced motion the motes still rise and swirl, at the air\'s own pace, without twinkle', () => {
+  const run = createCloudbaseRun();
+  run.reset(80, 3);
+  const thermal = run.state.thermals[1];
+  const pos = pilotAt(thermal, 300);
+  // What one second at full strength does to a thermal's motes.
+  const second = (calm) => {
+    const view = createCloudbase({ scene: new THREE.Scene(), calm });
+    view.begin();
+    const { uniforms } = named(view, 'motes-1').material;
+    view.update(1, pos, run);
+    const from = { rise: uniforms.rise.value, turn: uniforms.turn.value };
+    for (let n = 1; n <= 60; n++) view.update(1 + n / 60, pos, run);
+    const moved = { rise: uniforms.rise.value - from.rise, turn: uniforms.turn.value - from.turn, twinkle: uniforms.twinkle.value };
+    view.dispose();
+    return moved;
+  };
+  const calm = second(true);
+  const lively = second(false);
+  const core = CLOUD_HUNT.s * CLOUD_HUNT.peak;
+  // The air's own pace: a calm visitor's core motes keep up with a pilot centred in the core.
+  close(calm.rise, THERMAL_MOTES.calm.flow * core, 1e-9);
+  close(lively.rise, THERMAL_MOTES.flow * core, 1e-9);
+  assert.equal(THERMAL_MOTES.calm.flow, 1);
+  close(calm.turn, THERMAL_MOTES.calm.swirl * thermal.dir, 1e-9);
+  close(lively.turn, THERMAL_MOTES.swirl * thermal.dir, 1e-9);
+  assert.ok(Math.abs(calm.turn) > 0.3 && Math.abs(calm.turn) < Math.abs(lively.turn), 'slower round, but still round');
+  assert.deepEqual([calm.twinkle, lively.twinkle], [0, THERMAL_MOTES.twinkle]);
+});
+
+test('with the glow dropped the motes are drawn brighter', () => {
+  const view = createCloudbase({ scene: new THREE.Scene() });
+  view.begin();
+  const run = createCloudbaseRun();
+  run.reset(80, 3);
+  const pos = pilotAt(run.state.thermals[1], 300);
+  const motes = [0, 1, 2].map((i) => named(view, `motes-${i}`));
+  view.update(1, pos, run);
+  assert.deepEqual(motes.map((mesh) => mesh.material.uniforms.boost.value), [1, 1, 1]);
+  view.update(1, pos, run, null, 1, true);
+  assert.deepEqual(motes.map((mesh) => mesh.material.uniforms.boost.value), [1.4, 1.4, 1.4]);
+  assert.equal(THERMAL_MOTES.unbloomed, 1.4);
+  // Every pixel's alpha is multiplied by it.
+  assert.match(motes[0].material.fragmentShader, /\* opacity \* vAlpha \* boost\)/);
+  view.update(1, pos, run, null, 1, false);
+  assert.equal(motes[1].material.uniforms.boost.value, 1);
   view.dispose();
 });
 
@@ -1205,30 +1479,31 @@ test('the marks of a flock stay bright from take-off until its new lift is full,
   view.dispose();
 });
 
-test('lightning lets every hunted thermal show from anywhere for a moment, its sparks held larger, while lift not there yet still shows nothing', () => {
+test('lightning lets every hunted thermal show from anywhere for a moment, its motes held larger, while lift not there yet still shows nothing', () => {
   const view = createCloudbase({ scene: new THREE.Scene() });
   view.begin();
   const run = createCloudbaseRun();
   run.reset(80, 3);
   const [, first, second] = run.state.thermals;
-  const sparks = [0, 1, 2].map((i) => named(view, `sparks-${i}`));
-  const cores = [0, 1, 2].map((i) => named(view, `core-${i}`));
-  const uniform = (i, name) => sparks[i].material.uniforms[name].value;
+  const motes = [0, 1, 2].map((i) => named(view, `motes-${i}`));
+  const uniform = (i, name) => motes[i].material.uniforms[name].value;
   // 90 m from the first hunted thermal and further from the other: both dark.
   const pos = pilotAt(beyond(first, second, 90), 300);
   view.update(1, pos, run);
-  assert.equal(sparks[1].visible || sparks[2].visible || cores[1].visible || cores[2].visible, false);
-  // Struck: both show as if close by, and their sparks are never drawn tiny.
+  assert.equal(motes[1].visible || motes[2].visible, false);
+  // Struck: both show as if close by, and their heads are never drawn tiny.
   view.reveal(1);
   view.update(1, pos, run);
   for (const i of [1, 2]) {
-    assert.equal(sparks[i].visible && cores[i].visible, true, `thermal ${i}`);
+    assert.equal(motes[i].visible, true, `thermal ${i}`);
     assert.equal(uniform(i, 'near'), 1);
     assert.equal(uniform(i, 'flare'), 1);
-    close(cores[i].material.opacity, 0.32 * run.state.thermals[i].strength);
+    assert.equal(uniform(i, 'strength'), run.state.thermals[i].strength);
   }
   assert.deepEqual([uniform(0, 'near'), uniform(0, 'flare')], [1, 0], 'the launch column is lit from anywhere already');
-  assert.match(sparks[1].material.vertexShader, new RegExp(`1\\.0 \\+ ${(CLOUD_LIT.flare - 1).toFixed(1)} \\* flare, 7\\.0\\)`));
+  // The least width of a head, in CSS pixels, goes from 1.5 to CLOUD_LIT.flare with the flare.
+  assert.equal(CLOUD_LIT.flare, 3);
+  assert.match(motes[1].material.vertexShader, /max\(mix\(1\.5, 3\.0, flare\), /);
   // As the glimpse fades, a far thermal shows what is left of it, and a nearer one never less than
   // it shows from where the pilot is.
   view.reveal(0.4);
@@ -1240,17 +1515,17 @@ test('lightning lets every hunted thermal show from anywhere for a moment, its s
   second.move = 5;
   view.reveal(1);
   view.update(1, pos, run);
-  assert.equal(sparks[2].visible || cores[2].visible, false);
+  assert.equal(motes[2].visible, false);
   assert.equal(uniform(2, 'strength'), 0);
   // Over, it is as before; and a new run opens with none of it.
   view.reveal(0);
   view.update(1, pos, run);
-  assert.deepEqual([sparks[1].visible, uniform(1, 'flare')], [false, 0]);
+  assert.deepEqual([motes[1].visible, uniform(1, 'flare')], [false, 0]);
   view.reveal(1);
   view.begin();
   second.move = 0;
   view.update(1, pos, run);
-  assert.equal(sparks[1].visible || sparks[2].visible, false);
+  assert.equal(motes[1].visible || motes[2].visible, false);
   view.dispose();
 });
 

@@ -34,6 +34,18 @@
   }
 }
 
+/* The moment to turn into a core: the climb's readout flares cyan, unlike the surge's ember. */
+.cloudbase .fj-hud > dl [data-hud='vario'].lifted {
+  animation: fj-lifted 0.6s ease-out both;
+}
+
+@keyframes fj-lifted {
+  from {
+    color: #fff;
+    text-shadow: 0 0 10px var(--cyan), 0 0 2px #fff;
+  }
+}
+
 /* DEPTH, stamped just after the bar's weight and gone again. It takes no room of its own, so the
    readouts never shift for it. Hidden or shown, it is not read out with the bar: the hint says it. */
 .cloudbase .fj-hud > dl [data-hud='bar']::after {

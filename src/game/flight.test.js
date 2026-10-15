@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FLIGHT, BRAKE, STALL, createFlight, releaseFlight, settleFlight, stepFlight } from './flight.js';
+import { FLIGHT, BRAKE, DIVE, EARS, STALL, createFlight, releaseFlight, settleFlight, stepFlight } from './flight.js';
 
 const STEP = 1 / 60;
 const HIGH = 5000;
@@ -402,6 +402,8 @@ test('every number stays finite and inside its range through an hour of random c
       controls.harsh = random() < 0.5;
       controls.linger = random() < 0.5;
       controls.climb = random() < 0.05 ? random() * 12 - 6 : null;
+      controls.ears = random() < 0.2;
+      controls.dive = random() < 0.5;
       air.lift = random() * 20;
       air.sink = random() * 8;
       air.windX = random() * 12 - 6;
@@ -418,6 +420,7 @@ test('every number stays finite and inside its range through an hour of random c
     assert.ok(Number.isFinite(g.pos.x + g.pos.y + g.pos.z));
     assert.ok(g.brake >= 0 && g.brake <= 1 && g.bar >= 0 && g.bar <= 1 && g.stallLoad >= 0 && g.stallLoad <= 1);
     assert.ok(g.speed >= 0 && g.speed < 30 && g.stall >= 0 && Math.abs(g.stallSide) <= 1);
+    assert.ok(g.ears >= 0 && g.ears <= 1 && g.dive >= 0 && g.dive <= DIVE.catch && g.tuck >= 0 && g.tuck <= DIVE.tuck.time && g.diveRest >= 0);
   }
 });
 
@@ -437,3 +440,288 @@ test('a wing made safe never stalls, however long and hard the brake is held in 
   const unsafe = aloft();
   assert.ok(until(unsafe, handsUp({ brake: true, turn: 1, harsh: true, linger: true }), stillAir(), (wing) => wing.stall > 0) < 40);
 });
+
+// The air a glider meets flying out of a core: `strong` m/s for `settle` seconds, then falling away
+// to nothing over `over` seconds, as it does crossing a hunted core's edge at trim. Returns a
+// function for fly()'s `each` that sets it on `air` for the time it is handed.
+const outOfLift = (air, { strong = 20, settle = 3, over = 2 } = {}) => (t) => {
+  air.lift = t < settle ? strong : Math.max(0, strong * (1 - (t - settle) / over));
+};
+// Flies `controls` out of a core in still air until the wing dives, and says when (Infinity if never).
+const untilDive = (g, controls, air = stillAir(), seconds = 8) => {
+  const lift = outOfLift(air);
+  for (let i = 0; i < seconds * 60; i++) {
+    lift(i * STEP);
+    stepFlight(g, controls, air, STEP);
+    if (g.dive > 0) return i * STEP;
+  }
+  return Infinity;
+};
+// A hunted core's lift at full strength, `d` metres from its middle (cloudbase-state.js).
+const coreLift = (d) => {
+  const t = Math.min(1, Math.max(0, 1 - d / 38));
+  return 19.25 * 1.47 * t * t * (3 - 2 * t);
+};
+
+test('big ears sink about 6 m/s at 36 km/h, turn a 20 m circle by weight shift alone, and still climb in a strong core', () => {
+  const straight = fly(aloft(), handsUp({ ears: true }), stillAir(), 12);
+  assert.equal(straight.ears, 1);
+  assert.ok(near(straight.speed, FLIGHT.speed.trim - EARS.slow, 1e-3), `${straight.speed} m/s`);
+  assert.ok(near(straight.vy, -6.05, 0.01), `${straight.vy} m/s`);
+  // 2.6 times the speed bar's sink, and under the deep brake's.
+  assert.ok(-straight.vy > 2.5 * 2.3 && -straight.vy < FLIGHT.sink.deep);
+  const circling = fly(aloft(), handsUp({ ears: true, turn: 1 }), stillAir(), 12);
+  assert.ok(near(circling.yawRate, EARS.turn, 1e-3));
+  assert.ok(near(circling.speed / circling.yawRate, 20, 0.05), 'a 20 m circle');
+  assert.ok(near(circling.vy, -6.39, 0.01));
+  // In a core's 20 m/s it still climbs: the ears fly a pilot out of lift, never out of a core where it stands.
+  const climbing = fly(aloft(), handsUp({ ears: true, turn: 1 }), stillAir({ lift: 20 }), 12);
+  assert.ok(near(climbing.vy, 13.6, 0.02), `${climbing.vy} m/s`);
+});
+
+test('the ears fold in over 0.6 s, open by themselves over 1.5 s once let go, and in a quarter of a second with a touch of the brake, which bites only once they are out', () => {
+  const g = aloft();
+  const controls = handsUp({ ears: true });
+  assert.ok(near(until(g, controls, stillAir(), (wing) => wing.ears === 1), EARS.fold, 1.5 * STEP));
+  controls.ears = false;
+  assert.ok(near(until(g, controls, stillAir(), (wing) => wing.ears === 0), EARS.open, 1.5 * STEP));
+  controls.ears = true;
+  fly(g, controls, stillAir(), 1);
+  controls.ears = false;
+  controls.brake = true;
+  let bitAt = -1;
+  const opened = until(g, controls, stillAir(), (wing) => {
+    if (wing.ears > 0) assert.equal(wing.brake, 0, 'the brake does nothing while the ears are in');
+    return wing.ears === 0;
+  });
+  assert.ok(near(opened, EARS.dab, 1.5 * STEP));
+  bitAt = until(g, controls, stillAir(), (wing) => wing.brake >= BRAKE.light);
+  assert.ok(near(bitAt, BRAKE.light / BRAKE.take, 2 * STEP), 'then it takes up as ever');
+});
+
+test('with the ears in the bar cannot be had, no stall load builds, and a strike, a stall or the autopilot throws them open at once', () => {
+  const g = fly(aloft(), handsUp({ ears: true, bar: true }), stillAir(), 3);
+  assert.deepEqual([g.ears, g.bar], [1, 0]);
+  g.stallLoad = 0.5;
+  fly(g, handsUp({ ears: true, turn: 1 }), stillAir({ rough: 1 }), 2);
+  assert.ok(g.stallLoad < 0.5, 'the load only drains');
+  for (const [what, over] of [['a strike', { locked: true }], ['the autopilot', { climb: 2 }]]) {
+    const wing = fly(aloft(), handsUp({ ears: true }), stillAir(), 1);
+    stepFlight(wing, handsUp({ ears: true, ...over }), stillAir(), STEP);
+    assert.equal(wing.ears, 0, what);
+  }
+  const stalled = fly(aloft(), handsUp({ ears: true }), stillAir(), 1);
+  stalled.stall = 1;
+  stepFlight(stalled, handsUp({ ears: true }), stillAir(), STEP);
+  assert.equal(stalled.ears, 0, 'a stall');
+});
+
+test('a wing never asked for the ears or a dive flies to the last bit the same whether those controls are false or missing', () => {
+  const left = aloft();
+  const right = aloft();
+  const missing = handsUp();
+  const off = handsUp({ ears: false, dive: false });
+  const air = stillAir();
+  let seed = 31;
+  const random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+  for (let i = 0; i < 120 * 60; i++) {
+    if (i % 37 === 0) {
+      missing.turn = off.turn = Math.floor(random() * 3) - 1;
+      missing.brake = off.brake = random() < 0.3;
+      missing.bar = off.bar = random() < 0.2;
+      missing.harsh = off.harsh = random() < 0.5;
+      air.lift = random() * 20;
+      air.sink = random() < 0.2 ? 6 : 0;
+      air.windX = random() * 4 - 2;
+      air.rough = random();
+    }
+    stepFlight(left, missing, air, STEP);
+    stepFlight(right, off, air, STEP);
+  }
+  assert.deepEqual({ ...left, pos: { ...left.pos } }, { ...right, pos: { ...right.pos } });
+  assert.deepEqual([left.ears, left.dive, left.tuck], [0, 0, 0]);
+});
+
+test('letting go of everything opens the ears and leaves nothing of a dive or a tuck behind', () => {
+  const g = fly(aloft(), handsUp({ ears: true }), stillAir(), 1);
+  Object.assign(g, { dive: 0.4, tuck: 0.3, diveRest: 1, diveArmed: false, under: 12 });
+  releaseFlight(g);
+  assert.deepEqual([g.ears, g.dive, g.tuck, g.diveRest, g.diveArmed, g.under], [0, 0, 0, 0, true, 0]);
+  Object.assign(g, { ears: 1, dive: 0.4, tuck: 0.3 });
+  settleFlight(g);
+  assert.deepEqual([g.ears, g.dive, g.tuck], [0, 0, 0]);
+});
+
+test('flying out of a core into still air dives the wing, and a dab of the brake within the window catches it at no cost', () => {
+  const g = aloft();
+  const controls = handsUp({ dive: true });
+  const at = untilDive(g, controls);
+  assert.ok(at > 3 && at < 5, `dived ${at.toFixed(2)} s in`);
+  assert.equal(g.dive, DIVE.catch);
+  // A dab a little way into the window.
+  fly(g, controls, stillAir(), 0.3);
+  assert.ok(g.dive > 0 && g.tuck === 0, 'still to catch');
+  controls.brake = true;
+  fly(g, controls, stillAir(), 0.2);
+  assert.equal(g.dive, 0, 'caught');
+  controls.brake = false;
+  fly(g, controls, stillAir(), 2, () => assert.equal(g.tuck, 0));
+  // With the dive left out, the same air never dives the wing at all.
+  const plain = aloft();
+  assert.equal(untilDive(plain, handsUp()), Infinity);
+});
+
+test('a dive left alone tucks the wing for 0.8 s: the hands and steering do nothing, it holds its heading and comes down about ten metres more', () => {
+  const diving = aloft();
+  const twin = aloft();
+  const controls = handsUp({ dive: true });
+  untilDive(diving, controls);
+  untilDive(twin, handsUp());
+  // The same wing, with and without the dive, from here on: hands on the brake and a full turn.
+  const asked = handsUp({ dive: true, brake: true, turn: 1 });
+  fly(diving, handsUp({ dive: true }), stillAir(), DIVE.catch);
+  fly(twin, handsUp(), stillAir(), DIVE.catch);
+  assert.equal(diving.tuck, DIVE.tuck.time, 'it tucks as the window closes');
+  const heading = diving.yaw;
+  const from = [diving.pos.y, twin.pos.y];
+  fly(diving, asked, stillAir(), DIVE.tuck.time - STEP, () => assert.equal(diving.brake, 0, 'the brake does nothing'));
+  assert.ok(Math.abs(diving.yaw - heading) < 1e-9 && diving.yawRate === 0, 'the heading held');
+  fly(twin, handsUp(), stillAir(), DIVE.tuck.time - STEP);
+  fly(diving, handsUp({ dive: true }), stillAir(), 4);
+  fly(twin, handsUp(), stillAir(), 4);
+  const extra = (from[0] - diving.pos.y) - (from[1] - twin.pos.y);
+  assert.ok(near(extra, DIVE.tuck.sink * DIVE.tuck.time, 0.6), `the tuck cost ${extra.toFixed(1)} m more`);
+});
+
+test('a brake already biting holds the wing as the air drops away, and a circle up to 14 m off a core never dives, hands up or braked', () => {
+  const braked = aloft();
+  const controls = handsUp({ dive: true, brake: true, linger: true });
+  const air = stillAir();
+  const lift = outOfLift(air);
+  fly(braked, controls, air, 8, (t) => {
+    lift(t);
+    assert.equal(braked.dive, 0);
+  });
+  assert.equal(braked.tuck, 0);
+  // Circles round a point 14 m from a core's middle, in the core's own lift, each begun already
+  // turning as it will go on turning: hands up (a 14.4 m circle, out to 28.4 m from the middle) and
+  // on the light brake (8.2 m).
+  for (const brake of [false, true]) {
+    const g = aloft();
+    g.speed = brake ? FLIGHT.speed.light : FLIGHT.speed.trim;
+    g.yawRate = brake ? FLIGHT.turn.light : FLIGHT.turn.trim;
+    g.brake = brake ? BRAKE.light : 0;
+    Object.assign(g.pos, { x: 14 - g.speed / g.yawRate, z: 0 });
+    const circling = handsUp({ dive: true, turn: 1, brake, linger: true });
+    const at = stillAir();
+    let least = Infinity;
+    fly(g, circling, at, 60, () => {
+      at.lift = coreLift(Math.hypot(g.pos.x, g.pos.z));
+      if (g.brake > BRAKE.shelf - 0.01) circling.brake = false;
+      else if (brake && !circling.brake && g.brake === 0) circling.brake = true;
+      least = Math.min(least, at.lift);
+      assert.equal(g.dive, 0, brake ? 'braked' : 'hands up');
+    });
+    assert.ok(least > DIVE.floor, `the lap's weakest lift was ${least.toFixed(1)} m/s`);
+  }
+});
+
+test('one drop dives the wing once, and no dive the air starts comes within the rest after the last', () => {
+  const g = aloft();
+  const controls = handsUp({ dive: true });
+  const air = stillAir({ lift: 20 });
+  fly(g, controls, air, 3);
+  let dives = 0;
+  let was = false;
+  const count = () => {
+    if (g.dive > 0 && !was) dives += 1;
+    was = g.dive > 0;
+    // Caught at once, every time, so the windows never run on.
+    controls.brake = g.dive > 0;
+  };
+  // A sharp fall, the air back for half a second, and another within the rest.
+  air.lift = 0;
+  fly(g, controls, air, 0.5, count);
+  air.lift = 20;
+  fly(g, controls, air, 0.5, count);
+  air.lift = 0;
+  fly(g, controls, air, 0.4, count);
+  assert.equal(dives, 1);
+  // After the rest, a fresh fall dives it again.
+  air.lift = 20;
+  fly(g, controls, air, 2, count);
+  air.lift = 0;
+  fly(g, controls, air, 0.5, count);
+  assert.equal(dives, 2);
+});
+
+test('letting go of a deep brake dives the wing, and letting go of a light one does not', () => {
+  const release = (seconds) => {
+    const g = aloft();
+    const controls = handsUp({ dive: true, brake: true });
+    fly(g, controls, stillAir(), seconds);
+    const depth = g.brake;
+    controls.brake = false;
+    fly(g, controls, stillAir(), 0.2);
+    return [depth, g.dive > 0];
+  };
+  const [deep, dived] = release(1.2);
+  assert.ok(deep >= BRAKE.shelf && dived, `let go at ${deep.toFixed(2)}`);
+  const [light, calm] = release(0.3);
+  assert.ok(light < BRAKE.shelf && !calm, `let go at ${light.toFixed(2)}`);
+});
+
+test('a harsh stall dives the wing as it flies again: a fresh press catches it, and a brake held through the stall must be let go and pressed again', () => {
+  const stallThen = (onStall) => {
+    const g = aloft();
+    const controls = handsUp({ dive: true, harsh: true, brake: true });
+    until(g, controls, stillAir(), (wing) => wing.stall > 0);
+    onStall(controls);
+    until(g, controls, stillAir(), (wing) => wing.stall === 0);
+    return [g, controls];
+  };
+  // Held through the stall: the dive opens as it ends, and the held brake, which lost its grip in
+  // the stall, does not catch it.
+  const [held, keep] = stallThen(() => {});
+  assert.equal(held.dive, DIVE.catch);
+  fly(held, keep, stillAir(), DIVE.catch + STEP);
+  assert.ok(held.tuck > 0, 'it tucks');
+  // Let go in the stall and pressed again as it flies: caught.
+  const [freed, ask] = stallThen((controls) => {
+    controls.brake = false;
+  });
+  assert.equal(freed.dive, DIVE.catch);
+  ask.brake = true;
+  fly(freed, ask, stillAir(), 0.1);
+  assert.deepEqual([freed.dive, freed.tuck], [0, 0]);
+  // A forgiving stall has no second beat.
+  const g = aloft();
+  const gentle = handsUp({ dive: true, brake: true });
+  until(g, gentle, stillAir(), (wing) => wing.stall > 0);
+  gentle.brake = false;
+  until(g, gentle, stillAir(), (wing) => wing.stall === 0);
+  assert.equal(g.dive, 0);
+});
+
+test('a fold or the autopilot ends a dive or a tuck, and nothing dives a stalled, folded or tucked wing', () => {
+  for (const over of [{ locked: true }, { climb: 1 }]) {
+    const g = aloft();
+    Object.assign(g, { dive: 0.5, tuck: 0.4 });
+    stepFlight(g, handsUp({ dive: true, ...over }), stillAir(), STEP);
+    assert.deepEqual([g.dive, g.tuck], [0, 0], JSON.stringify(over));
+    // And the air falling away under it then dives it no more.
+    assert.equal(untilDive(g, handsUp({ dive: true, ...over })), Infinity, JSON.stringify(over));
+  }
+  const tucked = aloft();
+  fly(tucked, handsUp({ dive: true }), stillAir({ lift: 20 }), 3);
+  tucked.tuck = 5;
+  const air = stillAir();
+  stepFlight(tucked, handsUp({ dive: true }), air, STEP);
+  assert.equal(tucked.dive, 0, 'a tucked wing does not dive again');
+  const stalled = aloft();
+  fly(stalled, handsUp({ dive: true }), stillAir({ lift: 20 }), 3);
+  stalled.stall = STALL.forgiving.time + STALL.surge;
+  stepFlight(stalled, handsUp({ dive: true }), stillAir(), STEP);
+  assert.equal(stalled.dive, 0, 'nor a stalled one');
+});
+

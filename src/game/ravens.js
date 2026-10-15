@@ -183,7 +183,7 @@ export function createRavens({ count, sites, order = 0, ownGeometry, ownMaterial
 
   // One point per bird, so a flock can be found from across the zone when the birds themselves
   // are a few dark pixels. It is not fogged, never smaller than four CSS pixels, and violet so
-  // that it is neither a thermal's amber spark nor a star.
+  // that it is neither a thermal's gold mote nor a star.
   const spots = ownGeometry(new THREE.BufferGeometry());
   const places = new THREE.BufferAttribute(new Float32Array(count * 3), 3).setUsage(THREE.DynamicDrawUsage);
   const glows = new THREE.BufferAttribute(new Float32Array(count), 1).setUsage(THREE.DynamicDrawUsage);

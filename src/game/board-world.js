@@ -29,11 +29,13 @@ export async function digest(text, digits = 64) {
   return hex.slice(0, digits);
 }
 
-// What the step makes of a step's four bits (run-step.js stepBits, flight.js): both arrows are the
-// bar held straight, and the brake wins over the bar. Logs that differ only where the step cannot
-// tell them apart fly one flight.
+// What the step makes of a step's four bits (run-step.js stepBits, flight.js): the brake and the bar
+// bits together are the big ears, held straight when both arrows are held too; otherwise both
+// arrows are the bar held straight, and the brake wins over the bar. Logs that differ only where the
+// step cannot tell them apart fly one flight.
 const flown = (bits) => {
   const both = (bits & 3) === 3;
+  if ((bits & 12) === 12) return 12 | (both ? 0 : bits & 3);
   const brake = bits & 4;
   return (both ? 0 : bits & 3) | brake | (!brake && (both || bits & 8) ? 8 : 0);
 };

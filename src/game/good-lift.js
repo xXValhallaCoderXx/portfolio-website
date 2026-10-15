@@ -11,7 +11,7 @@ import { STONES_LEAD, cloudbaseHint } from './cloudbase-hints.js';
 import { holdHint } from './hints.js';
 import { createRunWorld, finishRun, startRun, stepBits } from './run-step.js';
 import { createWindStreaks } from './wind-streaks.js';
-import { MEET, PLATE_KIND, createMeet } from './meet-state.js';
+import { MEET, PLATE_KIND, TRAIL, createMeet } from './meet-state.js';
 import { BELLS, BELL_PHASE, BELL_RESULT, createBells } from './bells.js';
 import { BLESSING, GATE, GATES, RUNE, RUNE_NAME, RUNE_SIGN } from './meet-runes.js';
 import { createMeetView } from './meet-view.js';
@@ -27,11 +27,12 @@ import { bynameFor } from './meet-bynames.js';
 import { verseFor } from './meet-verse.js';
 import { isBlocked } from './meet-initials.js';
 import { SIM_VERSION } from './sim-version.js';
-import { createRecorder, decodeLog, encodeLog, inputBits } from './recorder.js';
+import { createRecorder, createTouchEars, decodeLog, encodeLog, inputBits } from './recorder.js';
 import { replayLog } from './replay.js';
 import { summariseRun } from './meet-sheet.js';
 import { createMusic } from './music.js';
 import { createSurge } from './run-surge.js';
+import { createEntry } from './run-entry.js';
 import { createOnlineBoard, placeOf, takenOff } from './board-online.js';
 import { LIGHTNING, createLightning } from './run-lightning.js';
 import { GLIDE, createGlideRing } from './run-glide.js';
@@ -58,6 +59,12 @@ export const JUDGES = Object.freeze(['contact', 'control', 'airspace']);
 // Seconds the lights stay up after a line, and between one pickup and the next for the next to
 // ring a step higher.
 const LIGHTS_FOR = 2.5;
+// When the next plate of a boarded trail is worth the ears: no further off than `ahead` (m), the
+// wing more than `over` metres too high for it on the bar's glide, in lift under `lift` m/s, which
+// the ears' 6 m/s still sinks through.
+const EARS_REACH = Object.freeze({ ahead: 40, over: 2, lift: 6 });
+// A flock worth flying into for the entry's hint: within `range` metres and `ahead` radians of the nose.
+const APPROACH = Object.freeze({ range: 70, ahead: 1 });
 const CHAIN = 2;
 // The pentatonic steps a run of pickups climbs, in semitones.
 const PENTA = [0, 2, 4, 7, 9];
@@ -152,9 +159,15 @@ export function createGoodLift(host) {
   const meet = createMeet();
   const bells = createBells();
   const world = createRunWorld({ sky, g, controls, air, bells, meet });
-  // Feeling for the core: the lift surging as a circle closes on it (run-surge.js).
+  // Feeling for the core: the lift surging as a circle closes on it (run-surge.js), and the moment
+  // to turn into one, passing it on the flock's side (run-entry.js).
   const surge = createSurge();
-  const view = createCloudbase({ scene, loadModel: host.loadModel });
+  const entry = createEntry();
+  // Both ▼ of a touch screen pressed together, for the big ears (recorder.js), and the controls the
+  // keys and buttons ask for each step, written into the log as its bits.
+  const touchEars = createTouchEars();
+  const asked = { left: false, right: false, brake: false, bar: false, ears: false };
+  const view = createCloudbase({ scene, loadModel: host.loadModel, calm: host.calm });
   const meetView = createMeetView({ scene, loadModel: host.loadModel, calm: host.calm });
   // The chalk the kit puts on the pilot's hands, puffing as a plate or a rep loads.
   const chalk = createChalk({ scene, calm: host.calm });
@@ -187,13 +200,17 @@ export function createGoodLift(host) {
   // thermal's last rep missed its core; the pickups rung in a row and when the last of them was;
   // the iron off the trail loaded, the sprays and the kg lost; bells turned aside by Algiz, stones
   // flown through and crumbled, and when the last blessing was taken, Algiz turned a bell aside and
-  // Tiwaz lost the bar; and the line of the last stones the climb came level with, and when.
+  // Tiwaz lost the bar; the line of the last stones the climb came level with, and when; whether the
+  // wing was diving, the tucks and the pumps answered and when the last tuck came; whether the ears
+  // have been pulled this run, and how long they have been held in climbing air; and when the moment
+  // came to turn into a core, and which way.
   const seen = {
     strikes: 0, bellHit: false, against: 0, searching: 0, rides: 0, riding: 0,
     thrown: 0, hits: 0, close: 0, count: 0, plates: 0, reps: 0, deep: 0, trails: 0, horn: false, shallow: false,
     closeAt: -Infinity, hornAt: -Infinity, deepAt: -Infinity, chain: 0, chainAt: -Infinity, beastClose: false,
     wind: 0, bait: 0, sprays: 0, lost: 0, glanced: 0, gates: 0, crumbled: 0,
     blessedAt: -Infinity, glancedAt: -Infinity, lostAt: -Infinity, levelLine: 0, levelAt: -Infinity,
+    dived: false, tucks: 0, pumps: 0, tuckAt: -Infinity, earsUsed: false, earsClimb: 0, turnAt: -Infinity, turnSide: 0,
   };
   // The blessing the readouts show, by RUNE.
   let shownRune = RUNE.none;
@@ -277,7 +294,12 @@ export function createGoodLift(host) {
     seen.levelLine = 0;
     seen.bellHit = seen.horn = seen.shallow = seen.beastClose = false;
     seen.closeAt = seen.hornAt = seen.deepAt = seen.chainAt = seen.blessedAt = seen.glancedAt = seen.lostAt = seen.levelAt = -Infinity;
+    seen.tucks = seen.pumps = seen.earsClimb = seen.turnSide = 0;
+    seen.dived = seen.earsUsed = false;
+    seen.tuckAt = seen.turnAt = -Infinity;
     surge.reset();
+    entry.reset();
+    touchEars.reset();
     varioCell.classList.remove('surge');
     barCell.classList.remove('depth', 'blessed');
     showRune(RUNE.none);
@@ -365,12 +387,22 @@ export function createGoodLift(host) {
     saidTimer = setTimeout(() => (saidEl.textContent = `Good Lift. ${label}.${full ? ` ${rival ? line : 'The opener is at 250 metres.'}` : ''}`), 120);
   }
 
-  /** One fixed step with the keys as `input`. Returns 'fog' or 'landed' if the run ended. */
-  function step(dt, input) {
-    // Four keys a step are recorded and flown through the one step every replay flies too, which
-    // reads both ways at once as the speed bar: on a touch screen the only way to it. A run that
-    // outlasts the log flies on unrecorded, and cannot then be raced or put on the board.
-    const bits = inputBits(input);
+  /**
+   * One fixed step with the keys as `input`, and `first` and `second` whether each ▼ of a touch
+   * screen is held. Returns 'fog' or 'landed' if the run ended.
+   */
+  function step(dt, input, first = false, second = false) {
+    // The keys a step are recorded and flown through the one step every replay flies too, which
+    // reads both ways at once as the speed bar: on a touch screen the only way to it. Both ▼ pressed
+    // together are the big ears, as E is on keys. A run that outlasts the log flies on unrecorded,
+    // and cannot then be raced or put on the board.
+    const paired = touchEars.step(first, second);
+    asked.left = input.left;
+    asked.right = input.right;
+    asked.bar = input.bar;
+    asked.brake = input.brake && !paired;
+    asked.ears = input.ears || paired;
+    const bits = inputBits(asked);
     if (!recorder.push(bits)) whole = false;
     last.collapsed = sky.state.pilot.collapse > 0;
     const ended = stepBits(world, bits);
@@ -416,6 +448,7 @@ export function createGoodLift(host) {
       seen.rides += 1;
       seen.shallow = false;
       surge.reset();
+      entry.reset();
     }
     // The moment the climb first comes level with a set of stones still waiting near it (from
     // STONES_LEAD under their opening's foot to its top): the time to dash for one, said once a set.
@@ -432,8 +465,37 @@ export function createGoodLift(host) {
       sound.play('surge', 0.8, swell, clamp(g.liftSide * 2, -0.7, 0.7));
       flare(varioCell, 'surge');
     }
+    // The moment to turn in: a thump from the core's side, the climb's readout flaring cyan and the
+    // wing over the core lifting, said by the hint with the way to turn.
+    const turnIn = entry.step(dt, g.lift, flock ? flock.strength : 1, g.yawRate, g.liftSide, flock ? flock.dir : 1, flying);
+    if (turnIn) {
+      seen.turnAt = elapsed;
+      seen.turnSide = turnIn;
+      sound.play('lifted', 1, thump, clamp(turnIn * 0.7, -0.7, 0.7));
+      flare(varioCell, 'lifted');
+      effects.heave = turnIn;
+    }
+    answerWing(dt, elapsed);
     awardMilestones(sky.state.peak);
     return ended;
+  }
+
+  // Answers what the wing did this step: a dive (and whether it was caught), a tuck, a pump of a
+  // folded wing, and the ears, which the hints keep count of.
+  function answerWing(dt, elapsed) {
+    const diving = g.dive > 0;
+    if (diving && !seen.dived) sound.play('dive', 0.4, lurch);
+    else if (!diving && seen.dived && g.tuck === 0) sound.play('catch', 0.3, snap);
+    seen.dived = diving;
+    if (world.tucks > seen.tucks) {
+      seen.tucks = world.tucks;
+      seen.tuckAt = elapsed;
+      sound.play('tuck', 0.5, flap);
+    }
+    if (world.pump.n > seen.pumps) sound.play('pump', 0.2, thunk);
+    seen.pumps = world.pump.n;
+    if (g.ears > 0) seen.earsUsed = true;
+    seen.earsClimb = g.ears >= 0.9 && g.vy > 1 ? seen.earsClimb + dt : 0;
   }
 
   // Answers what the meet did this step: a plate or a circle loaded, a trail laid, a strike's
@@ -559,9 +621,10 @@ export function createGoodLift(host) {
     lightning.update(elapsed, g.pos, sky, camera, view.shown);
     view.light(lightning.state.slot, lightning.state.glow);
     view.reveal(lightning.state.reveal);
-    // Ansuz shows the hunted thermals' sparks from twice as far.
+    // Ansuz shows the hunted thermals' motes from twice as far. The blessing keeps its old key,
+    // `sparks`: the rules' fingerprint reads every key of BLESSING, so a new name is a new version.
     const sight = meet.state.runes.blessing.rune === RUNE.ansuz ? BLESSING.sparks : 1;
-    view.update(elapsed, g.pos, sky, camera.position, sight);
+    view.update(elapsed, g.pos, sky, camera.position, sight, host.bright());
     meetView.update(elapsed, g.pos, meet, bells, camera.position, sky);
     chalk.update(elapsed, g.pos, meet);
     glide.update(dt, g.pos, sky, g.lift);
@@ -717,6 +780,14 @@ export function createGoodLift(host) {
     moment.collapse = pilot.collapse;
     moment.stall = g.stall;
     moment.stallSide = g.stallSide;
+    moment.harsh = controls.harsh;
+    moment.dive = g.dive;
+    moment.tucked = elapsed - seen.tuckAt;
+    moment.ears = g.ears;
+    moment.earsUsed = seen.earsUsed;
+    moment.earsClimb = seen.earsClimb;
+    moment.turnIn = elapsed - seen.turnAt;
+    moment.turnSide = seen.turnSide;
     moment.brake = g.brake;
     moment.deep = effects.deep;
     moment.load = g.stallLoad;
@@ -751,6 +822,8 @@ export function createGoodLift(host) {
     moment.blessed = elapsed - seen.blessedAt;
     moment.double = runes.blessing.rune === RUNE.tiwaz;
     moment.trail = lift.trail.live && lift.trail.boarded < 0;
+    moment.trailHigh = trailHigh(lift, runes);
+    approach(pilot);
     moment.shallow = seen.shallow;
     moment.depth = elapsed - seen.deepAt;
     // The stones still waiting near the pilot, the line they stand at, when they were raised and
@@ -778,6 +851,49 @@ export function createGoodLift(host) {
     if (line && line === glide.state.line) taught += Math.max(0, elapsed - hintAt);
     hintAt = elapsed;
     return line;
+  }
+
+  // Whether the next plate ahead on a trail already boarded lies further under the wing than the
+  // bar's glide brings it down by the time it gets there, in air the ears can sink through: the
+  // moment to say they would reach it. Worked out by hand, as stonesNear is.
+  function trailHigh(lift, runes) {
+    const { trail } = lift;
+    if (!trail.live || trail.boarded < 0 || g.lift >= EARS_REACH.lift) return false;
+    const reach = runes.blessing.rune === RUNE.fehu ? BLESSING.reach : TRAIL.reach;
+    const here = (g.pos.x - trail.x) * trail.ux + (g.pos.z - trail.z) * trail.uz;
+    for (let i = 0; i < trail.plates.length; i++) {
+      const plate = trail.plates[i];
+      if (!plate.live || (plate.x - trail.x) * trail.ux + (plate.z - trail.z) * trail.uz < here) continue;
+      const dx = plate.x - g.pos.x;
+      const dz = plate.z - g.pos.z;
+      const across = Math.sqrt(dx * dx + dz * dz);
+      if (across > EARS_REACH.ahead) return false;
+      return g.pos.y - across * trail.slope - plate.y - reach > EARS_REACH.over;
+    }
+    return false;
+  }
+
+  // On the way into a thermal: whether a settled flock that still lifts lies ahead, close enough to
+  // fly into, while the glider is in no hunted thermal yet, and which way that flock turns.
+  function approach(pilot) {
+    moment.approach = false;
+    moment.approachDir = 1;
+    if (pilot.thermal > 0) return;
+    let nearest = APPROACH.range * APPROACH.range;
+    const { thermals } = sky.state;
+    for (let i = 1; i < thermals.length; i++) {
+      const thermal = thermals[i];
+      if (!thermal.live || thermal.move !== 0 || thermal.strength < MEET.alive) continue;
+      const dx = thermal.x - g.pos.x;
+      const dz = thermal.z - g.pos.z;
+      const away = dx * dx + dz * dz;
+      if (away >= nearest) continue;
+      const off = Math.atan2(dx, -dz) - g.yaw;
+      if (Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) > APPROACH.ahead) continue;
+      nearest = away;
+      moment.approach = true;
+      moment.approachDir = thermal.dir;
+    }
   }
 
   // Whether any of the set of stones raised last still waits near the pilot (as its label would
@@ -1292,6 +1408,114 @@ export function createGoodLift(host) {
     for (let i = 0; i < 3; i++) ting(ctx, at + i * 0.07, 5 + i * 2, 0.05);
   }
 
+  // The wing diving ahead as the air drops away: its cloth whooshing forward over the pilot, a
+  // falling rush in the band of the canopy's own noise, quicker than a gust's.
+  function lurch(ctx, at) {
+    const air = ctx.createBufferSource();
+    air.buffer = sound.audio.noise;
+    air.loop = true;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = 1.1;
+    band.frequency.setValueAtTime(1300, at);
+    band.frequency.exponentialRampToValueAtTime(420, at + 0.32);
+    const shape = ctx.createGain();
+    shape.gain.setValueAtTime(0, at);
+    shape.gain.linearRampToValueAtTime(0.16, at + 0.04);
+    shape.gain.exponentialRampToValueAtTime(0.001, at + 0.38);
+    air.connect(band).connect(shape).connect(sound.audio.master);
+    air.start(at, Math.random());
+    air.stop(at + 0.4);
+  }
+
+  // A dive caught: the lines coming taut under the brake, a short dry snap with a low knock in it.
+  function snap(ctx, at) {
+    const crack = ctx.createBufferSource();
+    crack.buffer = sound.audio.noise;
+    const high = ctx.createBiquadFilter();
+    high.type = 'highpass';
+    high.frequency.value = 2200;
+    const shape = ctx.createGain();
+    shape.gain.setValueAtTime(0.12, at);
+    shape.gain.exponentialRampToValueAtTime(0.001, at + 0.05);
+    crack.connect(high).connect(shape).connect(sound.audio.master);
+    crack.start(at, Math.random());
+    crack.stop(at + 0.06);
+    const knock = ctx.createOscillator();
+    knock.frequency.setValueAtTime(140, at);
+    knock.frequency.exponentialRampToValueAtTime(90, at + 0.08);
+    const body = ctx.createGain();
+    body.gain.setValueAtTime(0.09, at);
+    body.gain.exponentialRampToValueAtTime(0.001, at + 0.1);
+    knock.connect(body).connect(sound.audio.master);
+    knock.start(at);
+    knock.stop(at + 0.11);
+  }
+
+  // A front tuck: the leading edge folding under with a short rattle of loose cloth, shorter and
+  // lighter than a stall's (slump), and with no call in it.
+  function flap(ctx, at) {
+    const cloth = ctx.createBufferSource();
+    cloth.buffer = sound.audio.noise;
+    cloth.loop = true;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = 0.8;
+    band.frequency.value = 900;
+    const rattle = ctx.createGain();
+    rattle.gain.setValueAtTime(0, at);
+    for (let i = 0; i < 9; i++) {
+      const when = at + i * 0.055;
+      rattle.gain.setValueAtTime(0.13 * (1 - i / 10), when);
+      rattle.gain.setValueAtTime(0.02, when + 0.025);
+    }
+    rattle.gain.linearRampToValueAtTime(0, at + 0.55);
+    cloth.connect(band).connect(rattle).connect(sound.audio.master);
+    cloth.start(at, Math.random());
+    cloth.stop(at + 0.56);
+  }
+
+  // A pump of a folded wing let go: a soft, low thunk of the cloth filling.
+  function thunk(ctx, at) {
+    const tone = ctx.createOscillator();
+    tone.frequency.setValueAtTime(110, at);
+    tone.frequency.exponentialRampToValueAtTime(68, at + 0.12);
+    const shape = ctx.createGain();
+    shape.gain.setValueAtTime(0, at);
+    shape.gain.linearRampToValueAtTime(0.12, at + 0.01);
+    shape.gain.exponentialRampToValueAtTime(0.001, at + 0.16);
+    tone.connect(shape).connect(sound.audio.master);
+    tone.start(at);
+    tone.stop(at + 0.18);
+  }
+
+  // The moment to turn into a core: a low thump from its side, falling where the surge's swell
+  // rises, so the one says turn and the other straighten.
+  function thump(ctx, at, pan) {
+    const out = panned(ctx, pan);
+    const tone = ctx.createOscillator();
+    tone.frequency.setValueAtTime(110, at);
+    tone.frequency.exponentialRampToValueAtTime(55, at + 0.25);
+    const shape = ctx.createGain();
+    shape.gain.setValueAtTime(0, at);
+    shape.gain.linearRampToValueAtTime(0.16, at + 0.008);
+    shape.gain.exponentialRampToValueAtTime(0.001, at + 0.3);
+    tone.connect(shape).connect(out);
+    tone.start(at);
+    tone.stop(at + 0.32);
+    const puff = ctx.createBufferSource();
+    puff.buffer = sound.audio.noise;
+    const low = ctx.createBiquadFilter();
+    low.type = 'lowpass';
+    low.frequency.value = 380;
+    const breath = ctx.createGain();
+    breath.gain.setValueAtTime(0.08, at);
+    breath.gain.exponentialRampToValueAtTime(0.001, at + 0.22);
+    puff.connect(low).connect(breath).connect(out);
+    puff.start(at, Math.random());
+    puff.stop(at + 0.24);
+  }
+
   // The lift surging under the wing: a soft swell of air with a low note rising in it, from the
   // side the core is on.
   function swell(ctx, at, pan) {
@@ -1792,6 +2016,7 @@ export function createGoodLift(host) {
     get meet() { return meet; },
     get bells() { return bells; },
     get surge() { return surge; },
+    get entry() { return entry; },
     /** What the hint was last chosen from (cloudbaseHint's facts), as of the last readout. */
     get hintFacts() { return moment; },
     get view() { return view; },
