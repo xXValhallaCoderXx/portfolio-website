@@ -264,7 +264,8 @@ test('only daily runs reach the board, and feats are earned once', () => {
   assert.deepEqual(earnFeats(store, ['beat-the-bot', 'opener', 'made-up']), ['beat-the-bot']);
   assert.deepEqual(earnFeats(store, new Set(['beat-the-bot'])), []);
   for (const nonsense of [undefined, null, 7, 'opener', { 0: 'opener', length: 1 }]) assert.deepEqual(earnFeats(store, nonsense), []);
-  assert.deepEqual(store.feats, [...FEAT_IDS.filter((id) => id !== 'training-block')]);
+  // Every feat these runs earned: all but the streak's and the tricks', which none of them flew.
+  assert.deepEqual(store.feats, [...FEAT_IDS.filter((id) => !['training-block', 'wingover-five', 'pitched-45'].includes(id))]);
 });
 
 test('a run ended early counts toward the runs, the bests and the streak, but takes no place on the board', () => {

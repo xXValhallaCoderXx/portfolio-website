@@ -210,8 +210,9 @@ test('kettlebells come every 16 to 22 s, and every 10 to 14 s once the pilot has
       gaps[high ? 'oftener' : 'every'].push(gap);
     }
   }
-  // On these skies: 35 gaps low down and 14 high, one of them held 0.45 s past its range by the rim
-  // (on seed 6). Under SIM_VERSION 1, hands up, 43 and 5, and none held.
+  // On these skies: 32 gaps low down and 24 high, none of them held past its range by the rim
+  // (under SIM_VERSION 2, 35 and 14, one held 0.45 s on seed 6). Under SIM_VERSION 1, hands up, 43
+  // and 5, and none held.
   assert.ok(held <= 2, `${held} throws held past their range by the rim`);
   assert.ok(gaps.every.length >= 10 && gaps.oftener.length >= 5, `${gaps.every.length} gaps low down, ${gaps.oftener.length} high`);
   assert.ok(Math.max(...gaps.every) - Math.min(...gaps.every) > 3, 'the gaps are drawn, not fixed');
@@ -245,7 +246,8 @@ test('each kettlebell is aimed where the glider would be 2.4 s later if the pilo
       },
     });
   }
-  // On these skies: 17 aims, 10 of them with the brake held and one the Beast's (on seed 6).
+  // On these skies: 23 aims, 13 of them with the brake held and four the Beast's (on seeds 1, 2, 3
+  // and 6).
   assert.ok(aimed >= 15 && braked >= 3 && beasts >= 1, `${aimed} aims checked, ${braked} with the brake held, ${beasts} of them the Beast`);
   // Even the ground counts, as it does in a run: a slow wing held on a deep brake 19 m up, where
   // a gentle stall cannot begin, is aimed at as a wing that does not stall.
@@ -308,6 +310,8 @@ test('a kettlebell falls from 96 m above and 26 m beside its aim, reaches it 2.4
   let followed = 0;
   fly(world, createReferencePilot(), {
     each(w) {
+      // The step the fog ends the run on moves no bell: the run is over.
+      if (!w.sky.state.active) return;
       for (const bell of state.bells) {
         if (bell.phase === BELL_PHASE.idle) continue;
         const t = w.sky.state.elapsed - bell.at;
@@ -545,8 +549,8 @@ test('no kettlebell is thrown while anything blocks it, and one comes once every
     ['cloud, however thin', (world) => { world.sky.state.pilot.cloud = 0.01; }, (world) => { world.sky.state.pilot.cloud = 0; }],
     ['a raven about to cross', (world) => { world.sky.state.pilot.danger = 1; }, (world) => { world.sky.state.pilot.danger = 0; }],
     ['a stall', (world) => { world.g.stall = 1; }, (world) => { world.g.stall = 0; }],
-    ['a dive still to catch', (world) => { world.g.dive = 0.5; }, (world) => { world.g.dive = 0; }],
     ['a front tuck', (world) => { world.g.tuck = 0.5; }, (world) => { world.g.tuck = 0; }],
+    ['a tip collapse', (world) => { world.g.tip = 0.5; }, (world) => { world.g.tip = 0; }],
     ['a gust front 5.9 s off', (world) => { world.sky.state.pilot.gustIn = BELLS.gust - 0.1; }, (world) => { world.sky.state.pilot.gustIn = BELLS.gust; }],
     ['the rim 14 m away', nearRim(BELLS.edge - 1), nearRim(BELLS.edge + 1)],
   ];
@@ -796,7 +800,7 @@ test('the same seed throws the same kettlebells, a used set throws them as a new
 test('what each kettlebell is comes from the seed and its number alone, however the run is flown', () => {
   // The same sky flown two ways: the throws come at other moments and at other aims, but the k-th
   // bell's side, weight and drawn gap are the same, and so is the first one's wait.
-  // Sky 9, where both meet five bells (under SIM_VERSION 3 it was sky 17, where one of them now
+  // Sky 9, where both meet four bells (under SIM_VERSION 3 it was sky 17, where one of them now
   // meets the Beast second: thrown further out, as every Beast is, it would not be the same bell).
   const ways = [createReferencePilot(), dodger(0.4, { brake: 'eased' })].map((pilot) => flyThrows(runWorld(9), pilot));
   const [one, other] = ways;
@@ -823,35 +827,35 @@ test('what each kettlebell is comes from the seed and its number alone, however 
 //   no kettlebells                              1   -            -            39 / 36
 //                                               2   -            -            26 / 30
 //                                               3   -            -            26 / 30
-//                                               4   -            -            25 / 35
+//                                               4   -            -            27 / 37
 //   holding its line, hands up                  1   4.0 / 3.9    78 / 79%     24 / 22
 //                                               2   3.3 / 3.0    73 / 79%      9 / 1
 //                                               3   3.3 / 3.0    73 / 79%      9 / 1     5 of 6 / none thrown
-//                                               4   3.5 / 3.6    73 / 80%     14 / 13    8 of 11 / 6 of 8
+//                                               4   3.6 / 3.6    73 / 78%     10 / 15    7 of 10 / 6 of 11
 //   holding its line, light brake eased         1   3.7 / 4.0    80 / 81%     24 / 23
 //                                               2   3.6 / 4.0    79 / 82%     25 / 24
 //                                               3   3.6 / 4.0    75 / 80%     25 / 24    14 of 23 / 13 of 17
-//                                               4   3.8 / 4.2    74 / 69%     35 / 36    16 of 29 / 16 of 35
+//                                               4   4.0 / 4.2    78 / 68%     35 / 39    17 of 28 / 14 of 35
 //   changing what it does 0.4 s in, hands up    1   4.3 / 4.1    0.6 / 3.1%   34 / 31
 //                                               2   3.5 / 3.5    0.7 / 0.7%   15 / 17
 //                                               3   3.5 / 3.5    0.7 / 0.7%   15 / 17    0 of 10 / 0 of 10
-//                                               4   3.5 / 3.7    0.7 / 0.7%   18 / 24    0 of 12 / 0 of 16
+//                                               4   3.4 / 3.9    0.0 / 0.6%   20 / 15    0 of 12 / 0 of 14
 //   changing what it does 0.4 s in, brake eased 1   4.1 / 4.3    0.6 / 0.6%   31 / 38
 //                                               2   3.9 / 4.1    0.0 / 1.2%   35 / 34
 //                                               3   3.8 / 4.2    0.0 / 0.6%   35 / 34    0 of 30 / 0 of 33
-//                                               4   4.0 / 4.3    0.0 / 0.0%   35 / 39    0 of 33 / 0 of 35
+//                                               4   4.2 / 4.3    0.6 / 0.0%   37 / 37    0 of 34 / 0 of 32
 //   changing what it does 0.6 s in, brake eased 1   4.2 / 4.3    1.8 / 0.6%   33 / 38
 //                                               2   3.7 / 4.0    3.4 / 0.6%   34 / 34
 //                                               3   3.7 / 4.0    2.7 / 1.3%   34 / 34    0 of 30 / 0 of 27
-//                                               4   3.9 / 4.3    1.3 / 1.2%   37 / 37    0 of 34 / 1 of 35
+//                                               4   4.2 / 4.4    0.6 / 0.0%   36 / 39    1 of 33 / 0 of 37
 // The first comes a median 6 to 14 s after the pilot reaches 550 m and the rest about every 21 s;
 // 54 to 73% are thrown at a circling pilot, aimed a median 27 to 42 degrees off its nose (under
 // version 2: 10 to 14 s, about every 22 s, 53 to 66% and 31 to 46 degrees). Hands up, the peaked
 // cores of version 2 keep a pilot lower, and a lower pilot is thrown fewer. Version 3's Beast, the
 // first bell past 1,000 m, is aimed as far ahead as its warning is long, so holding on still meets
 // it, and changing what you do 0.4 s in leaves even more of its warning to get clear: no dodger was
-// hit by one under version 3, and one Beast in 69 hit the 0.6 s dodger under version 4. Version 4's
-// wing, which dives and is caught, and pumps a fold open, lifts the line-holders past 1,000 m more
+// hit by one under version 3, and one Beast in 70 hit the 0.6 s dodger under version 4. Version 4's
+// wing, which surges and is caught, and pumps a fold open, lifts the line-holders past 1,000 m more
 // often: catching its wing costs a pilot little, and a fold pumped open costs it less height. The
 // pins in good-lift.test.js hold the balance; this only holds the promise that dodging works.
 test('a pilot who holds its line is hit by most kettlebells, and one who changes what it is doing 0.4 s into the warning hardly ever is', () => {

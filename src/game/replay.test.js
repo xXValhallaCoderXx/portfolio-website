@@ -7,6 +7,7 @@ import { TST, createReferencePilot } from './pilots.js';
 import { CLOUD_GATE, createCloudbaseRun } from './cloudbase-state.js';
 import { createMeet } from './meet-state.js';
 import { BELL_RESULT, createBells } from './bells.js';
+import { createStyle } from './meet-style.js';
 import { RUNE } from './meet-runes.js';
 import { summariseRun } from './meet-sheet.js';
 import { SIM_VERSION } from './sim-version.js';
@@ -19,7 +20,7 @@ const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 // share of those steps its turn asks for. Its brake follows its hands at once. Between lifts it
 // pushes the speed bar, with the bar's own key or, with `chord`, both arrows at once, as a phone
 // does, and only when it has no turning to do. Its keys are written as the game writes them
-// (inputBits), so the bar it still holds while its brake catches a dive stays the brake.
+// (inputBits), so the bar it still holds while its brake catches a surge stays the brake.
 function keys(options = {}, { hold = 9, pulse = false, chord = false } = {}) {
   const pilot = createReferencePilot(options);
   const intent = { turn: 0, brake: false, bar: false };
@@ -59,11 +60,11 @@ function lander() {
   };
 }
 
-// Flies a run on `seed` with the meet and the kettlebells through stepBits, as the game does, with
+// Flies a run on `seed` with the meet, the kettlebells and the style through stepBits, as the game does, with
 // `bitsOf(world)` at the keys and a recorder taking every step down, until the run ends or the
 // pilot ends it at step `quit`. Returns the run's sheet and its link.
 function flyLive(seed, bitsOf, { quit = Infinity, meta = {} } = {}) {
-  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells() }), seed);
+  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle() }), seed);
   const recorder = createRecorder();
   let reason = null;
   while (!reason && world.steps < quit) {
@@ -81,9 +82,9 @@ function flyLive(seed, bitsOf, { quit = Infinity, meta = {} } = {}) {
 // Twenty-four runs, each flown live by one kind of pilot: arrows held, both arrows for the bar on
 // a phone, arrows tapped, a pilot who ends the run part of the way up, one who lands, the collector
 // at the keys after the trails' plates and its runes' stones, and one holding its line on the light
-// brake that takes Algiz's stone (on sky 35, where it also sprays its bar, has a bell glance off,
+// brake that takes Algiz's stone (on sky 266, where it also sprays its bar, has a bell glance off,
 // meets the Beast and catches a plate under a cloud and the fog's bait: under SIM_VERSION 3 it was
-// sky 19).
+// sky 19, and 35 when the wing first dived).
 const SKIES = [
   ...[1, 2, 3, 4, 5, 6].map((seed) => ({ seed, pilot: () => keys() })),
   ...[7, 8, 9, 10].map((seed) => ({ seed, pilot: () => keys({ brake: 'eased' }, { hold: 6, chord: true }), meta: { touch: true, initials: 'TST' } })),
@@ -91,7 +92,7 @@ const SKIES = [
   ...[14, 15, 16, 17].map((seed) => ({ seed, pilot: () => keys({ brake: 'eased' }), quit: (14 + 23 * (seed - 14)) * 60 + seed })),
   ...[18, 19, 20].map((seed) => ({ seed, pilot: lander })),
   ...[21, 22, 23].map((seed) => ({ seed, pilot: () => keys({ ...TST, collect: true }, { hold: 6 }) })),
-  { seed: 35, pilot: () => keys({ brake: 'eased', gates: [RUNE.algiz] }) },
+  { seed: 266, pilot: () => keys({ brake: 'eased', gates: [RUNE.algiz] }) },
 ];
 
 // Each run flown live once, for every test here to replay.
@@ -125,10 +126,10 @@ test('a recorded run replays to the same total, peak, lights, ending and barogra
   // Between them the runs did everything a run can: each ending, lines judged white and red, under
   // the horn too, reps and trails, kettlebells that hit, came close, missed and glanced off Algiz,
   // the Beast among them, plates met on the wind, plates sprayed off the bar and caught back, and
-  // rune gates taken. (On these skies under SIM_VERSION 4: 17 fog, 4 quit and 3 landed; 86 lines,
-  // 46 lifts with a red light and 17 under the horn; 70 reps and 90 trails; 72 kettlebells, 37 of
-  // them hits, 11 close calls, 23 dodged and 1 glanced off, and 10 Beasts; 18 plates off gust fronts;
-  // 54 plates sprayed and 20 caught back; and 6 gates. Under 3: 78 lines, 45 red and 14 under the
+  // rune gates taken. (On these skies under SIM_VERSION 4: 18 fog, 4 quit and 2 landed; 85 lines,
+  // 47 lifts with a red light and 15 under the horn; 75 reps and 90 trails; 73 kettlebells, 32 of
+  // them hits, 12 close calls, 27 dodged and 1 glanced off, and 12 Beasts; 13 plates off gust fronts;
+  // 53 plates sprayed and 18 caught back; and 3 gates. Under 3: 78 lines, 45 red and 14 under the
   // horn; 68 reps and 86 trails; 67 kettlebells, 33 hits, 6 close, 27 dodged, 1 glanced and 9
   // Beasts; 14 off the fronts; 65 sprayed and 22 back; 1 gate.)
   for (const [what, count] of Object.entries(seen)) assert.ok(count > 0, `${count} ${what}`);
@@ -266,7 +267,7 @@ function arraysMadeBy(run) {
 
 test('a replay makes no array or buffer as it flies, only the sheet it hands back at the end, whatever the run met', () => {
   assert.ok(arraysMadeBy(() => new Float32Array(1)) > 0 && arraysMadeBy(() => {}) === 0, 'the watch sees what it should');
-  // A pilot at the keys, and the one that takes Algiz's stone on sky 35, which sprays its bar, has
+  // A pilot at the keys, and the one that takes Algiz's stone on sky 266, which sprays its bar, has
   // a bell glance off, meets the Beast and catches a plate under a cloud and the fog's bait. What
   // the engine boxes for itself is not watched here: replaying the same keys with each version's
   // modules loaded fresh, it comes to some 213 bytes a step with the kettlebells and 173 without,
@@ -285,6 +286,6 @@ test('a replay makes no array or buffer as it flies, only the sheet it hands bac
     assert.deepEqual(replay.result, sheet);
   }
   const { stats } = algiz.sheet;
-  assert.deepEqual([algiz.seed, stats.gates, stats.runes, stats.glanced, stats.thunder, stats.bait], [35, 1, 1 << (RUNE.algiz - 1), 1, 1, 1]);
+  assert.deepEqual([algiz.seed, stats.gates, stats.runes, stats.glanced, stats.thunder, stats.bait], [266, 1, 1 << (RUNE.algiz - 1), 1, 1, 1]);
   assert.ok(stats.scattered > 0 && stats.beast !== BELL_RESULT.pending);
 });

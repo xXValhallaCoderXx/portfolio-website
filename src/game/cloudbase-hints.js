@@ -3,11 +3,11 @@
 // can be read and tested by itself. What every hint shares with free flight (the width of a line,
 // how long it stays up, the lines for a stalled wing) is in hints.js, and passed on from here.
 import { BRAKE } from './flight.js';
-import { stallHint } from './hints.js';
+import { pitchHint, stallHint, surgeHint, wingoverHint } from './hints.js';
 import { MEET } from './meet-state.js';
 import { BLESSING, RUNE } from './meet-runes.js';
 
-export { HINT_HOLD, HINT_WIDTH, holdHint, stallHint } from './hints.js';
+export { HINT_HOLD, HINT_WIDTH, holdHint, pitchHint, stallHint, surgeHint, wingoverHint } from './hints.js';
 
 // Fog this close below (m) is worth a warning: a raven strike alone costs about 60 m.
 export const FOG_NEAR = 80;
@@ -23,8 +23,15 @@ export const CENTRE_RIDES = 6;
 // taught on the way to the first this many, and the moment to turn is said for `TURN_SAID` seconds.
 export const ENTRY_RIDES = 4;
 export const TURN_SAID = 1.5;
-// A front tuck is explained for this many seconds after it, for the next dive.
+// A front tuck is explained for this many seconds after it, for the next surge, and a tip collapse
+// for the next wingover.
 export const TUCK_SAID = 2;
+export const TIP_SAID = 2;
+// A trick's set landed is said for this many seconds, and one lost for `LOST_SAID`; how to pitch and
+// to wingover is taught while one is being flown, until this many sets have landed.
+export const TRICK_SAID = 2.5;
+export const LOST_SAID = 2;
+export const TRICKS_TAUGHT = 2;
 // Seconds of big ears held in climbing air before the pilot is told they will not beat it.
 export const EARS_CLIMB = 1.5;
 // The plates riding a gust front are pointed out on this many fronts of a run, and then left to be
@@ -72,9 +79,19 @@ export const BLESSED = Object.freeze([
  *   rides         hunted thermals entered so far in this run
  *   searching     seconds without lift
  *   touch         the on-screen buttons are in use
- *   harsh         a stall here is the costly kind, with a dive to catch as it ends
- *   dive          seconds left to catch the wing as it dives (0 while it is not diving)
- *   tucked        seconds since the wing last tucked for a dive left uncaught
+ *   harsh         a stall here is the costly kind, with a surge to catch as it ends
+ *   surging       the wing is surging toward a fold and wants catching (1), or not (0)
+ *   tucked        seconds since the wing last tucked for a surge left uncaught
+ *   tipped        seconds since a wingover too steep last tipped the wing
+ *   nearTuck      a surge is within a few degrees of tucking the wing, and `nearTip` a wingover of
+ *                 tipping it (only where it can fold)
+ *   landed        seconds since a set of tricks landed, `trick` what it was ('wingover ×5') and
+ *                 `points` the style it earned; `lost`, seconds since one was lost
+ *   inHand        what the set of tricks in hand is, once it has two in it ('' for none), and
+ *                 `inHandPitch` whether the last of them was a pitched swing
+ *   pitching      a swing is being pitched bigger, and `wingover` a wingover is under way
+ *   tricksLanded  sets of tricks landed this run
+ *   unscored      seconds since a trick was flown below the grace height, where style does not count
  *   ears          how far the big ears are in, 0 to 1; `earsUsed` they have been pulled this run,
  *                 and `earsClimb` seconds they have been held fully in climbing air
  *   approach      a hunted thermal's flock is ahead to fly into, turning `approachDir`
@@ -113,9 +130,14 @@ export function cloudbaseHint(facts) {
   }
   const stalled = stallHint(facts.stall, facts.stallSide, facts.harsh);
   if (stalled) return stalled;
-  // A dive is caught with a touch of the brake, and the tuck it ends in says so for the next one.
-  if (facts.dive > 0) return facts.touch ? 'wing diving — tap ▼ to catch it' : 'wing diving — tap the brake to catch it';
-  if (facts.tucked < TUCK_SAID) return facts.touch ? 'front tuck — tap ▼ as the wing dives' : 'front tuck — tap the brake as it dives';
+  // A surge is caught with the brake held till the wing swings back, and the tuck it ends in says
+  // so for the next one.
+  if (facts.surging > 0) return surgeHint(facts.touch);
+  if (facts.tucked < TUCK_SAID) return facts.touch ? 'front tuck — hold ▼ as the wing surges' : 'front tuck — brake as the wing surges';
+  if (facts.tipped < TIP_SAID) return 'tip collapse — stop swapping short of red';
+  // Near a fold a trick can come to, said before it does.
+  if (facts.nearTuck) return facts.touch ? 'too far ahead — ▼ sooner' : 'too far ahead — brake it sooner';
+  if (facts.nearTip) return 'too steep — ease off or a tip folds';
   // A kettlebell is dodged by changing what the wing is doing. Circling, the bar is the change
   // that works (straightening fails in a gentle circle); flying straight, or on the bar, a turn is.
   // The Beast is dodged the same way, said in the fewest words: by the time it comes at 1,000 m
@@ -152,6 +174,14 @@ export function cloudbaseHint(facts) {
   if (facts.horn < 3) return 'Gjallarhorn — every lift counts double';
   if (facts.blessed < 3 && BLESSED[facts.blessing]) return BLESSED[facts.blessing];
   if (facts.depth < 2.5) return `depth — centred circle, ${MEET.deep * times} kg on the bar`;
+  // A set of tricks landed or lost, and while one is being flown, how to land it, and how to fly it
+  // until two have landed. Below the grace height, once, that it counts for nothing there.
+  if (facts.landed < TRICK_SAID) return `landed — ${facts.trick}, +${facts.points.toLocaleString('en-GB')} style`;
+  if (facts.lost < LOST_SAID) return 'trick lost — level out to land the next';
+  if (facts.unscored < TRICK_SAID) return 'style counts from 260 m — climb first';
+  if (facts.inHand) return facts.inHandPitch ? `${facts.inHand} — brake the surge to land it` : `${facts.inHand} — level out to land it`;
+  if (facts.pitching && facts.tricksLanded < TRICKS_TAUGHT) return pitchHint(facts.touch);
+  if (facts.wingover && facts.tricksLanded < TRICKS_TAUGHT) return wingoverHint(facts.touch);
   if (facts.elapsed < 8) return 'circle in the amber column to climb';
   if (facts.fogClearance < FOG_NEAR) return facts.lift > 3 ? 'fog closing in — keep climbing' : 'fog closing in — fly to the ravens';
   if (facts.headroom < 70 && facts.climbing) return 'storm cloud above — lift ends at its base';

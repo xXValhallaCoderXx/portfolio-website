@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { FEATS, JUDGES, barogram, kilos, medalsSaid, metres, shareText, worldSaid } from '../game/meet-card.js';
+import { FEATS, JUDGES, barogram, kilos, medalsSaid, metres, shareText, trickSaid, worldSaid } from '../game/meet-card.js';
 import { bynameOf } from '../game/meet-bynames.js';
 import { isBlocked, runesOf } from '../game/meet-initials.js';
 import { outranks, withBot } from '../game/board.js';
@@ -404,7 +404,14 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
         </p>
         {result.verse && <p className="dim good-lift-verse">{result.verse}</p>}
         <p className="good-lift-total" id={`${id}-total`}>
-          TOTAL <strong>{kilos(result.total)} kg</strong> · peak <strong>{metres(result.peak)} m</strong> · best {kilos(best.total)} kg
+          TOTAL <strong>{kilos(result.total)} kg</strong> · peak <strong>{metres(result.peak)} m</strong>
+          {result.stats.style > 0 && (
+            <>
+              {' · style '}
+              <span className="good-lift-style">{result.stats.style.toLocaleString('en-GB')}</span>
+            </>
+          )}
+          {' · '}best {kilos(best.total)} kg
         </p>
         {((result.pilot ?? result.initials) || bynameOf(result.byname)) && (
           <p className="good-lift-who">
@@ -422,6 +429,7 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
           {result.stats.reps > 0 && ` · ${result.stats.reps} rep${result.stats.reps === 1 ? '' : 's'}, ${result.stats.deep || 'none'} to depth`}
         </p>
         <SkyLine result={result} />
+        {trickSaid(result.stats) && <p className="dim good-lift-tricks">{trickSaid(result.stats)}</p>}
         <Medals bots={landed} />
         <p className="good-lift-hide" role="status">
           {said}

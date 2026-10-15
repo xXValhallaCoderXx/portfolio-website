@@ -6,6 +6,7 @@
 import { FLIGHT, createFlight, settleFlight, stepFlight } from './flight.js';
 import { CLOUD_GATE, CLOUD_RAVENS, CLOUD_STRIKE, CLOUD_ZONE } from './cloudbase-state.js';
 import { surfaceAt } from './ground.js';
+import { createSwingWatch } from './swing-watch.js';
 
 // Seconds a run is stepped by, everywhere. Touching down within `ground` metres of the surface
 // ends a run, ring or not.
@@ -22,12 +23,15 @@ const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 /**
  * Everything one run needs, made once and reused for every run after it. `sky` is a
  * createCloudbaseRun(); `g`, `controls` and `air` may be handed in so the game draws the very
- * objects the run steps. `bells` and `meet` are the Good Lift layer, or null to fly the bare sky.
+ * objects the run steps. `bells` and `meet` are the Good Lift layer, or null to fly the bare sky,
+ * and `style` (meet-style.js) scores the run's tricks, or null to leave them unscored.
  *
+ *   watch   what the wing's swings are doing (swing-watch.js), stepped with the wing
  *   hook    which way a folded wing hooks round: the way it was turning when it was struck
  *   struck  strikes already answered with a hook
  *   stalls  stalls begun this run
- *   tucks   front tucks this run: dives left uncaught
+ *   tucks   front tucks this run: surges left uncaught past the wing's line
+ *   tips    tip collapses this run: wingovers swung past the wing's limit
  *   pump    the brake held into the fold so far (s) and the pumps it has had (`held`, `n`)
  *   steps   fixed steps flown this run
  *   intent  what stepBits last asked of the wing ({ turn, brake, bar, ears }): one object, reused
@@ -36,18 +40,21 @@ const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 export function createRunWorld({
   sky,
   g = createFlight({ x: CLOUD_GATE.x, y: CLOUD_GATE.y, z: CLOUD_GATE.z }),
-  controls = { turn: 0, brake: false, bar: false, ears: false, locked: false, harsh: false, linger: true, dive: false, safe: false, climb: null },
+  controls = { turn: 0, brake: false, bar: false, ears: false, locked: false, harsh: false, linger: true, swing: false, folds: false, safe: false, climb: null },
   air = { lift: 0, sink: 0, windX: 0, windZ: 0, calm: false, rough: 0, clearance: Infinity },
   bells = null,
   meet = null,
+  style = null,
 } = {}) {
   return {
-    sky, g, controls, air, bells, meet,
+    sky, g, controls, air, bells, meet, style,
+    watch: createSwingWatch(),
     forces: { lift: 0, sink: 0, liftSide: 0, windX: 0, windZ: 0, rough: 0 },
     hook: 1,
     struck: 0,
     stalls: 0,
     tucks: 0,
+    tips: 0,
     pump: { held: 0, n: 0 },
     steps: 0,
     intent: { turn: 0, brake: false, bar: false, ears: false },
@@ -77,12 +84,14 @@ export function startRun(world, seed) {
   g.yaw = CLOUD_GATE.yaw;
   settleFlight(g);
   world.hook = 1;
-  world.struck = world.stalls = world.tucks = world.steps = 0;
+  world.struck = world.stalls = world.tucks = world.tips = world.steps = 0;
   world.pump.held = world.pump.n = 0;
   world.intent.turn = 0;
   world.intent.brake = world.intent.bar = world.intent.ears = false;
   world.bells?.reset(seed);
   world.meet?.reset();
+  world.watch.reset();
+  world.style?.reset();
   // Nothing of the last run's climb is left behind the first sample of this one: the run at rest.
   trace.alt.fill(0);
   trace.fog.fill(0);
@@ -125,10 +134,11 @@ export function stepRun(world, intent, dt = RUN.step) {
   controls.ears = !!intent.ears;
   controls.locked = collapsed;
   // A stall only costs real height above the ravens' grace height; low over the launch hill it
-  // is the gentle kind, and the wing never dives there. The brake lingers light here, for
-  // circling tight.
+  // is the gentle kind, and a surge there swings out and back without tucking. The wing swings
+  // over the pilot everywhere in a run. The brake lingers light here, for circling tight.
   controls.harsh = g.pos.y >= CLOUD_RAVENS.grace;
-  controls.dive = controls.harsh;
+  controls.swing = true;
+  controls.folds = controls.harsh;
   controls.linger = true;
   controls.safe = false;
   controls.climb = null;
@@ -146,9 +156,12 @@ export function stepRun(world, intent, dt = RUN.step) {
 
   const stalled = g.stall > 0;
   const tucked = g.tuck > 0;
+  const tipped = g.tip > 0;
   stepFlight(g, controls, air, dt);
   if (g.stall > 0 && !stalled) world.stalls += 1;
   if (g.tuck > 0 && !tucked) world.tucks += 1;
+  if (g.tip > 0 && !tipped) world.tips += 1;
+  world.watch.step(dt, g, pilot.collapse > 0, controls);
   if (g.pos.y - surfaceAt(g.pos.x, g.pos.z) <= RUN.ground) return 'landed';
 
   const ended = sky.step(dt, g.pos);
@@ -161,6 +174,7 @@ export function stepRun(world, intent, dt = RUN.step) {
     world.hook = Math.sign(g.yawRate) || 1;
   }
   world.meet?.step(dt, world);
+  world.style?.step(dt, world);
   world.steps += 1;
   if (world.steps % TRACE.every === 0) sample(world);
   return ended;
@@ -196,6 +210,7 @@ export function stepBits(world, bits) {
  */
 export function finishRun(world, reason) {
   world.meet?.finish(reason, world);
+  world.style?.finish(reason);
   world.sky.finish();
   return world;
 }

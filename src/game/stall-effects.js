@@ -8,8 +8,9 @@ import { BRAKE, STALL } from './flight.js';
 // half folds in a spin (the other half stays open). The wing opens again `reopen` seconds before
 // the pilot's hands reach it once more. `luff` is the stall load over which the cloth starts to
 // flutter, all of it by the end. `shake` is radians of camera shake while the wing is falling.
-// `tuck` is radians of camera shake while the wing is tucked: a jolt, under a stall's.
-export const STALL_EFFECTS = Object.freeze({ fold: 0.45, spin: 0.85, reopen: 0.35, luff: Object.freeze([0.35, 0.95]), shake: 0.012, tuck: 0.006 });
+// `tuck` is radians of camera shake while the wing is tucked or tipped: a jolt, under a stall's.
+// `tip` is how far the half that unloaded folds in a tip collapse, at the top of a wingover too steep.
+export const STALL_EFFECTS = Object.freeze({ fold: 0.45, spin: 0.85, reopen: 0.35, luff: Object.freeze([0.35, 0.95]), shake: 0.012, tuck: 0.006, tip: 0.75 });
 
 // The meter is one track. The take-up of the brake fills its first `takeUp`; the light brake's
 // linger creeps across the next `band` (40% of it, so a light brake can be read at a glance);
@@ -26,14 +27,14 @@ const smoothstep = (from, to, value) => {
 /**
  * Writes into `out` where each effect should be heading for the glider `flight` (as flight.js
  * keeps it): `left` and `right`, how far each half of the wing is folded (0 to 1), `luff`, how
- * hard the cloth flutters (0 to 1), `shake`, radians of camera shake, and `dive` and `tuck`, how far
- * the wing has pitched forward in a dive and how far its leading edge is tucked under (0 to 1).
- * Outside the two kinds of flying everything is zero and `flight` is not read. `load` is the stall
- * load the flutter warns of: the wing's own, or 0 where it cannot stall (over the fjord), so nothing
- * there warns of one.
+ * hard the cloth flutters (0 to 1), `shake`, radians of camera shake, and `tuck`, how far its
+ * leading edge is tucked under (0 to 1). A tip collapse folds the half it took (`tipSide`). The
+ * wing's swings over the pilot are flight.js's own pitch and bank, drawn as they are. Outside the two kinds of flying everything is zero and `flight` is not read.
+ * `load` is the stall load the flutter warns of: the wing's own, or 0 where it cannot stall (over
+ * the fjord), so nothing there warns of one.
  */
 export function stallEffects(mode, flight, out, load = flight?.stallLoad ?? 0) {
-  out.left = out.right = out.luff = out.shake = out.dive = out.tuck = 0;
+  out.left = out.right = out.luff = out.shake = out.tuck = 0;
   if (mode !== 'flying' && mode !== 'cloudbase') return out;
   const E = STALL_EFFECTS;
   if (flight.stall > E.reopen) {
@@ -44,11 +45,15 @@ export function stallEffects(mode, flight, out, load = flight?.stallLoad ?? 0) {
   }
   out.luff = flight.stall > 0 ? 1 : smoothstep(E.luff[0], E.luff[1], load);
   if (flight.stall > STALL.surge) out.shake = E.shake;
-  // A dive pitches the wing forward over the pilot until it is caught; a tuck folds its leading
-  // edge under and shakes the pilot a little, less than a stall.
-  if (flight.dive > 0) out.dive = 1;
+  // A tuck folds the leading edge under and shakes the pilot a little, less than a stall; a tip
+  // collapse folds the half that unloaded, with the same jolt.
   if (flight.tuck > 0) {
     out.tuck = 1;
+    out.shake = Math.max(out.shake, E.tuck);
+  }
+  if (flight.tip > 0) {
+    if (flight.tipSide > 0) out.right = Math.max(out.right, E.tip);
+    else out.left = Math.max(out.left, E.tip);
     out.shake = Math.max(out.shake, E.tuck);
   }
   return out;
@@ -57,18 +62,17 @@ export function stallEffects(mode, flight, out, load = flight?.stallLoad ?? 0) {
 /**
  * Writes what the brake meter shows into `out`: `fill` and `red`, each a share of the track, and
  * `state`, one of '' (nothing to show), 'light', 'late' (the light brake about to go deep), 'deep',
- * 'near' (the stall is close), 'stalled', 'ears' (the big ears in, filling as they fold) and 'dive'
- * (a dive to catch with the brake). `depth` and `load` are flight.js's brake and stallLoad, 0 to 1;
- * `stall` is its seconds of stall left, `ears` how far the ears are in and `dive` its seconds left to
- * catch a dive. The fill grows from the left with the brake, or the ears; the red grows in from the
- * right with the load and meets the fill as the wing stalls. A stall outranks a dive, and a dive the
- * ears and the brake.
+ * 'near' (the stall is close), 'stalled' and 'ears' (the big ears in, filling as they fold).
+ * `depth` and `load` are flight.js's brake and stallLoad, 0 to 1; `stall` is its seconds of stall
+ * left and `ears` how far the ears are in. The fill grows from the left with the brake, or the ears;
+ * the red grows in from the right with the load and meets the fill as the wing stalls. A stall
+ * outranks the ears, and the ears the brake. When to brake a swing is the swing gauge's to show.
  */
-export function brakeMeter(depth, load, stall, out, ears = 0, dive = 0) {
-  if (stall <= 0 && (dive > 0 || ears > 0)) {
-    out.fill = dive > 0 ? clamp(depth / BRAKE.light, 0, 1) * BRAKE_METER.takeUp : clamp(ears, 0, 1);
+export function brakeMeter(depth, load, stall, out, ears = 0) {
+  if (stall <= 0 && ears > 0) {
+    out.fill = clamp(ears, 0, 1);
     out.red = 0;
-    out.state = dive > 0 ? 'dive' : 'ears';
+    out.state = 'ears';
     return out;
   }
   const M = BRAKE_METER;

@@ -9,6 +9,9 @@ import { ORDER, createCloudbase } from './cloudbase.js';
 import { runEffects } from './run-effects.js';
 import { STONES_LEAD, cloudbaseHint } from './cloudbase-hints.js';
 import { holdHint } from './hints.js';
+import { BRAKE, PITCH, ROLL, pitchPeak } from './flight.js';
+import { SWING_GAUGE } from './swing-gauge.js';
+import { CATCH } from './pilots.js';
 import { createRunWorld, finishRun, startRun, stepBits } from './run-step.js';
 import { createWindStreaks } from './wind-streaks.js';
 import { MEET, PLATE_KIND, TRAIL, createMeet } from './meet-state.js';
@@ -29,6 +32,7 @@ import { isBlocked } from './meet-initials.js';
 import { SIM_VERSION } from './sim-version.js';
 import { createRecorder, createTouchEars, decodeLog, encodeLog, inputBits } from './recorder.js';
 import { replayLog } from './replay.js';
+import { STYLE, createStyle } from './meet-style.js';
 import { summariseRun } from './meet-sheet.js';
 import { createMusic } from './music.js';
 import { createSurge } from './run-surge.js';
@@ -47,7 +51,8 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 // and lights, lift for lift.
 const sameSheet = (run, again) => !!again && !again.error && again.reason === run.reason && again.steps === run.steps &&
   again.total === run.total && again.peak === run.peak && again.lifts.length === run.lifts.length &&
-  run.lifts.every((lift, i) => lift.red === again.lifts[i].red && lift.kg === again.lifts[i].kg && lift.good === again.lifts[i].good);
+  run.lifts.every((lift, i) => lift.red === again.lifts[i].red && lift.kg === again.lifts[i].kg && lift.good === again.lifts[i].good) &&
+  again.stats.style === run.stats.style;
 
 // Whether two kits (wing-kit.js's, normalised) are the same wing, helmet and chalk.
 const sameKit = (a, b) => a.wing === b.wing && a.helmet === b.helmet && a.chalk === b.chalk;
@@ -95,6 +100,12 @@ const OUTCOMES = Object.freeze(['falling', 'hit', 'close', 'dodged', 'shielded',
 // What the run adds to the readouts: the bar's row, the judges' lights, the chevron and the glow
 // along the bottom once Gjallarhorn has sounded.
 const BAR_ROW = /* html */ '<dt class="fj-run">bar</dt><dd class="fj-run" data-hud="bar"></dd>';
+// The run's style (meet-style.js), a row of its own that shows once a set of tricks has landed, and
+// the line above the swing gauge saying the set in hand, and stamping it landed or lost.
+const STYLE_ROW = /* html */ '<dt class="fj-run fj-trick">style</dt><dd class="fj-run fj-trick" data-hud="style"></dd>';
+const STYLE_LINE = /* html */ '<p class="fj-style" aria-hidden="true"></p>';
+// Seconds a set of tricks landed, and one lost, is stamped over the gauge.
+const STAMP = Object.freeze({ landed: 1.6, lost: 1.4 });
 const MARKUP = /* html */ `
   <div class="fj-horn" aria-hidden="true"></div>
   <div class="fj-chevron" aria-hidden="true" hidden></div>
@@ -157,8 +168,9 @@ export function createGoodLift(host) {
   const panned = (ctx, pan) => sound.panned(ctx, pan);
   const sky = createCloudbaseRun();
   const meet = createMeet();
+  const style = createStyle();
   const bells = createBells();
-  const world = createRunWorld({ sky, g, controls, air, bells, meet });
+  const world = createRunWorld({ sky, g, controls, air, bells, meet, style });
   // Feeling for the core: the lift surging as a circle closes on it (run-surge.js), and the moment
   // to turn into one, passing it on the flock's side (run-entry.js).
   const surge = createSurge();
@@ -201,7 +213,7 @@ export function createGoodLift(host) {
   // the iron off the trail loaded, the sprays and the kg lost; bells turned aside by Algiz, stones
   // flown through and crumbled, and when the last blessing was taken, Algiz turned a bell aside and
   // Tiwaz lost the bar; the line of the last stones the climb came level with, and when; whether the
-  // wing was diving, the tucks and the pumps answered and when the last tuck came; whether the ears
+  // wing was surging, the tucks, tips and pumps answered and when the last tuck and tip came; whether the ears
   // have been pulled this run, and how long they have been held in climbing air; and when the moment
   // came to turn into a core, and which way.
   const seen = {
@@ -210,7 +222,15 @@ export function createGoodLift(host) {
     closeAt: -Infinity, hornAt: -Infinity, deepAt: -Infinity, chain: 0, chainAt: -Infinity, beastClose: false,
     wind: 0, bait: 0, sprays: 0, lost: 0, glanced: 0, gates: 0, crumbled: 0,
     blessedAt: -Infinity, glancedAt: -Infinity, lostAt: -Infinity, levelLine: 0, levelAt: -Infinity,
-    dived: false, tucks: 0, pumps: 0, tuckAt: -Infinity, earsUsed: false, earsClimb: 0, turnAt: -Infinity, turnSide: 0,
+    surging: false, tucks: 0, pumps: 0, tuckAt: -Infinity, tips: 0, tipAt: -Infinity, earsUsed: false, earsClimb: 0, turnAt: -Infinity, turnSide: 0,
+  };
+  // The run's style as last answered (meet-style.js): sets landed and lost, the elements in the set in
+  // hand and its name, the style shown and in which form, and when a set last landed or was lost, and
+  // a trick was flown too low to count, with the stamp over the gauge and when it comes down, and
+  // what the line over the gauge last showed (the stamp, or the points of the set in hand).
+  const styled = {
+    landed: 0, lost: 0, elements: 0, unscored: 0, total: -1, compact: null, inHand: '', trick: '', points: 0,
+    landedAt: -Infinity, lostAt: -Infinity, unscoredAt: -Infinity, toldLow: false, stamp: '', stampUntil: -Infinity, stamped: null, pending: -1,
   };
   // The blessing the readouts show, by RUNE.
   let shownRune = RUNE.none;
@@ -243,12 +263,15 @@ export function createGoodLift(host) {
 
   // The run's own readouts, made once and taken away by dispose().
   const rows = stage.querySelector('.fj-hud dl');
-  rows.insertAdjacentHTML('beforeend', BAR_ROW);
+  rows.insertAdjacentHTML('beforeend', BAR_ROW + STYLE_ROW);
   stage.querySelector('.fj-toasts').insertAdjacentHTML('beforebegin', MARKUP);
   stage.querySelector('.fj-toasts').insertAdjacentHTML('afterbegin', LIGHTS);
   stage.querySelector('.fj-hud').insertAdjacentHTML('beforebegin', GATE_MARKUP);
   const barCell = host.hud('bar');
   const varioCell = host.hud('vario');
+  const styleCell = host.hud('style');
+  stage.querySelector('.fj-swing').insertAdjacentHTML('beforebegin', STYLE_LINE);
+  const styleEl = stage.querySelector('.fj-style');
   const hornEl = stage.querySelector('.fj-horn');
   const lightsEl = stage.querySelector('.fj-lights');
   const lightEls = lightsEl.querySelectorAll('i');
@@ -264,7 +287,7 @@ export function createGoodLift(host) {
   for (const sound of stage.querySelectorAll('.fj-hud nav > [data-do="sound"], .fj-keys-more > [data-do="sound"]')) sound.insertAdjacentHTML('afterend', MUSIC_BUTTON);
   const musicButtons = [...stage.querySelectorAll('[data-do="music"]')];
   for (const button of musicButtons) button.addEventListener('click', () => toggleMusic());
-  const ownEls = [...rows.querySelectorAll('.fj-run'), hornEl, lightsEl, saidEl, chevronEl, gatesEl, titleEl, ...musicButtons];
+  const ownEls = [...rows.querySelectorAll('.fj-run'), styleEl, hornEl, lightsEl, saidEl, chevronEl, gatesEl, titleEl, ...musicButtons];
   let lightsTimer = 0;
   let saidTimer = 0;
   let titleTimer = 0;
@@ -294,9 +317,16 @@ export function createGoodLift(host) {
     seen.levelLine = 0;
     seen.bellHit = seen.horn = seen.shallow = seen.beastClose = false;
     seen.closeAt = seen.hornAt = seen.deepAt = seen.chainAt = seen.blessedAt = seen.glancedAt = seen.lostAt = seen.levelAt = -Infinity;
-    seen.tucks = seen.pumps = seen.earsClimb = seen.turnSide = 0;
-    seen.dived = seen.earsUsed = false;
-    seen.tuckAt = seen.turnAt = -Infinity;
+    seen.tucks = seen.pumps = seen.tips = seen.earsClimb = seen.turnSide = 0;
+    seen.surging = seen.earsUsed = false;
+    seen.tuckAt = seen.tipAt = seen.turnAt = -Infinity;
+    Object.assign(styled, {
+      landed: 0, lost: 0, elements: 0, unscored: 0, total: -1, compact: null, inHand: '', trick: '', points: 0,
+      landedAt: -Infinity, lostAt: -Infinity, unscoredAt: -Infinity, toldLow: false, stamp: '', stampUntil: -Infinity, stamped: null, pending: -1,
+    });
+    styleEl.textContent = '';
+    styleEl.className = 'fj-style';
+    rows.toggleAttribute('data-style', false);
     surge.reset();
     entry.reset();
     touchEars.reset();
@@ -476,26 +506,95 @@ export function createGoodLift(host) {
       effects.heave = turnIn;
     }
     answerWing(dt, elapsed);
+    answerStyle(elapsed);
     awardMilestones(sky.state.peak);
     return ended;
   }
 
-  // Answers what the wing did this step: a dive (and whether it was caught), a tuck, a pump of a
-  // folded wing, and the ears, which the hints keep count of.
+  // Answers what the wing did this step: a surge toward a fold, a tuck or a tip, a pump of a folded
+  // wing, and the ears, which the hints keep count of. A surge caught is the engine's to hear
+  // (game.js), over the fjord as here.
   function answerWing(dt, elapsed) {
-    const diving = g.dive > 0;
-    if (diving && !seen.dived) sound.play('dive', 0.4, lurch);
-    else if (!diving && seen.dived && g.tuck === 0) sound.play('catch', 0.3, snap);
-    seen.dived = diving;
+    const surging = g.tuck === 0 && g.pitchRate < 0 && pitchPeak(g) < -CATCH.surge;
+    if (surging && !seen.surging) sound.play('lurch', 0.4, lurch);
+    seen.surging = surging;
     if (world.tucks > seen.tucks) {
       seen.tucks = world.tucks;
       seen.tuckAt = elapsed;
       sound.play('tuck', 0.5, flap);
     }
+    // A tip collapse rattles from the side of the half that unloaded.
+    if (world.tips > seen.tips) {
+      seen.tips = world.tips;
+      seen.tipAt = elapsed;
+      sound.play('tip', 0.5, flap, 0.7 * g.tipSide);
+    }
     if (world.pump.n > seen.pumps) sound.play('pump', 0.2, thunk);
     seen.pumps = world.pump.n;
     if (g.ears > 0) seen.earsUsed = true;
     seen.earsClimb = g.ears >= 0.9 && g.vy > 1 ? seen.earsClimb + dt : 0;
+  }
+
+  // What a set of tricks is called: its wingovers, its pitched swing, or, both in it, its tricks.
+  function setName({ elements, rolls }) {
+    if (rolls === elements) return `wingover ×${rolls}`;
+    return rolls > 0 ? `tricks ×${elements}` : `pitch ×${elements}`;
+  }
+
+  // Answers what the style did this step (meet-style.js): an element scored in a set in hand, a rush
+  // of air a step higher for each linked (a lone element, as a dodge turned back makes, is no set
+  // yet, and passes unheard and unshown); a set landed, stamped over the gauge, flared on its
+  // readout, rung and said; one lost, stamped struck through, with a falling pair of notes after the
+  // fold's own sound; and a trick flown too low to count, told once a run.
+  function answerStyle(elapsed) {
+    const s = style.state;
+    const inHand = s.elements >= STYLE.inHand;
+    if (s.elements > styled.elements) {
+      styled.inHand = setName(s);
+      if (inHand && s.links > 0) sound.play('swish', 0.08, swish, s.links);
+    }
+    if (s.landed > styled.landed) {
+      styled.landedAt = elapsed;
+      styled.trick = styled.inHand;
+      styled.points = s.said;
+      styled.stamp = 'landed';
+      styled.stampUntil = elapsed + STAMP.landed;
+      styled.stamped = null;
+      sound.play('landed', 0.5, arpeggio);
+      flare(styleCell, 'lifted');
+      if (lightsEl.hidden) {
+        clearTimeout(saidTimer);
+        saidEl.textContent = '';
+        saidTimer = setTimeout(() => (saidEl.textContent = `Trick landed: ${styled.trick}, plus ${styled.points} style.`), 120);
+      }
+    }
+    if (s.lost > styled.lost) {
+      styled.lostAt = elapsed;
+      styled.points = s.said;
+      styled.stamp = 'lost';
+      styled.stampUntil = elapsed + STAMP.lost;
+      styled.stamped = null;
+      sound.play('dud', 0.5, dud);
+    }
+    if (s.unscored > styled.unscored && !styled.toldLow) {
+      styled.unscoredAt = elapsed;
+      styled.toldLow = true;
+    }
+    styled.elements = s.elements;
+    styled.landed = s.landed;
+    styled.lost = s.lost;
+    styled.unscored = s.unscored;
+    // The line over the gauge: a stamp while it is up, or else the set in hand and what it is worth;
+    // written only as one of them changes.
+    const stamped = elapsed < styled.stampUntil ? styled.stamp : '';
+    const pending = !stamped && inHand ? s.pending : -1;
+    if (stamped !== styled.stamped || pending !== styled.pending) {
+      styled.stamped = stamped;
+      styled.pending = pending;
+      styleEl.textContent = stamped === 'landed' ? `LANDED +${styled.points.toLocaleString('en-GB')}` : stamped === 'lost' ? `lost +${styled.points.toLocaleString('en-GB')}`
+        : pending >= 0 ? `${styled.inHand} +${pending.toLocaleString('en-GB')}` : '';
+      styleEl.className = stamped ? `fj-style ${stamped}` : 'fj-style';
+    }
   }
 
   // Answers what the meet did this step: a plate or a circle loaded, a trail laid, a strike's
@@ -768,8 +867,18 @@ export function createGoodLift(host) {
     // The bar as it would be lifted at the next line, the empty bar included; where the belt is
     // not shown, the total rides with it.
     const bar = `${kg(lift.bar + MEET.bar)}${lift.horn ? ' kg ×2' : ' kg'}`;
-    barCell.textContent = host.compact() ? `bar ${bar} · total ${kg(lift.total)} kg` : bar;
+    const compact = host.compact();
+    barCell.textContent = compact ? `bar ${bar} · total ${kg(lift.total)} kg` : bar;
     barCell.classList.toggle('doubled', lift.horn);
+    // The style, once a set of tricks has landed: written as it changes, or as the readouts change
+    // form (a phone turned, a window narrowed).
+    const total = style.state.total;
+    if (total !== styled.total || compact !== styled.compact) {
+      styled.total = total;
+      styled.compact = compact;
+      styleCell.textContent = compact ? `style ${total.toLocaleString('en-GB')}` : total.toLocaleString('en-GB');
+      rows.toggleAttribute('data-style', total > 0);
+    }
     // The blessing held rides beside the bar as its rune, lit up as it is taken.
     showRune(lift.runes.blessing.rune);
     if (quiet) {
@@ -781,8 +890,24 @@ export function createGoodLift(host) {
     moment.stall = g.stall;
     moment.stallSide = g.stallSide;
     moment.harsh = controls.harsh;
-    moment.dive = g.dive;
+    moment.surging = seen.surging ? 1 : 0;
     moment.tucked = elapsed - seen.tuckAt;
+    moment.tipped = elapsed - seen.tipAt;
+    // Near a fold a trick can come to, where the wing can come to one.
+    const tuckLine = PITCH.line + PITCH.held * Math.min(1, g.brake / BRAKE.light);
+    moment.nearTuck = controls.folds && g.pitch < 0 && -g.pitch >= tuckLine - SWING_GAUGE.near && g.pitchRate < 0;
+    moment.nearTip = controls.folds && Math.abs(g.bank) >= ROLL.limit - SWING_GAUGE.near;
+    // The tricks: a set landed or lost, the set in hand, one being flown, and one flown too low.
+    moment.landed = elapsed - styled.landedAt;
+    moment.trick = styled.trick;
+    moment.points = styled.points;
+    moment.lost = elapsed - styled.lostAt;
+    moment.unscored = elapsed - styled.unscoredAt;
+    moment.inHand = style.state.elements >= STYLE.inHand ? styled.inHand : '';
+    moment.inHandPitch = style.state.last === 1;
+    moment.pitching = world.watch.state.pumping === 1;
+    moment.wingover = world.watch.state.linking === 1 || world.watch.state.chain >= 2;
+    moment.tricksLanded = style.state.landed;
     moment.ears = g.ears;
     moment.earsUsed = seen.earsUsed;
     moment.earsClimb = seen.earsClimb;
@@ -1408,8 +1533,8 @@ export function createGoodLift(host) {
     for (let i = 0; i < 3; i++) ting(ctx, at + i * 0.07, 5 + i * 2, 0.05);
   }
 
-  // The wing diving ahead as the air drops away: its cloth whooshing forward over the pilot, a
-  // falling rush in the band of the canopy's own noise, quicker than a gust's.
+  // The wing surging ahead toward a fold: its cloth whooshing forward over the pilot, a falling
+  // rush in the band of the canopy's own noise, quicker than a gust's.
   function lurch(ctx, at) {
     const air = ctx.createBufferSource();
     air.buffer = sound.audio.noise;
@@ -1428,33 +1553,9 @@ export function createGoodLift(host) {
     air.stop(at + 0.4);
   }
 
-  // A dive caught: the lines coming taut under the brake, a short dry snap with a low knock in it.
-  function snap(ctx, at) {
-    const crack = ctx.createBufferSource();
-    crack.buffer = sound.audio.noise;
-    const high = ctx.createBiquadFilter();
-    high.type = 'highpass';
-    high.frequency.value = 2200;
-    const shape = ctx.createGain();
-    shape.gain.setValueAtTime(0.12, at);
-    shape.gain.exponentialRampToValueAtTime(0.001, at + 0.05);
-    crack.connect(high).connect(shape).connect(sound.audio.master);
-    crack.start(at, Math.random());
-    crack.stop(at + 0.06);
-    const knock = ctx.createOscillator();
-    knock.frequency.setValueAtTime(140, at);
-    knock.frequency.exponentialRampToValueAtTime(90, at + 0.08);
-    const body = ctx.createGain();
-    body.gain.setValueAtTime(0.09, at);
-    body.gain.exponentialRampToValueAtTime(0.001, at + 0.1);
-    knock.connect(body).connect(sound.audio.master);
-    knock.start(at);
-    knock.stop(at + 0.11);
-  }
-
   // A front tuck: the leading edge folding under with a short rattle of loose cloth, shorter and
   // lighter than a stall's (slump), and with no call in it.
-  function flap(ctx, at) {
+  function flap(ctx, at, pan = 0) {
     const cloth = ctx.createBufferSource();
     cloth.buffer = sound.audio.noise;
     cloth.loop = true;
@@ -1470,9 +1571,81 @@ export function createGoodLift(host) {
       rattle.gain.setValueAtTime(0.02, when + 0.025);
     }
     rattle.gain.linearRampToValueAtTime(0, at + 0.55);
-    cloth.connect(band).connect(rattle).connect(sound.audio.master);
+    cloth.connect(band).connect(rattle).connect(pan ? panned(ctx, pan) : sound.audio.master);
     cloth.start(at, Math.random());
     cloth.stop(at + 0.56);
+  }
+
+  // A trick's element scored: a rush of air up the canopy's band, with a soft note a pentatonic step
+  // higher for each linked (`links`), so a chain is heard climbing as the plates' tings do, in a
+  // voice of its own.
+  function swish(ctx, at, links = 1) {
+    const air = ctx.createBufferSource();
+    air.buffer = sound.audio.noise;
+    air.loop = true;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = 1.4;
+    band.frequency.setValueAtTime(600, at);
+    band.frequency.exponentialRampToValueAtTime(1800, at + 0.22);
+    const shape = ctx.createGain();
+    shape.gain.setValueAtTime(0, at);
+    shape.gain.linearRampToValueAtTime(0.05, at + 0.06);
+    shape.gain.exponentialRampToValueAtTime(0.001, at + 0.26);
+    air.connect(band).connect(shape).connect(sound.audio.master);
+    air.start(at, Math.random());
+    air.stop(at + 0.28);
+    const steps = [0, 2, 4, 7, 9, 12, 14, 16];
+    const note = ctx.createOscillator();
+    note.type = 'triangle';
+    note.frequency.value = 392 * 2 ** (steps[Math.min(links, steps.length) - 1] / 12);
+    const ring = ctx.createGain();
+    ring.gain.setValueAtTime(0.04, at + 0.04);
+    ring.gain.exponentialRampToValueAtTime(0.001, at + 0.3);
+    note.connect(ring).connect(sound.audio.master);
+    note.start(at + 0.04);
+    note.stop(at + 0.32);
+  }
+
+  // A set of tricks landed: three bright notes up an arpeggio, and a faint shimmer.
+  function arpeggio(ctx, at) {
+    for (const [i, ratio] of [1, 1.5, 2].entries()) {
+      const note = ctx.createOscillator();
+      note.type = 'triangle';
+      note.frequency.value = 523.25 * ratio;
+      const ring = ctx.createGain();
+      ring.gain.setValueAtTime(0.06, at + i * 0.07);
+      ring.gain.exponentialRampToValueAtTime(0.001, at + i * 0.07 + 0.45);
+      note.connect(ring).connect(sound.audio.master);
+      note.start(at + i * 0.07);
+      note.stop(at + i * 0.07 + 0.5);
+    }
+    const shimmer = ctx.createBufferSource();
+    shimmer.buffer = sound.audio.noise;
+    const high = ctx.createBiquadFilter();
+    high.type = 'highpass';
+    high.frequency.value = 5000;
+    const shape = ctx.createGain();
+    shape.gain.setValueAtTime(0.015, at + 0.14);
+    shape.gain.exponentialRampToValueAtTime(0.001, at + 0.6);
+    shimmer.connect(high).connect(shape).connect(sound.audio.master);
+    shimmer.start(at + 0.14, Math.random());
+    shimmer.stop(at + 0.62);
+  }
+
+  // A set of tricks lost: two soft notes falling, after the fold's own sound has had its moment.
+  function dud(ctx, at) {
+    for (const [i, freq] of [196, 164.81].entries()) {
+      const note = ctx.createOscillator();
+      note.type = 'triangle';
+      note.frequency.value = freq;
+      const ring = ctx.createGain();
+      ring.gain.setValueAtTime(0.04, at + 0.25 + i * 0.16);
+      ring.gain.exponentialRampToValueAtTime(0.001, at + 0.25 + i * 0.16 + 0.3);
+      note.connect(ring).connect(sound.audio.master);
+      note.start(at + 0.25 + i * 0.16);
+      note.stop(at + 0.25 + i * 0.16 + 0.32);
+    }
   }
 
   // A pump of a folded wing let go: a soft, low thunk of the cloth filling.
@@ -2026,5 +2199,6 @@ export function createGoodLift(host) {
     get glide() { return glide; },
     get streaks() { return streaks; },
     get world() { return world; },
+    get style() { return style; },
   };
 }

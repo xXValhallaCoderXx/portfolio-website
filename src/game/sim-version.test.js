@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { SIM_VERSION } from './sim-version.js';
-import { BRAKE, DIVE, EARS, FLIGHT, STALL } from './flight.js';
+import { BRAKE, EARS, FALL, FLIGHT, PITCH, ROLL, STALL, TIP, TUCK } from './flight.js';
 import * as SKY from './cloudbase-state.js';
 import { RUN } from './run-step.js';
 import { BAIT, MEET, MEET_POOL, SCATTER, THUNDER, TRAIL, WIND } from './meet-state.js';
@@ -14,7 +14,7 @@ import { ZONES, surfaceAt } from './terrain.js';
 // flown under one version is replayed under it for ever after, by every link and board row that
 // carries it, so the tables of a shipped version never change: a retune is a new version. Pinned
 // on the day a version ships; version 0 is the provisional one Good Lift is built under, and has none.
-const FINGERPRINT = Object.freeze({ 1: '145b525a', 2: 'ba74e01c', 3: '06097c0b', 4: 'aab53b23' });
+const FINGERPRINT = Object.freeze({ 1: '145b525a', 2: 'ba74e01c', 3: '06097c0b', 4: 'b3f2b8a7' });
 
 // Everything a run is flown by that is a number rather than code: the wing's tables, every one of
 // the sky's, the step's, the meet's (its plates off the trail and its rune gates and blessings with
@@ -30,7 +30,7 @@ function material() {
     for (let dx = -zone.r; dx <= zone.r; dx += 10) ground.push(Math.round(surfaceAt(zone.x + dx, zone.z + dz) * 100));
   }
   return {
-    FLIGHT, BRAKE, STALL, EARS, DIVE,
+    FLIGHT, BRAKE, STALL, EARS, PITCH, FALL, TUCK, ROLL, TIP,
     ...Object.fromEntries(Object.entries(SKY).filter(([name]) => name.startsWith('CLOUD_'))),
     RUN, MEET, TRAIL, MEET_POOL, WIND, THUNDER, BAIT, SCATTER, GATES, BLESSING, RUNE, BELLS, BELL_POOL, BEAST,
     ZONES: ZONES.map(({ x, z, r, h }) => ({ x, z, r, h })),
@@ -85,7 +85,7 @@ test('the fingerprint moves with every number in the tables, every landing zone 
   const print = fingerprint(tables);
   // Every table a run is flown by is in it, and the whole of the ground's grid.
   const names = Object.keys(tables);
-  for (const name of ['FLIGHT', 'BRAKE', 'STALL', 'EARS', 'DIVE', 'CLOUD_ZONE', 'CLOUD_GATE', 'CLOUD_LAUNCH', 'CLOUD_WEAR', 'CLOUD_HUNT', 'CLOUD_RAVENS', 'CLOUD_STRIKE', 'CLOUD_STORM', 'CLOUD_WIND', 'CLOUD_GUST', 'CLOUD_POOL',
+  for (const name of ['FLIGHT', 'BRAKE', 'STALL', 'EARS', 'PITCH', 'FALL', 'TUCK', 'ROLL', 'TIP', 'CLOUD_ZONE', 'CLOUD_GATE', 'CLOUD_LAUNCH', 'CLOUD_WEAR', 'CLOUD_HUNT', 'CLOUD_RAVENS', 'CLOUD_STRIKE', 'CLOUD_STORM', 'CLOUD_WIND', 'CLOUD_GUST', 'CLOUD_POOL',
     'MEET', 'TRAIL', 'MEET_POOL', 'WIND', 'THUNDER', 'BAIT', 'SCATTER', 'GATES', 'BLESSING', 'RUNE', 'BELLS', 'BELL_POOL', 'BEAST']) {
     assert.ok(names.includes(name), name);
   }

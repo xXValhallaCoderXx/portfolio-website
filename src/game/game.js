@@ -10,8 +10,10 @@ import { ACHIEVEMENTS, GAME_STORE, beltFor, readProgress, writeProgress, emptyPr
 import { scoreLanding, createLandingLeg } from './landing.js';
 import { sampleApproach, fjordBreeze } from './approach.js';
 import { crossesGateway } from './gateway.js';
-import { FLIGHT, BRAKE, createFlight, releaseFlight, settleFlight, stepFlight } from './flight.js';
+import { FLIGHT, BRAKE, PITCH, ROLL, createFlight, pitchPeak, releaseFlight, settleFlight, stepFlight } from './flight.js';
 import { stallEffects, brakeMeter } from './stall-effects.js';
+import { BANDS, WATCH, createSwingWatch } from './swing-watch.js';
+import { CUES, SWING_GAUGE, swingGauge } from './swing-gauge.js';
 import { holdHint } from './hints.js';
 import { fjordHint } from './fjord-hints.js';
 import { createLost } from './lost.js';
@@ -65,6 +67,23 @@ const KEYS = {
   KeyE: 'ears',
 };
 
+// The swing gauge's ticks, one for each band a trick is judged in (swing-watch.js BANDS), and its red
+// ends past the folds, placed once along its arms: across, the bank either way out to
+// SWING_GAUGE.side; up, the wing ahead out to SWING_GAUGE.ahead, from the middle two-thirds down.
+const tickAcross = (rad) => 50 + (rad * 50) / SWING_GAUGE.side;
+const tickAhead = (rad) => 67 - (rad * 67) / SWING_GAUGE.ahead;
+const SWING_TICKS = {
+  roll: BANDS.roll
+    .map((deg, i) => {
+      const at = tickAcross((deg * Math.PI) / 180);
+      return `<i class="t${i + 1}" style="left:${at.toFixed(1)}%"></i><i class="t${i + 1}" style="left:${(100 - at).toFixed(1)}%"></i>`;
+    })
+    .join(''),
+  pitch: BANDS.pitch.map((deg, i) => `<i class="t${i + 1}" style="top:${tickAhead((deg * Math.PI) / 180).toFixed(1)}%"></i>`).join(''),
+  rollRed: `<b style="left:${tickAcross(ROLL.limit).toFixed(1)}%;right:0"></b><b style="left:0;right:${tickAcross(ROLL.limit).toFixed(1)}%"></b>`,
+  pitchRed: `<b style="top:0;height:${tickAhead(PITCH.line).toFixed(1)}%"></b>`,
+};
+
 // Everything the game draws over its own canvas. The landing panel is not here: the page renders
 // that, so it can reuse the same section components as the traditional page.
 const MARKUP = /* html */ `
@@ -87,16 +106,23 @@ const MARKUP = /* html */ `
       <button data-do="fullscreen">[ <kbd>f: </kbd>fullscreen ]</button>
       <button data-do="exit">[ <kbd>esc: </kbd>exit ]</button>
       <aside class="fj-keys" hidden>
+        <button data-do="cloudbase" hidden>[ Good Lift ]</button>
+        <button data-do="quit-cloudbase" hidden>[ end run ]</button>
+        <div class="fj-keys-more">
+          <button data-do="sound">[ sound: on ]</button>
+          <button data-do="exit">[ <kbd>esc: </kbd>exit ]</button>
+        </div>
         <p>controls</p>
         <dl>
           <dt>← →</dt><dd>steer <span>or A D</span></dd>
           <dt>space</dt><dd>brake: the longer you hold, the deeper you sink <span>or ↓ S</span></dd>
           <dt>↑</dt><dd>speed bar: hands up, faster and sinking more <span>or W</span></dd>
           <dt>e</dt><dd>big ears, in Good Lift: fold the tips to sink fast, and the brake opens them</dd>
-          <dt>enter</dt><dd>take off again once landed <span>or space</span></dd>
-          <dt>shift</dt><dd>hold to speed time up</dd>
-          <dt>click</dt><dd>a lit pillar or its label, to fly there by itself</dd>
-          <dt>n</dt><dd>once landed, fly to the next place</dd>
+          <dt>tricks</dt><dd>swap ← → as each swing tops out for wingovers; brake as the wing is ahead and let go as it is behind to pitch it. The gauge under the pilot says when</dd>
+          <dt class="fj-keys-fjord">enter</dt><dd class="fj-keys-fjord">take off again once landed <span>or space</span></dd>
+          <dt class="fj-keys-fjord">shift</dt><dd class="fj-keys-fjord">hold to speed time up</dd>
+          <dt class="fj-keys-fjord">click</dt><dd class="fj-keys-fjord">a lit pillar or its label, to fly there by itself</dd>
+          <dt class="fj-keys-fjord">n</dt><dd class="fj-keys-fjord">once landed, fly to the next place</dd>
           <dt>m</dt><dd>map: pick a place to fly to</dd>
           <dt>r</dt><dd>start again from the launch</dd>
           <dt>l · f</dt><dd>sound · fullscreen</dd>
@@ -105,22 +131,23 @@ const MARKUP = /* html */ `
         <ul>
           <li>◀ ▶ steer</li>
           <li>▼ brake: hold longer to sink faster</li>
-          <li>▼ ▼ pressed together in Good Lift: big ears, held by either</li>
-          <li>» hold to speed time up</li>
-          <li>tap a lit pillar or its label to fly there by itself</li>
+          <li>▼ ▼ together, in Good Lift: big ears</li>
+          <li>◀ ▶ in turn for wingovers, ▼ in time to pitch: the gauge says when</li>
+          <li class="fj-keys-fjord">» hold to speed time up</li>
+          <li class="fj-keys-fjord">tap a lit pillar or its label to fly there by itself</li>
         </ul>
-        <p class="fj-keys-goal">land inside a lit ring to read that part of the page</p>
-        <div class="fj-keys-more">
-          <button data-do="sound">[ sound: on ]</button>
-          <button data-do="exit">[ <kbd>esc: </kbd>exit ]</button>
-        </div>
-        <button data-do="cloudbase" hidden>[ Good Lift ]</button>
-        <button data-do="quit-cloudbase" hidden>[ end run ]</button>
-        <p class="fj-keys-goal fj-keys-run" hidden>Good Lift: climb through a line every 250 m, where three judges light the lift · ravens circle where the air rises: turn the way they turn and climb beside them · fly past a flock's core on the side it turns to, and turn as that wing lifts: the first circle goes round the core · a circle centred on the core is a rep to depth, 5 kg: straighten as the lift surges, turn as it fades · the wing dives as the air drops away: tap the brake to catch it, or it tucks · a struck wing is pumped open: hold the brake a moment and let go, twice · Hrungnir throws kettlebells: push the bar, or turn off your line, and from 1,000 m the Beast, heavier, with longer warning · a strike sprays your plates: catch them as they sink · plates ride the gust fronts, hide under storm clouds and, after the horn, bait you down to the fog · at 500 m and 1,000 m rune stones rise: fly through one for its blessing · ← and → together push the bar, as ◀ and ▶ do · keep out of the storm clouds: their lightning shows every thermal for a moment · the ring round you is how far you glide before the fog: cyan, a flock is in reach; amber, climb first · big ears (E, or ▼ ▼ together) sink you fast and cannot stall: fly out of the lift with them, they will not beat a core · past the arch the brake can stall the wing, and a high stall ends in a dive to catch: let go, then tap · time does not speed up in a run<span class="for-keys"> · B switches the music</span></p>
+        <p class="fj-keys-goal fj-keys-fjord">land inside a lit ring to read that part of the page</p>
+        <p class="fj-keys-goal fj-keys-run" hidden>Good Lift: climb through a line every 250 m, where three judges light the lift · ravens circle where the air rises: turn the way they turn and climb beside them · fly past a flock's core on the side it turns to, and turn as that wing lifts: the first circle goes round the core · a circle centred on the core is a rep to depth, 5 kg: straighten as the lift surges, turn as it fades · the wing swings over you: it surges ahead as the air drops away or a brake is let go, so brake till it swings back, or high up it tucks · a struck wing is pumped open: hold the brake a moment and let go, twice · Hrungnir throws kettlebells: push the bar, or turn off your line, and from 1,000 m the Beast, heavier, with longer warning · a strike sprays your plates: catch them as they sink · plates ride the gust fronts, hide under storm clouds and, after the horn, bait you down to the fog · at 500 m and 1,000 m rune stones rise: fly through one for its blessing · ← and → together push the bar, as ◀ and ▶ do · keep out of the storm clouds: their lightning shows every thermal for a moment · the ring round you is how far you glide before the fog: cyan, a flock is in reach; amber, climb first · big ears (E, or ▼ ▼ together) sink you fast and cannot stall: fly out of the lift with them, they will not beat a core · past the arch the brake can stall the wing, and a high stall ends in a surge to catch: let go, then brake · tricks earn style, never kilograms: pitch the wing bigger and catch it, or link wingovers, and land the set by flying level; above 260 m an overdone one tucks the wing or folds a tip · time does not speed up in a run<span class="for-keys"> · B switches the music</span></p>
       </aside>
     </nav>
   </div>
   <div class="fj-toasts"></div>
+  <div class="fj-swing" data-on="" data-mode="pitch" data-cue="" data-band="0" data-near="" data-safe="1" aria-hidden="true">
+    <i class="fj-swing-x">${SWING_TICKS.roll}${SWING_TICKS.rollRed}</i>
+    <i class="fj-swing-y">${SWING_TICKS.pitch}${SWING_TICKS.pitchRed}</i>
+    <span class="fj-swing-at"><span><b></b></span></span>
+  </div>
+  <div class="fj-cue" data-cue="" data-live="" data-good="" aria-hidden="true"><i></i><b></b><small></small></div>
   <div class="fj-brake" data-state="" aria-hidden="true"><b>brake</b><span><i></i><i></i></span></div>
   <div class="fj-hint"></div>
   <section class="fj-map window" hidden>
@@ -296,7 +323,9 @@ export function createGame(stage, hooks = {}) {
   const g = createFlight(new THREE.Vector3(START.x, START.y, START.z));
   g.yaw = START.yaw;
   // What the pilot asks of the wing and the air it is in, filled afresh at every step.
-  const controls = { turn: 0, brake: false, bar: false, ears: false, locked: false, harsh: false, linger: false, dive: false, climb: null };
+  const controls = { turn: 0, brake: false, bar: false, ears: false, locked: false, harsh: false, linger: false, swing: false, folds: false, climb: null };
+  // What the wing's swings are doing over the fjord (swing-watch.js); a run keeps its own.
+  const fjordWatch = createSwingWatch();
   const air = { lift: 0, sink: 0, windX: 0, windZ: 0, calm: true, rough: 0, clearance: Infinity };
   const input = { left: false, right: false, bar: false, brake: false, ears: false, boost: false };
   // Who is holding each control. Two keys, or a key and a button, can hold the same one, and it
@@ -335,14 +364,23 @@ export function createGame(stage, hooks = {}) {
   // folded of the two. `stalled` is whether the stall has been heard, `deep` seconds the brake has
   // been deep, and `meter` what the brake meter shows (`meterShown`, what was last written to the page).
   // `stop` is the wall seconds a good lift still holds the flight still for (written by the run).
-  // `dive` and `tuck` are how far the wing is shown dived ahead and tucked under, and `heave` the
-  // side of the wing over a core lifted as the moment to turn in comes (-1 left to 1 right, written
-  // by the run and dying away).
+  // `tuck` is how far the wing is shown tucked under, and `heave` the side of the wing over a core
+  // lifted as the moment to turn in comes (-1 left to 1 right, written by the run and dying away).
   const effects = {
     fold: 0, veil: 0, veilShown: 0, shake: 0, gaze: 0, want: { fold: 0, veil: 0, shake: 0, gaze: 0 }, floor: -Infinity, gazeShown: -1, stop: 0,
-    foldLeft: 0, foldRight: 0, luff: 0, stall: { left: 0, right: 0, luff: 0, shake: 0, dive: 0, tuck: 0 }, stalled: false, stallSide: 0, deep: 0,
-    dive: 0, tuck: 0, heave: 0,
+    foldLeft: 0, foldRight: 0, luff: 0, stall: { left: 0, right: 0, luff: 0, shake: 0, tuck: 0 }, stalled: false, stallSide: 0, deep: 0,
+    tuck: 0, heave: 0,
     meter: { fill: 0, red: 0, state: '' }, meterShown: { fill: -1, red: -1, state: null }, fjordHint: { line: '', since: 0 },
+    // The swing gauge (swing-gauge.js) and what of it was last written to the page; the catches and
+    // the swings through the bottom already heard.
+    gauge: { on: false, left: 0, mode: 'pitch', cue: 0, coming: 0, soon: 1, x: 0, y: 0, band: 0, near: false, safe: true },
+    // The prompt by the wing as last written, and the hands on time: until when it says so, and how.
+    cueShown: { coming: -1, live: null, ring: -1, x: NaN, y: NaN, good: null },
+    good: { until: -Infinity, word: '' },
+    // When on this flight over the fjord a trick was first flown (-1 for not yet).
+    trickAt: -1,
+    gaugeShown: { on: null, x: null, y: null, mode: null, cue: null, told: null, band: null, near: null, safe: null },
+    heard: { catches: 0, pitch: 0, roll: 0 },
   };
   const veilEl = $('.fj-veil');
   const strikeEl = $('.fj-strike');
@@ -354,6 +392,11 @@ export function createGame(stage, hooks = {}) {
   const meterEl = $('.fj-brake');
   const [meterWord, meterTrack] = meterEl.children;
   const [meterFill, meterRed] = meterTrack.children;
+  const swingEl = $('.fj-swing');
+  const swingAcross = $('.fj-swing-at');
+  const swingUp = swingAcross.firstElementChild;
+  const cueEl = $('.fj-cue');
+  const [cueRing, cueSign, cueWord] = cueEl.children;
   // For looking at a run from the console: a seed to fly again, and the flight held still.
   let pinnedSeed = null;
   let held = false;
@@ -415,7 +458,7 @@ export function createGame(stage, hooks = {}) {
   function clearRunEffects() {
     effects.fold = effects.veil = effects.veilShown = effects.shake = 0;
     effects.foldLeft = effects.foldRight = effects.luff = effects.deep = effects.stallSide = 0;
-    effects.dive = effects.tuck = effects.heave = 0;
+    effects.tuck = effects.heave = 0;
     effects.want.fold = effects.want.veil = effects.want.shake = effects.want.gaze = 0;
     effects.floor = -Infinity;
     effects.stop = 0;
@@ -655,9 +698,11 @@ export function createGame(stage, hooks = {}) {
     controls.turn = turn;
     controls.brake = input.brake && !auto;
     controls.bar = input.bar && !auto;
-    // The big ears and the wing's dives are a run's: over the fjord neither is ever asked for.
+    // The big ears are a run's: over the fjord they are never asked for. The wing swings here as in
+    // a run, but nothing it does folds it: a surge past its line is only stopped.
     controls.ears = false;
-    controls.dive = false;
+    controls.swing = true;
+    controls.folds = false;
     controls.locked = false;
     controls.harsh = false;
     controls.linger = false;
@@ -678,6 +723,7 @@ export function createGame(stage, hooks = {}) {
       controls.climb = clamp((path - g.pos.y) * 0.9, -6, 6);
     }
     stepFlight(g, controls, air, dt);
+    fjordWatch.step(dt, g, false, controls);
     afterStep(dt, false);
 
     const ground = surfaceAt(g.pos.x, g.pos.z);
@@ -710,6 +756,28 @@ export function createGame(stage, hooks = {}) {
   // how long the brake has been deep, the achievements earned in the air and the rune stones.
   // `collapsed` says a raven strike had the wing, which ends a stall with no sound of refilling.
   function afterStep(dt, collapsed) {
+    // A big swing caught and brought calm snaps the lines taut, over the fjord as in a run; a swing
+    // through its bottom fast, fore and aft or in a wingover, rushes past.
+    const watch = mode === 'cloudbase' ? run?.world.watch.state : fjordWatch.state;
+    if (watch) {
+      if (watch !== effects.heard.watch) effects.heard = { watch, catches: watch.catches, timed: watch.timed, pitch: g.pitch, roll: g.roll };
+      if (watch.catches > effects.heard.catches) {
+        play('catch', 0.3, snap);
+        effects.good.until = time + 0.9;
+        effects.good.word = 'CAUGHT';
+      } else if (watch.timed > effects.heard.timed) {
+        // The hands on time: a swap at a wingover's top, a press or a let-go at a pitched swing's peak.
+        play('good', 0.1, chime, watch.timedKind === 3 ? -0.4 * watch.topSide : 0);
+        effects.good.until = time + 0.45;
+        effects.good.word = 'NICE';
+      }
+      effects.heard.catches = watch.catches;
+      effects.heard.timed = watch.timed;
+    }
+    if (g.pitch * effects.heard.pitch < 0 && Math.abs(g.pitchRate) > 0.9) play('swoosh', 0.35, swoosh, Math.min(1, Math.abs(g.pitchRate) / 2.5));
+    if (g.roll * effects.heard.roll < 0 && Math.abs(g.rollRate) > 1.2) play('swoosh', 0.35, swoosh, Math.min(1, Math.abs(g.rollRate) / 3));
+    effects.heard.pitch = g.pitch;
+    effects.heard.roll = g.roll;
     if (g.stall > 0 && !effects.stalled) {
       effects.stalled = true;
       effects.stallSide = g.stallSide;
@@ -794,6 +862,9 @@ export function createGame(stage, hooks = {}) {
     g.pos.set(x, y, z);
     g.yaw = yaw;
     settleFlight(g);
+    fjordWatch.reset();
+    effects.heard.catches = 0;
+    effects.trickAt = -1;
     climbStart = null;
     effects.gaze = 0;
     // A new flight starts with nothing said, and nothing of the last stall still showing. Nor is
@@ -912,16 +983,31 @@ export function createGame(stage, hooks = {}) {
   const chase = new THREE.Vector3();
   const lookAt = new THREE.Vector3();
 
+  // The heading the chase looks along: the glider's own, but carried round more slowly through a
+  // wingover, so the glider is seen carving across the picture instead of the world swinging round
+  // with it; and how far the camera stands back for it. Outside a wingover the heading is the
+  // glider's own, exactly, and the camera where it always was.
+  let heading = g.yaw;
+  let swung = 0;
+  function followHeading(dt) {
+    swung = smoothstep(0.1, 0.4, Math.abs(g.roll));
+    const off = wrapAngle(g.yaw - heading);
+    if (swung === 0 && Math.abs(off) < 1e-3) heading = g.yaw;
+    else heading += off * (1 - Math.exp(-dt * (2 + 30 * (1 - swung))));
+  }
+
   function chaseTarget() {
     // With no gaze this is the ordinary chase: behind, a little above, looking just ahead.
-    forward.set(Math.sin(g.yaw), 0, -Math.cos(g.yaw));
-    chase.copy(g.pos).addScaledVector(forward, (camera.aspect < 1 ? -34 : -26) - GAZE.back * effects.gaze);
+    forward.set(Math.sin(heading), 0, -Math.cos(heading));
+    chase.copy(g.pos).addScaledVector(forward, (camera.aspect < 1 ? -34 : -26) - GAZE.back * effects.gaze - 4 * swung);
     chase.y += 9.5 - GAZE.drop * effects.gaze;
     lookAt.copy(g.pos).addScaledVector(forward, 14);
     lookAt.y += 3 + GAZE.lift * effects.gaze;
   }
 
   function snapCamera() {
+    heading = g.yaw;
+    swung = 0;
     chaseTarget();
     camera.position.copy(chase);
   }
@@ -1043,6 +1129,7 @@ export function createGame(stage, hooks = {}) {
         hintEl.style.setProperty('--gaze', String(shown / 50));
       }
     }
+    followHeading(dt);
     chaseTarget();
     if (launchReveal && mode === 'flying') {
       launchReveal.age += dt;
@@ -1061,7 +1148,9 @@ export function createGame(stage, hooks = {}) {
     camera.position.y = Math.max(camera.position.y, surfaceAt(camera.position.x, camera.position.z) + 4);
     if (mode === 'cloudbase') camera.position.y = Math.max(camera.position.y, effects.floor + 4);
     camera.lookAt(lookAt);
-    camera.rotateZ(-g.bank * 0.25);
+    // The picture tilts with a quarter of a turn's bank, and with a tenth of a wingover's swing
+    // on top of it: none of the swing for whoever asks for less motion.
+    camera.rotateZ(-(g.lean + (calm ? 0 : 0.4 * g.roll)) * 0.25);
     if (effects.shake > 0) {
       // A turn of the head only, after the aim is set, so it can never drift.
       camera.rotateX(effects.shake * Math.sin(time * 53.1));
@@ -1184,6 +1273,14 @@ export function createGame(stage, hooks = {}) {
     fjordMoment.sinking = g.vy < 0;
     fjordMoment.airtime = airtime;
     fjordMoment.touch = touch;
+    // The wing's swings: a surge wanting catching, the first trick of the flight for a few seconds,
+    // and a trick under way.
+    const swung = fjordWatch.state;
+    fjordMoment.pitching = swung.pumping === 1;
+    fjordMoment.wingover = swung.linking === 1 || swung.chain >= 2;
+    if ((fjordMoment.pitching || fjordMoment.wingover) && effects.trickAt < 0) effects.trickAt = airtime;
+    fjordMoment.safeTricks = effects.trickAt >= 0 && airtime - effects.trickAt < 3;
+    fjordMoment.surging = g.tuck === 0 && g.pitchRate < 0 && pitchPeak(g) < -WATCH.surge;
     // Held on the frame clock, not the flight's: under boost the flight's runs three times as fast,
     // and a line has to stay up long enough to read in real time.
     return holdHint(effects.fjordHint, fjordHint(fjordMoment), time);
@@ -1192,14 +1289,14 @@ export function createGame(stage, hooks = {}) {
   // The brake meter: two bars scaled across one track, written only when they change and only as
   // transforms, so the page never lays itself out again for them.
   const SCALES = Array.from({ length: 201 }, (_, i) => `scaleX(${i / 200})`);
-  const METER_WORDS = { light: 'brake', late: 'brake', deep: 'deep', near: 'deep', stalled: 'stall', ears: 'ears', dive: 'catch' };
+  const METER_WORDS = { light: 'brake', late: 'brake', deep: 'deep', near: 'deep', stalled: 'stall', ears: 'ears' };
   function updateMeter() {
     // Nothing to show with the map open, while flying itself, or anywhere but in the air.
     const shown = isAirborne() && !mapOpen && !auto;
-    // Only a run can stall, so only a run's meter ever shows red; and only a run's wing dives or
-    // takes its ears in.
+    // Only a run can stall, so only a run's meter ever shows red; and only a run's wing takes its
+    // ears in.
     const running = shown && mode === 'cloudbase';
-    brakeMeter(shown ? g.brake : 0, running ? g.stallLoad : 0, shown ? g.stall : 0, effects.meter, running ? g.ears : 0, running ? g.dive : 0);
+    brakeMeter(shown ? g.brake : 0, running ? g.stallLoad : 0, shown ? g.stall : 0, effects.meter, running ? g.ears : 0);
     const was = effects.meterShown;
     const fill = Math.round(effects.meter.fill * 200);
     const red = Math.round(effects.meter.red * 200);
@@ -1212,6 +1309,100 @@ export function createGame(stage, hooks = {}) {
       // The word stays as it was while the meter fades out.
       if (METER_WORDS[was.state]) meterWord.textContent = METER_WORDS[was.state];
     }
+  }
+
+  // The swing gauge (swing-gauge.js): its dot moved by transforms from these, written only when
+  // they change, as are its states. As a moment to act opens, the gauge lights it, the button to
+  // press shows it on a touch screen, and a knock says it.
+  const SWING_ACROSS = Array.from({ length: 201 }, (_, i) => `translateX(${(i - 100) / 2}%)`);
+  const SWING_UP = Array.from({ length: 101 }, (_, i) => `translateY(${i - 67}%)`);
+  const SWING_CUES = ['', 'catch', 'press', 'release', 'left', 'right'];
+  function updateGauge(dt) {
+    const gauge = effects.gauge;
+    const shown = isAirborne() && !mapOpen && !auto;
+    const watch = mode === 'cloudbase' ? run?.world.watch.state : fjordWatch.state;
+    if (shown && watch) swingGauge(g, watch, mode === 'cloudbase' && controls.folds, dt, gauge);
+    else {
+      gauge.on = false;
+      gauge.left = 0;
+      gauge.cue = 0;
+    }
+    const was = effects.gaugeShown;
+    const on = gauge.on ? '1' : '';
+    if (on !== was.on) swingEl.dataset.on = was.on = on;
+    const cue = gauge.on ? SWING_CUES[gauge.cue] : '';
+    if (cue !== was.cue) swingEl.dataset.cue = was.cue = cue;
+    // Knocked and rung on its button only as the prompt by the wing tells it too: the first top
+    // after a reversal, as a circle turned the other way has, shows its swap on the gauge alone.
+    const told = cue && gauge.coming === gauge.cue ? cue : '';
+    if (told !== was.told) {
+      if (told) play('tock', 0.12, tock, told === 'left' ? -0.5 : told === 'right' ? 0.5 : 0, told === 'release');
+      touchEl.dataset.cue = was.told = told;
+    }
+    if (!gauge.on) return;
+    if (gauge.x !== was.x) swingAcross.style.transform = SWING_ACROSS[(was.x = gauge.x) + 100];
+    if (gauge.y !== was.y) swingUp.style.transform = SWING_UP[(was.y = gauge.y) + 67];
+    if (gauge.mode !== was.mode) swingEl.dataset.mode = was.mode = gauge.mode;
+    if (gauge.band !== was.band) swingEl.dataset.band = was.band = gauge.band;
+    const near = gauge.near ? '1' : '';
+    if (near !== was.near) swingEl.dataset.near = was.near = near;
+    const safe = gauge.safe ? '1' : '';
+    if (safe !== was.safe) swingEl.dataset.safe = was.safe = safe;
+  }
+
+  // The prompt to act on a swing (swing-gauge.js's `coming`): a big sign by the wing, a ▼ to catch a
+  // surge or to brake, a ▽ to let go, ◀ or ▶ beside the wing to swap a wingover's turn that way, with
+  // a ring that closes on it as its moment comes, lit as the moment does; and, the hands on time, a
+  // tick (afterStep). Placed over the wing each frame it shows, and written only as it changes.
+  const CUE_SIGNS = ['', '▼', '▼', '▽', '◀', '▶'];
+  const CUE_WORDS = ['', 'CATCH', 'BRAKE', 'LET GO', 'SWAP', 'SWAP'];
+  const CUE_RINGS = Array.from({ length: 41 }, (_, i) => `scale(${(1 + (1.6 * i) / 40).toFixed(3)})`);
+  const cueAt = new THREE.Vector3();
+  function updateCue() {
+    const gauge = effects.gauge;
+    const was = effects.cueShown;
+    const good = time < effects.good.until && isAirborne() && !mapOpen;
+    const coming = gauge.on ? gauge.coming : 0;
+    if (!coming && !good) {
+      if (was.coming !== 0 || was.good !== '') {
+        was.coming = 0;
+        was.good = was.live = '';
+        cueEl.dataset.cue = cueEl.dataset.good = cueEl.dataset.live = '';
+      }
+      return;
+    }
+    // Over the wing, and for a swap toward the side it swaps to, kept on the screen.
+    cueAt.copy(g.pos);
+    cueAt.y += 11;
+    cueAt.project(camera);
+    const side = coming === CUES.left ? -1 : coming === CUES.right ? 1 : 0;
+    const x = Math.round(clamp((cueAt.x * 0.5 + 0.5) * view.width + side * Math.min(130, view.width * 0.28), 44, view.width - 44));
+    const y = Math.round(clamp((-cueAt.y * 0.5 + 0.5) * view.height, 70, view.height - 120));
+    if (x !== was.x || y !== was.y) {
+      was.x = x;
+      was.y = y;
+      cueEl.style.transform = `translate(${x}px, ${y}px)`;
+    }
+    const sayGood = good ? effects.good.word : '';
+    if (sayGood !== was.good) {
+      was.good = sayGood;
+      cueEl.dataset.good = sayGood ? '1' : '';
+      if (sayGood) {
+        cueSign.textContent = '✓';
+        cueWord.textContent = sayGood;
+      } else was.coming = -1;
+    }
+    if (sayGood) return;
+    if (coming !== was.coming) {
+      was.coming = coming;
+      cueEl.dataset.cue = SWING_CUES[coming];
+      cueSign.textContent = CUE_SIGNS[coming];
+      cueWord.textContent = CUE_WORDS[coming];
+    }
+    const live = gauge.cue !== 0 ? '1' : '';
+    if (live !== was.live) cueEl.dataset.live = was.live = live;
+    const ring = Math.round(clamp(gauge.soon, 0, 1) * 40);
+    if (ring !== was.ring) cueRing.style.transform = CUE_RINGS[(was.ring = ring)];
   }
 
   function updateHud() {
@@ -1597,14 +1788,104 @@ export function createGame(stage, hooks = {}) {
     play('refill', 1, refill, side * 0.3);
   }
 
+  // The moment to act on a swing: a short wooden knock, from the side to turn to, lighter for a
+  // let-go. Nothing like the judges' bright clack.
+  function tock(ctx, at, pan = 0, light = false) {
+    const out = pan ? panned(ctx, pan) : audio.master;
+    const knock = ctx.createOscillator();
+    knock.frequency.setValueAtTime(light ? 760 : 520, at);
+    knock.frequency.exponentialRampToValueAtTime(light ? 600 : 410, at + 0.07);
+    const body = ctx.createGain();
+    body.gain.setValueAtTime(light ? 0.05 : 0.08, at);
+    body.gain.exponentialRampToValueAtTime(0.001, at + 0.07);
+    knock.connect(body).connect(out);
+    knock.start(at);
+    knock.stop(at + 0.08);
+    const tap = ctx.createBufferSource();
+    tap.buffer = audio.noise;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = light ? 1700 : 1100;
+    band.Q.value = 5;
+    const click = ctx.createGain();
+    click.gain.setValueAtTime(light ? 0.05 : 0.08, at);
+    click.gain.exponentialRampToValueAtTime(0.001, at + 0.03);
+    tap.connect(band).connect(click).connect(out);
+    tap.start(at, Math.random());
+    tap.stop(at + 0.04);
+  }
+
+  // The hands on time on a swing: two quick bright notes up a fifth, from the side swapped from.
+  function chime(ctx, at, pan = 0) {
+    const out = pan ? panned(ctx, pan) : audio.master;
+    for (const [i, freq] of [880, 1318.5].entries()) {
+      const note = ctx.createOscillator();
+      note.type = 'triangle';
+      note.frequency.value = freq;
+      const ring = ctx.createGain();
+      ring.gain.setValueAtTime(0.055, at + i * 0.06);
+      ring.gain.exponentialRampToValueAtTime(0.001, at + i * 0.06 + 0.22);
+      note.connect(ring).connect(out);
+      note.start(at + i * 0.06);
+      note.stop(at + i * 0.06 + 0.24);
+    }
+  }
+
+  // A swing caught: the lines coming taut under the brake, a short dry snap with a low knock in it.
+  function snap(ctx, at) {
+    const crack = ctx.createBufferSource();
+    crack.buffer = audio.noise;
+    const high = ctx.createBiquadFilter();
+    high.type = 'highpass';
+    high.frequency.value = 2200;
+    const shape = ctx.createGain();
+    shape.gain.setValueAtTime(0.12, at);
+    shape.gain.exponentialRampToValueAtTime(0.001, at + 0.05);
+    crack.connect(high).connect(shape).connect(audio.master);
+    crack.start(at, Math.random());
+    crack.stop(at + 0.06);
+    const knock = ctx.createOscillator();
+    knock.frequency.setValueAtTime(140, at);
+    knock.frequency.exponentialRampToValueAtTime(90, at + 0.08);
+    const body = ctx.createGain();
+    body.gain.setValueAtTime(0.09, at);
+    body.gain.exponentialRampToValueAtTime(0.001, at + 0.1);
+    knock.connect(body).connect(audio.master);
+    knock.start(at);
+    knock.stop(at + 0.11);
+  }
+
+  // A swing through its bottom: the wing rushing past overhead, a soft sweep of air up and down
+  // the canopy's own band, louder the faster it goes (`level`, 0 to 1).
+  function swoosh(ctx, at, level = 1) {
+    const air = ctx.createBufferSource();
+    air.buffer = audio.noise;
+    air.loop = true;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = 0.9;
+    band.frequency.setValueAtTime(500, at);
+    band.frequency.exponentialRampToValueAtTime(1100, at + 0.18);
+    band.frequency.exponentialRampToValueAtTime(600, at + 0.4);
+    const shape = ctx.createGain();
+    shape.gain.setValueAtTime(0, at);
+    shape.gain.linearRampToValueAtTime(0.06 * level, at + 0.15);
+    shape.gain.exponentialRampToValueAtTime(0.001, at + 0.42);
+    air.connect(band).connect(shape).connect(audio.master);
+    air.start(at, Math.random());
+    air.stop(at + 0.44);
+  }
+
   function updateAudio() {
     if (!audio) return;
     const now = audio.ctx.currentTime;
     const flying = isAirborne() && !mapOpen;
     const running = mode === 'cloudbase' && !mapOpen;
     const rush = mode === 'lost' ? Math.min(0.14, 0.01 + Math.abs(g.vy) * 0.005) : 0.01;
-    // The wind in the lines follows the airspeed: louder and brighter on the bar, dull on the brake.
-    audio.wind.gain.setTargetAtTime(flying ? 0.02 + g.speed * 0.004 : rush, now, 0.3);
+    // The wind in the lines follows the airspeed: louder and brighter on the bar, dull on the brake,
+    // and quicker to while the wing swings, so it rises at every bottom of a swing.
+    const swinging = Math.abs(g.roll) > 0.3 || Math.abs(g.pitch) > 0.4;
+    audio.wind.gain.setTargetAtTime(flying ? 0.02 + g.speed * 0.004 : rush, now, swinging ? 0.12 : 0.3);
     const fogNear = running ? 1 - clamp((g.pos.y - effects.floor) / 140, 0, 1) : 0;
     // Inside a storm cloud the same rumble swells and the wind goes dull.
     const inCloud = running ? effects.veil : 0;
@@ -1873,13 +2154,10 @@ export function createGame(stage, hooks = {}) {
       // Put right out once it is a trace, as the folds are: while it is above nought the wing works
       // out a flutter for every point of its cloth.
       if (effects.luff < 0.003 && effects.stall.luff === 0) effects.luff = 0;
-      // A dive throws the wing ahead fast and it comes back as it is caught; a tuck folds the
-      // leading edge under at once and opens over a few tenths of a second.
-      effects.dive += (effects.stall.dive - effects.dive) * Math.min(1, elapsed * (effects.stall.dive > effects.dive ? 9 : 4));
+      // A tuck folds the leading edge under at once and opens over a few tenths of a second.
       effects.tuck += (effects.stall.tuck - effects.tuck) * Math.min(1, elapsed * (effects.stall.tuck > effects.tuck ? 18 : 3));
-      if (effects.dive < 0.003 && effects.stall.dive === 0) effects.dive = 0;
       if (effects.tuck < 0.003 && effects.stall.tuck === 0) effects.tuck = 0;
-    } else effects.foldLeft = effects.foldRight = effects.luff = effects.dive = effects.tuck = 0;
+    } else effects.foldLeft = effects.foldRight = effects.luff = effects.tuck = 0;
     // The lift of the wing over a core is a moment's: it dies away, and is put right out once a trace.
     effects.heave -= effects.heave * Math.min(1, elapsed * 3);
     if (Math.abs(effects.heave) < 0.001) effects.heave = 0;
@@ -1935,12 +2213,15 @@ export function createGame(stage, hooks = {}) {
       // A gust rocking the wing is only motion; the flutter of a coming stall says something, and stays.
       rough: airborne && !calm ? air.rough : 0,
       ears: airborne ? g.ears : 0,
-      dive: effects.dive,
       tuck: effects.tuck,
+      // The wing's own swing over the pilot, back to overhead on the ground.
+      swing: airborne ? g.pitch : 0,
       // Gentler for whoever asks for less motion, and still there.
       heave: calm ? effects.heave * 0.5 : effects.heave,
     });
     updateMeter();
+    updateGauge(elapsed);
+    updateCue();
     updateCamera(elapsed);
 
     terrain.update(time);
@@ -1992,6 +2273,9 @@ export function createGame(stage, hooks = {}) {
     // Feeling for the core: how fast the lift is climbing, and the surges felt so far; and the
     // moment to turn into one (run-entry.js), and the moments called so far.
     get surge() { return run?.surge.state ?? null; },
+    // The wing's swings as watched (swing-watch.js), over the fjord or in the run, and a run's style.
+    get watch() { return mode === 'cloudbase' ? run?.world.watch.state ?? null : fjordWatch.state; },
+    get style() { return run?.style.state ?? null; },
     get entry() { return run?.entry.state ?? null; },
     // What the run's hint was last chosen from: its facts, as the readouts last wrote them.
     get hintFacts() { return run?.hintFacts ?? null; },
@@ -1999,7 +2283,8 @@ export function createGame(stage, hooks = {}) {
       return {
         seed: run?.sky.state.seed ?? null, fold: effects.fold, foldLeft: effects.foldLeft, foldRight: effects.foldRight, luff: effects.luff,
         veil: effects.veil, gaze: effects.gaze, hook: run?.world.hook ?? 1, stalls: run?.world.stalls ?? 0, meter: { ...effects.meter }, haste, stop: effects.stop,
-        tucks: run?.world.tucks ?? 0, pumps: run?.world.pump.n ?? 0, dive: effects.dive, tuck: effects.tuck, heave: effects.heave,
+        tucks: run?.world.tucks ?? 0, tips: run?.world.tips ?? 0, pumps: run?.world.pump.n ?? 0, tuck: effects.tuck, heave: effects.heave,
+        pitch: g.pitch, pitchRate: g.pitchRate, bank: g.bank, gauge: { ...effects.gauge },
       };
     },
     // fjord.seed(n) flies the same Cloudbase sky every run until fjord.seed() lets it go;

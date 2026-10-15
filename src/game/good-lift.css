@@ -20,6 +20,91 @@
   color: var(--ember);
 }
 
+/* The style's row, once a set of tricks has landed: never part of the lifting, so in plain white,
+   flaring cyan as a set lands. */
+.cloudbase .fj-hud > dl:not([data-style]) .fj-trick {
+  display: none;
+}
+
+.cloudbase .fj-hud > dl [data-hud='style'] {
+  color: var(--text);
+}
+
+.cloudbase .fj-hud > dl [data-hud='style'].lifted {
+  animation: fj-lifted 0.6s ease-out both;
+}
+
+/* ---- the set of tricks in hand, over the swing gauge, stamped as it lands or is lost: only over
+   a run under way, never over its sheet, the fjord, the page or the missing page */
+
+.fj-style {
+  display: none;
+  position: absolute;
+  right: 0;
+  bottom: 170px;
+  left: 0;
+  margin: 0;
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: center;
+  text-shadow: 0 0 6px var(--bg);
+  pointer-events: none;
+}
+
+.fj-style.landed {
+  color: var(--cyan);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  animation: fj-stamp 0.35s ease-out both;
+}
+
+.fj-style.lost {
+  color: #ff546b;
+  text-decoration: line-through;
+}
+
+@keyframes fj-stamp {
+  from {
+    opacity: 0;
+    scale: 1.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fj-style.landed {
+    animation: none;
+  }
+}
+
+.cloudbase .fj-style {
+  display: block;
+}
+
+@media (max-width: 560px) {
+  .fj-style {
+    bottom: 162px;
+  }
+}
+
+@media (pointer: coarse) {
+  .fj-style {
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 180px);
+  }
+}
+
+/* Held sideways, beside the gauge rather than over it, clear of the right-hand buttons. */
+@media (pointer: coarse) and (orientation: landscape) {
+  .fj-style {
+    right: auto;
+    bottom: calc(max(8px, env(safe-area-inset-bottom)) + 30px);
+    left: calc(50% + 85px);
+    max-width: calc(50% - 85px - 150px);
+    text-align: left;
+  }
+}
+
 /* ---- feeling for the core: a surge flares the vario, and a rep to depth stamps the bar */
 
 /* For whoever has the sound off: the climb's readout flares white as the lift surges. */
@@ -761,6 +846,15 @@
 
 .good-lift-total strong {
   color: var(--cyan);
+}
+
+/* The style beside the TOTAL: the pilot's own flourish, in plain white, never the lifting's cyan. */
+.good-lift-total .good-lift-style {
+  color: var(--text);
+}
+
+.good-lift-result .good-lift-tricks {
+  font-size: 12px;
 }
 
 .good-lift-cost {

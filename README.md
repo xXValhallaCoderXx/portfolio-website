@@ -54,13 +54,36 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     20 m circle by weight shift, and no stall, for the brake is off the wing. They open by
     themselves over 1.5 s once let go, or at once with a touch of the brake. They fly a pilot out
     of lift and down, never out of a core where it stands: in 20 m/s of lift they still climb.
-  - **The dive.** Above 260 m, as the air drops away under the wing (climbing into a storm
-    cloud's base, leaving lift late, dodging on the bar out of a core) or a deep brake is let
-    go, the wing pitches ahead of the pilot: tap the brake within 0.8 s to catch it, or its
-    leading edge tucks under for 0.8 s, about 10 m. A brake already biting catches it, and so do
-    the ears. No light is lost to a tuck.
-  - **The stall's second beat.** A stall above 260 m ends in a dive to catch: let go, then tap.
+  - **The swing.** The wing swings fore and aft over the pilot, a 2.8 s pendulum (`PITCH` in
+    `flight.js`), here and over the fjord. Taking up the brake swings it back and letting go swings
+    it ahead; a deep brake let go, the air dropping away under the wing (climbing into a storm
+    cloud's base, leaving lift late, dodging on the bar out of a core) and a harsh stall flying
+    again surge it far ahead. Braked as it surges, and held till it swings back, it is caught:
+    about 0.5 s in, it peaks under 45°. Left alone, above 260 m it crosses its line (57°) and the
+    leading edge tucks under for 0.8 s, about 10 m; lower, and over the fjord, it is only stopped
+    there. A light brake already biting holds it. No light is lost to a tuck. Braking as the wing
+    swings back instead makes the swing bigger: that is pitching.
+  - **The stall's second beat.** A stall above 260 m ends in a surge to catch: let go, then brake.
     A brake held all through the stall has lost its grip, so it must be let go and pressed again.
+  - **Wingovers.** A turn reversed as its bank tops out swings the wing further the other way
+    (`ROLL`): 45° from one swap, 62° by the third, 74° by the sixth, climbing and slowing at each
+    top and diving fast through each bottom, and always losing height. Swapped too fast or too
+    slow it never builds. Above 260 m a wingover past 78° unloads the outer wing and its tip folds
+    for a second (`TIP`): a hook toward it and about 13 m, and no light.
+  - **Tricks and style.** Pitching a swing bigger (three forward peaks in a row) and linked
+    wingovers (from the second top) are tricks, scored in style points by how far each swing
+    goes, more for each linked (`meet-style.js`). A set lands once the wing flies level and calm
+    for a second with three or more in it; a tuck, a tip, a stall or a strike loses it. Style only
+    counts above 260 m, where a trick can go wrong, and it is never kilograms: it shows in the
+    readouts, beside the TOTAL on the sheet, and in two feats, never on the board. The swing gauge
+    under the pilot (`swing-gauge.js`, over the fjord too) shows where the wing is, the bands a
+    trick is judged in, and the moment to catch, to press or let go, or to swap the turn. A big
+    sign by the wing says the same (CATCH, BRAKE, LET GO or SWAP) with a ring that closes on the
+    moment, ringing the button to press on a phone and knocking as the moment opens. A swap is
+    told so only once a wingover is under way (the turn swapped back at a top), so a circle turned
+    the other way, or a dodge, is never told to swap; the first top of a wingover shows its swap on
+    the gauge alone. Hands on time are answered with a chime and ✓ NICE, and a caught surge with
+    a snap and ✓ CAUGHT. A lone element, as a dodge turned straight back can make, is no set yet.
   - **Pumping a fold.** A wing folded by a raven or a kettlebell opens 0.4 s sooner for each time
     the brake is held for at least 0.3 s and let go, twice at most: about 55 m lost becomes about
     31 m. Taps shorter than that, or a brake held all through, do nothing.
@@ -211,10 +234,11 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     run was flown under: a test fingerprints every tuning table, so changing how a run flies without
     a new version fails `npm test`, and a link from other rules is refused rather than misread.
     Version 2 brought the peaked cores and reps to depth, version 3 the iron in the sky, the rune
-    stones and the Beast, and version 4 the wing flown, not only held: big ears, the dive and its
-    tuck, the stall's second beat and pumping a fold open.
+    stones and the Beast, and version 4 the wing flown, not only held: big ears, the swing over the
+    pilot and its tuck, wingovers and their tip, the stall's second beat and pumping a fold open.
   - **Feats and the board.** Opener, Under the horn, Giant-dodger, Clean meet, the 1,000 lb club,
-    Training block (the Daily Sky seven days in a row) and Beat the bot are Good Lift's own feats:
+    Wingover ×5, Pitched 45°, Training block (the Daily Sky seven days in a row) and Beat the bot
+    are Good Lift's own feats:
     the sheet names any new ones when it opens (Beat the bot when the bots land), never during a
     run, and they never move the fjord's belt. Each Daily Sky keeps a board of this browser's ten
     best runs, ranked by total, then peak, then the earlier run, under three initials and the

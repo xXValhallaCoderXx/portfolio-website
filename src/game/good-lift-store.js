@@ -33,10 +33,14 @@ export const GAME_STORE = 'good-lift-v1';
 //   giant-dodger         dodge every kettlebell in a run that had at least three
 //   clean-meet           four lifts or more, every light white
 //   thousand-pound-club  a total of at least 453.6 kg (1,000 lb)
+//   wingover-five        five linked wingovers in a set of tricks landed (meet-card.js TRICK_FEATS)
+//   pitched-45           a pitched swing 45° ahead, caught, in a set landed
 //   training-block       the Daily Sky flown on TRAINING_BLOCK UTC days in a row (recordRun awards it)
 //   beat-the-bot         out-lift TST on the same sky (good-lift.js awards it with earnFeats once the
 //                        bots have flown it, after the run is recorded)
-export const FEAT_IDS = Object.freeze(['opener', 'under-the-horn', 'giant-dodger', 'clean-meet', 'thousand-pound-club', 'training-block', 'beat-the-bot']);
+export const FEAT_IDS = Object.freeze([
+  'opener', 'under-the-horn', 'giant-dodger', 'clean-meet', 'thousand-pound-club', 'wingover-five', 'pitched-45', 'training-block', 'beat-the-bot',
+]);
 
 // UTC days in a row of Daily Skies that earn the training block.
 export const TRAINING_BLOCK = 7;

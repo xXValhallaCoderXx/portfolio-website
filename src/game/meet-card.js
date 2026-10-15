@@ -11,6 +11,10 @@ export const JUDGES = Object.freeze(['contact', 'control', 'airspace']);
 // A 1,000 lb total, in the kilograms the meet counts in.
 export const THOUSAND_POUNDS = 453.6;
 
+// What the trick feats ask of a run's style (meet-style.js): wingovers linked in one set landed, and
+// the degrees a pitched swing reached ahead in a set landed.
+export const TRICK_FEATS = Object.freeze({ wingovers: 5, pitch: 45 });
+
 // Good Lift's feats. They are its own, kept in its own store, and never move the fjord's belt.
 // `streak` is the one the store awards (days in a row), and `bot` the one awarded once the bots have
 // flown the run's sky (meet-bots.js, as the sheet opens); every other is earned by one run alone.
@@ -20,6 +24,8 @@ export const FEATS = Object.freeze([
   Object.freeze({ id: 'giant-dodger', name: 'Giant-dodger', text: 'Dodge every kettlebell in a run with three or more.' }),
   Object.freeze({ id: 'clean-meet', name: 'Clean meet', text: 'Four lifts or more in a run, every light white.' }),
   Object.freeze({ id: 'thousand-pound-club', name: '1,000 lb club', text: 'Total 453.6 kg in one run.' }),
+  Object.freeze({ id: 'wingover-five', name: 'Wingover ×5', text: 'Land five linked wingovers past 50°.' }),
+  Object.freeze({ id: 'pitched-45', name: 'Pitched 45°', text: 'Pitch the wing 45° ahead and catch it.' }),
   Object.freeze({ id: 'training-block', name: 'Training block', text: 'Fly the Daily Sky seven days in a row.', streak: 7 }),
   Object.freeze({ id: 'beat-the-bot', name: 'Beat the bot', text: 'Out-lift TST, the test pilot, on the same sky.', bot: true }),
 ]);
@@ -42,7 +48,20 @@ export function featsFor(result) {
   if (result.stats.thrown >= 3 && result.stats.hits === 0) earned.push('giant-dodger');
   if (lines.length >= 4 && result.lifts.every((lift) => lift.red === 0)) earned.push('clean-meet');
   if (result.total >= THOUSAND_POUNDS) earned.push('thousand-pound-club');
+  if ((result.stats.wingovers ?? 0) >= TRICK_FEATS.wingovers) earned.push('wingover-five');
+  if ((result.stats.pitch ?? 0) >= TRICK_FEATS.pitch) earned.push('pitched-45');
   return earned;
+}
+
+/**
+ * The run's tricks in a line for the sheet, or '' if it landed none: its style is shown beside the
+ * TOTAL, and this says what earned it (`stats` is summariseRun's).
+ */
+export function trickSaid(stats) {
+  const said = [];
+  if (stats.wingovers > 0) said.push(`wingover ×${stats.wingovers}`);
+  if (stats.pitch > 0) said.push(`pitched ${stats.pitch}°`);
+  return said.length ? `tricks: ${said.join(' · ')}` : '';
 }
 
 /**

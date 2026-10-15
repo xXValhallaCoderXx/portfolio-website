@@ -702,13 +702,14 @@ test('nothing it is handed, however wild, puts a number astray or turns an arm p
       liftSide: roll() < 0.5 ? -1 : 1, landed: roll() < 0.1,
       flying: roll() < 0.8, brake: pick(-0.2, 1.2), bar: pick(-0.2, 1.2), luff: pick(-0.2, 1.2), stall: roll() < 0.3 ? 1 : 0,
       foldLeft: pick(-0.2, 1.2), foldRight: pick(-0.2, 1.2), rough: pick(-0.2, 1.2),
-      ears: pick(-0.2, 1.2), dive: pick(-0.2, 1.2), tuck: pick(-0.2, 1.2), heave: pick(-1.5, 1.5),
+      ears: pick(-0.2, 1.2), tuck: pick(-0.2, 1.2), heave: pick(-1.5, 1.5), swing: roll() < 0.5 ? pick(-2.5, 2.5) : undefined,
     });
     glider.measure(measured);
     for (const [key, value] of [...Object.entries(glider.sway), ...Object.entries(glider.air), ...Object.entries(measured)]) {
       assert.ok(Number.isFinite(value), `${key} is ${value} after pose ${n}`);
     }
     assert.ok(Math.abs(glider.sway.pitch) <= 0.5 && Math.abs(glider.sway.roll) <= 0.5);
+    assert.ok(Math.abs(glider.sway.swing) <= 1.25, `the flight's swing drawn at ${glider.sway.swing}`);
     // Down to -0.75 and up to 0.55, the bar with a flail or a tremble on top included; the throw
     // of the reserve is a turn of its own on top of the right arm's.
     for (const name of glider.gear.throwing ? ['L_Upperarm'] : ['L_Upperarm', 'R_Upperarm']) {
@@ -791,25 +792,56 @@ test('a tuck folds the leading edge down and back under the wing and leaves the 
   }
 });
 
-test('a dive throws the wing ahead of the pilot until it is caught, and the moment to turn in lifts the side of the wing over the core', () => {
-  // Each against a twin posed the same without it: the air rocks them both alike.
+test('the flight\'s own swing puts the wing ahead of or behind the pilot as it is, eased and stopped at 1.25 rad, and the pilot hangs under it', () => {
+  const swung = swingOnly();
+  const twin = swingOnly();
+  const [sling, seat] = swung.group.children;
+  const [twinSling, twinSeat] = twin.group.children;
+  // Swung 0.8 rad ahead and held there a while, against a twin at rest: the air rocks them both alike.
+  for (let i = 0; i < 120; i++) {
+    swung.pose({ ...CALM, dt: STEP, time: i * STEP, flying: true, swing: -0.8 });
+    twin.pose({ ...CALM, dt: STEP, time: i * STEP, flying: true, swing: 0 });
+  }
+  close(swung.sway.swing, -0.8, 1e-3, 'the swing as the flight has it:');
+  close(sling.rotation.x - twinSling.rotation.x, -0.8, 1e-3, 'the wing ahead:');
+  close(seat.rotation.x - twinSeat.rotation.x, -0.8 * 0.85, 1e-3, 'the pilot under it:');
+  // Taken over at once by a strike or the autopilot, it is eased back, not snapped.
+  swung.pose({ ...CALM, dt: STEP, time: 2, flying: true, swing: 0 });
+  assert.ok(swung.sway.swing < -0.6, `${swung.sway.swing} a frame on`);
+  for (let i = 0; i < 60; i++) swung.pose({ ...CALM, dt: STEP, time: 2 + i * STEP, flying: true, swing: 3 });
+  close(swung.sway.swing, 1.25, 1e-3, 'stopped at');
+  // Left out, as the hero picture and the 404 scene leave it, nothing of it is drawn.
+  const backdrop = swingOnly();
+  for (let i = 0; i < 60; i++) backdrop.pose({ ...CALM, dt: STEP, time: i * STEP, flying: true });
+  assert.equal(backdrop.sway.swing, 0);
+});
+
+test('with the flight\'s own swing drawn, the bar still holds the wing ahead and the brake holds it back, eased there with no swing of its own', () => {
+  const [fast, slow, twin] = [swingOnly(), swingOnly(), swingOnly()];
+  const [[fastSling, fastSeat], [slowSling], [twinSling, twinSeat]] = [fast, slow, twin].map((glider) => glider.group.children);
+  // 4.8 m/s over trim on the bar, and 2.5 under it on the full light brake, against a twin at
+  // trim: the air rocks all three alike, so what is left is where each sits.
+  let most = 0;
+  for (let i = 0; i < 240; i++) {
+    fast.pose({ ...CALM, dt: STEP, time: i * STEP, flying: true, swing: 0, pace: 4.8, bar: 1 });
+    slow.pose({ ...CALM, dt: STEP, time: i * STEP, flying: true, swing: 0, pace: -2.5, brake: 1 });
+    twin.pose({ ...CALM, dt: STEP, time: i * STEP, flying: true, swing: 0 });
+    most = Math.min(most, fastSling.rotation.x - twinSling.rotation.x);
+  }
+  const ahead = fastSling.rotation.x - twinSling.rotation.x;
+  close(ahead, -4.8 * 0.02, 1e-3, 'ahead on the bar:');
+  assert.ok(most >= ahead - 1e-9, `never further ahead on the way: ${most} against ${ahead}`);
+  close(fastSeat.rotation.x - twinSeat.rotation.x, ahead * 0.6, 1e-3, 'the pilot leaning along:');
+  close(slowSling.rotation.x - twinSling.rotation.x, 2.5 * 0.02 + 0.02, 1e-3, 'back on the brake:');
+});
+
+test('the moment to turn in lifts the side of the wing over the core', () => {
+  // Against a twin posed the same without it: the air rocks them both alike.
   const pair = () => {
     const both = [swingOnly(), swingOnly()];
     for (let i = 0; i < 300; i++) for (const glider of both) glider.pose({ ...CALM, dt: STEP, time: i * STEP, flying: true });
     return both;
   };
-  const [diving, twin] = pair();
-  const fly = (steps, from, dive) => {
-    for (let i = 0; i < steps; i++) {
-      diving.pose({ ...CALM, dt: STEP, time: from + i * STEP, flying: true, dive });
-      twin.pose({ ...CALM, dt: STEP, time: from + i * STEP, flying: true });
-    }
-  };
-  fly(120, 5, 1);
-  assert.ok(diving.sway.pitch < twin.sway.pitch - 0.15, `the wing ahead of the pilot: ${diving.sway.pitch} against ${twin.sway.pitch}`);
-  // Caught, it swings back over the pilot.
-  fly(300, 7, 0);
-  close(diving.sway.pitch, twin.sway.pitch, 0.01, 'back over the pilot:');
   // A heave toward the right lifts the right side first: the swing rolls that way.
   const [heaved, still] = pair();
   for (let i = 0; i < 12; i++) {

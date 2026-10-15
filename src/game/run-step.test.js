@@ -4,96 +4,97 @@ import { RUN, TRACE, createRunWorld, finishRun, startRun, stepBits, stepRun } fr
 import { TST, WORTH_RUNES, createReferencePilot, flyPilot } from './pilots.js';
 import { CLOUD_GATE, CLOUD_RAVENS, CLOUD_STRIKE, CLOUD_ZONE, createCloudbaseRun } from './cloudbase-state.js';
 import { GATEWAY, surfaceAt } from './terrain.js';
-import { EARS, FLIGHT } from './flight.js';
+import { EARS, FLIGHT, PITCH } from './flight.js';
 import { MEET, createMeet } from './meet-state.js';
 import { RUNE } from './meet-runes.js';
 import { createBells } from './bells.js';
 
 // What the reference pilot does on these skies, to the last bit: seed, options, then peak (m),
-// strikes, stalls, front tucks, seconds, seconds in cloud and how the run ended. First taken before
+// strikes, stalls, front tucks, tip collapses, seconds, seconds in cloud and how the run ended. First taken before
 // its flying moved into run-step.js and pilots.js, to hold the move to the bit; re-captured for
 // SIM_VERSION 2, on purpose, since its hunted cores peak at their middle and the pilot circles
 // tighter in them (pilots.js); re-captured for SIM_VERSION 3, and every row came out as version 2's
 // to the bit: the sky, the wing and the bare pilot fly as they did, and everything new is the
-// meet's and the kettlebells'. Re-captured for SIM_VERSION 4, on purpose: the wing dives above the
-// ravens' grace height and a fold is pumped open, and every pilot catches and pumps (pilots.js
-// CATCH), but for the last rows, a pilot that never does and so tucks. Any change to how a run
-// flies shows up here first.
+// meet's and the kettlebells'. Re-captured for SIM_VERSION 4, on purpose: the wing swings over the
+// pilot fore and aft and in its turns, surging as the air falls away and tucking above the ravens'
+// grace height unless it is caught, and a fold is pumped open; every pilot catches and pumps
+// (pilots.js CATCH), but for the last rows, a pilot that never does and so tucks. No reference
+// pilot ever banks far enough to tip. Any change to how a run flies shows up here first.
 const GOLDENS = [
-  [1, {"brake": "none"}, 936.973872771315, 2, 0, 0, 137.53333333333492, 2.6999999999999953, 'fog'],
-  [2, {"brake": "none"}, 1119.8777874202815, 0, 0, 0, 142.8666666666725, 8.333333333333327, 'fog'],
-  [3, {"brake": "none"}, 1054.5846088165072, 2, 0, 0, 141.0500000000044, 0, 'fog'],
-  [4, {"brake": "none"}, 1011.7931108945835, 0, 0, 0, 140.0333333333369, 8.31666666666666, 'fog'],
-  [5, {"brake": "none"}, 836.6595766054314, 0, 0, 0, 134.6499999999993, 28.433333333333, 'fog'],
-  [6, {"brake": "none"}, 1294.3296832599856, 0, 0, 0, 146.91666666667572, 1.4999999999999996, 'fog'],
-  [7, {"brake": "none"}, 1114.6858084850323, 2, 0, 0, 142.58333333333894, 3.016666666666661, 'fog'],
-  [8, {"brake": "none"}, 1105.825843054587, 1, 0, 0, 141.80000000000499, 3.1166666666666605, 'fog'],
-  [9, {"brake": "none"}, 1167.8178427719956, 1, 0, 0, 143.68333333333982, 8.533333333333337, 'fog'],
-  [10, {"brake": "none"}, 1277.011146070376, 0, 0, 0, 146.61666666667548, 4.383333333333323, 'fog'],
-  [11, {"brake": "none"}, 1467.8940278445646, 1, 0, 0, 150.80000000001215, 3.7833333333333248, 'fog'],
-  [12, {"brake": "none"}, 1109.8464093690977, 0, 0, 0, 142.48333333333886, 0, 'fog'],
-  [1, {"brake": "eased"}, 1357.947489083276, 0, 0, 0, 147.8500000000098, 23.349999999999955, 'fog'],
-  [2, {"brake": "eased"}, 1937.8051570632454, 0, 0, 0, 159.66666666668587, 2.0499999999999976, 'fog'],
-  [3, {"brake": "eased"}, 1517.5596112315782, 2, 0, 0, 151.81666666667962, 9.000000000000027, 'fog'],
-  [4, {"brake": "eased"}, 1197.8974314450288, 2, 0, 0, 144.7833333333407, 12.183333333333518, 'fog'],
-  [5, {"brake": "eased"}, 835.7550285284906, 0, 0, 0, 134.84999999999945, 31.9333333333328, 'fog'],
-  [6, {"brake": "eased"}, 1398.0760761571348, 3, 0, 0, 149.31666666667763, 0, 'fog'],
-  [7, {"brake": "eased"}, 1546.8340280427842, 3, 0, 0, 152.40000000001342, 0, 'fog'],
-  [8, {"brake": "eased"}, 1370.4420437330152, 1, 0, 0, 147.98333333334324, 22.133333333333358, 'fog'],
-  [9, {"brake": "eased"}, 1501.5376723250254, 0, 0, 0, 151.48333333334602, 5.983333333333317, 'fog'],
-  [10, {"brake": "eased"}, 1756.9535274809123, 1, 0, 0, 156.01666666668297, 6.966666666666647, 'fog'],
-  [11, {"brake": "eased"}, 1793.3917556304027, 1, 0, 0, 157.10000000001716, 11.883333333333503, 'fog'],
-  [12, {"brake": "eased"}, 1268.6473461953296, 2, 0, 0, 145.3666666666745, 0, 'fog'],
-  [1, {"brake": "late"}, 1200.0648502080849, 1, 0, 0, 144.4500000000071, 12.56666666666687, 'fog'],
-  [2, {"brake": "late"}, 1284.0281436954047, 1, 0, 0, 146.21666666667517, 17.133333333333642, 'fog'],
-  [3, {"brake": "late"}, 1474.9952020509352, 3, 0, 0, 150.03333333334487, 0, 'fog'],
-  [4, {"brake": "late"}, 1199.2477229253168, 1, 0, 0, 144.81666666667405, 16.86666666666699, 'fog'],
-  [5, {"brake": "late"}, 1096.1988376128916, 3, 0, 0, 142.26666666667202, 5.316666666666653, 'fog'],
-  [6, {"brake": "late"}, 1547.4094971290822, 1, 0, 0, 152.2500000000133, 11.133333333333466, 'fog'],
-  [7, {"brake": "late"}, 918.3439621188957, 3, 0, 0, 137.01666666666785, 23.266666666666627, 'fog'],
-  [8, {"brake": "late"}, 1271.2268145014016, 1, 0, 0, 146.40000000000865, 14.950000000000323, 'fog'],
-  [9, {"brake": "late"}, 1661.3567088989482, 1, 0, 0, 154.6500000000152, 2.0999999999999974, 'fog'],
-  [10, {"brake": "late"}, 1300.3380717622583, 2, 0, 0, 147.16666666667592, 17.91666666666693, 'fog'],
-  [11, {"brake": "late"}, 1253.8625535429676, 3, 0, 0, 146.1000000000084, 10.300000000000091, 'fog'],
-  [12, {"brake": "late"}, 1306.7146711115156, 2, 0, 0, 147.21666666667596, 11.100000000000131, 'fog'],
-  [1, {"brake": "held"}, 1105.5320906773873, 2, 4, 0, 141.75000000000495, 8.266666666666657, 'fog'],
-  [2, {"brake": "held"}, 901.5854954335423, 1, 5, 0, 136.86666666666773, 13.30000000000024, 'fog'],
-  [3, {"brake": "held"}, 1253.0126328048832, 1, 5, 0, 146.08333333334173, 4.583333333333322, 'fog'],
-  [4, {"brake": "held"}, 1037.402736591634, 1, 4, 0, 140.41666666667055, 4.783333333333322, 'fog'],
-  [5, {"brake": "held"}, 836.5689853294175, 0, 3, 0, 134.66666666666598, 27.88333333333303, 'fog'],
-  [6, {"brake": "held"}, 1017.3678839048296, 3, 4, 0, 140.10000000000363, 0, 'fog'],
-  [7, {"brake": "held"}, 1222.152807033881, 2, 4, 0, 143.93333333334002, 7.5499999999999785, 'fog'],
-  [8, {"brake": "held"}, 986.1609396834646, 2, 4, 0, 136.9666666666678, 2.4833333333333294, 'fog'],
-  [9, {"brake": "held"}, 1179.973674510943, 0, 4, 0, 144.26666666667361, 1.8499999999999983, 'fog'],
-  [10, {"brake": "held"}, 1162.4595472900055, 1, 5, 0, 143.85000000000662, 3.4499999999999926, 'fog'],
-  [11, {"brake": "held"}, 1385.1332786095627, 4, 5, 0, 148.66666666667712, 1.1166666666666676, 'fog'],
-  [12, {"brake": "held"}, 1188.576567078256, 0, 4, 0, 144.46666666667377, 6.866666666666648, 'fog'],
-  [1, {"brake": "none", "withFlock": false}, 842.5516247274037, 3, 0, 0, 134.54999999999922, 0, 'fog'],
-  [2, {"brake": "none", "withFlock": false}, 791.2721430552535, 3, 0, 0, 133.38333333333162, 2.749999999999995, 'fog'],
-  [3, {"brake": "none", "withFlock": false}, 1059.2210406624756, 3, 0, 0, 141.0333333333377, 1.3166666666666669, 'fog'],
-  [4, {"brake": "none", "withFlock": false}, 814.5693810532325, 1, 0, 0, 133.9833333333321, 5.2999999999999865, 'fog'],
-  [5, {"brake": "none", "withFlock": false}, 836.6308594955013, 2, 0, 0, 134.76666666666605, 12.250000000000188, 'fog'],
-  [6, {"brake": "none", "withFlock": false}, 944.3801577028196, 3, 0, 0, 137.95000000000192, 0, 'fog'],
-  [1, {"brake": "none", "hazards": false}, 1195.0774268008515, 0, 0, 0, 144.71666666667397, 0, 'fog'],
-  [2, {"brake": "none", "hazards": false}, 1208.5019603176609, 0, 0, 0, 145.0333333333409, 0, 'fog'],
-  [3, {"brake": "none", "hazards": false}, 1237.0754911809559, 0, 0, 0, 145.71666666667477, 0, 'fog'],
-  [4, {"brake": "none", "hazards": false}, 1058.1785187033117, 0, 0, 0, 141.2833333333379, 0, 'fog'],
-  [5, {"brake": "none", "hazards": false}, 1084.5629913922016, 0, 0, 0, 141.68333333333823, 0, 'fog'],
-  [6, {"brake": "none", "hazards": false}, 1280.9131189817397, 0, 0, 0, 146.65000000000884, 0, 'fog'],
-  [1, {"brake": "none", "catches": false}, 826.2315608071353, 2, 0, 1, 133.18333333333146, 0, 'fog'],
-  [2, {"brake": "none", "catches": false}, 972.2101652573955, 1, 0, 2, 138.93333333333604, 8.18333333333332, 'fog'],
-  [3, {"brake": "none", "catches": false}, 1173.664463905874, 1, 0, 1, 143.98333333334006, 4.083333333333324, 'fog'],
-  [4, {"brake": "none", "catches": false}, 873.1240022221577, 1, 0, 3, 135.58333333333337, 11.200000000000136, 'fog'],
-  [5, {"brake": "none", "catches": false}, 840.2558602778965, 0, 0, 8, 134.8833333333328, 21.00000000000009, 'fog'],
-  [6, {"brake": "none", "catches": false}, 1272.8618396131, 0, 0, 1, 146.41666666667533, 1.3833333333333333, 'fog'],
+  [1, {"brake": "none"}, 957.1358978670338, 2, 0, 0, 0, 138.06666666666868, 2.3833333333333298, 'fog'],
+  [2, {"brake": "none"}, 1123.7629637278148, 0, 0, 0, 0, 142.96666666667258, 13.533333333333585, 'fog'],
+  [3, {"brake": "none"}, 1166.72919022752, 1, 0, 0, 0, 143.55000000000638, 3.9666666666666575, 'fog'],
+  [4, {"brake": "none"}, 954.0916593639267, 1, 0, 0, 0, 137.51666666666824, 7.4666666666666455, 'fog'],
+  [5, {"brake": "none"}, 836.1547200771289, 0, 0, 0, 0, 134.6499999999993, 28.74999999999965, 'fog'],
+  [6, {"brake": "none"}, 1299.7875170177483, 0, 0, 0, 0, 147.00000000000912, 1.8333333333333317, 'fog'],
+  [7, {"brake": "none"}, 1058.704471332012, 3, 0, 0, 0, 141.26666666667123, 2.3833333333333298, 'fog'],
+  [8, {"brake": "none"}, 1181.5568966481717, 1, 0, 0, 0, 144.33333333334033, 3.2499999999999933, 'fog'],
+  [9, {"brake": "none"}, 1170.3260303680297, 1, 0, 0, 0, 143.7000000000065, 8.683333333333344, 'fog'],
+  [10, {"brake": "none"}, 1277.0480000368907, 0, 0, 0, 0, 146.63333333334216, 4.333333333333323, 'fog'],
+  [11, {"brake": "none"}, 1472.1053387400539, 1, 0, 0, 0, 150.88333333334555, 3.866666666666658, 'fog'],
+  [12, {"brake": "none"}, 1032.0256881273458, 2, 0, 0, 0, 139.6333333333366, 0, 'fog'],
+  [1, {"brake": "eased"}, 1357.7424599482406, 0, 0, 0, 0, 147.83333333334312, 23.199999999999964, 'fog'],
+  [2, {"brake": "eased"}, 1828.1628684732254, 1, 0, 0, 0, 157.733333333351, 4.9166666666666545, 'fog'],
+  [3, {"brake": "eased"}, 1538.9685052339607, 2, 0, 0, 0, 152.2500000000133, 8.900000000000022, 'fog'],
+  [4, {"brake": "eased"}, 1193.1826147666895, 1, 0, 0, 0, 144.66666666667393, 14.96666666666699, 'fog'],
+  [5, {"brake": "eased"}, 835.1105193608538, 0, 0, 0, 0, 134.79999999999941, 30.199999999999566, 'fog'],
+  [6, {"brake": "eased"}, 1655.1443382648972, 2, 0, 0, 0, 154.53333333334845, 0, 'fog'],
+  [7, {"brake": "eased"}, 1476.0811047556929, 4, 0, 0, 0, 150.96666666667895, 0, 'fog'],
+  [8, {"brake": "eased"}, 1356.9477264434472, 2, 0, 0, 0, 147.8500000000098, 18.38333333333357, 'fog'],
+  [9, {"brake": "eased"}, 1507.9739219792982, 2, 0, 0, 0, 151.61666666667946, 3.8333333333333246, 'fog'],
+  [10, {"brake": "eased"}, 1483.7252386966104, 4, 0, 0, 0, 151.06666666667903, 8.416666666666664, 'fog'],
+  [11, {"brake": "eased"}, 1649.3237050276462, 2, 0, 0, 0, 154.4166666666817, 12.516666666666868, 'fog'],
+  [12, {"brake": "eased"}, 1225.243188707521, 2, 0, 0, 0, 144.55000000000717, 0, 'fog'],
+  [1, {"brake": "late"}, 1058.7614157493704, 1, 0, 1, 0, 140.966666666671, 12.383333333333528, 'fog'],
+  [2, {"brake": "late"}, 1284.8246545835837, 1, 0, 0, 0, 146.2000000000085, 17.10000000000031, 'fog'],
+  [3, {"brake": "late"}, 1473.0261003501096, 2, 0, 0, 0, 150.5166666666786, 0, 'fog'],
+  [4, {"brake": "late"}, 872.4897167029495, 3, 0, 0, 0, 135.26666666666645, 19.28333333333352, 'fog'],
+  [5, {"brake": "late"}, 1108.4469003835668, 1, 0, 0, 0, 142.4500000000055, 10.633333333333441, 'fog'],
+  [6, {"brake": "late"}, 1549.3815834499508, 1, 0, 0, 0, 152.35000000001338, 10.683333333333444, 'fog'],
+  [7, {"brake": "late"}, 1210.3307553268207, 2, 0, 0, 0, 145.08333333334093, 18.916666666666874, 'fog'],
+  [8, {"brake": "late"}, 1381.545849981059, 0, 0, 0, 0, 148.96666666667736, 11.716666666666828, 'fog'],
+  [9, {"brake": "late"}, 1504.5321456816837, 2, 0, 0, 0, 151.55000000001274, 0, 'fog'],
+  [10, {"brake": "late"}, 1306.3718204915178, 1, 0, 0, 0, 147.30000000000936, 20.68333333333344, 'fog'],
+  [11, {"brake": "late"}, 1622.8380266410059, 2, 0, 0, 0, 153.90000000001461, 7.09999999999998, 'fog'],
+  [12, {"brake": "late"}, 1333.8339013484142, 1, 0, 0, 0, 147.8500000000098, 11.383333333333479, 'fog'],
+  [1, {"brake": "held"}, 1012.1039082653682, 2, 4, 0, 0, 139.7833333333367, 9.616666666666724, 'fog'],
+  [2, {"brake": "held"}, 1105.586461627324, 2, 5, 0, 0, 142.50000000000554, 2.8499999999999948, 'fog'],
+  [3, {"brake": "held"}, 1186.3851500368783, 1, 4, 0, 0, 143.66666666667314, 5.516666666666652, 'fog'],
+  [4, {"brake": "held"}, 870.2213345153102, 1, 4, 0, 0, 134.2333333333323, 5.749999999999985, 'fog'],
+  [5, {"brake": "held"}, 836.9193398117027, 0, 3, 0, 0, 134.66666666666598, 30.38333333333289, 'fog'],
+  [6, {"brake": "held"}, 943.2032026447092, 3, 5, 0, 0, 137.3833333333348, 0, 'fog'],
+  [7, {"brake": "held"}, 1228.410497654733, 2, 5, 0, 0, 145.46666666667457, 0.39999999999999997, 'fog'],
+  [8, {"brake": "held"}, 1116.683857352091, 3, 3, 0, 0, 142.15000000000526, 0, 'fog'],
+  [9, {"brake": "held"}, 1406.1146908841258, 1, 4, 0, 0, 149.31666666667763, 0, 'fog'],
+  [10, {"brake": "held"}, 1146.9085622004125, 2, 5, 0, 0, 142.7000000000057, 0, 'fog'],
+  [11, {"brake": "held"}, 1189.173305564863, 5, 4, 0, 0, 143.91666666667334, 1.9833333333333312, 'fog'],
+  [12, {"brake": "held"}, 1178.4797121836316, 0, 5, 0, 0, 144.21666666667358, 7.899999999999977, 'fog'],
+  [1, {"brake": "none", "withFlock": false}, 739.1308906576244, 5, 0, 0, 0, 129.7499999999954, 0, 'fog'],
+  [2, {"brake": "none", "withFlock": false}, 857.0494711664305, 2, 0, 0, 0, 135.51666666666665, 0.4333333333333333, 'fog'],
+  [3, {"brake": "none", "withFlock": false}, 1025.8586021255303, 4, 0, 0, 0, 140.2166666666704, 0, 'fog'],
+  [4, {"brake": "none", "withFlock": false}, 813.9906467931692, 1, 0, 0, 0, 133.94999999999874, 5.18333333333332, 'fog'],
+  [5, {"brake": "none", "withFlock": false}, 836.8057686610298, 2, 0, 0, 0, 134.7333333333327, 12.23333333333352, 'fog'],
+  [6, {"brake": "none", "withFlock": false}, 919.4463899838482, 3, 0, 0, 0, 137.41666666666816, 0, 'fog'],
+  [1, {"brake": "none", "hazards": false}, 1188.7447140343793, 0, 0, 0, 0, 144.56666666667385, 0, 'fog'],
+  [2, {"brake": "none", "hazards": false}, 1213.8978245796002, 0, 0, 0, 0, 145.16666666667433, 0, 'fog'],
+  [3, {"brake": "none", "hazards": false}, 1239.8265926249492, 0, 0, 0, 0, 145.7666666666748, 0, 'fog'],
+  [4, {"brake": "none", "hazards": false}, 1029.892660346921, 0, 0, 0, 0, 140.5333333333373, 0, 'fog'],
+  [5, {"brake": "none", "hazards": false}, 1088.5024415784574, 0, 0, 0, 0, 141.75000000000495, 0, 'fog'],
+  [6, {"brake": "none", "hazards": false}, 1283.5827736185565, 0, 0, 0, 0, 146.78333333334228, 0, 'fog'],
+  [1, {"brake": "none", "catches": false}, 903.3573779904191, 1, 0, 2, 0, 136.58333333333417, 0, 'fog'],
+  [2, {"brake": "none", "catches": false}, 1123.7629637278148, 0, 0, 0, 0, 142.96666666667258, 13.533333333333585, 'fog'],
+  [3, {"brake": "none", "catches": false}, 1182.0492581977373, 1, 0, 1, 0, 143.98333333334006, 4.116666666666657, 'fog'],
+  [4, {"brake": "none", "catches": false}, 859.2468643243675, 1, 0, 2, 0, 135.58333333333337, 6.649999999999982, 'fog'],
+  [5, {"brake": "none", "catches": false}, 837.7197349100353, 2, 0, 3, 0, 132.53333333333094, 6.899999999999981, 'fog'],
+  [6, {"brake": "none", "catches": false}, 1275.5066944006755, 0, 0, 1, 0, 146.46666666667537, 1.266666666666667, 'fog'],
 ];
 
 test('the one step flies the reference pilot exactly as recorded under this SIM_VERSION, to the last bit', () => {
-  for (const [seed, options, peak, strikes, stalls, tucks, seconds, cloud, reason] of GOLDENS) {
+  for (const [seed, options, peak, strikes, stalls, tucks, tips, seconds, cloud, reason] of GOLDENS) {
     const { hazards = true, ...pilot } = options;
     const world = startRun(createRunWorld({ sky: createCloudbaseRun({ hazards }) }), seed);
     const flown = flyPilot(world, createReferencePilot(pilot));
-    assert.deepEqual(flown, { peak, strikes, stalls, tucks, seconds, cloud, reason }, `seed ${seed} ${JSON.stringify(options)}`);
+    assert.deepEqual(flown, { peak, strikes, stalls, tucks, tips, seconds, cloud, reason }, `seed ${seed} ${JSON.stringify(options)}`);
   }
 });
 
@@ -112,33 +113,32 @@ test('the one step flies the reference pilot exactly as recorded under this SIM_
 // plates off the trail, the gates and the Beast added (TST's and the line-holder's rows came out as
 // version 2's), and the collector's and gate-taker's rows again when those pilots were retuned
 // (pilots.js, not the rules: the other rows stayed to the bit); and for SIM_VERSION 4, on purpose,
-// as the wing dives and folds are pumped open. Seed 3's collector holds Fehu as a strike sprays
-// three plates, and all three go straight back on the bar (its reach takes in the ring they spray
-// from); the collector's seeds 5, 10 and 15 and the gate-taker's seed 2 lose bars to strikes under
-// Tiwaz; a bell glances off Algiz on seeds 1, 19 and 36 of the pilot taking it (two on 36), and on
-// seed 19 the bell that glances off is the Beast.
+// as the wing swings and folds are pumped open. Seed 3's collector holds Fehu as strikes spray
+// five plates, and all five go straight back on the bar (its reach takes in the ring they spray
+// from); the collector's seeds 5 and 15 lose bars to strikes under Tiwaz; a bell glances off Algiz
+// on seeds 1 and 36 of the pilot taking it, and on seed 19 it never reaches the stone.
 const MEET_GOLDENS = [
-  [1, 'TST', 1152.218730323731, 8538, 275, '0 0 4 0x 1', 5, 4, 4, 7, 4, 0, 0, 3, 1, 1, 0, 1, 0, 0, 3, 0, 0],
-  [3, 'TST', 1407.3029666951027, 8971, 285, '0 0 0 1 4x 0', 3, 3, 5, 8, 5, 0, 0, 4, 1, 0, 0, 1, 0, 0, 3, 0, 0],
-  [5, 'TST', 838.7594642616897, 8097, 200, '0 0 4x 5', 2, 2, 4, 5, 2, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [10, 'TST', 1500.638328836822, 9088, 370, '0 0 0 0 4x 4x 0', 5, 5, 4, 4, 4, 0, 0, 4, 1, 0, 0, 0, 0, 0, 3, 0, 0],
-  [1, 'collector', 1122.8738597737904, 8463, 355, '0 0 5 0x 1', 5, 5, 4, 12, 4, 1, 0, 2, 1, 0, 0, 2, 1, 0, 3, 0, 0],
-  [3, 'collector', 999.0673397373226, 8355, 347.5, '0 1 1 0', 3, 2, 4, 18, 4, 0, 0, 3, 3, 0, 0, 3, 3, 0, 0, 1, 1],
-  [5, 'collector', 1272.188698704326, 8785, 395, '0 1 4 0 1x 0', 2, 2, 5, 13, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 8],
-  [10, 'collector', 1511.1361271507444, 9088, 670, '0 0 1 0 0x 4x 0', 5, 4, 5, 12, 5, 0, 0, 5, 1, 0, 0, 0, 0, 0, 3, 1, 8],
-  [14, 'collector', 917.0001210417947, 8215, 360, '0 0 1 4', 2, 2, 5, 18, 2, 0, 0, 2, 1, 0, 0, 0, 0, 0, 0, 1, 1],
-  [15, 'collector', 1136.440025553864, 8597, 385, '0 0 1 1x 4', 3, 3, 4, 11, 4, 1, 0, 3, 0, 0, 0, 0, 0, 0, 3, 1, 8],
-  [20, 'collector', 1158.1184005233522, 8629, 340, '0 1 1 1x 0', 1, 1, 5, 10, 4, 0, 0, 4, 1, 0, 0, 2, 1, 0, 0, 0, 0],
-  [2, 'gates', 1169.1272292808414, 8630, 190, '0 0 1 0 5', 1, 1, 5, 8, 4, 0, 0, 4, 2, 0, 0, 0, 0, 0, 3, 1, 8],
-  [12, 'gates', 1091.2617614163653, 8516, 425, '0 0 1 0x 0', 2, 2, 5, 17, 2, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2, 1],
-  [20, 'gates', 1071.887715978815, 8498, 255, '0 1 0 0x 0', 2, 0, 4, 7, 6, 0, 0, 6, 1, 0, 0, 0, 0, 0, 3, 1, 1],
-  [1, 'holding', 1084.0641501835325, 8446, 175, '0 0 5 1x 1', 3, 3, 4, 5, 3, 3, 0, 0, 0, 1, 0, 2, 0, 0, 0, 0, 0],
-  [3, 'holding', 1279.2458506510252, 8788, 205, '0 0 0 1 5x 0', 3, 3, 5, 15, 4, 4, 0, 0, 1, 2, 0, 8, 5, 0, 1, 0, 0],
-  [5, 'holding', 835.7605451166347, 8091, 125, '0 0 5x 4', 4, 4, 4, 8, 2, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0],
-  [10, 'holding', 1543.6417973879654, 9100, 320, '0 0 0 0 1x 1x 1', 5, 5, 5, 7, 5, 4, 0, 1, 0, 0, 0, 3, 1, 0, 1, 0, 0],
-  [1, 'algiz', 1060.6599487731082, 8459, 230, '0 0 4 1x 0', 2, 2, 4, 7, 4, 2, 0, 0, 0, 0, 0, 2, 1, 1, 0, 1, 2],
-  [19, 'algiz', 1374.8373142748308, 8929, 140, '0 0 0 5 1x 5', 2, 2, 5, 7, 5, 3, 1, 0, 0, 0, 0, 1, 0, 1, 6, 1, 2],
-  [36, 'algiz', 1374.421760836474, 8918, 245, '0 0 0 0x 0x 4', 3, 3, 4, 0, 4, 0, 1, 1, 0, 0, 0, 0, 0, 2, 3, 2, 2],
+  [1, 'TST', 1044.867034736461, 8443, 215, '0 0 4 1x 0', 3, 3, 4, 4, 3, 0, 0, 3, 0, 1, 0, 1, 1, 0, 0, 0, 0],
+  [3, 'TST', 1491.6162855370328, 9077, 310, '0 0 0 1 0x 0', 4, 4, 5, 9, 4, 0, 0, 4, 2, 0, 0, 2, 1, 0, 3, 0, 0],
+  [5, 'TST', 838.4841820234357, 8096, 240, '0 0 4x 4', 3, 3, 4, 5, 2, 0, 0, 2, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+  [10, 'TST', 1590.499684986063, 9196, 340, '0 0 0 1 0x 0x 0', 6, 6, 5, 4, 5, 0, 0, 5, 1, 0, 0, 1, 0, 0, 3, 0, 0],
+  [1, 'collector', 1037.9381648574035, 8402, 375, '0 0 5 1x 0', 5, 5, 4, 15, 3, 0, 0, 2, 0, 0, 0, 3, 2, 0, 0, 0, 0],
+  [3, 'collector', 1008.2787340546226, 8393, 447.5, '0 1 0 1x 0', 3, 1, 5, 17, 4, 0, 1, 3, 2, 0, 0, 5, 5, 0, 0, 1, 1],
+  [5, 'collector', 836.7434636883831, 7998, 50, '0 1 5x 5', 3, 3, 4, 7, 3, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1, 8],
+  [10, 'collector', 956.5585022974227, 8294, 135, '0 1 1 1', 3, 3, 4, 7, 3, 0, 0, 3, 0, 0, 0, 5, 0, 0, 0, 0, 0],
+  [14, 'collector', 933.804269908305, 8248, 390, '0 0 1 4', 2, 2, 5, 22, 1, 0, 0, 1, 3, 1, 0, 4, 4, 0, 0, 1, 1],
+  [15, 'collector', 1553.7509505904677, 9112, 435, '0 0 1 0 0 1x 4', 5, 4, 5, 10, 3, 0, 1, 2, 1, 0, 0, 0, 0, 0, 3, 1, 8],
+  [20, 'collector', 1182.4221700961398, 8664, 425, '0 1 1 1x 0', 2, 2, 5, 12, 4, 0, 1, 3, 1, 0, 0, 2, 2, 0, 0, 0, 0],
+  [2, 'gates', 1178.3241970318902, 8647, 315, '0 0 1 0 4', 1, 1, 5, 14, 5, 0, 1, 4, 3, 0, 0, 0, 0, 0, 3, 2, 12],
+  [12, 'gates', 1154.7828143696581, 8620, 545, '0 0 0 1x 0', 3, 3, 5, 20, 2, 0, 0, 2, 2, 0, 0, 2, 2, 0, 0, 1, 1],
+  [20, 'gates', 1258.3689633852634, 8762, 300, '0 0 0 1 4x 4', 3, 2, 4, 10, 5, 0, 0, 5, 0, 0, 0, 1, 0, 0, 3, 0, 0],
+  [1, 'holding', 1103.8200982721742, 8533, 170, '0 0 5 1x 1', 3, 3, 4, 5, 4, 3, 0, 0, 0, 1, 0, 2, 0, 0, 0, 0, 0],
+  [3, 'holding', 1276.7635470114221, 8785, 205, '0 0 0 1 5x 0', 3, 3, 5, 15, 4, 4, 0, 0, 1, 2, 0, 8, 5, 0, 1, 0, 0],
+  [5, 'holding', 836.8547958266746, 8085, 105, '0 0 5x 4', 3, 3, 4, 5, 2, 2, 0, 0, 0, 0, 0, 3, 2, 0, 0, 0, 0],
+  [10, 'holding', 1325.1979292257631, 8847, 175, '0 0 0 1 5x 1', 4, 4, 4, 14, 4, 3, 1, 0, 1, 0, 1, 8, 2, 0, 2, 0, 0],
+  [1, 'algiz', 1067.7854969323587, 8468, 185, '0 0 4 1x 0', 3, 3, 4, 8, 4, 2, 0, 0, 0, 0, 0, 4, 2, 1, 0, 1, 2],
+  [19, 'algiz', 1317.6013097979778, 8846, 210, '0 0 0 5 1x 0', 2, 2, 5, 9, 4, 2, 1, 0, 1, 0, 0, 3, 1, 0, 1, 0, 0],
+  [36, 'algiz', 1214.692642837299, 8711, 185, '0 0 1 1x 0', 1, 1, 4, 1, 3, 1, 1, 0, 0, 0, 0, 0, 0, 1, 2, 1, 2],
 ];
 const MEET_PILOTS = {
   TST, collector: { ...TST, collect: true }, gates: { ...TST, gates: WORTH_RUNES }, holding: { brake: 'eased' }, algiz: { brake: 'eased', gates: [RUNE.algiz] },
@@ -177,7 +177,7 @@ test('the same sky and the same asks give the same run, whatever wing and world 
     return world;
   };
   const fresh = fly(startRun(createRunWorld({ sky: createCloudbaseRun() }), 77));
-  // A world that has already flown, stalled, dived, tucked, pulled its ears and been struck, part way
+  // A world that has already flown, stalled, swung, tucked, pulled its ears and been struck, part way
   // through pumping a fold, starts the same run from scratch.
   const used = createRunWorld({ sky: createCloudbaseRun() });
   fly(startRun(used, 3));
@@ -185,29 +185,29 @@ test('the same sky and the same asks give the same run, whatever wing and world 
   used.g.brake = 0.9;
   used.g.stallLoad = 0.8;
   used.g.ears = 0.6;
-  used.g.dive = 0.3;
-  used.g.tuck = 0.2;
-  used.g.diveRest = 1;
-  used.g.diveArmed = false;
+  Object.assign(used.g, { pitch: 0.4, pitchRate: -1, pitchPush: 0.3, tuck: 0.2, fallRest: 1, fallArmed: false });
+  Object.assign(used.g, { lean: 0.5, roll: 0.4, rollRate: 1.5, rollRest: 0.1, rollSpeed: -1, tip: 0.3, tipSide: -1 });
   used.hook = -1;
   used.stalls = 9;
   used.tucks = 4;
+  used.tips = 2;
   used.pump.held = 0.2;
   used.pump.n = 1;
   used.intent.ears = true;
   fly(startRun(used, 77));
   assert.deepEqual(used.sky.state, fresh.sky.state);
   assert.deepEqual({ ...used.g, pos: { ...used.g.pos } }, { ...fresh.g, pos: { ...fresh.g.pos } });
-  assert.deepEqual([used.hook, used.stalls, used.tucks, used.steps, used.pump], [fresh.hook, fresh.stalls, fresh.tucks, fresh.steps, fresh.pump]);
+  assert.deepEqual([used.hook, used.stalls, used.tucks, used.tips, used.steps, used.pump], [fresh.hook, fresh.stalls, fresh.tucks, fresh.tips, fresh.steps, fresh.pump]);
   // With the meet and the kettlebells, a world that has flown a whole run, taken a gate, sprayed
   // its plates and met the Beast starts the next exactly as a new one: everything the meet keeps
   // (the plates off the trail, the gates and the blessing among it) and the kettlebells keep.
   const meetWorld = () => createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells() });
   const newer = startRun(meetWorld(), 21);
   flyPilot(newer, createReferencePilot({ ...TST, collect: true }), { limit: 140 });
-  // Sky 7 (under SIM_VERSION 3 it was 32, which no longer meets the Beast).
+  // Sky 12 (under SIM_VERSION 3 it was 32, which no longer meets the Beast, and 7 when the wing
+  // first dived).
   const older = meetWorld();
-  flyPilot(startRun(older, 7), createReferencePilot({ ...TST, collect: true }));
+  flyPilot(startRun(older, 12), createReferencePilot({ ...TST, collect: true }));
   assert.ok(older.meet.state.runes.taken > 0 && older.meet.state.scattered > 0 && older.bells.state.beast.n >= 0, 'the used world did all of it');
   startRun(older, 21);
   flyPilot(older, createReferencePilot({ ...TST, collect: true }), { limit: 140 });
@@ -224,7 +224,7 @@ test('a world with the meet flies the very sky of one with the kettlebells alone
   let twins = 0;
   let gates = 0;
   let glances = 0;
-  for (const [seed, options] of [[1, collector], [10, collector], [20, collector], [37, collector], [1, MEET_PILOTS.algiz]]) {
+  for (const [seed, options] of [[3, collector], [5, collector], [7, collector], [12, collector], [1, MEET_PILOTS.algiz]]) {
     const asked = [];
     const met = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells() }), seed);
     const pilot = createReferencePilot(options);
@@ -319,10 +319,10 @@ test('pumping the brake opens a folded wing sooner: each press held 0.3 s and le
   assert.deepEqual(world.pump, { held: 0, n: 0 });
 });
 
-test('the wing can dive above the ravens\' grace height and not below it', () => {
+test('the air falling away surges the wing at any height, and only above the ravens\' grace height can it tuck', () => {
   // The same fall of the air under a wing in air with no lift and no sink, as if it had just left a
-  // core that lifted it 20 m/s, either side of the grace height.
-  for (const [y, dives] of [[CLOUD_RAVENS.grace + 30, true], [CLOUD_RAVENS.grace - 30, false]]) {
+  // core that lifted it 20 m/s, either side of the grace height, flown on hands up.
+  for (const [y, folds] of [[CLOUD_RAVENS.grace + 30, true], [CLOUD_RAVENS.grace - 30, false]]) {
     const world = startRun(createRunWorld({ sky: createCloudbaseRun({ hazards: false }) }), 8);
     const forces = {};
     let spot = null;
@@ -333,22 +333,31 @@ test('the wing can dive above the ravens\' grace height and not below it', () =>
     }
     assert.ok(spot, 'a spot of still air');
     Object.assign(world.g.pos, spot);
-    Object.assign(world.g, { under: 20, felt: true, diveArmed: true, diveRest: 0 });
-    stepRun(world, { turn: 0, brake: false, bar: false }, RUN.step);
-    assert.equal(world.controls.dive, dives);
-    assert.equal(world.g.dive > 0, dives, `at ${y} m`);
+    Object.assign(world.g, { under: 20, felt: true, fallArmed: true, fallRest: 0 });
+    const intent = { turn: 0, brake: false, bar: false };
+    stepRun(world, intent, RUN.step);
+    assert.equal(world.controls.folds, folds);
+    assert.equal(world.controls.swing, true);
+    assert.ok(world.g.pitchPush < -PITCH.push.fall * 0.9, `at ${y} m it surges: ${world.g.pitchPush} rad/s owed`);
+    let ahead = 0;
+    for (let i = 0; i < 90 && world.g.tuck === 0; i++) {
+      stepRun(world, intent, RUN.step);
+      ahead = Math.min(ahead, world.g.pitch);
+    }
+    assert.equal(world.tucks > 0, folds, `at ${y} m`);
+    if (!folds) assert.ok(-ahead > PITCH.line, 'low down it swings as far, and is only stopped');
   }
 });
 
 test('a tuck is counted for the run, but is no stall: the control light stays white', () => {
-  // A pilot circling hands up, so no brake of its own catches the dive.
+  // A pilot circling hands up, so no brake of its own catches the surge.
   const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet() }), 3);
   const pilot = createReferencePilot({ catches: false });
   const intent = { turn: 0, brake: false, bar: false };
   let reason = null;
   while (!reason && world.g.pos.y < CLOUD_RAVENS.grace + 20) reason = stepRun(world, pilot.decide(world, intent), RUN.step);
-  // A dive about to close uncaught.
-  world.g.dive = 2 * RUN.step;
+  // A surge that will carry the wing past its line.
+  world.g.pitchRate = -2.8;
   while (!reason && world.meet.state.count < 2) reason = stepRun(world, pilot.decide(world, intent), RUN.step);
   assert.ok(world.tucks >= 1, `${world.tucks} tucks`);
   assert.equal(world.stalls, 0);
@@ -412,7 +421,8 @@ test('the controls fly exactly what they stand for: left and right held together
   const chord = startRun(createRunWorld({ sky: createCloudbaseRun() }), 3);
   for (let i = 0; i < 3 * 60; i++) stepBits(chord, 0b0011);
   assert.equal(chord.g.bar, 1);
-  assert.ok(Math.abs(chord.g.speed - FLIGHT.speed.bar) < 0.1, `${chord.g.speed} m/s`);
+  // Fast, if not settled: leaving the launch column on the bar swings the wing a little.
+  assert.ok(chord.g.speed > FLIGHT.speed.trim + 3, `${chord.g.speed} m/s`);
   assert.equal(chord.g.yawRate, 0);
   const braked = startRun(createRunWorld({ sky: createCloudbaseRun() }), 3);
   for (let i = 0; i < 3 * 60; i++) stepBits(braked, 0b0111);

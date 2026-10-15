@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FEATS, JUDGES, THOUSAND_POUNDS, barogram, featsFor, kilos, lightsOf, medalsSaid, metres, shareText, worldSaid } from './meet-card.js';
+import { FEATS, JUDGES, THOUSAND_POUNDS, TRICK_FEATS, barogram, featsFor, kilos, lightsOf, medalsSaid, metres, shareText, trickSaid, worldSaid } from './meet-card.js';
 import { FEAT_IDS } from './good-lift-store.js';
 
 const lift = (line, red, { kg = 25, double = false } = {}) => ({ line, kg, red, good: (red & (red - 1)) === 0, double, at: 0 });
@@ -52,9 +52,23 @@ test('each feat is earned by what the run did, and only by that', () => {
   assert.ok(!featsFor(run([lift(250, 0)], { total: 452.5 })).includes('thousand-pound-club'));
   // Earned in FEATS order; the streak's is never a single run's, nor the bot's, which only the bots
   // flying the sky can award.
-  const all = featsFor(run([...clean.slice(0, 4).map((each, i) => ({ ...each, double: i === 3 })), lift(0, 0)], { total: 500, stats: { thrown: 4, hits: 0 } }));
+  const all = featsFor(run([...clean.slice(0, 4).map((each, i) => ({ ...each, double: i === 3 })), lift(0, 0)], { total: 500, stats: { thrown: 4, hits: 0, wingovers: 5, pitch: 45 } }));
   assert.deepEqual(all, FEATS.filter((feat) => !feat.streak && !feat.bot).map((feat) => feat.id));
   assert.deepEqual(FEATS.filter((feat) => feat.streak || feat.bot).map((feat) => feat.id), ['training-block', 'beat-the-bot']);
+});
+
+test('the trick feats ask five linked wingovers or a pitched swing caught 45° ahead in a set landed, and the sheet says the tricks', () => {
+  const tricked = (stats) => featsFor(run([lift(250, 0)], { stats: { thrown: 0, hits: 0, ...stats } }));
+  assert.ok(tricked({ wingovers: TRICK_FEATS.wingovers }).includes('wingover-five'));
+  assert.ok(!tricked({ wingovers: TRICK_FEATS.wingovers - 1 }).includes('wingover-five'));
+  assert.ok(tricked({ pitch: TRICK_FEATS.pitch }).includes('pitched-45'));
+  assert.ok(!tricked({ pitch: TRICK_FEATS.pitch - 1 }).includes('pitched-45'));
+  // A sheet from before style was kept says nothing of it, and earns neither.
+  assert.deepEqual(tricked({}), ['opener']);
+  assert.equal(trickSaid({ wingovers: 5, pitch: 47 }), 'tricks: wingover ×5 · pitched 47°');
+  assert.equal(trickSaid({ wingovers: 3, pitch: 0 }), 'tricks: wingover ×3');
+  assert.equal(trickSaid({ wingovers: 0, pitch: 0 }), '');
+  assert.equal(trickSaid({}), '');
 });
 
 test('the store knows every feat the sheet lists, in the same order', () => {

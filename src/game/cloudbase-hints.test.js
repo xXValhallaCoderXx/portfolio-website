@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  BLESSED, CENTRE_RIDES, DEEP_WARN, EARS_CLIMB, ENTRY_RIDES, FOG_NEAR, FRONTS_TAUGHT, GUST_NEAR, HINT_HOLD, HINT_WIDTH, STONES_AGAIN, STONES_NEWS, TUCK_SAID,
-  TURN_SAID, cloudbaseHint, holdHint, stallHint,
+  BLESSED, CENTRE_RIDES, DEEP_WARN, EARS_CLIMB, ENTRY_RIDES, FOG_NEAR, FRONTS_TAUGHT, GUST_NEAR, HINT_HOLD, HINT_WIDTH, LOST_SAID, STONES_AGAIN, STONES_NEWS,
+  TIP_SAID, TRICKS_TAUGHT, TRICK_SAID, TUCK_SAID, TURN_SAID, cloudbaseHint, holdHint, stallHint,
 } from './cloudbase-hints.js';
 import { BRAKE } from './flight.js';
 import { MEET } from './meet-state.js';
@@ -378,9 +378,9 @@ test('Gjallarhorn is said the moment it sounds, whatever line was up a moment be
   assert.equal(holdHint(held, hint({ horn: 0 }), 110), 'Gjallarhorn — every lift counts double');
 });
 
-test('high in a run a stall says both beats, let go and then catch the dive as it flies again, where a gentle one says only to let go', () => {
-  assert.equal(hint({ stall: 1, harsh: true }), 'stalled — let go, then tap as it dives');
-  assert.equal(hint({ stall: 1, stallSide: 1, harsh: true }), 'spin — let go, then tap as it dives');
+test('high in a run a stall says both beats, let go and then brake the surge as it flies again, where a gentle one says only to let go', () => {
+  assert.equal(hint({ stall: 1, harsh: true }), 'stalled — let go, then brake the surge');
+  assert.equal(hint({ stall: 1, stallSide: 1, harsh: true }), 'spin — let go, then brake the surge');
   assert.equal(hint({ stall: 1 }), 'stalled — let go, the wing flies again');
   // Over the fjord, where nothing is harsh, the lines are as they always were.
   assert.equal(stallHint(1, 0), 'stalled — let go, the wing flies again');
@@ -388,17 +388,17 @@ test('high in a run a stall says both beats, let go and then catch the dive as i
   assert.equal(stallHint(0, 0, true), '');
 });
 
-test('a diving wing is said at once with how to catch it, and the tuck a missed one ends in says so for the next, after a fold and a stall but before a kettlebell', () => {
-  assert.equal(hint({ dive: 0.5 }), 'wing diving — tap the brake to catch it');
-  assert.equal(hint({ dive: 0.5, touch: true }), 'wing diving — tap ▼ to catch it');
-  assert.equal(hint({ tucked: 0.4 }), 'front tuck — tap the brake as it dives');
-  assert.equal(hint({ tucked: 0.4, touch: true }), 'front tuck — tap ▼ as the wing dives');
+test('a surging wing is said at once with how to catch it, and the tuck a missed one ends in says so for the next, after a fold and a stall but before a kettlebell', () => {
+  assert.equal(hint({ surging: 1 }), 'wing surging — brake till it swings back');
+  assert.equal(hint({ surging: 1, touch: true }), 'wing surging — hold ▼ till it swings back');
+  assert.equal(hint({ tucked: 0.4 }), 'front tuck — brake as the wing surges');
+  assert.equal(hint({ tucked: 0.4, touch: true }), 'front tuck — hold ▼ as the wing surges');
   assert.equal(hint({ tucked: TUCK_SAID }), '');
-  assert.match(hint({ dive: 0.5, collapse: 1 }), /^raven strike/);
-  assert.match(hint({ dive: 0.5, stall: 1, harsh: true }), /^stalled/);
-  assert.match(hint({ dive: 0.5, tucked: 0.4, bell: 1, load: 0.9, cloud: 1 }), /^wing diving/);
+  assert.match(hint({ surging: 1, collapse: 1 }), /^raven strike/);
+  assert.match(hint({ surging: 1, stall: 1, harsh: true }), /^stalled/);
+  assert.match(hint({ surging: 1, tucked: 0.4, bell: 1, load: 0.9, cloud: 1 }), /^wing surging/);
   assert.match(hint({ tucked: 0.4, bell: 1, load: 0.9, cloud: 1 }), /^front tuck/);
-  for (const moment of [{ dive: 0.5 }, { tucked: 0.4 }]) {
+  for (const moment of [{ surging: 1 }, { tucked: 0.4 }]) {
     const held = { line: '', since: 0 };
     holdHint(held, 'climb beside the ravens, never through', 10);
     assert.equal(holdHint(held, hint(moment), 10.1), hint(moment), 'said at once');
@@ -436,7 +436,7 @@ test('on the way into the first thermals the hint teaches the entry, and the mom
   assert.equal(hint({ turnIn: 0.2, turnSide: 1 }), 'turn ▶ now — into the lifted wing');
   assert.equal(hint({ turnIn: 0.2, turnSide: -1 }), 'turn ◀ now — into the lifted wing');
   assert.equal(hint({ turnIn: TURN_SAID }), '');
-  // A fold, a stall, a dive, a kettlebell, the brake and a cloud all come first.
+  // A fold, a stall, a surge, a kettlebell, the brake and a cloud all come first.
   assert.match(hint({ turnIn: 0.2, turnSide: 1, cloud: 1 }), /^in cloud/);
   assert.match(hint({ turnIn: 0.2, turnSide: 1, bell: 2 }), /^kettlebell/);
   const held = { line: '', since: 0 };
@@ -447,9 +447,13 @@ test('on the way into the first thermals the hint teaches the entry, and the mom
 test('every line the wing\'s new moments add fits one line of a narrow phone, and each moment has its own', () => {
   const moments = [
     { collapse: 1, touch: true }, { collapse: 1, bellHit: true, touch: true }, { stall: 1, harsh: true }, { stall: 1, stallSide: 1, harsh: true },
-    { dive: 0.5 }, { dive: 0.5, touch: true }, { tucked: 0.4 }, { tucked: 0.4, touch: true },
+    { surging: 1 }, { surging: 1, touch: true }, { tucked: 0.4 }, { tucked: 0.4, touch: true },
     { deep: 1, lift: 0 }, { deep: 1, lift: 0, touch: true }, { earsClimb: 9 }, { trailHigh: true }, { trailHigh: true, touch: true }, { approach: true, approachDir: 1, rides: 0 }, { approach: true, approachDir: -1, rides: 0 },
     { turnIn: 0, turnSide: 1 }, { turnIn: 0, turnSide: -1 },
+    { tipped: 0.5 }, { nearTuck: true }, { nearTuck: true, touch: true }, { nearTip: true },
+    { landed: 0.5, trick: 'wingover ×12', points: 12_345 }, { lost: 0.5 }, { unscored: 0.5 }, { inHand: 'wingover ×10' }, { inHand: 'pitch ×4', inHandPitch: true },
+    { pitching: true, tricksLanded: 0 }, { pitching: true, tricksLanded: 0, touch: true }, { wingover: true, tricksLanded: 0 },
+    { wingover: true, tricksLanded: 0, touch: true },
   ];
   const lines = moments.map(hint);
   assert.equal(new Set(lines).size, moments.length, 'each moment has its own line');
@@ -457,4 +461,40 @@ test('every line the wing\'s new moments add fits one line of a narrow phone, an
     assert.ok(line.length > 0);
     assert.ok([...line].length <= HINT_WIDTH, `"${line}" is ${[...line].length} characters`);
   }
+});
+
+test('a trick near its fold is warned of at once, after a surge, a tuck or a tip but before a kettlebell, and a tip says how to keep off the next', () => {
+  assert.equal(hint({ tipped: 0.5 }), 'tip collapse — stop swapping short of red');
+  assert.equal(hint({ tipped: TIP_SAID }), '');
+  assert.equal(hint({ nearTuck: true }), 'too far ahead — brake it sooner');
+  assert.equal(hint({ nearTuck: true, touch: true }), 'too far ahead — ▼ sooner');
+  assert.equal(hint({ nearTip: true }), 'too steep — ease off or a tip folds');
+  assert.match(hint({ nearTuck: true, surging: 1 }), /^wing surging/);
+  assert.match(hint({ nearTip: true, tipped: 0.5 }), /^tip collapse/);
+  assert.match(hint({ nearTip: true, bell: 1, load: 0.9 }), /^too steep/);
+  for (const moment of [{ tipped: 0.5 }, { nearTuck: true }, { nearTip: true }]) {
+    const held = { line: '', since: 0 };
+    holdHint(held, 'climb beside the ravens, never through', 10);
+    assert.equal(holdHint(held, hint(moment), 10.1), hint(moment), 'said at once');
+  }
+});
+
+test('a set of tricks landed or lost is said, then how to land one in hand, and how to fly them until two have landed; below the grace height, that style waits', () => {
+  assert.equal(hint({ landed: 1, trick: 'wingover ×5', points: 245 }), 'landed — wingover ×5, +245 style');
+  assert.equal(hint({ landed: 1, trick: 'tricks ×9', points: 1250 }), 'landed — tricks ×9, +1,250 style');
+  assert.equal(hint({ landed: TRICK_SAID, trick: 'wingover ×5', points: 245 }), '');
+  assert.equal(hint({ lost: 1 }), 'trick lost — level out to land the next');
+  assert.equal(hint({ lost: LOST_SAID }), '');
+  assert.equal(hint({ unscored: 1 }), 'style counts from 260 m — climb first');
+  assert.equal(hint({ inHand: 'wingover ×3' }), 'wingover ×3 — level out to land it');
+  assert.equal(hint({ inHand: 'pitch ×3', inHandPitch: true }), 'pitch ×3 — brake the surge to land it');
+  assert.equal(hint({ pitching: true, tricksLanded: 0 }), 'pitch: brake when ahead, let go when behind');
+  assert.equal(hint({ pitching: true, tricksLanded: 0, touch: true }), 'pitch: ▼ when ahead, let go when behind');
+  assert.equal(hint({ wingover: true, tricksLanded: 1 }), 'wingover — swap turns as each swing peaks');
+  assert.equal(hint({ wingover: true, tricksLanded: 1, touch: true }), 'wingover — ◀ ▶ in turn as each swing peaks');
+  assert.equal(hint({ wingover: true, pitching: true, tricksLanded: TRICKS_TAUGHT }), '', 'taught until two have landed');
+  // A set in hand is said over how to fly it; the meet's news, a kettlebell and the depth come first.
+  assert.match(hint({ inHand: 'wingover ×3', wingover: true, tricksLanded: 0 }), /level out to land it$/);
+  assert.match(hint({ depth: 1, landed: 1, trick: 'pitch ×3', points: 115 }), /^depth/);
+  assert.match(hint({ bell: 2, inHand: 'wingover ×3' }), /^kettlebell/);
 });

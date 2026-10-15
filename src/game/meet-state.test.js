@@ -7,7 +7,7 @@ import { TST } from './pilots.js';
 import { createRunWorld, startRun, stepRun } from './run-step.js';
 import { createReferencePilot } from './pilots.js';
 import { CLOUD_POOL, cloudFogSpeed, createCloudbaseRun } from './cloudbase-state.js';
-import { DIVE, FLIGHT, STALL } from './flight.js';
+import { FLIGHT, STALL, TUCK } from './flight.js';
 
 const STEP = 1 / 60;
 const TAU = Math.PI * 2;
@@ -299,7 +299,7 @@ test('a front tuck, like a stall, loses the circle in progress', () => {
   // same flight without it makes a rep.
   const tucked = circle(1, 13, {
     before: ({ g }, i) => {
-      if (i === 360) g.tuck = DIVE.tuck.time;
+      if (i === 360) g.tuck = TUCK.time;
     },
     after: ({ g, meet }) => {
       if (g.tuck > 0) assert.equal(meet.state.turned, 0);
