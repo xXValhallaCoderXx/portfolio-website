@@ -187,7 +187,9 @@ test('a recorder keeps every step of the longest run in one buffer, counts each 
 //   tapped five times a second, light brake, eased         1  1130 / 1383   1942 / 2355
 //                                                          2  1011 / 1295   1838 / 2350
 // Under version 2 the reference pilot aims inside the tightest circle its wing can turn (pilots.js),
-// so it asks for a full turn more of the time and its keys change less.
+// so it asks for a full turn more of the time and its keys change less. Version 3 moved each of
+// these medians by 25 characters at most and left every longest link as it was: its plates, gates
+// and Beast change which way a run goes, never how its controls are written.
 // A stretch of steps holding the same controls costs one byte up to seven steps long and two up to
 // 1,023, so a link grows with how often the pilot changes what it holds, not with how long it
 // flies. Even a pilot tapping five times a second for the whole run stays far inside MAX_LINK;

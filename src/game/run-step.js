@@ -1,10 +1,11 @@
 // One fixed step of a Good Lift run: the wing and the sky, and the meet's kettlebells and judges
-// once they are given one. The game, the tests, the replays of a run and (one day) a server
-// that checks a submitted run all step it here, in this one order, so a run flown in a browser
-// can be flown again anywhere else and come out the same. Kept free of 3D and page code.
+// once they are given one. The game, the tests, the replays of a run and the world board's
+// function (functions/), which checks a run before it ranks it, all step it here, in this one
+// order, so a run flown in a browser can be flown again anywhere else and come out the same. Kept
+// free of 3D and page code: the ground it touches down on is ground.js's, not terrain.js's.
 import { FLIGHT, createFlight, settleFlight, stepFlight } from './flight.js';
 import { CLOUD_GATE, CLOUD_RAVENS, CLOUD_ZONE } from './cloudbase-state.js';
-import { surfaceAt } from './terrain.js';
+import { surfaceAt } from './ground.js';
 
 // Seconds a run is stepped by, everywhere. Touching down within `ground` metres of the surface
 // ends a run, ring or not.

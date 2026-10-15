@@ -1155,6 +1155,9 @@ const firstSkies = (count) => Array.from({ length: count }, (_, i) => i + 1);
 //                                  2    835 / 1254 / 1800 m   100 /  86 / 14%   1.8   0
 //   never eased, with the flock    1    721 / 1023 / 1368 m   100 /  51 /  0%   1.9   3.7
 //                                  2    640 / 1027 / 1359 m   100 /  54 /  0%   2.0   3.8
+// Version 3 left every row as version 2 had it, to the run: it added only the meet's plates, gates
+// and Beast, which no pilot here meets, and the sky flies exactly as it did (run-step.test.js's
+// goldens of these pilots came out the same to the bit).
 // Version 2's hunted cores peak at their middle. A light-brake circle round it rides 30% more than
 // a hands-up one, which gets what the whole core gave before, so the light brake climbs as high as
 // it did or a little higher, while hands up, the way a new player circles, comes down 210 to 280 m

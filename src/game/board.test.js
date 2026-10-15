@@ -1,12 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BOARD, ROW, addRow, boardKey, emptyBoard, normalizeBoard, normalizeRow, pruneBoard, rowsFor } from './board.js';
+import {
+  BOARD, ROW, addRow, boardDay, boardKey, emptyBoard, normalizeBoard, normalizeBots, normalizeRow, normalizeScore, outranks, pruneBoard, rowsFor, withBot,
+} from './board.js';
+import { BYNAMES } from './meet-bynames.js';
 
 const DAY = 20_756;
 const KEY = boardKey(1, DAY);
 
-// A whole row: a run flown here, unnamed, every light white. Each run on a day needs its own log.
-const row = (fields = {}) => ({ who: '', via: 'me', total: 100, peak: 600, red: [0, 0, 0], at: 1_000, log: 'AQ', ...fields });
+// A whole row: a run flown here, unnamed and with no byname, every light white. Each run on a day
+// needs its own log.
+const row = (fields = {}) => ({ who: '', via: 'me', total: 100, peak: 600, red: [0, 0, 0], at: 1_000, log: 'AQ', byname: '', ...fields });
 const logs = (board, key = KEY) => rowsFor(board, key).map(({ log }) => log);
 
 test('the ten best runs of a day are kept, best total first, then peak, then the earliest', () => {
@@ -85,10 +89,10 @@ test('old days are forgotten, under any version of the rules', () => {
 });
 
 test('a damaged row is dropped rather than repaired', () => {
-  const good = { who: 'REN', via: 'link', total: 512.5, peak: 1412, red: [0, 2, 0, 7], at: 1_791_000_000_000, log: 'AQGv-_x9' };
+  const good = { who: 'REN', via: 'link', total: 512.5, peak: 1412, red: [0, 2, 0, 7], at: 1_791_000_000_000, log: 'AQGv-_x9', byname: 'unstruck' };
   assert.deepEqual(normalizeRow(good), good);
   assert.notEqual(normalizeRow(good).red, good.red);
-  assert.deepEqual(normalizeRow({ ...good, total: 0, peak: 0, red: [], at: 0, who: '', via: 'me' }), { ...good, total: 0, peak: 0, red: [], at: 0, who: '', via: 'me' });
+  assert.deepEqual(normalizeRow({ ...good, total: 0, peak: 0, red: [], at: 0, who: '', via: 'me', byname: '' }), { ...good, total: 0, peak: 0, red: [], at: 0, who: '', via: 'me', byname: '' });
   assert.deepEqual(normalizeRow({ ...good, ghost: true }), good, 'anything else in a row is left behind');
   assert.equal(normalizeRow({ ...good, log: 'A'.repeat(ROW.log - 1) }).log.length, ROW.log - 1);
   assert.deepEqual(normalizeRow({ ...good, red: Array(ROW.lights).fill(7) }).red, Array(ROW.lights).fill(7));
@@ -164,4 +168,87 @@ test('a damaged row is dropped rather than repaired', () => {
   assert.deepEqual(logs(read, boardKey(1, DAY - 3)), ['r11', 'r10', 'r9', 'r8', 'r7', 'r6', 'r5', 'r4', 'r3', 'r2']);
   assert.deepEqual(logs(read, boardKey(1, DAY - 4)), ['r11', 'r10', 'r9', 'r8', 'r7', 'r6', 'r5', 'r4', 'r3', 'r2']);
   for (const nonsense of [null, undefined, [], 'board', { days: [] }, { days: null }, { days: 'x' }]) assert.deepEqual(normalizeBoard(nonsense), emptyBoard());
+});
+
+test('a row keeps the byname its run earned, and one this build does not know is left off while the run keeps its row', () => {
+  for (const { id } of BYNAMES) assert.equal(normalizeRow(row({ byname: id })).byname, id, id);
+  // A row written before there were bynames has none, and reads as having none.
+  const older = row();
+  delete older.byname;
+  assert.deepEqual(normalizeRow(older), row());
+  for (const unknown of ['the Unstruck', 'UNSTRUCK', 'a-later-byname', null, 7, ['unstruck'], {}, '__proto__', 'constructor']) {
+    assert.deepEqual(normalizeRow(row({ byname: unknown })), row(), String(unknown));
+  }
+  // The board keeps it with its run, and it comes back from storage.
+  const board = emptyBoard();
+  addRow(board, KEY, row({ byname: 'horn-lifter', log: 'horn' }));
+  assert.equal(rowsFor(board, KEY)[0].byname, 'horn-lifter');
+  assert.equal(rowsFor(normalizeBoard(JSON.parse(JSON.stringify(board))), KEY)[0].byname, 'horn-lifter');
+});
+
+test('one run outranks another by the heavier total, then by the higher peak, and a tie in both outranks neither', () => {
+  const run = (total, peak) => ({ total, peak });
+  assert.equal(outranks(run(102.5, 10), run(100, 900)), true);
+  assert.equal(outranks(run(100, 900), run(102.5, 10)), false);
+  assert.equal(outranks(run(100, 601), run(100, 600)), true);
+  assert.equal(outranks(run(100, 600), run(100, 601)), false);
+  assert.equal(outranks(run(100, 600), run(100, 600)), false);
+});
+
+test('the bot to beat is pinned among the day\'s runs where it ranks, a run that only ties it stays under it, and its row is never one the board keeps', () => {
+  const rows = [row({ total: 300, log: 'a' }), row({ total: 200, peak: 700, log: 'b' }), row({ total: 200, peak: 600, log: 'c' }), row({ total: 100, log: 'd' })];
+  const order = (shown) => shown.map((each) => (each.via === 'bot' ? 'bot' : each.log));
+  const tst = { who: 'TST', total: 200, peak: 600, red: [0, 1] };
+  const shown = withBot(rows, tst);
+  assert.deepEqual(order(shown), ['a', 'b', 'bot', 'c', 'd']);
+  assert.deepEqual(order(withBot(rows, { ...tst, total: 900 })), ['bot', 'a', 'b', 'c', 'd']);
+  assert.deepEqual(order(withBot(rows, { ...tst, total: 0, peak: 0 })), ['a', 'b', 'c', 'd', 'bot']);
+  assert.deepEqual(order(withBot([], tst)), ['bot']);
+  const pinned = shown[2];
+  assert.deepEqual(pinned, { who: 'TST', via: 'bot', total: 200, peak: 600, red: [0, 1], at: 0, log: '', byname: '' });
+  assert.notEqual(pinned.red, tst.red);
+  // A new list of the caller's own rows, which are left as they were.
+  assert.equal(rows.length, 4);
+  assert.equal(shown[0], rows[0]);
+  // However it is dressed up, a bot's row is no run: the board refuses it.
+  for (const dressed of [pinned, { ...pinned, at: 1, log: 'AQ' }]) assert.equal(normalizeRow(dressed), null);
+  const board = emptyBoard();
+  assert.deepEqual(addRow(board, KEY, { ...pinned, at: 1, log: 'AQ' }), { rank: 0, best: false });
+  assert.deepEqual(board, emptyBoard());
+});
+
+test('what a day\'s bots came to is kept whole or not at all', () => {
+  const kept = {
+    key: boardKey(2, DAY),
+    seed: 0xfeedbeef,
+    scores: [{ total: 237.5, peak: 1040, red: [0, 0, 1, 0] }, { total: 145, peak: 1152, red: [] }, { total: 360, peak: 1300, red: [0, 0, 0, 0, 0] }],
+  };
+  assert.deepEqual(normalizeBots(kept), kept);
+  assert.deepEqual(normalizeBots({ ...kept, extra: 1, scores: kept.scores.map((score) => ({ ...score, reason: 'fog' })) }), kept, 'anything else is left behind');
+  const copy = normalizeBots(kept);
+  copy.scores[0].red.push(7);
+  assert.deepEqual(kept.scores[0].red, [0, 0, 1, 0]);
+  const damaged = {
+    'a key boardKey would not write': { key: 'today' },
+    'no key': { key: undefined },
+    'a seed past 32 bits': { seed: 2 ** 32 },
+    'a negative seed': { seed: -1 },
+    'a seed between whole numbers': { seed: 1.5 },
+    'a seed as text': { seed: '7' },
+    'no scores': { scores: [] },
+    'scores that are not a list': { scores: { 0: kept.scores[0] } },
+    'more scores than any build flies': { scores: Array(9).fill(kept.scores[0]) },
+    'a total of no plate': { scores: [{ ...kept.scores[0], total: 101 }] },
+    'a peak between metres': { scores: [{ ...kept.scores[0], peak: 10.5 }] },
+    'a light past three bits': { scores: [{ ...kept.scores[0], red: [8] }] },
+    'lights with a gap': { scores: [{ ...kept.scores[0], red: [0, , 1] }] },
+    'a score that is no score': { scores: [null] },
+  };
+  for (const [why, fields] of Object.entries(damaged)) assert.equal(normalizeBots({ ...kept, ...fields }), null, why);
+  for (const nonsense of [null, undefined, 'bots', 7, [], [kept]]) assert.equal(normalizeBots(nonsense), null);
+  // A score is held to a row's rules, and a key read for its day as the board reads it.
+  assert.deepEqual(normalizeScore({ total: 2.5, peak: 0, red: [7], who: 'X' }), { total: 2.5, peak: 0, red: [7] });
+  assert.equal(normalizeScore({ total: 2.5, peak: 0, red: Array(ROW.lights + 1).fill(0) }), null);
+  assert.equal(boardDay(boardKey(2, DAY)), DAY);
+  for (const key of ['2:day', '02:20756', '__proto__', 7]) assert.ok(Number.isNaN(boardDay(key)), String(key));
 });

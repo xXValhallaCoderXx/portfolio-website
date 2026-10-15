@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CENTRE_RIDES, DEEP_WARN, FOG_NEAR, GUST_NEAR, HINT_HOLD, HINT_WIDTH, cloudbaseHint, holdHint, stallHint } from './cloudbase-hints.js';
+import {
+  BLESSED, CENTRE_RIDES, DEEP_WARN, FOG_NEAR, FRONTS_TAUGHT, GUST_NEAR, HINT_HOLD, HINT_WIDTH, STONES_AGAIN, STONES_NEWS, cloudbaseHint, holdHint, stallHint,
+} from './cloudbase-hints.js';
 import { BRAKE } from './flight.js';
 import { MEET } from './meet-state.js';
+import { BLESSING, RUNE, RUNE_NAME, RUNE_SIGN } from './meet-runes.js';
 
 // A quiet moment well into a run: gliding in still air with nothing near and the hands up.
 const quiet = {
@@ -218,4 +221,156 @@ test('the run\'s first rep to depth is news for a moment, after a close call and
 test('the meet\'s news names the weights the meet itself loads', () => {
   assert.ok(hint({ closeCall: 0 }).includes(` ${MEET.close} kg `));
   assert.ok(hint({ depth: 0 }).includes(` ${MEET.deep} kg `));
+});
+
+test('the Beast coming says how to dodge it as any kettlebell does, on keys and on a phone, and starts with the word that has it said at once', () => {
+  assert.equal(hint({ bell: 1, beast: true }), 'kettlebell — the Beast: bar or straighten');
+  assert.equal(hint({ bell: 1, beast: true, touch: true }), 'kettlebell — the Beast: ◀▶ or straighten');
+  assert.equal(hint({ bell: 2, beast: true }), 'kettlebell — the Beast: turn off your line');
+  assert.equal(hint({ bell: 2, beast: true, touch: true }), 'kettlebell — the Beast: turn off your line');
+  assert.equal(hint({ bell: 0, beast: true }), '', 'only while it is coming');
+  assert.match(hint({ bell: 1, beast: true, collapse: 1 }), /^raven strike/);
+  assert.match(hint({ bell: 1, beast: true, load: 0.9, cloud: 1, deep: 3 }), /^kettlebell — the Beast/);
+  for (const moment of [{ bell: 1, beast: true }, { bell: 1, beast: true, touch: true }, { bell: 2, beast: true }]) {
+    const held = { line: '', since: 0 };
+    holdHint(held, 'climb beside the ravens, never through', 10);
+    assert.equal(holdHint(held, hint(moment), 10.1), hint(moment));
+  }
+});
+
+test('a close call says what it put on the bar: the Beast\'s more, and twice as much under Tiwaz, as a rep to depth is', () => {
+  assert.equal(hint({ closeCall: 0.5, beastClose: true }), `close call, the Beast — ${MEET.beast} kg on the bar`);
+  assert.equal(hint({ closeCall: 0.5, double: true }), `close call — ${MEET.close * BLESSING.double} kg on the bar`);
+  assert.equal(hint({ closeCall: 0.5, beastClose: true, double: true }), 'close call, the Beast — 40 kg on the bar');
+  assert.equal(hint({ depth: 0.5, double: true }), 'depth — centred circle, 10 kg on the bar');
+  assert.equal(hint({ closeCall: 2.5, beastClose: true }), '');
+});
+
+test('each blessing taken is news for three seconds, in its own words, and one already spent is not said', () => {
+  const said = [RUNE.fehu, RUNE.algiz, RUNE.ansuz, RUNE.tiwaz].map((rune) => hint({ blessing: rune, blessed: 0.2 }));
+  assert.deepEqual(said, BLESSED.slice(1));
+  assert.deepEqual(said.map((line) => line.split(' ')[0]), [RUNE_SIGN[1], RUNE_SIGN[2], RUNE_SIGN[3], RUNE_SIGN[4]]);
+  assert.ok(said.every((line, i) => line.includes(RUNE_NAME[i + 1])));
+  assert.equal(hint({ blessing: RUNE.fehu, blessed: 3.1 }), '');
+  assert.equal(hint({ blessing: RUNE.none, blessed: 0.5 }), '', 'Algiz spent straight away has nothing to say');
+  // News: a cloud and the horn come first, the run's first rep to depth after.
+  assert.match(hint({ blessing: RUNE.tiwaz, blessed: 1, cloud: 1 }), /^in cloud/);
+  assert.match(hint({ blessing: RUNE.tiwaz, blessed: 1, horn: 1 }), /^Gjallarhorn/);
+  assert.match(hint({ blessing: RUNE.tiwaz, blessed: 1, depth: 0.5 }), /^ᛏ Tiwaz/);
+});
+
+test('a kettlebell turned aside by Algiz, and a bar lost to a strike under Tiwaz once the wing has opened, are each said for a moment', () => {
+  assert.equal(hint({ glanced: 0.5 }), 'ᛉ Algiz turned the kettlebell aside');
+  assert.equal(hint({ glanced: 2.1 }), '');
+  assert.equal(hint({ barLost: 1, collapse: 1.4, bellHit: true }), 'kettlebell hit — wing collapsed, hold on', 'the fold is said first');
+  assert.equal(hint({ barLost: 2.5 }), 'ᛏ Tiwaz — the strike took the whole bar');
+  assert.equal(hint({ barLost: 5.1 }), '');
+  assert.match(hint({ glanced: 0.5, closeCall: 0.5 }), /^ᛉ Algiz/);
+  assert.match(hint({ barLost: 3, horn: 1 }), /^ᛏ Tiwaz — the strike/);
+});
+
+test('rune stones are news as they are raised, saying where, or that one replaces the blessing held, and again for a moment as a slow climb comes level with them, never after', () => {
+  const raised = { stones: 500, stonesNew: 1, stonesLevel: Infinity };
+  assert.equal(hint(raised), 'rune stones at 500 m — fly through one');
+  assert.equal(hint({ ...raised, stones: 1000 }), 'rune stones at 1,000 m — fly through one');
+  assert.equal(hint({ ...raised, stones: 1000, blessing: RUNE.algiz }), 'rune stones at 1,000 m — one replaces yours');
+  assert.equal(hint({ ...raised, stonesNew: STONES_NEWS + 0.1 }), '', 'then the climb has the hint back');
+  // Level, STONES_AGAIN or more after they were raised: for as long as their news, from that moment.
+  const level = 'fly through a glowing rune for its blessing';
+  const slow = (stonesLevel) => ({ stones: 500, stonesNew: STONES_AGAIN + 2 + stonesLevel, stonesLevel });
+  assert.equal(hint(slow(0)), level);
+  assert.equal(hint(slow(STONES_NEWS - 0.1)), level);
+  assert.equal(hint(slow(STONES_NEWS)), '');
+  assert.equal(hint({ stones: 500, stonesNew: STONES_AGAIN, stonesLevel: 0 }), level);
+  assert.equal(hint({ ...slow(0), stones: 0 }), '', 'none waiting, none said');
+  // A strong climb comes level while their own news is still up, which goes on saying where they are,
+  // and then the climb has the hint back: it has just been told.
+  assert.equal(hint({ stones: 500, stonesNew: 3, stonesLevel: 0.2 }), 'rune stones at 500 m — fly through one');
+  assert.equal(hint({ stones: 500, stonesNew: STONES_NEWS + 0.5, stonesLevel: 1.7 }), '');
+  assert.equal(hint({ stones: 500, stonesNew: STONES_AGAIN - 0.1, stonesLevel: 0 }), '');
+  // They give way to news, the fog and a storm cloud being climbed toward, and come before the ravens' way.
+  assert.match(hint({ ...slow(1), blessing: RUNE.fehu, blessed: 0.5 }), /^ᚠ Fehu/);
+  assert.match(hint({ ...slow(1), fogClearance: 40 }), /^fog closing in/);
+  assert.match(hint({ ...slow(1), headroom: 30, climbing: true }), /^storm cloud above/);
+  assert.match(hint({ stones: 500, stonesNew: 1, stonesLevel: Infinity, headroom: 30, climbing: true }), /^storm cloud above/);
+  assert.equal(hint({ ...slow(1), thermal: 1, against: 3 }), level);
+});
+
+test('the iron loose in the sky is pointed out while it is there to be had: a strike\'s own plates, the plate under a cloud, the first fronts\' plates and the fog\'s bait', () => {
+  assert.equal(hint({ sprayed: true }), 'your plates sprayed — catch any on the way');
+  assert.equal(hint({ thunder: true }), '25 kg under the cloud — grab it and leave');
+  // Climbing toward the cloud, its own warning comes first; once the climb stops under it, the plate.
+  assert.equal(hint({ thunder: true, headroom: 30, climbing: true }), 'storm cloud above — lift ends at its base');
+  assert.equal(hint({ thunder: true, headroom: 30, climbing: false }), '25 kg under the cloud — grab it and leave');
+  assert.equal(hint({ front: true, fronts: 1 }), 'plates on the gust — widen your circle');
+  assert.equal(hint({ front: true, fronts: FRONTS_TAUGHT }), 'plates on the gust — widen your circle');
+  assert.equal(hint({ front: true, fronts: FRONTS_TAUGHT + 1 }), '', 'after the first fronts the plates speak for themselves');
+  assert.equal(hint({ bait: true }), 'fog bait — be over it as the fog lifts it');
+  // In the order they are gone in: the sprayed plates first, the bait last of them.
+  assert.match(hint({ sprayed: true, stones: 500, stonesNew: 1, stonesLevel: 1, thunder: true, front: true, fronts: 1, bait: true }), /^your plates/);
+  assert.match(hint({ stones: 500, stonesNew: 1, stonesLevel: Infinity, thunder: true }), /^rune stones/);
+  assert.match(hint({ front: true, fronts: 1, bait: true }), /^fog bait/);
+  // The fog, a storm cloud climbed toward and the news outrank all of them; turning against the
+  // flock and a trail outrank the bait; and a dying lift waits for it.
+  assert.match(hint({ sprayed: true, fogClearance: 40 }), /^fog closing in/);
+  assert.match(hint({ sprayed: true, headroom: 30, climbing: true }), /^storm cloud above/);
+  assert.match(hint({ bait: true, horn: 1 }), /^Gjallarhorn/);
+  assert.match(hint({ bait: true, thermal: 1, against: 2 }), /^ravens turn/);
+  assert.match(hint({ bait: true, trail: true }), /^lift dying — follow/);
+  assert.match(hint({ bait: true, thermal: 1, dying: true }), /^fog bait/);
+});
+
+test('a front\'s plates wait for the first lesson of the climb, which has only two thermals, for centring and for a dying lift, which they would not help, and come before the brake\'s lesson', () => {
+  const front = { front: true, fronts: 1 };
+  assert.equal(hint({ ...front, thermal: 1, rides: 1, lift: 14 }), 'climb beside the ravens, never through');
+  assert.equal(hint({ ...front, thermal: 2, rides: 2, lift: 14 }), 'climb beside the ravens, never through');
+  assert.equal(hint({ ...front, thermal: 1, rides: 3, shallow: true, lift: 14 }), 'straighten in the surge, turn as it fades');
+  assert.equal(hint({ ...front, thermal: 1, rides: 3, dying: true }), 'lift dying — leave when the ravens leave');
+  assert.match(hint({ ...front, thermal: 1, rides: 3, against: 2 }), /^ravens turn/);
+  // From the third thermal, and in the launch column, the plates are pointed out while they come.
+  for (const rides of [3, 4, 5]) assert.equal(hint({ ...front, thermal: 1, rides, lift: 14 }), 'plates on the gust — widen your circle');
+  assert.equal(hint({ ...front, thermal: 0, rides: 1, lift: 14 }), 'plates on the gust — widen your circle');
+  assert.equal(hint({ thermal: 1, rides: 3, lift: 14 }), 'ease the brake each circle or it goes deep', 'and the brake\'s lesson has it back');
+});
+
+test('the teaching lines are not crowded out: level with the stones, the centring and the brake lessons have the hint back once the moment to dash has passed', () => {
+  const level = { stones: 500, stonesNew: STONES_AGAIN + 10, stonesLevel: STONES_NEWS - 0.1 };
+  const passed = { ...level, stonesLevel: STONES_NEWS };
+  const centring = { thermal: 1, rides: 3, shallow: true, lift: 14 };
+  const brake = { thermal: 2, rides: 4, lift: 14 };
+  const ravens = { thermal: 1, rides: 2, lift: 14 };
+  for (const lesson of [centring, brake, ravens]) assert.equal(hint({ ...lesson, ...level }), 'fly through a glowing rune for its blessing');
+  assert.equal(hint({ ...centring, ...passed }), 'straighten in the surge, turn as it fades');
+  assert.equal(hint({ ...brake, ...passed }), 'ease the brake each circle or it goes deep');
+  assert.equal(hint({ ...ravens, ...passed }), 'climb beside the ravens, never through');
+  // Climbing on past them, with the stones still waiting, the lessons keep it.
+  assert.equal(hint({ ...brake, ...level, stonesLevel: 25 }), 'ease the brake each circle or it goes deep');
+  // A strong climb, level some 3 s after they were raised, has its lesson back as their news ends.
+  assert.equal(hint({ ...ravens, stones: 500, stonesNew: STONES_NEWS, stonesLevel: 1 }), 'climb beside the ravens, never through');
+  // So too once the stones' news is old and before the climb has come level with them.
+  assert.equal(hint({ ...centring, stones: 500, stonesNew: STONES_NEWS + 1, stonesLevel: Infinity }), 'straighten in the surge, turn as it fades');
+});
+
+test('every line the rune stones, the Beast and the loose iron add fits one line of a narrow phone, and each moment has its own', () => {
+  const moments = [
+    { bell: 1, beast: true }, { bell: 1, beast: true, touch: true }, { bell: 2, beast: true },
+    { closeCall: 0, beastClose: true }, { closeCall: 0, double: true }, { glanced: 0 }, { barLost: 3 }, { depth: 0, double: true },
+    ...[1, 2, 3, 4].map((rune) => ({ blessing: rune, blessed: 0 })),
+    { stones: 500, stonesNew: 0, stonesLevel: Infinity }, { stones: 1000, stonesNew: 0, stonesLevel: Infinity },
+    { stones: 1000, stonesNew: 0, stonesLevel: Infinity, blessing: RUNE.tiwaz }, { stones: 500, stonesNew: 9, stonesLevel: 0 },
+    { sprayed: true }, { thunder: true }, { front: true, fronts: 1 }, { bait: true },
+  ];
+  const lines = moments.map(hint);
+  assert.equal(new Set(lines).size, moments.length, 'each moment has its own line');
+  for (const line of lines) {
+    assert.ok(line.length > 0);
+    assert.ok([...line].length <= HINT_WIDTH, `"${line}" is ${[...line].length} characters`);
+  }
+  for (const line of BLESSED.slice(1)) assert.ok([...line].length <= HINT_WIDTH, `"${line}"`);
+});
+
+test('Gjallarhorn is said the moment it sounds, whatever line was up a moment before', () => {
+  const held = { line: '', since: 0 };
+  holdHint(held, 'ravens circle where air rises — fly there', 109.6);
+  assert.equal(holdHint(held, hint({ horn: 0 }), 110), 'Gjallarhorn — every lift counts double');
 });

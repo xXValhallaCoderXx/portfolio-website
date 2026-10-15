@@ -1,18 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RUN, TRACE, createRunWorld, finishRun, startRun, stepBits, stepRun } from './run-step.js';
-import { TST, createReferencePilot, flyPilot } from './pilots.js';
+import { TST, WORTH_RUNES, createReferencePilot, flyPilot } from './pilots.js';
 import { CLOUD_GATE, CLOUD_ZONE, createCloudbaseRun } from './cloudbase-state.js';
 import { GATEWAY, surfaceAt } from './terrain.js';
 import { FLIGHT } from './flight.js';
 import { MEET, createMeet } from './meet-state.js';
+import { RUNE } from './meet-runes.js';
 import { createBells } from './bells.js';
 
 // What the reference pilot does on these skies, to the last bit: seed, options, then peak (m),
 // strikes, stalls, seconds, seconds in cloud and how the run ended. First taken before its flying
 // moved into run-step.js and pilots.js, to hold the move to the bit; re-captured for SIM_VERSION 2,
 // on purpose, since its hunted cores peak at their middle and the pilot circles tighter in them
-// (pilots.js). Any change to how a run flies shows up here first.
+// (pilots.js); re-captured for SIM_VERSION 3, and every row came out as version 2's to the bit: the
+// sky, the wing and the bare pilot fly as they did, and everything new is the meet's and the
+// kettlebells'. Any change to how a run flies shows up here first.
 const GOLDENS = [
   [1, {"brake": "none"}, 954.7750248206488, 1, 0, 137.98333333333528, 1.016666666666668, 'fog'],
   [2, {"brake": "none"}, 1119.8860489703784, 0, 0, 142.8666666666725, 8.333333333333327, 'fog'],
@@ -86,40 +89,63 @@ test('the one step flies the reference pilot exactly as recorded under this SIM_
 });
 
 // The same with the meet and Hrungnir's kettlebells in the run, which the goldens above leave out:
-// what TST (pilots.js), the collector (TST following the plates) and a pilot holding its line with
-// the light brake eased (whom most kettlebells hit) came to on these skies. Seed and pilot, then
-// the peak (m, to the last bit), fixed steps flown, the TOTAL (kg), each lift's red lights in
-// order (1 contact, 2 control and 4 airspace, added up; `x` judged under the horn, at ×2; the
-// fog's lift last), reps and how many of them were to depth, trails and plates loaded, and the
-// kettlebells thrown, hit, close and dodged. Every link already shared replays through these
-// rules, so none of it may change without a new SIM_VERSION. Re-captured for SIM_VERSION 2, on
-// purpose, with the reps to depth added.
+// what TST (pilots.js), the collector (TST following the trails of plates and taking Fehu's or
+// Tiwaz's stone), the gate-taker (TST taking Fehu's or Tiwaz's stone at each line), a pilot holding
+// its line with the light brake eased (whom most kettlebells hit) and that pilot taking Algiz's
+// stone came to on these skies. Seed and pilot, then the peak (m, to the last bit), fixed steps
+// flown, the TOTAL (kg), each lift's red lights in order (1 contact, 2 control and 4 airspace, added
+// up; `x` judged under the horn, at ×2; the fog's lift last), reps and how many of them were to
+// depth, trails and plates loaded, the kettlebells thrown, hit, close and dodged, the plates off
+// gust fronts, from under clouds and the fog's bait, the plates strikes sprayed and those loaded
+// back, bells glanced off Algiz, how the Beast came out (BELL_RESULT), and the gates taken with
+// their runes (a bit for each). Every link already shared replays through these rules, so none of
+// it may change without a new SIM_VERSION. Re-captured for SIM_VERSION 3, on purpose, with the
+// plates off the trail, the gates and the Beast added (TST's and the line-holder's rows came out as
+// version 2's), and the collector's and gate-taker's rows again when those pilots were retuned
+// (pilots.js, not the rules: the other rows stayed to the bit). Seed 14's collector holds Fehu as a
+// strike sprays four plates, and all four go straight back on the bar (its reach takes in the ring
+// they spray from); seeds 10, 15 and 20 lose bars to strikes under Tiwaz; a bell glances off Algiz
+// on seeds 1 and 36 of the pilot taking it, and the Beast comes close on its seed 19.
 const MEET_GOLDENS = [
-  [1, 'TST', 1177.3941804846224, 8633, 215, '0 0 4 0x 0', 5, 4, 4, 4, 4, 0, 0, 4],
-  [3, 'TST', 1294.2978147845135, 8808, 290, '0 0 0 1 4x 0', 4, 4, 5, 4, 4, 0, 1, 3],
-  [5, 'TST', 819.865337186954, 7978, 225, '0 0 4x 1', 2, 2, 4, 5, 2, 0, 0, 2],
-  [10, 'TST', 1510.7623209975627, 9036, 310, '0 0 0 0 4x 4x 1', 5, 5, 5, 2, 3, 0, 0, 3],
-  [1, 'collector', 1042.159583275864, 8361, 230, '0 0 5 0x 1', 5, 5, 4, 6, 2, 0, 0, 2],
-  [3, 'collector', 1278.3785827907298, 8762, 460, '0 1 1 0x 0x 0', 3, 3, 5, 11, 6, 0, 0, 6],
-  [5, 'collector', 1299.0490711260957, 8821, 590, '0 1 4 1x 1x 0', 4, 4, 5, 15, 1, 0, 0, 1],
-  [10, 'collector', 1144.416219193201, 8609, 157.5, '0 0 0 5x 0', 5, 4, 4, 2, 4, 0, 0, 4],
-  [1, 'holding', 1024.9181718515536, 8409, 255, '0 0 5 1x 0', 3, 3, 4, 7, 3, 3, 0, 0],
-  [3, 'holding', 1055.748106358312, 8467, 350, '0 0 0 1x 1', 2, 2, 5, 11, 3, 3, 0, 0],
-  [5, 'holding', 835.7077318719834, 8091, 125, '0 0 5x 4', 4, 4, 4, 5, 2, 1, 0, 0],
-  [10, 'holding', 1379.8091126777167, 8936, 155, '0 0 0 0 5x 1', 6, 6, 4, 9, 3, 3, 0, 0],
+  [1, 'TST', 1152.218730323731, 8506, 275, '0 0 4 0x 1', 5, 4, 4, 7, 4, 0, 0, 3, 1, 1, 0, 1, 0, 0, 3, 0, 0],
+  [3, 'TST', 1278.8486516985072, 8787, 365, '0 0 0 1 4x 0', 4, 4, 5, 7, 4, 0, 1, 3, 2, 1, 0, 1, 0, 0, 3, 0, 0],
+  [5, 'TST', 819.865337186954, 7978, 225, '0 0 4x 1', 2, 2, 4, 5, 2, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  [10, 'TST', 1500.638328836822, 9088, 370, '0 0 0 0 4x 4x 0', 5, 5, 4, 4, 4, 0, 0, 4, 1, 0, 0, 0, 0, 0, 3, 0, 0],
+  [1, 'collector', 1042.159583275864, 8361, 215, '0 0 5 0x 1', 5, 5, 4, 7, 2, 0, 0, 2, 1, 0, 0, 1, 1, 0, 3, 0, 0],
+  [3, 'collector', 1411.259947272213, 8976, 450, '0 1 1 0x 0x 0', 3, 3, 5, 12, 6, 0, 1, 5, 0, 0, 0, 1, 0, 0, 3, 0, 0],
+  [5, 'collector', 1327.327374850414, 8866, 510, '0 1 4 1x 0x 0', 4, 4, 5, 12, 2, 0, 0, 2, 0, 0, 0, 0, 0, 0, 3, 0, 0],
+  [10, 'collector', 1509.8241905697012, 9094, 480, '0 0 1 0 4x 0x 0', 5, 4, 5, 9, 6, 0, 0, 6, 1, 0, 0, 0, 0, 0, 3, 1, 8],
+  [14, 'collector', 898.1979759129669, 8153, 560, '0 0 1x 4', 1, 1, 5, 20, 2, 0, 0, 2, 5, 0, 0, 4, 4, 0, 0, 1, 1],
+  [15, 'collector', 857.0606958674464, 8131, 110, '0 0 1 5', 2, 2, 4, 7, 2, 0, 0, 2, 1, 0, 0, 0, 0, 0, 0, 1, 8],
+  [20, 'collector', 1167.9618627290333, 8627, 290, '0 1 0 1x 1', 3, 2, 5, 5, 3, 0, 0, 2, 1, 0, 0, 0, 0, 0, 0, 1, 8],
+  [2, 'gates', 1144.0286468139996, 8608, 290, '0 0 1 4x 0', 2, 1, 5, 6, 4, 0, 1, 3, 0, 0, 0, 0, 0, 0, 0, 1, 8],
+  [12, 'gates', 779.0341527624436, 7975, 460, '0 0 1x 0', 1, 0, 4, 11, 2, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1, 1],
+  [20, 'gates', 1254.785966637613, 8763, 405, '0 1 0 0 0x 4', 3, 2, 5, 10, 3, 0, 0, 3, 0, 0, 0, 0, 0, 0, 3, 2, 9],
+  [1, 'holding', 1024.9181718515536, 8409, 205, '0 0 5 1x 0', 3, 3, 4, 9, 3, 3, 0, 0, 0, 1, 0, 4, 1, 0, 0, 0, 0],
+  [3, 'holding', 1055.748106358312, 8467, 215, '0 0 0 1x 1', 2, 2, 5, 12, 3, 3, 0, 0, 0, 0, 0, 5, 1, 0, 0, 0, 0],
+  [5, 'holding', 835.7077318719834, 8091, 125, '0 0 5x 4', 4, 4, 4, 6, 2, 1, 0, 0, 0, 0, 0, 2, 1, 0, 0, 0, 0],
+  [10, 'holding', 1306.3303083794092, 8820, 150, '0 0 0 0 5x 1', 4, 4, 4, 8, 5, 5, 0, 0, 0, 0, 0, 6, 2, 0, 1, 0, 0],
+  [1, 'algiz', 919.9239483332752, 8232, 180, '0 0 4 1', 1, 1, 4, 10, 3, 2, 0, 0, 1, 0, 0, 2, 1, 1, 0, 1, 2],
+  [19, 'algiz', 1351.1524856025273, 8814, 260, '0 0 0 1 0x 1', 2, 2, 5, 4, 4, 2, 2, 0, 0, 0, 0, 2, 1, 0, 2, 0, 0],
+  [36, 'algiz', 1373.918966955416, 8917, 245, '0 0 0 0x 0x 4', 3, 3, 4, 0, 3, 0, 1, 1, 0, 0, 0, 0, 0, 1, 3, 2, 2],
 ];
-const MEET_PILOTS = { TST, collector: { ...TST, collect: true }, holding: { brake: 'eased' } };
+const MEET_PILOTS = {
+  TST, collector: { ...TST, collect: true }, gates: { ...TST, gates: WORTH_RUNES }, holding: { brake: 'eased' }, algiz: { brake: 'eased', gates: [RUNE.algiz] },
+};
 
-test('with the meet and the kettlebells, each sky comes out as recorded under this SIM_VERSION: the same flight to the last bit, the same lights, plates and kettlebells', () => {
-  for (const [seed, pilot, peak, steps, total, lights, reps, deep, trails, plates, thrown, hits, close, dodged] of MEET_GOLDENS) {
+test('with the meet and the kettlebells, each sky comes out as recorded under this SIM_VERSION: the same flight to the last bit, the same lights, plates, gates and kettlebells', () => {
+  for (const row of MEET_GOLDENS) {
+    const [seed, pilot, ...want] = row;
     const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells() }), seed);
     const flown = flyPilot(world, createReferencePilot(MEET_PILOTS[pilot]));
     const { state } = world.meet;
     const bells = world.bells.state;
     const shown = state.lifts.slice(0, state.count).map(({ red, double }) => `${red}${double ? 'x' : ''}`).join(' ');
+    assert.equal(flown.reason, 'fog', `seed ${seed}, ${pilot}`);
     assert.deepEqual(
-      [flown.reason, flown.peak, world.steps, state.total, shown, state.reps, state.deep, state.trails, state.plates, bells.thrown, bells.hits, bells.close, bells.dodged],
-      ['fog', peak, steps, total, lights, reps, deep, trails, plates, thrown, hits, close, dodged],
+      [flown.peak, world.steps, state.total, shown, state.reps, state.deep, state.trails, state.plates, bells.thrown, bells.hits, bells.close, bells.dodged,
+        state.wind, state.thunder, state.bait, state.scattered, state.recovered, bells.glanced, bells.beast.result, state.runes.taken, state.runes.runes],
+      want,
       `seed ${seed}, ${pilot}`,
     );
     // The meet paid for every close call the kettlebells counted.
@@ -127,10 +153,10 @@ test('with the meet and the kettlebells, each sky comes out as recorded under th
   }
 });
 
-test('the same sky and the same asks give the same run, whatever wing and world flew before', () => {
-  const fly = (world) => {
+test('the same sky and the same asks give the same run, whatever wing and world flew before, its meet, gates and kettlebells too', () => {
+  const fly = (world, seconds = 40) => {
     const intent = { turn: 0, brake: false, bar: false };
-    for (let i = 0; i < 40 * 60; i++) {
+    for (let i = 0; i < seconds * 60; i++) {
       // A fixed, fussy pilot: circles, pulls the brake now and then, pushes the bar on the glide.
       intent.turn = Math.sin(i / 90);
       intent.brake = i % 700 > 520;
@@ -152,6 +178,55 @@ test('the same sky and the same asks give the same run, whatever wing and world 
   assert.deepEqual(used.sky.state, fresh.sky.state);
   assert.deepEqual({ ...used.g, pos: { ...used.g.pos } }, { ...fresh.g, pos: { ...fresh.g.pos } });
   assert.deepEqual([used.hook, used.stalls, used.steps], [fresh.hook, fresh.stalls, fresh.steps]);
+  // With the meet and the kettlebells, a world that has flown a whole run, taken a gate, sprayed
+  // its plates and met the Beast starts the next exactly as a new one: everything the meet keeps
+  // (the plates off the trail, the gates and the blessing among it) and the kettlebells keep.
+  const meetWorld = () => createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells() });
+  const newer = startRun(meetWorld(), 21);
+  flyPilot(newer, createReferencePilot({ ...TST, collect: true }), { limit: 140 });
+  const older = meetWorld();
+  flyPilot(startRun(older, 32), createReferencePilot({ ...TST, collect: true }));
+  assert.ok(older.meet.state.runes.taken > 0 && older.meet.state.scattered > 0 && older.bells.state.beast.n >= 0, 'the used world did all of it');
+  startRun(older, 21);
+  flyPilot(older, createReferencePilot({ ...TST, collect: true }), { limit: 140 });
+  assert.deepEqual(older.meet.state, newer.meet.state);
+  assert.deepEqual(older.bells.state, newer.bells.state);
+  assert.deepEqual(older.sky.state, newer.sky.state);
+});
+
+test('a world with the meet flies the very sky of one with the kettlebells alone, but for a bell Algiz turns aside', () => {
+  // Each pilot flies its sky with the meet; its twin flies the same sky without it, asking at every
+  // step exactly what the pilot asked. Gates, plates and sprays never reach the sky; only a bell
+  // glancing off Algiz could, where it would otherwise have struck.
+  const collector = { ...TST, collect: true };
+  let twins = 0;
+  let gates = 0;
+  let glances = 0;
+  for (const [seed, options] of [[1, collector], [10, collector], [20, collector], [37, collector], [1, MEET_PILOTS.algiz]]) {
+    const asked = [];
+    const met = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells() }), seed);
+    const pilot = createReferencePilot(options);
+    const intent = { turn: 0, brake: false, bar: false };
+    for (let reason = null; !reason;) {
+      pilot.decide(met, intent);
+      asked.push({ ...intent });
+      reason = stepRun(met, intent, RUN.step);
+    }
+    const twin = startRun(createRunWorld({ sky: createCloudbaseRun(), bells: createBells() }), seed);
+    for (const ask of asked) if (stepRun(twin, ask, RUN.step)) break;
+    gates += met.meet.state.runes.taken;
+    if (met.bells.state.glanced > 0) {
+      // The pilot taking Algiz on seed 1: it turned a bell aside, which struck the twin.
+      assert.ok(twin.sky.state.pilot.strikes > met.sky.state.pilot.strikes || twin.steps !== met.steps, `seed ${seed}`);
+      glances += 1;
+      continue;
+    }
+    assert.deepEqual(twin.sky.state, met.sky.state, `seed ${seed}`);
+    assert.deepEqual(wing(twin.g), wing(met.g), `seed ${seed}`);
+    assert.deepEqual([twin.hook, twin.struck, twin.stalls, twin.steps], [met.hook, met.struck, met.stalls, met.steps]);
+    twins += 1;
+  }
+  assert.ok(twins >= 3 && gates >= 3 && glances === 1, `${twins} twins, ${gates} gates taken, ${glances} skies with a glance`);
 });
 
 test('every run starts settled at the gate, in the arch\'s opening, facing through it', () => {

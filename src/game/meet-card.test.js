@@ -1,10 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FEATS, JUDGES, THOUSAND_POUNDS, barogram, featsFor, kilos, lightsOf, metres, shareText } from './meet-card.js';
+import { FEATS, JUDGES, THOUSAND_POUNDS, barogram, featsFor, kilos, lightsOf, medalsSaid, metres, shareText, worldSaid } from './meet-card.js';
+import { FEAT_IDS } from './good-lift-store.js';
 
 const lift = (line, red, { kg = 25, double = false } = {}) => ({ line, kg, red, good: (red & (red - 1)) === 0, double, at: 0 });
 const run = (lifts, { total = 0, stats = {} } = {}) => ({
-  total, peak: 0, lifts, stats: { strikes: 0, stalls: 0, cloud: 0, reps: 0, deep: 0, trails: 0, close: 0, thrown: 0, dodged: 0, hits: 0, ...stats },
+  total, peak: 0, lifts, stats: {
+    strikes: 0, stalls: 0, cloud: 0, reps: 0, deep: 0, trails: 0, wind: 0, thunder: 0, bait: 0, close: 0, scattered: 0, recovered: 0,
+    thrown: 0, dodged: 0, hits: 0, glanced: 0, beast: 0, gates: 0, runes: 0, ...stats,
+  },
 });
 
 test('kilos print a decimal only for a half, and both mark their thousands', () => {
@@ -46,9 +50,28 @@ test('each feat is earned by what the run did, and only by that', () => {
   assert.ok(!featsFor(run([...clean.slice(0, 4), lift(0, 0b100)])).includes('clean-meet'), 'every light, the mist\'s too');
   assert.ok(featsFor(run([lift(250, 0)], { total: THOUSAND_POUNDS })).includes('thousand-pound-club'));
   assert.ok(!featsFor(run([lift(250, 0)], { total: 452.5 })).includes('thousand-pound-club'));
-  // Earned in FEATS order, and the streak's is never a single run's.
+  // Earned in FEATS order; the streak's is never a single run's, nor the bot's, which only the bots
+  // flying the sky can award.
   const all = featsFor(run([...clean.slice(0, 4).map((each, i) => ({ ...each, double: i === 3 })), lift(0, 0)], { total: 500, stats: { thrown: 4, hits: 0 } }));
-  assert.deepEqual(all, FEATS.map((feat) => feat.id).filter((id) => id !== 'training-block'));
+  assert.deepEqual(all, FEATS.filter((feat) => !feat.streak && !feat.bot).map((feat) => feat.id));
+  assert.deepEqual(FEATS.filter((feat) => feat.streak || feat.bot).map((feat) => feat.id), ['training-block', 'beat-the-bot']);
+});
+
+test('the store knows every feat the sheet lists, in the same order', () => {
+  assert.deepEqual(FEATS.map((feat) => feat.id), FEAT_IDS);
+});
+
+test('once the bots land, the sheet says the medals lightest first, which one TST set, the medal taken and any feat it earned', () => {
+  const medals = [
+    { medal: 'bronze', total: 145, peak: 1152, by: 'holder' },
+    { medal: 'silver', total: 237.5, peak: 1040, by: 'tst' },
+    { medal: 'gold', total: 1240, peak: 1300, by: 'collector' },
+  ];
+  assert.equal(
+    medalsSaid({ medals, medal: 'silver', fresh: ['beat-the-bot'] }),
+    'Medals: bronze 145 kg, silver 237.5 kg, set by TST, gold 1,240 kg. Yours: silver. New feat: Beat the bot.',
+  );
+  assert.equal(medalsSaid({ medals, medal: '' }), 'Medals: bronze 145 kg, silver 237.5 kg, set by TST, gold 1,240 kg. Yours: none.');
 });
 
 test('the barogram stays in its frame, with the fog under the flight and the horn where it sounded', () => {
@@ -77,4 +100,23 @@ test('the barogram stays in its frame, with the fog under the flight and the hor
   const reaching = barogram(short, [lift(250, 0), lift(500, 0)], { peak: 519 });
   assert.ok(reaching.ceiling >= 519 && reaching.lines.every((each) => each.y >= 0 && each.y <= 96));
   assert.equal(reaching.lines.length, 2);
+});
+
+test('the world board\'s line says how many are on it, where this browser stands and what became of the run sent', () => {
+  const rows = (count) => Array.from({ length: count }, () => ({}));
+  assert.equal(worldSaid({ rows: [], rank: 0, sent: null }), 'nobody on it yet');
+  assert.equal(worldSaid({ rows: rows(1), rank: 1, sent: null }), '1 pilot on it · you: #1');
+  assert.equal(worldSaid({ rows: rows(57), rank: 3, sent: { ok: true, why: '', rank: 3 } }), '57 pilots on it · you: #3 · this run went up');
+  assert.equal(worldSaid({ rows: rows(100), rank: 0, sent: { ok: true, why: '', rank: 0 } }), '100 pilots on it · this run went up, but not into the top 100');
+  assert.equal(worldSaid({ rows: rows(9), rank: 4, sent: { ok: false, why: 'not-best', rank: 4 } }), '9 pilots on it · you: #4 · your better run is already on it');
+  assert.equal(worldSaid({ rows: rows(9), rank: 0, sent: { ok: false, why: 'mismatch', rank: 0 } }), '9 pilots on it · its replay of this run came to another sheet, so it stays here');
+  // A reason this build does not know is a plain no; a board that failed to judge the run said no to nothing.
+  assert.equal(worldSaid({ rows: rows(2), rank: 0, sent: { ok: false, why: 'later', rank: 0 } }), '2 pilots on it · it turned this run down');
+  for (const why of ['store', 'fault']) assert.equal(worldSaid({ rows: rows(2), rank: 0, sent: { ok: false, why, rank: 0 } }), '2 pilots on it · it could not be reached, so this run stays here', why);
+  // Taken off, it says so, and nothing of where it stood or what became of it.
+  assert.equal(worldSaid({ rows: rows(8), rank: 0, sent: { ok: true, why: '', rank: 2 }, removed: true }), '8 pilots on it · yours is taken off');
+  // Sent from another browser, it stays where it stands, and the sheet says who can take it off.
+  assert.equal(worldSaid({ rows: rows(8), rank: 2, sent: null, stays: true }), '8 pilots on it · you: #2 · only the browser that sent it can take it off');
+  // Asked to take it off and not reached, it says so, and the button asks again.
+  assert.equal(worldSaid({ rows: rows(8), rank: 2, sent: null, failed: true }), '8 pilots on it · you: #2 · it could not be taken off just now: try again');
 });

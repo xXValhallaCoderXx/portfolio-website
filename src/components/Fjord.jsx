@@ -148,6 +148,12 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
   const [result, setResult] = useState(null);
   // Good Lift's music switch as last thrown, anywhere (null until it is), for the meet sheet's own.
   const [music, setMusic] = useState(null);
+  // What the bots came to on the sky the meet sheet shows, once they land (null until they do). It
+  // comes apart from the result, so the sheet takes it in without taking the focus back.
+  const [bots, setBots] = useState(null);
+  // The world board's word on the Daily Sky the meet sheet shows, once it answers (null until it
+  // does, and for good when the build names no world board); apart from the result, as the bots are.
+  const [world, setWorld] = useState(null);
   // Whether the game beyond the arch is still on its way ('loading') or would not come ('failed').
   const [sky, setSky] = useState('');
   // A challenge link's run to beat, once read and replayed: { who, total, peak } or { error }.
@@ -169,6 +175,8 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
         onLost: setLostStage,
         onResult: setResult,
         onMusic: setMusic,
+        onBots: setBots,
+        onWorld: setWorld,
         onPortal: () => latest.current.onPortal(),
         onFjord: () => latest.current.onFjord(),
         onPanel: (next) => {
@@ -241,6 +249,8 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
       game.current?.idle();
       setPanel(null);
       setResult(null);
+      setBots(null);
+      setWorld(null);
       setSky('');
       lastPlace.current = null;
       return;
@@ -392,6 +402,10 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
           onInitials={(text) => game.current?.setInitials(text)}
           music={music}
           onMusic={() => game.current?.toggleMusic()}
+          bots={bots}
+          world={world}
+          onWithdraw={() => game.current?.removeWorldRun()}
+          onKit={(choice) => game.current?.setKit(choice)}
         />
       )}
     </div>

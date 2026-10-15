@@ -35,8 +35,14 @@ test('a run\'s sheet is what its world holds: every lift judged in order with th
     assert.deepEqual(sheet.lifts.map((lift) => lift.line), [...sheet.lifts.slice(0, -1).map((_, i) => MEET.every * (i + 1)), 0]);
     assert.deepEqual(sheet.stats, {
       strikes: sky.state.pilot.strikes, stalls: world.stalls, cloud: Math.round(sky.state.pilot.cloudTime),
-      reps: met.reps, deep: met.deep, trails: met.trails, close: met.close, thrown: bells.state.thrown, dodged: bells.state.dodged, hits: bells.state.hits,
+      reps: met.reps, deep: met.deep, trails: met.trails, wind: met.wind, thunder: met.thunder, bait: met.bait, close: met.close,
+      scattered: met.scattered, recovered: met.recovered,
+      thrown: bells.state.thrown, dodged: bells.state.dodged, hits: bells.state.hits, glanced: bells.state.glanced, beast: bells.state.beast.result,
+      gates: met.runes.taken, runes: met.runes.runes,
     });
+    // The plate sources first, then what strikes cost, the kettlebells and the gates.
+    assert.deepEqual(Object.keys(sheet.stats), ['strikes', 'stalls', 'cloud', 'reps', 'deep', 'trails', 'wind', 'thunder', 'bait', 'close',
+      'scattered', 'recovered', 'thrown', 'dodged', 'hits', 'glanced', 'beast', 'gates', 'runes']);
     assert.deepEqual(sheet.trace, { alt: [...trace.alt.subarray(0, trace.n)], fog: [...trace.fog.subarray(0, trace.n)], total: [...trace.total.subarray(0, trace.n)], n: trace.n });
     assert.ok(sheet.lifts.length >= 4 && sheet.stats.thrown >= 2 && sheet.trace.n > 100, JSON.stringify(sheet.stats));
   }
@@ -77,7 +83,10 @@ test('a quit is any ending but the fog and a touchdown, and a world with no meet
   finishRun(bare, 'quit');
   const sheet = summariseRun(bare, 'quit');
   assert.deepEqual([sheet.total, sheet.lifts, sheet.steps, sheet.trace.n], [0, [], 20 * 60, 21]);
-  assert.deepEqual(sheet.stats, { strikes: 0, stalls: 0, cloud: 0, reps: 0, deep: 0, trails: 0, close: 0, thrown: 0, dodged: 0, hits: 0 });
+  assert.deepEqual(sheet.stats, {
+    strikes: 0, stalls: 0, cloud: 0, reps: 0, deep: 0, trails: 0, wind: 0, thunder: 0, bait: 0, close: 0, scattered: 0, recovered: 0,
+    thrown: 0, dodged: 0, hits: 0, glanced: 0, beast: 0, gates: 0, runes: 0,
+  });
   assert.ok(sheet.peak > CLOUD_GATE.y);
 });
 

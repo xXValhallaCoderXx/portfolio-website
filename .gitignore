@@ -2,6 +2,10 @@ node_modules/
 dist/
 .artifacts/
 
+# The world board's function: its packages, and the bundle tools/build-functions.mjs makes of it.
+functions/node_modules/
+functions/lib/
+
 # Local model sources; deploy the optimized assets in public/models/ instead.
 /concepts/
 /models-raw/

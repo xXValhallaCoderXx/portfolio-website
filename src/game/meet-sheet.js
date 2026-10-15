@@ -17,8 +17,12 @@
  *   lifts             the lifts judged, in order, the bar judged as the run ended last (`line`
  *                     0): { line, kg, red (bit 0 contact, bit 1 control, bit 2 airspace), good,
  *                     double, at }
- *   stats             strikes, stalls, seconds in cloud (rounded), reps and those of them to depth,
- *                     trails, close calls, and kettlebells thrown, dodged and hit
+ *   stats             strikes, stalls, seconds in cloud (rounded); the plates loaded: reps and those
+ *                     of them to depth, trails laid, plates off gust fronts, from under clouds and
+ *                     the fog's bait, and close calls; plates a strike sprayed off the bar and those
+ *                     loaded back; kettlebells thrown, dodged, hit and glanced off Algiz, and how
+ *                     the Beast came out (BELL_RESULT; 0 if it was never thrown, or still falling);
+ *                     rune gates flown through, and the runes taken (bit rune - 1 for each, RUNE)
  *   trace             the barogram: `alt`, `fog` and `total` for each run second, `n` of them
  */
 export function summariseRun(world, reason) {
@@ -50,10 +54,19 @@ export function summariseRun(world, reason) {
       reps: met ? met.reps : 0,
       deep: met ? met.deep : 0,
       trails: met ? met.trails : 0,
+      wind: met ? met.wind : 0,
+      thunder: met ? met.thunder : 0,
+      bait: met ? met.bait : 0,
       close: met ? met.close : thrown ? thrown.close : 0,
+      scattered: met ? met.scattered : 0,
+      recovered: met ? met.recovered : 0,
       thrown: thrown ? thrown.thrown : 0,
       dodged: thrown ? thrown.dodged : 0,
       hits: thrown ? thrown.hits : 0,
+      glanced: thrown ? thrown.glanced : 0,
+      beast: thrown ? thrown.beast.result : 0,
+      gates: met ? met.runes.taken : 0,
+      runes: met ? met.runes.runes : 0,
     },
     trace: {
       alt: trace ? Array.from(trace.alt.subarray(0, n)) : [],

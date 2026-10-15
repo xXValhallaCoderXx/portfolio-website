@@ -8,4 +8,8 @@
 // 1: Good Lift as it first shipped (the tables sim-version.test.js fingerprints as 145b525a).
 // 2: hunted thermals peak at their middle, and a rep centred on the core is a rep to depth and
 //    loads 5 kg (CLOUD_HUNT.core and .peak, MEET.depth and .deep).
-export const SIM_VERSION = 2;
+// 3: plates ride the gust fronts, hang under storm clouds and rise on the fog after the horn, a
+//    strike sprays the bar's plates for the pilot to catch again, rune gates at 500 and 1,000 m
+//    bless the pilot who flies through one, and the first bell past 1,000 m is the Beast (WIND,
+//    THUNDER, BAIT, SCATTER, GATES, BLESSING, BEAST, MEET.beast and .iron).
+export const SIM_VERSION = 3;

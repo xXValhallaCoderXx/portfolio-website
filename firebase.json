@@ -20,5 +20,16 @@
         "headers": [{ "key": "Content-Type", "value": "model/gltf-binary" }]
       }
     ]
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": ["node_modules", "src", "test", ".git", "firebase-debug.log", "firebase-debug.*.log", "*.local"],
+      "predeploy": ["npm --prefix \"$PROJECT_DIR\" run build:functions"]
+    }
+  ],
+  "firestore": {
+    "rules": "firestore.rules"
   }
 }

@@ -14,8 +14,8 @@ export function stallHint(stall, stallSide) {
 }
 
 // The wing has folded or stalled, is about to, a kettlebell is coming or the pilot is in cloud:
-// these cannot wait their turn.
-export const URGENT = Object.freeze(['raven strike', 'kettlebell', 'stalled', 'spin', 'brake in the red', 'gust coming', 'brake going deep', 'in cloud']);
+// these cannot wait their turn. Nor can Gjallarhorn, said with its call for its three seconds.
+export const URGENT = Object.freeze(['raven strike', 'kettlebell', 'stalled', 'spin', 'brake in the red', 'gust coming', 'brake going deep', 'in cloud', 'Gjallarhorn']);
 const urgent = (line) => URGENT.some((start) => line.startsWith(start));
 
 /**

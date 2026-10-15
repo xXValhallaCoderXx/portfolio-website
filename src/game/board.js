@@ -11,6 +11,12 @@
 //
 // Everything here works on a plain object, { days: { 'version:day': { rows: [row, …] } } }, so the
 // store can write it as JSON and read it back. Nothing here touches storage or the clock.
+//
+// The sheet shows a day's board with TST, the bot to beat (meet-bots.js), pinned among its runs
+// where it ranks (withBot), but a bot is never a row: no row stored here was flown by one. What the
+// day's bots came to is kept beside the board (normalizeBots), so a sky flown again that day never
+// flies them again.
+import { bynameOf } from './meet-bynames.js';
 
 // How much the board remembers: the best `keep` runs of each day, for `days` UTC days (today and
 // the 13 before it). A row is about 1.2 KB, mostly its log, so a full board is some 170 KB.
@@ -36,39 +42,34 @@ const KEY = /^(0|[1-9]\d*):(0|[1-9]\d*)$/;
 const WHO = /^(?:[A-Z]{3})?$/;
 const LOG = /^[A-Za-z0-9_-]+$/;
 
-// The UTC day a board key names, or NaN for a key boardKey would never write. Only such keys get
-// onto a board, so nothing read back from storage can name a day '__proto__'.
-function dayIn(key) {
+/**
+ * The UTC day a board key names, or NaN for a key boardKey would never write. Only such keys get
+ * onto a board, so nothing read back from storage can name a day '__proto__'.
+ */
+export function boardDay(key) {
   const match = typeof key === 'string' ? KEY.exec(key) : null;
   if (!match || !Number.isSafeInteger(Number(match[1])) || !Number.isSafeInteger(Number(match[2]))) return NaN;
   return Number(match[2]);
 }
+
+/**
+ * Whether run `a` ranks above run `b` ({ total, peak }) by what they banked: the heavier total, or
+ * the same total and the higher peak. Of two that tie in both, neither does; the board then puts
+ * the earlier run first, and a bot stays ahead of any run that only ties it.
+ */
+export const outranks = (a, b) => a.total > b.total || (a.total === b.total && a.peak > b.peak);
 
 // Best first: the heavier total, then the higher peak, then the run that started first. The sort
 // is stable, so a run that ties another exactly in all three ranks after the one already there.
 const byRank = (a, b) => b.total - a.total || b.peak - a.peak || a.at - b.at;
 
 /**
- * A clean copy of a board row, or null when any part of it is damaged. A row is
- *
- *   who     '' for a run flown unnamed, or three capitals A to Z
- *   via     'me' for a run flown here, 'link' for one read from a challenge link
- *   total   kg, a whole number of 2.5 kg steps
- *   peak    m, whole metres
- *   red     each lift's lights in lift order, the mist last: 0 to 7 (bit 0 contact, bit 1
- *           control, bit 2 airspace), at most ROW.lights of them
- *   at      ms since 1970 when the run started
- *   log     the run's log, non-empty base64url under ROW.log characters
- *
- * Anything else in the object is left behind. A damaged row is dropped, never repaired: a total
- * rounded to the nearest plate, or a name guessed from lower case, would be a run nobody flew,
- * and its log would not replay to it.
+ * A clean copy of what a run banked, { total, peak, red }, held to the rules a row's are (see
+ * normalizeRow), or null when any of the three is damaged. Anything else in the object is left behind.
  */
-export function normalizeRow(row) {
-  if (!isRecord(row)) return null;
-  const { who, via, total, peak, red, at, log } = row;
-  if (typeof who !== 'string' || !WHO.test(who)) return null;
-  if (via !== 'me' && via !== 'link') return null;
+export function normalizeScore(score) {
+  if (!isRecord(score)) return null;
+  const { total, peak, red } = score;
   // Twice the total is a whole number of 5 kg exactly when the total is a multiple of 2.5, and
   // doubling is exact in floating point, so no near miss rounds its way onto the board.
   if (!isAmount(total) || !Number.isInteger(total * 2) || (total * 2) % 5 !== 0) return null;
@@ -81,9 +82,38 @@ export function normalizeRow(row) {
     const light = red[i];
     if (!Number.isInteger(light) || light < 0 || light > 7) return null;
   }
+  return { total, peak, red: [...red] };
+}
+
+/**
+ * A clean copy of a board row, or null when any part of it is damaged. A row is
+ *
+ *   who     '' for a run flown unnamed, or three capitals A to Z
+ *   via     'me' for a run flown here, 'link' for one read from a challenge link
+ *   total   kg, a whole number of 2.5 kg steps
+ *   peak    m, whole metres
+ *   red     each lift's lights in lift order, the mist last: 0 to 7 (bit 0 contact, bit 1
+ *           control, bit 2 airspace), at most ROW.lights of them
+ *   at      ms since 1970 when the run started
+ *   log     the run's log, non-empty base64url under ROW.log characters
+ *   byname  the byname the run earned (meet-bynames.js), by its id, or '' for none
+ *
+ * Anything else in the object is left behind. A damaged row is dropped, never repaired: a total
+ * rounded to the nearest plate, or a name guessed from lower case, would be a run nobody flew,
+ * and its log would not replay to it. A byname is the one exception: it says only how the run was
+ * flown, and its log earns it again whenever it is replayed, so one this build does not know (a
+ * later build's, or damage) is left off and the run keeps its row.
+ */
+export function normalizeRow(row) {
+  if (!isRecord(row)) return null;
+  const { who, via, at, log, byname } = row;
+  if (typeof who !== 'string' || !WHO.test(who)) return null;
+  if (via !== 'me' && via !== 'link') return null;
+  const score = normalizeScore(row);
+  if (!score) return null;
   if (!isAmount(at)) return null;
   if (typeof log !== 'string' || log.length >= ROW.log || !LOG.test(log)) return null;
-  return { who, via, total, peak, red: [...red], at, log };
+  return { who, via, ...score, at, log, byname: bynameOf(byname) ? byname : '' };
 }
 
 /**
@@ -99,7 +129,7 @@ export function normalizeBoard(raw) {
   if (!isRecord(raw) || !isRecord(raw.days)) return board;
   for (const key of Object.keys(raw.days)) {
     const day = raw.days[key];
-    if (Number.isNaN(dayIn(key)) || !isRecord(day) || !Array.isArray(day.rows)) continue;
+    if (Number.isNaN(boardDay(key)) || !isRecord(day) || !Array.isArray(day.rows)) continue;
     const rows = [];
     for (const row of day.rows.map((candidate) => normalizeRow(candidate)).filter(Boolean).sort(byRank)) {
       if (rows.length === BOARD.keep) break;
@@ -122,7 +152,7 @@ export function normalizeBoard(raw) {
  */
 export function addRow(board, key, row) {
   const clean = normalizeRow(row);
-  if (!clean || Number.isNaN(dayIn(key))) return { rank: 0, best: false };
+  if (!clean || Number.isNaN(boardDay(key))) return { rank: 0, best: false };
   if (!Object.hasOwn(board.days, key)) board.days[key] = { rows: [] };
   const { rows } = board.days[key];
   const known = rows.findIndex((other) => other.log === clean.log);
@@ -153,8 +183,52 @@ export function rowsFor(board, key) {
  */
 export function pruneBoard(board, today) {
   for (const key of Object.keys(board.days)) {
-    const day = dayIn(key);
+    const day = boardDay(key);
     if (Number.isNaN(day) || day <= today - BOARD.days) delete board.days[key];
   }
   return board;
+}
+
+/**
+ * The rows of a day (rowsFor's, best first) with a bot's run pinned among them where it ranks, for
+ * the sheet to show: under every run that outranks it and over the rest, so a run that only ties it
+ * stays under it. `bot` is { who, total, peak, red }. Its row comes back as a bot's: `via` 'bot',
+ * with no start, log or byname, which normalizeRow refuses, so it can never be stored as a run. A
+ * new list, holding the caller's own rows.
+ */
+export function withBot(rows, bot) {
+  let place = 0;
+  while (place < rows.length && outranks(rows[place], bot)) place += 1;
+  const pinned = { who: bot.who, via: 'bot', total: bot.total, peak: bot.peak, red: [...bot.red], at: 0, log: '', byname: '' };
+  return [...rows.slice(0, place), pinned, ...rows.slice(place)];
+}
+
+// The most bots a day's scores can hold: more than flown, so a build that flies another can still
+// read what this one kept, and a damaged list cannot grow without bound.
+const BOTS_KEPT = 8;
+
+/**
+ * A clean copy of what the bots of a day's Daily Sky came to, as the store keeps them, or null when
+ * any part of it is damaged. It is
+ *
+ *   key      the day's board key (boardKey): the rules the bots flew under, and the UTC day
+ *   seed     the sky's seed, 32 bits
+ *   scores   each bot's { total, peak, red } (normalizeScore), in the order meet-bots.js flies them,
+ *            one to eight of them
+ *
+ * Anything else in the object is left behind. Shares no object with `raw`.
+ */
+export function normalizeBots(raw) {
+  if (!isRecord(raw)) return null;
+  const { key, seed, scores } = raw;
+  if (Number.isNaN(boardDay(key))) return null;
+  if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) return null;
+  if (!Array.isArray(scores) || scores.length < 1 || scores.length > BOTS_KEPT) return null;
+  const clean = [];
+  for (let i = 0; i < scores.length; i++) {
+    const score = normalizeScore(scores[i]);
+    if (!score) return null;
+    clean.push(score);
+  }
+  return { key, seed, scores: clean };
 }

@@ -1,6 +1,9 @@
 // What the meet sheet says about a run of Good Lift, worked out without a page: the feats it
-// earned, the line to share it by and the barogram of its climb. Pure, so the tests can read a
-// run's sheet the way a visitor does. A run's numbers come from meet-sheet.js's summariseRun.
+// earned, the line to share it by, the barogram of its climb, what it says of the medals the bots
+// set (meet-bots.js) and of the world board (board-online.js). Pure, so the tests can read a run's
+// sheet the way a visitor does. A run's numbers come from meet-sheet.js's summariseRun; its byname
+// and its verse are worked out in meet-bynames.js and meet-verse.js.
+import { WORLD_BOARD } from './board-world.js';
 
 // The judges, in the order their lights stand: bit 0 of a lift's `red` is the first.
 export const JUDGES = Object.freeze(['contact', 'control', 'airspace']);
@@ -9,7 +12,8 @@ export const JUDGES = Object.freeze(['contact', 'control', 'airspace']);
 export const THOUSAND_POUNDS = 453.6;
 
 // Good Lift's feats. They are its own, kept in its own store, and never move the fjord's belt.
-// `streak` is the one the store awards (days in a row); every other is earned by one run.
+// `streak` is the one the store awards (days in a row), and `bot` the one awarded once the bots have
+// flown the run's sky (meet-bots.js, as the sheet opens); every other is earned by one run alone.
 export const FEATS = Object.freeze([
   Object.freeze({ id: 'opener', name: 'Opener', text: 'Lock out the first line.' }),
   Object.freeze({ id: 'under-the-horn', name: 'Under the horn', text: 'Make a good lift after Gjallarhorn sounds.' }),
@@ -17,6 +21,7 @@ export const FEATS = Object.freeze([
   Object.freeze({ id: 'clean-meet', name: 'Clean meet', text: 'Four lifts or more in a run, every light white.' }),
   Object.freeze({ id: 'thousand-pound-club', name: '1,000 lb club', text: 'Total 453.6 kg in one run.' }),
   Object.freeze({ id: 'training-block', name: 'Training block', text: 'Fly the Daily Sky seven days in a row.', streak: 7 }),
+  Object.freeze({ id: 'beat-the-bot', name: 'Beat the bot', text: 'Out-lift TST, the test pilot, on the same sky.', bot: true }),
 ]);
 
 /** Kilograms as a meet writes them: a decimal only for a half (182.5, 180, 1,240). */
@@ -38,6 +43,48 @@ export function featsFor(result) {
   if (lines.length >= 4 && result.lifts.every((lift) => lift.red === 0)) earned.push('clean-meet');
   if (result.total >= THOUSAND_POUNDS) earned.push('thousand-pound-club');
   return earned;
+}
+
+/**
+ * What the sheet says once the bots have landed (good-lift.js's `bots`: the sky's `medals`, lightest
+ * first, the `medal` the run took, '' for none, and the feats that `fresh`ly earned), for whoever
+ * cannot see the line that shows them:
+ *   Medals: bronze 145 kg, silver 160 kg, set by TST, gold 375 kg. Yours: silver. New feat: Beat the bot.
+ */
+export function medalsSaid({ medals, medal, fresh = [] }) {
+  const marks = medals.map((mark) => `${mark.medal} ${kilos(mark.total)} kg${mark.by === 'tst' ? ', set by TST' : ''}`).join(', ');
+  const feats = FEATS.filter((feat) => fresh.includes(feat.id)).map((feat) => feat.name);
+  return `Medals: ${marks}. Yours: ${medal || 'none'}.${feats.length ? ` New feat${feats.length === 1 ? '' : 's'}: ${feats.join(', ')}.` : ''}`;
+}
+
+// What became of a run sent to the world board that it did not rank, by the reason the function
+// gave (functions/src/runs.js); any other reason is said as a plain no. A board whose store or code
+// failed never judged the run at all, so it is not said to have turned it down.
+const NOT_RANKED = Object.freeze({
+  'not-best': 'your better run is already on it',
+  duplicate: 'this run is already on it',
+  mismatch: 'its replay of this run came to another sheet, so it stays here',
+  quota: 'it takes no more of your runs today',
+  full: 'it takes no more pilots today',
+  rate: 'it was busy, so this run stays here',
+  store: 'it could not be reached, so this run stays here',
+  fault: 'it could not be reached, so this run stays here',
+});
+
+/**
+ * What the sheet says under the world board (good-lift.js's `world`: the day's `rows`, where this
+ * browser stands, `rank`, what became of the run `sent`, and whether this browser's run was
+ * `removed`, or `stays` because another browser sent it), for everyone, sighted or not:
+ *   57 pilots on it · you: #3 · this run went up
+ */
+export function worldSaid({ rows, rank = 0, sent = null, removed = false, stays = false, failed = false }) {
+  const said = [rows.length ? `${rows.length} pilot${rows.length === 1 ? '' : 's'} on it` : 'nobody on it yet'];
+  if (removed) said.push('yours is taken off');
+  else if (rank > 0) said.push(`you: #${rank}`);
+  if (failed && !removed) said.push('it could not be taken off just now: try again');
+  else if (stays) said.push('only the browser that sent it can take it off');
+  else if (sent && !removed) said.push(sent.ok ? `this run went up${sent.rank > 0 ? '' : `, but not into the top ${WORLD_BOARD.keep}`}` : NOT_RANKED[sent.why] ?? 'it turned this run down');
+  return said.join(' · ');
 }
 
 /** One lift's three lights as a share line writes them: ⚪ white, 🔴 red. */

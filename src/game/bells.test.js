@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BELLS, BELL_PHASE, BELL_POOL, BELL_RESULT, createBells } from './bells.js';
+import { BEAST, BELLS, BELL_PHASE, BELL_POOL, BELL_RESULT, createBells } from './bells.js';
 import { RUN, createRunWorld, startRun, stepRun } from './run-step.js';
 import { createReferencePilot } from './pilots.js';
+import { RUNE } from './meet-runes.js';
 import { CLOUD_STRIKE, CLOUD_ZONE, createCloudbaseRun } from './cloudbase-state.js';
 import { FLIGHT, stepFlight } from './flight.js';
 import { surfaceAt } from './terrain.js';
@@ -149,6 +150,7 @@ function flyAhead(world, seconds, { ground = true } = {}) {
 // Every number in a set of kettlebells, with where it is kept.
 const numbers = (state) => [
   ...Object.entries(state).filter(([, value]) => typeof value === 'number'),
+  ...Object.entries(state.beast).map(([key, value]) => [`beast.${key}`, value]),
   ...state.bells.flatMap((bell, i) => Object.entries(bell).filter(([, value]) => typeof value === 'number').map(([key, value]) => [`bells[${i}].${key}`, value])),
 ];
 
@@ -215,11 +217,12 @@ test('kettlebells come every 16 to 22 s, and every 10 to 14 s once the pilot has
   assert.ok(Math.max(...gaps.every) - Math.min(...gaps.every) > 3, 'the gaps are drawn, not fixed');
 });
 
-test('each kettlebell is aimed where the glider would be 2.4 s later if the pilot held what it was doing, to the last bit', () => {
+test('each kettlebell is aimed where the glider would be 2.4 s later if the pilot held what it was doing, and the Beast 3.2 s later, to the last bit', () => {
   // Full skies, with lift, wind, gusts and cloud in the air the look ahead flies through, and a
   // pilot that holds the light brake, so the controls held include more than the turn.
   let aimed = 0;
   let braked = 0;
+  let beasts = 0;
   for (const seed of firstSkies(6)) {
     const world = runWorld(seed);
     let seen = 0;
@@ -229,18 +232,21 @@ test('each kettlebell is aimed where the glider would be 2.4 s later if the pilo
         if (state.thrown === seen) return;
         seen = state.thrown;
         const bell = state.bells[state.warning];
-        const ahead = flyAhead(w, BELLS.lead);
+        assert.equal(bell.lead, bell.beast ? BEAST.lead : BELLS.lead);
+        const ahead = flyAhead(w, bell.lead);
         assert.deepEqual([bell.aimX, bell.aimY, bell.aimZ], [ahead.x, ahead.y, ahead.z], `seed ${seed}, throw ${seen}`);
-        // About as far ahead as 2.4 s of flying takes it.
+        // About as far ahead as 2.4 s (or 3.2 s) of flying takes it.
         const reach = Math.hypot(bell.aimX - w.g.pos.x, bell.aimZ - w.g.pos.z);
-        assert.ok(reach > 10 && reach < 45, `the aim was ${reach.toFixed(1)} m away`);
+        assert.ok(reach > 10 && reach < (bell.beast ? 60 : 45), `the aim was ${reach.toFixed(1)} m away`);
         assert.equal(bell.circling, Math.abs(w.g.yawRate) > BELLS.turning && w.g.bar < 0.5);
         aimed++;
+        if (bell.beast) beasts++;
         if (w.controls.brake) braked++;
       },
     });
   }
-  assert.ok(aimed >= 15 && braked >= 3, `${aimed} aims checked, ${braked} with the brake held`);
+  // On these skies: 17 aims, 10 of them with the brake held and one the Beast's (on seed 6).
+  assert.ok(aimed >= 15 && braked >= 3 && beasts >= 1, `${aimed} aims checked, ${braked} with the brake held, ${beasts} of them the Beast`);
   // Even the ground counts, as it does in a run: a slow wing held on a deep brake 19 m up, where
   // a gentle stall cannot begin, is aimed at as a wing that does not stall.
   const low = aloft(2, { y: surfaceAt(CLOUD_ZONE.x, CLOUD_ZONE.z) + 19 });
@@ -294,7 +300,7 @@ test('each sky\'s kettlebells are the ones it has always thrown: the same first 
   }
 });
 
-test('a kettlebell falls from 96 m above and 26 m beside its aim, reaches it 2.4 s after its warning begins and falls on for 1.5 s', () => {
+test('a kettlebell falls from 96 m above and 26 m beside its aim, reaches it 2.4 s after its warning begins and falls on for 1.5 s, and the Beast from as much further out as its 3.2 s', () => {
   const world = runWorld(3);
   const { state } = world.bells;
   const weights = new Set();
@@ -305,25 +311,27 @@ test('a kettlebell falls from 96 m above and 26 m beside its aim, reaches it 2.4
       for (const bell of state.bells) {
         if (bell.phase === BELL_PHASE.idle) continue;
         const t = w.sky.state.elapsed - bell.at;
+        // Along the same slant as every bell, as much further out as its lead is longer.
+        const out = bell.lead / BELLS.lead;
         if (t === 0) {
           // Just thrown: from straight above the aim's ring and to one side of it.
-          assert.equal(bell.fromY - bell.aimY, BELLS.drop);
-          assert.ok(Math.abs(Math.hypot(bell.fromX - bell.aimX, bell.fromZ - bell.aimZ) - BELLS.side) < 1e-9);
+          assert.ok(Math.abs(bell.fromY - bell.aimY - BELLS.drop * out) < 1e-9);
+          assert.ok(Math.abs(Math.hypot(bell.fromX - bell.aimX, bell.fromZ - bell.aimZ) - BELLS.side * out) < 1e-9);
           assert.deepEqual([bell.x, bell.y, bell.z], [bell.fromX, bell.fromY, bell.fromZ]);
-          weights.add(bell.kg);
+          if (!bell.beast) weights.add(bell.kg);
           bearings.push(Math.atan2(bell.aimX - bell.fromX, -(bell.aimZ - bell.fromZ)));
         }
         // Always on its line, and at the aim when the lead is up.
-        const along = t / BELLS.lead;
+        const along = t / bell.lead;
         for (const axis of ['X', 'Y', 'Z']) {
           const want = bell[`from${axis}`] + (bell[`aim${axis}`] - bell[`from${axis}`]) * along;
           assert.ok(Math.abs(bell[axis.toLowerCase()] - want) < 1e-9);
         }
-        if (Math.abs(t - BELLS.lead) < STEP / 2) {
+        if (Math.abs(t - bell.lead) < STEP / 2) {
           assert.ok(Math.hypot(bell.x - bell.aimX, bell.y - bell.aimY, bell.z - bell.aimZ) < 1e-6);
           followed++;
         }
-        assert.ok(t < BELLS.lead + BELLS.fall, 'it is gone once it has fallen 1.5 s past the aim');
+        assert.ok(t < bell.lead + BELLS.fall, 'it is gone once it has fallen 1.5 s past the aim');
         assert.equal(bell.phase, bell.result === BELL_RESULT.pending ? BELL_PHASE.warning : BELL_PHASE.away);
       }
     },
@@ -335,13 +343,97 @@ test('a kettlebell falls from 96 m above and 26 m beside its aim, reaches it 2.4
   for (const seed of [4, 5, 6]) {
     const { throws } = flyThrows(runWorld(seed), createReferencePilot());
     for (const { bell } of throws) {
-      weights.add(bell.kg);
+      if (!bell.beast) weights.add(bell.kg);
       bearings.push(Math.atan2(bell.aimX - bell.fromX, -(bell.aimZ - bell.fromZ)));
     }
   }
   assert.equal(weights.size, BELLS.kg.length);
   const quarters = new Set(bearings.map((bearing) => Math.floor(((bearing + 2 * Math.PI) % (2 * Math.PI)) / (Math.PI / 2))));
   assert.equal(quarters.size, 4);
+});
+
+test('the first throw once the pilot has reached 1,000 m is the Beast, once a run: 48 kg, warned 3.2 s ahead and aimed as far, along the same slant from further out', () => {
+  // Parked at 700 m, ordinary bells; with the peak at 1,000 m, the next throw is the Beast.
+  const world = aloft(19);
+  const { state } = world.bells;
+  assert.ok(untilThrown(world) < 10);
+  assert.equal(state.bells[state.warning].beast, false);
+  sendDown(world, 30);
+  assert.deepEqual([state.beast.n, state.beast.result], [-1, BELL_RESULT.pending]);
+  Object.assign(world.g.pos, { y: BEAST.from });
+  world.sky.state.peak = BEAST.from;
+  const aim = flyAhead(world, BEAST.lead);
+  assert.ok(untilThrown(world, 30) < 30);
+  const bell = state.bells[state.warning];
+  assert.deepEqual([bell.beast, bell.kg, bell.lead, state.beast.n, state.beast.result], [true, BEAST.kg, BEAST.lead, 1, BELL_RESULT.pending]);
+  assert.deepEqual([bell.aimX, bell.aimY, bell.aimZ], [aim.x, aim.y, aim.z]);
+  // 128 m above its aim and 34.7 m beside it: the 15° slant of every bell, so it falls no faster.
+  const out = BEAST.lead / BELLS.lead;
+  assert.ok(Math.abs(bell.fromY - bell.aimY - BELLS.drop * out) < 1e-9 && Math.abs(BELLS.drop * out - 128) < 1e-9);
+  assert.ok(Math.abs(Math.hypot(bell.fromX - bell.aimX, bell.fromZ - bell.aimZ) - BELLS.side * out) < 1e-9);
+  // Its warning lasts 3.2 s; a miss under 9 m is a close call, kept as the Beast's own result.
+  assert.equal(sendDown(world, BELLS.close - 1).result, BELL_RESULT.close);
+  assert.deepEqual([state.beast.n, state.beast.result, state.close], [1, BELL_RESULT.close, 1]);
+  // Every throw after it is an ordinary bell again.
+  for (let k = 0; k < 3; k++) {
+    assert.ok(untilThrown(world, 30) < 30);
+    assert.equal(state.bells[state.warning].beast, false);
+    assert.ok(BELLS.kg.includes(state.bells[state.warning].kg));
+    sendDown(world, 30);
+  }
+  assert.deepEqual([state.beast.n, state.beast.result], [1, BELL_RESULT.close]);
+  // A Beast whose aim is refused is still the Beast when it is thrown: heading out over the rim
+  // from 16 m inside it, the aim is over the edge; turned back in, the Beast comes.
+  const rim = aloft(19, { x: CLOUD_ZONE.x + CLOUD_ZONE.r - BELLS.edge - 1, y: BEAST.from, yaw: Math.PI / 2 });
+  wait(rim, 8);
+  assert.ok(rim.bells.state.thrown === 0 && rim.bells.state.retry > 0);
+  rim.g.yaw = -Math.PI / 2;
+  assert.ok(untilThrown(rim, BELLS.retry + STEP) <= BELLS.retry + STEP);
+  assert.deepEqual([rim.bells.state.bells[0].beast, rim.bells.state.beast.n], [true, 0]);
+  // Its fall takes its whole lead: it reaches the aim 3.2 s after the throw, and is in the air for
+  // 1.5 s more.
+  const beast = rim.bells.state.bells[0];
+  wait(rim, BEAST.lead);
+  assert.ok(Math.hypot(beast.x - beast.aimX, beast.y - beast.aimY, beast.z - beast.aimZ) < 1e-6);
+  wait(rim, BELLS.fall - 2 * STEP);
+  assert.notEqual(beast.phase, BELL_PHASE.idle);
+  wait(rim, 3 * STEP);
+  assert.equal(beast.phase, BELL_PHASE.idle);
+});
+
+test('a bell that would hit a pilot holding Algiz glances off instead: nothing strikes, it is counted, and only a bell that would have hit is turned', () => {
+  // The meet's blessing as the kettlebells read it, by hand.
+  const warded = (world) => {
+    world.meet = { state: { runes: { blessing: { rune: RUNE.algiz } } } };
+    return world;
+  };
+  const glance = warded(aloft(23));
+  const before = structuredClone(glance.sky.state);
+  assert.ok(untilThrown(glance) < 10);
+  const bell = sendDown(glance, 0);
+  assert.equal(bell.result, BELL_RESULT.glanced);
+  const { thrown, hits, close, dodged, glanced } = glance.bells.state;
+  assert.deepEqual({ thrown, hits, close, dodged, glanced }, { thrown: 1, hits: 0, close: 0, dodged: 0, glanced: 1 });
+  // The sky is untouched: no strike, no fold, no shield.
+  before.elapsed = glance.sky.state.elapsed;
+  assert.deepEqual(glance.sky.state, before);
+  // A near miss is a close call as ever, a shielded wing is shielded and a hidden one hidden: none of
+  // them would have hit, so none glances.
+  const near = warded(aloft(23));
+  assert.ok(untilThrown(near) < 10);
+  assert.equal(sendDown(near, BELLS.close - 1).result, BELL_RESULT.close);
+  const shielded = warded(aloft(23));
+  assert.ok(untilThrown(shielded) < 10);
+  assert.equal(shielded.sky.strike(), true);
+  assert.equal(sendDown(shielded, 0).result, BELL_RESULT.shielded);
+  const hidden = warded(aloft(23));
+  assert.ok(untilThrown(hidden) < 10);
+  assert.equal(sendDown(hidden, 0, (world) => { world.sky.state.pilot.cloud = CLOUD_STRIKE.cover; }).result, BELL_RESULT.hidden);
+  assert.deepEqual([near.bells.state.glanced, shielded.bells.state.glanced, hidden.bells.state.glanced], [0, 0, 0]);
+  // Without the blessing the very same bell hits.
+  const bare = aloft(23);
+  assert.ok(untilThrown(bare) < 10);
+  assert.equal(sendDown(bare, 0).result, BELL_RESULT.hit);
 });
 
 test('a kettlebell hit is exactly the sky\'s own strike from nowhere, and the folded wing then hooks the way the pilot was turning', () => {
@@ -634,7 +726,7 @@ test('every number the kettlebells keep stays finite, every bell comes out as ne
     for (const pilot of [createReferencePilot({ brake: 'eased' }), dodger(0.4)]) {
       const world = runWorld(seed, { bells });
       finite(bells.state);
-      const came = [0, 0, 0, 0, 0, 0];
+      const came = [0, 0, 0, 0, 0, 0, 0];
       const was = bells.state.bells.map((bell) => bell.result);
       fly(world, pilot, {
         each(w) {
@@ -721,25 +813,35 @@ test('what each kettlebell is comes from the seed and its number alone, however 
   }
 });
 
-// Measured over seeds 1-40 and 1001-1040 under SIM_VERSION 1, then 2: kettlebells thrown a run,
-// the share that hit, and runs of 40 that passed 1,000 m.
+// Measured over seeds 1-40 and 1001-1040 under SIM_VERSION 1, 2 and then 3: kettlebells thrown a
+// run, the share that hit, and runs of 40 that passed 1,000 m; under version 3, then, how many of
+// the Beasts thrown hit.
 //   no kettlebells                              1   -            -            39 / 36
 //                                               2   -            -            26 / 30
+//                                               3   -            -            26 / 30
 //   holding its line, hands up                  1   4.0 / 3.9    78 / 79%     24 / 22
 //                                               2   3.3 / 3.0    73 / 79%      9 / 1
+//                                               3   3.3 / 3.0    73 / 79%      9 / 1     5 of 6 / none thrown
 //   holding its line, light brake eased         1   3.7 / 4.0    80 / 81%     24 / 23
 //                                               2   3.6 / 4.0    79 / 82%     25 / 24
+//                                               3   3.6 / 4.0    75 / 80%     25 / 24    14 of 23 / 13 of 17
 //   changing what it does 0.4 s in, hands up    1   4.3 / 4.1    0.6 / 3.1%   34 / 31
 //                                               2   3.5 / 3.5    0.7 / 0.7%   15 / 17
+//                                               3   3.5 / 3.5    0.7 / 0.7%   15 / 17    0 of 10 / 0 of 10
 //   changing what it does 0.4 s in, brake eased 1   4.1 / 4.3    0.6 / 0.6%   31 / 38
 //                                               2   3.9 / 4.1    0.0 / 1.2%   35 / 34
+//                                               3   3.8 / 4.2    0.0 / 0.6%   35 / 34    0 of 30 / 0 of 33
 //   changing what it does 0.6 s in, brake eased 1   4.2 / 4.3    1.8 / 0.6%   33 / 38
 //                                               2   3.7 / 4.0    3.4 / 0.6%   34 / 34
+//                                               3   3.7 / 4.0    2.7 / 1.3%   34 / 34    0 of 30 / 0 of 27
 // The first comes a median 6 to 14 s after the pilot reaches 550 m and the rest about every 21 s;
 // 54 to 73% are thrown at a circling pilot, aimed a median 27 to 42 degrees off its nose (under
 // version 2: 10 to 14 s, about every 22 s, 53 to 66% and 31 to 46 degrees). Hands up, the peaked
-// cores of version 2 keep a pilot lower, and a lower pilot is thrown fewer. The pins in
-// good-lift.test.js hold the balance; this only holds the promise that dodging works.
+// cores of version 2 keep a pilot lower, and a lower pilot is thrown fewer. Version 3's Beast, the
+// first bell past 1,000 m, is aimed as far ahead as its warning is long, so holding on still meets
+// it, and changing what you do 0.4 s in leaves even more of its warning to get clear: no dodger was
+// hit by one. The pins in good-lift.test.js hold the balance; this only holds the promise that
+// dodging works.
 test('a pilot who holds its line is hit by most kettlebells, and one who changes what it is doing 0.4 s into the warning hardly ever is', () => {
   const share = (pilot) => {
     let thrown = 0;

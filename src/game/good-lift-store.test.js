@@ -5,9 +5,12 @@ import { GAME_STORE as RESET_KEY } from './achievements.js';
 import { addRow, boardKey, emptyBoard, rowsFor } from './board.js';
 import { DAY_MS } from './good-lift-address.js';
 import {
-  FEAT_IDS, GAME_STORE, TRAINING_BLOCK, clearStore, earnFeats, emptyStore, normalizeStore, readStore, recordRun, setInitials,
-  updateStore, writeStore,
+  FEAT_IDS, GAME_STORE, KIT, TRAINING_BLOCK, clearStore, earnFeats, earnedKit, emptyStore, keepEarned, kitAfterRun, kitSheet, newlyEarned,
+  normalizeStore, readStore, recordRun, setInitials, updateStore, writeStore,
 } from './good-lift-store.js';
+import { BLOCKED } from './meet-initials.js';
+import { LIVERIES } from './livery.js';
+import { WINGS, emptyKit } from './wing-kit.js';
 
 const DAY = 20_756;
 const NOON = DAY * DAY_MS + DAY_MS / 2;
@@ -45,7 +48,7 @@ afterEach(() => {
 });
 
 test('a fresh or damaged store reads as empty, and a good one round-trips', () => {
-  assert.deepEqual(emptyStore(), { v: 1, best: { total: 0, peak: 0 }, tonnage: 0, runs: 0, feats: [], daily: { last: 0, streak: 0 }, initials: '', board: { days: {} } });
+  assert.deepEqual(emptyStore(), { v: 1, best: { total: 0, peak: 0 }, tonnage: 0, runs: 0, feats: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: { days: {} }, bots: null });
   assert.deepEqual(readStore(memoryStorage()), emptyStore());
   for (const text of ['{broken', 'null', '[]', '"store"', '42', JSON.stringify({ best: 'high' })]) {
     assert.deepEqual(readStore(memoryStorage({ [GAME_STORE]: text })), emptyStore(), text);
@@ -232,9 +235,9 @@ test('only daily runs reach the board, and feats are earned once', () => {
   assert.deepEqual(store.board, emptyBoard());
 
   // A Daily Sky goes on its day's board, under the store's initials, as this device's own run.
-  const first = recordRun(store, run({ total: 200, peak: 800, red: [0, 2, 0, 4], log: 'daily1', feats: ['opener', 'opener', 'made-up'] }), AT);
+  const first = recordRun(store, run({ total: 200, peak: 800, red: [0, 2, 0, 4], log: 'daily1', feats: ['opener', 'opener', 'made-up'], byname: 'horn-lifter' }), AT);
   assert.deepEqual(placed(first), { feats: ['opener'], rank: 1, best: true });
-  assert.deepEqual(rowsFor(store.board, KEY), [{ who: 'REN', via: 'me', total: 200, peak: 800, red: [0, 2, 0, 4], at: NOON - 120_000, log: 'daily1' }]);
+  assert.deepEqual(rowsFor(store.board, KEY), [{ who: 'REN', via: 'me', total: 200, peak: 800, red: [0, 2, 0, 4], at: NOON - 120_000, log: 'daily1', byname: 'horn-lifter' }]);
   // A lighter run ranks below it, and a feat earned again is not earned anew. `best` says whether this
   // run now leads its day, as addRow does; the leading row itself is the first of rowsFor.
   assert.deepEqual(placed(recordRun(store, run({ total: 100, log: 'daily2', feats: ['under-the-horn', 'opener'] }), AT)), { feats: ['under-the-horn'], rank: 2, best: false });
@@ -350,4 +353,162 @@ test('the store never touches the fjord\'s own key', () => {
   assert.deepEqual([...new Set(storage.keys)], [GAME_STORE]);
   assert.equal(storage.items.get('fjord-glider-v1'), fjord);
   assert.deepEqual([...storage.items.keys()], ['fjord-glider-v1']);
+});
+
+test('initials the board will not show are refused as they are typed, and read as none if a store still holds them', () => {
+  const store = emptyStore();
+  setInitials(store, 'REN');
+  for (const blocked of BLOCKED) {
+    assert.equal(setInitials(store, blocked), 'REN', blocked);
+    assert.equal(setInitials(store, ` ${blocked.toLowerCase()} `), 'REN', blocked);
+  }
+  // A word for who someone is is no insult, and everyday initials go through as ever.
+  for (const fine of ['GAY', 'JEW', 'TOR', 'ASH', 'SAS']) assert.equal(setInitials(store, fine), fine);
+  // Initials a store kept before the blocklist refused them read as none, and the rest as it was.
+  assert.deepEqual(normalizeStore({ initials: BLOCKED[0], runs: 3 }), { ...emptyStore(), runs: 3 });
+  assert.equal(normalizeStore({ initials: 'TOR' }).initials, 'TOR');
+});
+
+test('initials typed where the sheet offers the world board are the opt-in to it, initials set anywhere else are not, and none opt out', () => {
+  const store = emptyStore();
+  // Set where the sheet said nothing of a world board, as every set before there was one was.
+  setInitials(store, 'REN');
+  assert.equal(store.optIn, false);
+  setInitials(store, 'REN', { world: true });
+  assert.equal(store.optIn, true);
+  // Changed elsewhere, or refused, the opt-in stands.
+  for (const typed of ['TOR', 'R3N', BLOCKED[0]]) setInitials(store, typed, { world: false });
+  assert.deepEqual([store.initials, store.optIn], ['TOR', true]);
+  // Cleared anywhere, the initials take the opt-in with them.
+  setInitials(store, '', { world: false });
+  assert.deepEqual([store.initials, store.optIn], ['', false]);
+  setInitials(store, 'ULL');
+  assert.equal(store.optIn, false);
+  // Read back, the opt-in needs initials to go up under, and is true or nothing.
+  assert.equal(normalizeStore({ initials: 'REN' }).optIn, false);
+  assert.equal(normalizeStore({ initials: 'REN', optIn: true }).optIn, true);
+  for (const raw of [{ optIn: true }, { initials: 'ren', optIn: true }, { initials: BLOCKED[0], optIn: true }, { initials: 'REN', optIn: 'yes' }]) {
+    assert.equal(normalizeStore(raw).optIn, false, JSON.stringify(raw));
+  }
+});
+
+test('what the bots came to on the day\'s sky is kept beside the board, whole or not at all, and comes back from storage', () => {
+  const bots = {
+    key: boardKey(2, DAY),
+    seed: 4_236_776_022,
+    scores: [{ total: 115, peak: 1040, red: [0, 0, 0, 1, 0] }, { total: 145, peak: 1152, red: [0] }, { total: 160, peak: 1110, red: [] }],
+  };
+  const storage = memoryStorage();
+  updateStore((store) => {
+    store.bots = bots;
+  }, storage);
+  assert.deepEqual(readStore(storage).bots, bots);
+  // A damaged one reads as none, and costs nothing else.
+  assert.deepEqual(normalizeStore({ runs: 2, bots: { ...bots, seed: -1 } }), { ...emptyStore(), runs: 2 });
+  assert.equal(normalizeStore({ bots: { ...bots, key: 'today' } }).bots, null);
+  // Recording a run leaves it be, and the store read back shares nothing with it.
+  updateStore((store) => recordRun(store, run(), AT), storage);
+  const read = readStore(storage);
+  assert.deepEqual(read.bots, bots);
+  read.bots.scores[0].red.push(7);
+  assert.deepEqual(bots.scores[0].red, [0, 0, 0, 1, 0]);
+  assert.deepEqual(readStore(storage).bots, bots);
+});
+
+test('a run\'s byname goes onto its row, and one this build does not know goes on as none', () => {
+  const store = emptyStore();
+  recordRun(store, run({ log: 'named', byname: 'unstruck' }), AT);
+  recordRun(store, run({ total: 90, log: 'later', byname: 'a-later-byname' }), AT);
+  recordRun(store, run({ total: 80, log: 'older' }), AT);
+  assert.deepEqual(rowsFor(store.board, KEY).map(({ log, byname }) => [log, byname]), [['named', 'unstruck'], ['later', ''], ['older', '']]);
+});
+
+// A store with `tonnage` kilos banked and `feats` earned, and nothing else flown.
+const banked = (tonnage, feats = [], best = 0) => ({ ...emptyStore(), tonnage, feats, best: { total: best, peak: 0 } });
+
+test('the kit ladder opens at 1, 2.5, 5, 10, 20 and 40 tonnes banked, the Valkyrie wing with a clean meet and the helmet with the 1,000 lb club', () => {
+  const rungs = KIT.filter((item) => item.kg).map((item) => [item.id, item.kg]);
+  assert.deepEqual(rungs, [['chalk', 1000], ['raven', 2500], ['calibrated', 5000], ['sheetless', 10000], ['flyte', 20000], ['hird', 40000]]);
+  assert.deepEqual(KIT.filter((item) => item.feat).map((item) => [item.id, item.feat]), [['valkyrie', 'clean-meet'], ['gjermundbu', 'thousand-pound-club']]);
+  // Its wings are the ones that can be worn and painted, and its feats are the store's own.
+  assert.deepEqual(['standard', ...KIT.filter((item) => item.kind === 'wing').map((item) => item.id)], WINGS);
+  assert.deepEqual(Object.keys(LIVERIES), WINGS.slice(1));
+  for (const item of KIT) if (item.feat) assert.ok(FEAT_IDS.includes(item.feat), item.feat);
+  // Each rung opens at its tonnage exactly, not a kilo before.
+  assert.deepEqual(earnedKit(banked(0)), []);
+  assert.deepEqual(earnedKit(banked(999.5)), []);
+  assert.deepEqual(earnedKit(banked(1000)), ['chalk']);
+  assert.deepEqual(earnedKit(banked(4997.5)), ['chalk', 'raven']);
+  assert.deepEqual(earnedKit(banked(40000)), ['chalk', 'raven', 'calibrated', 'sheetless', 'flyte', 'hird']);
+  // A feat earns its piece whatever the tonnage.
+  assert.deepEqual(earnedKit(banked(0, ['clean-meet', 'thousand-pound-club'])), ['valkyrie', 'gjermundbu']);
+  assert.deepEqual(earnedKit(banked(0, ['opener', 'giant-dodger'])), []);
+});
+
+test('only what has been earned is kept: an unearned wing is the standard one, an unearned helmet or chalk is off', () => {
+  const everything = { wing: 'hird', helmet: true, chalk: true };
+  assert.deepEqual(keepEarned(everything, banked(0)), emptyKit());
+  assert.deepEqual(keepEarned(everything, banked(40000)), { wing: 'hird', helmet: false, chalk: true });
+  assert.deepEqual(keepEarned(everything, banked(39997.5, ['thousand-pound-club'])), { wing: 'standard', helmet: true, chalk: true });
+  assert.deepEqual(keepEarned({ wing: 'valkyrie' }, banked(50000)), emptyKit(), 'tonnage never buys a feat\'s wing');
+  assert.deepEqual(keepEarned({ wing: 'valkyrie' }, banked(0, ['clean-meet'])).wing, 'valkyrie');
+  // The standard wing is always there, and nonsense is the empty kit.
+  assert.deepEqual(keepEarned({ wing: 'standard', helmet: false, chalk: false }, banked(0)), emptyKit());
+  assert.deepEqual(keepEarned('raven', banked(99999)), emptyKit());
+});
+
+test('the kit a run earns is what its tonnage or its feats crossed into, as recordRun counts them, and only that', () => {
+  const before = { ...emptyStore(), tonnage: 2400, feats: ['opener'] };
+  const after = normalizeStore(before);
+  recordRun(after, run({ total: 150, feats: ['clean-meet'] }), AT);
+  assert.equal(after.tonnage, 2550);
+  assert.deepEqual(newlyEarned(before, after), ['raven', 'valkyrie']);
+  // The same run again earns nothing new, and a run that banks nothing earns nothing.
+  const again = normalizeStore(after);
+  recordRun(again, run({ total: 150, feats: ['clean-meet'], log: 'AR' }), AT);
+  assert.deepEqual(newlyEarned(after, again), []);
+  // A run that leaps several rungs earns every one.
+  assert.deepEqual(newlyEarned(banked(0), banked(5000)), ['chalk', 'raven', 'calibrated']);
+});
+
+test('as a run ends the kit kept is held to what has been earned, and the chalk switches itself on the first time it is earned and never again', () => {
+  // The run that crosses a tonne: the chalk comes on, and the wing kept stays on.
+  assert.deepEqual(kitAfterRun({ wing: 'standard', helmet: false, chalk: false }, banked(990), banked(1010)), {
+    kept: { wing: 'standard', helmet: false, chalk: true },
+    fresh: ['chalk'],
+  });
+  // Switched off in the kit tab after that, it stays off.
+  assert.deepEqual(kitAfterRun({ wing: 'standard', helmet: false, chalk: false }, banked(1010), banked(1200)), { kept: emptyKit(), fresh: [] });
+  // A wing or the helmet just earned waits to be put on.
+  assert.deepEqual(kitAfterRun(emptyKit(), banked(2400), banked(2600, ['thousand-pound-club'])).kept, emptyKit());
+  // A kit kept from before a reset, or written by hand, comes off, whether or not the run was recorded.
+  assert.deepEqual(kitAfterRun({ wing: 'hird', helmet: true, chalk: true }, banked(0), banked(0)), { kept: emptyKit(), fresh: [] });
+  assert.deepEqual(kitAfterRun({ wing: 'hird', helmet: true, chalk: false }, banked(0), banked(1500)).kept, { wing: 'standard', helmet: false, chalk: true });
+  // An earned kit is kept as it is, and nonsense is the empty kit.
+  const raven = { wing: 'raven', helmet: true, chalk: false };
+  assert.deepEqual(kitAfterRun(raven, banked(3000, ['thousand-pound-club']), banked(3100, ['thousand-pound-club'])), { kept: raven, fresh: [] });
+  assert.deepEqual(kitAfterRun('raven', banked(990), banked(1000)).kept, { ...emptyKit(), chalk: true });
+});
+
+test('the kit tab is told how far each rung is, which comes next, the best total for the 1,000 lb club, and what was just earned', () => {
+  const sheet = kitSheet(banked(3240, ['thousand-pound-club'], 467.5), { wing: 'raven', helmet: true, chalk: true }, ['gjermundbu', 'raven']);
+  assert.equal(sheet.tonnage, 3240);
+  assert.equal(sheet.best, 467.5);
+  assert.deepEqual(sheet.worn, { wing: 'raven', helmet: true, chalk: true });
+  assert.deepEqual(sheet.fresh, ['raven', 'gjermundbu'], 'in the kit\'s own order');
+  const by = Object.fromEntries(sheet.items.map((item) => [item.id, item]));
+  assert.deepEqual(sheet.items.map((item) => item.id), KIT.map((item) => item.id));
+  assert.deepEqual([by.chalk.earned, by.chalk.left], [true, 0]);
+  assert.deepEqual([by.raven.earned, by.raven.left], [true, 0]);
+  assert.deepEqual([by.calibrated.earned, by.calibrated.left], [false, 1760]);
+  assert.deepEqual([by.hird.earned, by.hird.left], [false, 36760]);
+  assert.deepEqual([by.valkyrie.earned, by.valkyrie.left], [false, 0]);
+  assert.deepEqual([by.gjermundbu.earned, by.gjermundbu.kind], [true, 'helmet']);
+  assert.equal(sheet.next.id, 'calibrated');
+  assert.equal(sheet.next.left, 1760);
+  // Once every rung is open there is none next; the sheet says what is worn as a kit, whatever it is handed.
+  const all = kitSheet(banked(41000), null);
+  assert.equal(all.next, null);
+  assert.deepEqual(all.worn, emptyKit());
+  assert.deepEqual(all.fresh, []);
 });

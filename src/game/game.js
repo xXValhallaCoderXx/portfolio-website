@@ -18,6 +18,7 @@ import { createLost } from './lost.js';
 import { createWindStreaks } from './wind-streaks.js';
 import { varioTone } from './vario.js';
 import { sameGame } from './good-lift-address.js';
+import { clearKit, normalizeKit, readKit } from './wing-kit.js';
 import './game.css';
 
 const { clamp } = THREE.MathUtils;
@@ -111,7 +112,7 @@ const MARKUP = /* html */ `
         </div>
         <button data-do="cloudbase" hidden>[ Good Lift ]</button>
         <button data-do="quit-cloudbase" hidden>[ end run ]</button>
-        <p class="fj-keys-goal fj-keys-run" hidden>Good Lift: climb through a line every 250 m, where three judges light the lift · ravens circle where the air rises: turn the way they turn and climb beside them · a circle centred on the core is a rep to depth, 5 kg: straighten as the lift surges, turn as it fades · Hrungnir throws kettlebells: push the bar, or turn off your line · ← and → together push the bar, as ◀ and ▶ do · keep out of the storm clouds · past the arch the brake can stall the wing · time does not speed up in a run<span class="for-keys"> · B switches the music</span></p>
+        <p class="fj-keys-goal fj-keys-run" hidden>Good Lift: climb through a line every 250 m, where three judges light the lift · ravens circle where the air rises: turn the way they turn and climb beside them · a circle centred on the core is a rep to depth, 5 kg: straighten as the lift surges, turn as it fades · Hrungnir throws kettlebells: push the bar, or turn off your line, and from 1,000 m the Beast, heavier, with longer warning · a strike sprays your plates: catch them as they sink · plates ride the gust fronts, hide under storm clouds and, after the horn, bait you down to the fog · at 500 m and 1,000 m rune stones rise: fly through one for its blessing · ← and → together push the bar, as ◀ and ▶ do · keep out of the storm clouds: their lightning shows every thermal for a moment · the ring round you is how far you glide before the fog: cyan, a flock is in reach; amber, climb first · past the arch the brake can stall the wing · time does not speed up in a run<span class="for-keys"> · B switches the music</span></p>
       </aside>
     </nav>
   </div>
@@ -150,6 +151,12 @@ const MARKUP = /* html */ `
  * hooks.onFjord()                     the visitor asked to leave Good Lift for the fjord: the page
  *                                     changes the address and calls fly()
  * hooks.onMusic(on)                   Good Lift's music was switched on or off, from anywhere
+ * hooks.onBots(bots)                  the bots landed on the sky a meet sheet shows: its medals,
+ *                                     TST for its board and any feat that earned (good-lift.js
+ *                                     askBots); apart from onResult, so the sheet keeps its focus
+ * hooks.onWorld(world)                the world board answered for the Daily Sky a meet sheet shows:
+ *                                     its best runs, where this browser stands and what became of
+ *                                     the run sent (good-lift.js shareWorld); apart from onResult too
  */
 export function createGame(stage, hooks = {}) {
   stage.insertAdjacentHTML('beforeend', MARKUP);
@@ -180,6 +187,17 @@ export function createGame(stage, hooks = {}) {
   const glider = buildGlider();
   const scatter = buildScatter(() => (terrain.cones.visible = false));
   const gateway = buildGateway();
+  // What the visitor flies in (wing-kit.js), worn from the first frame, so the hero wears it too.
+  // Only Good Lift changes the kit kept (its kit tab through setKit, and the end of a run), keeping
+  // only what has been earned; fjord.wear tries one on without keeping it. The run reads the chalk
+  // from here.
+  let kit = readKit();
+  function wear(next) {
+    kit = normalizeKit(next);
+    glider.setKit(kit);
+    return { ...kit };
+  }
+  wear(kit);
   // The game beyond the arch (good-lift.js), loaded and made the first time a run is wanted, and
   // `portal` set while the flight holds still for it: through the arch, or while it loads.
   let run = null;
@@ -1122,11 +1140,15 @@ export function createGame(stage, hooks = {}) {
     g, controls, air, scene, camera, loadModel, effects, touch, calm, hud, unlock, stage, view,
     base: import.meta.env.BASE_URL,
     onMusic: (on) => hooks.onMusic?.(on),
+    onBots: (bots) => hooks.onBots?.(bots),
+    onWorld: (world) => hooks.onWorld?.(world),
     compact: () => touch || view.width <= 560,
     best: () => progress.cloudbase.bestAltitude,
     flash: flashStrike,
     sound: { play, panned, get audio() { return audio; } },
     bright: () => !useBloom,
+    kit: () => ({ ...kit }),
+    wear,
   };
   const fjordMoment = {};
 
@@ -1743,12 +1765,13 @@ export function createGame(stage, hooks = {}) {
       finishCloudbase('quit', false);
       Object.assign(progress, emptyProgress());
       writeProgress(emptyProgress());
-      // Good Lift's own store goes too: its bests, feats, streak and board.
+      // Good Lift's own store goes too: its bests, feats, streak and board, and the kit they earned.
       try {
         localStorage.removeItem(GAME_STORE);
       } catch {
         // Storage can be blocked; there is then nothing kept to clear.
       }
+      clearKit();
       location.reload();
     },
   };
@@ -1915,6 +1938,8 @@ export function createGame(stage, hooks = {}) {
     get meetView() { return run?.meetView ?? null; },
     // Feeling for the core: how fast the lift is climbing, and the surges felt so far.
     get surge() { return run?.surge.state ?? null; },
+    // What the run's hint was last chosen from: its facts, as the readouts last wrote them.
+    get hintFacts() { return run?.hintFacts ?? null; },
     get effects() {
       return {
         seed: run?.sky.state.seed ?? null, fold: effects.fold, foldLeft: effects.foldLeft, foldRight: effects.foldRight, luff: effects.luff,
@@ -1933,6 +1958,22 @@ export function createGame(stage, hooks = {}) {
     get streaks() { return mode === 'cloudbase' && run ? run.streaks : streaks; },
     // Good Lift's music: switched on, playing now, which track, and whether the browser refused it.
     get music() { return run?.musicState ?? null; },
+    // The kit worn now, and fjord.wear({ wing, helmet, chalk }) to try any of it on for a look:
+    // earned or not, and never written down (the kit tab is the way to keep a choice), until the
+    // next run ends and puts the kit kept back on. The run's chalk puffs, to start one by hand:
+    // fjord.chalk.puff(x, y, z).
+    get kit() { return { ...kit }; },
+    wear: (next) => {
+      const worn = wear({ ...kit, ...next });
+      run?.chalk.wear(worn.chalk);
+      return worn;
+    },
+    get chalk() { return run?.chalk ?? null; },
+    // The run's lightning (fjord.lightning.fire() strikes now, from a cloud in view if there is one,
+    // and .state says when and where the last struck) and its glide ring (fjord.glide.state: its
+    // word, the flock it judged, its radius and how strongly it is drawn).
+    get lightning() { return run?.lightning ?? null; },
+    get glide() { return run?.glide ?? null; },
     fjordBreeze,
     camera,
     ZONES,
@@ -1948,6 +1989,10 @@ export function createGame(stage, hooks = {}) {
     play: playGame,
     // The last run's log and sheet, and a log's text replayed here: QA checks one against the other.
     get lastRun() { return run?.lastRun ?? null; },
+    // The meet sheet's bots: the sky they fly, how far they are, and what they last told a sheet.
+    get bots() { return run?.bots ?? null; },
+    // The world board: whether the build names one, and what it last told a sheet.
+    get worldBoard() { return run?.worldBoard ?? null; },
     replay: (text) => run?.replay(text) ?? null,
     // The Good Lift address being played, and the sky it came to.
     get game() { return game; },
@@ -1962,6 +2007,14 @@ export function createGame(stage, hooks = {}) {
     setInitials: (text) => run?.setInitials(text),
     /** Good Lift's music switched over, from the meet sheet: whether it is now on. */
     toggleMusic: () => run?.toggleMusic() ?? false,
+    /** This browser's run taken off the world board the meet sheet shows: whether it went. */
+    removeWorldRun: () => run?.removeWorldRun() ?? Promise.resolve(false),
+    /**
+     * The meet sheet's kit tab: `choice` is any of { wing, helmet, chalk } (wing-kit.js). Good Lift
+     * keeps only what has been earned and writes that down, and the glider wears it at once.
+     * Returns the kit now worn.
+     */
+    setKit: (choice) => (run ? run.chooseKit(choice) : { ...kit }),
     /** The meet sheet, a component that comes with Good Lift: null until it has loaded. */
     get meetSheet() { return run?.MeetSheet ?? null; },
     /**

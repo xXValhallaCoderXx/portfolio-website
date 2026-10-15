@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { createReplay, replayLog } from './replay.js';
 import { INPUT, createRecorder, decodeLog, encodeLog } from './recorder.js';
 import { createRunWorld, finishRun, startRun, stepBits } from './run-step.js';
-import { createReferencePilot } from './pilots.js';
+import { TST, createReferencePilot } from './pilots.js';
 import { CLOUD_GATE, createCloudbaseRun } from './cloudbase-state.js';
 import { createMeet } from './meet-state.js';
-import { createBells } from './bells.js';
+import { BELL_RESULT, createBells } from './bells.js';
+import { RUNE } from './meet-runes.js';
 import { summariseRun } from './meet-sheet.js';
 import { SIM_VERSION } from './sim-version.js';
 
@@ -76,22 +77,30 @@ function flyLive(seed, bitsOf, { quit = Infinity, meta = {} } = {}) {
   return { sheet, text };
 }
 
-// Twenty skies, each flown live by one kind of pilot: arrows held, both arrows for the bar on a
-// phone, arrows tapped, a pilot who ends the run part of the way up, and one who lands.
+// Twenty-four runs, each flown live by one kind of pilot: arrows held, both arrows for the bar on
+// a phone, arrows tapped, a pilot who ends the run part of the way up, one who lands, the collector
+// at the keys after the trails' plates and its runes' stones, and one holding its line on the light
+// brake that takes Algiz's stone (sky 19 again, where it also sprays its bar, has a bell glance off,
+// meets the Beast and catches a plate under a cloud and the fog's bait).
 const SKIES = [
   ...[1, 2, 3, 4, 5, 6].map((seed) => ({ seed, pilot: () => keys() })),
   ...[7, 8, 9, 10].map((seed) => ({ seed, pilot: () => keys({ brake: 'eased' }, { hold: 6, chord: true }), meta: { touch: true, initials: 'TST' } })),
   ...[11, 12, 13].map((seed) => ({ seed, pilot: () => keys({}, { hold: 18, pulse: true }), meta: { day: 20_756 } })),
   ...[14, 15, 16, 17].map((seed) => ({ seed, pilot: () => keys({ brake: 'eased' }), quit: (14 + 23 * (seed - 14)) * 60 + seed })),
   ...[18, 19, 20].map((seed) => ({ seed, pilot: lander })),
+  ...[21, 22, 23].map((seed) => ({ seed, pilot: () => keys({ ...TST, collect: true }, { hold: 6 }) })),
+  { seed: 19, pilot: () => keys({ brake: 'eased', gates: [RUNE.algiz] }) },
 ];
 
-// Each of the twenty skies flown live once, for every test here to replay.
+// Each run flown live once, for every test here to replay.
 let flown = null;
 const recorded = () => (flown ??= SKIES.map((sky) => ({ ...sky, ...flyLive(sky.seed, sky.pilot(), sky) })));
 
-test('a recorded run replays to the same total, peak, lights, ending and barogram', () => {
-  const seen = { fog: 0, quit: 0, landed: 0, lines: 0, doubled: 0, reds: 0, reps: 0, trails: 0, thrown: 0, hits: 0, close: 0, dodged: 0 };
+test('a recorded run replays to the same total, peak, lights, ending and barogram, and the same plates, gates and kettlebells', () => {
+  const seen = {
+    fog: 0, quit: 0, landed: 0, lines: 0, doubled: 0, reds: 0, reps: 0, trails: 0, thrown: 0, hits: 0, close: 0, dodged: 0,
+    wind: 0, scattered: 0, recovered: 0, glanced: 0, gates: 0, beasts: 0,
+  };
   for (const { seed, sheet, text, meta = {} } of recorded()) {
     const read = decodeLog(text);
     assert.equal(read.ok, true, read.why);
@@ -105,15 +114,19 @@ test('a recorded run replays to the same total, peak, lights, ending and barogra
     seen.lines += sheet.lifts.filter((lift) => lift.line > 0).length;
     seen.doubled += sheet.lifts.filter((lift) => lift.double).length;
     seen.reds += sheet.lifts.filter((lift) => lift.red).length;
-    for (const stat of ['reps', 'trails', 'thrown', 'hits', 'close', 'dodged']) seen[stat] += sheet.stats[stat];
+    for (const stat of ['reps', 'trails', 'thrown', 'hits', 'close', 'dodged', 'wind', 'scattered', 'recovered', 'glanced', 'gates']) seen[stat] += sheet.stats[stat];
+    if (sheet.stats.beast !== BELL_RESULT.pending) seen.beasts += 1;
     // The barogram is the run's, second by second, whichever way it ended.
     assert.equal(sheet.trace.n, Math.floor(sheet.steps / 60) + 1);
     assert.equal(sheet.trace.alt[0], CLOUD_GATE.y);
   }
   // Between them the runs did everything a run can: each ending, lines judged white and red, under
-  // the horn too, reps and trails, and kettlebells that hit, came close and missed. (On these skies:
-  // 13 fog, 4 quit and 3 landed; 61 lines, 31 lifts with a red light and 9 under the horn; 49 reps
-  // and 65 trails; 50 kettlebells, 21 of them hits, 10 close calls and 19 dodged.)
+  // the horn too, reps and trails, kettlebells that hit, came close, missed and glanced off Algiz,
+  // the Beast among them, plates met on the wind, plates sprayed off the bar and caught back, and
+  // rune gates taken. (On these skies: 17 fog, 4 quit and 3 landed; 78 lines, 45 lifts with a red
+  // light and 14 under the horn; 68 reps and 86 trails; 67 kettlebells, 33 of them hits, 6 close
+  // calls, 27 dodged and 1 glanced off, and 9 Beasts; 14 plates off gust fronts; 65 plates sprayed
+  // and 22 caught back; and 1 gate.)
   for (const [what, count] of Object.entries(seen)) assert.ok(count > 0, `${count} ${what}`);
 });
 
@@ -247,16 +260,27 @@ function arraysMadeBy(run) {
   return made;
 }
 
-test('a replay makes no array or buffer as it flies, only the sheet it hands back at the end', () => {
-  const { sheet, text } = recorded()[3];
-  const replay = createReplay({ log: decodeLog(text).log });
+test('a replay makes no array or buffer as it flies, only the sheet it hands back at the end, whatever the run met', () => {
   assert.ok(arraysMadeBy(() => new Float32Array(1)) > 0 && arraysMadeBy(() => {}) === 0, 'the watch sees what it should');
-  let slices = 0;
-  while (!replay.done) {
-    const made = arraysMadeBy(() => replay.advance(600));
-    slices += 1;
-    if (!replay.done) assert.equal(made, 0, `slice ${slices}`);
+  // A pilot at the keys, and the one that takes Algiz's stone on sky 19, which sprays its bar, has
+  // a bell glance off, meets the Beast and catches a plate under a cloud and the fog's bait. What
+  // the engine boxes for itself is not watched here: replaying the same keys with each version's
+  // modules loaded fresh, it comes to some 213 bytes a step with the kettlebells and 173 without,
+  // under version 3 as under version 2.
+  const algiz = recorded()[23];
+  for (const run of [recorded()[3], algiz]) {
+    const { sheet, text } = run;
+    const replay = createReplay({ log: decodeLog(text).log });
+    let slices = 0;
+    while (!replay.done) {
+      const made = arraysMadeBy(() => replay.advance(600));
+      slices += 1;
+      if (!replay.done) assert.equal(made, 0, `seed ${run.seed}, slice ${slices}`);
+    }
+    assert.ok(slices > 10);
+    assert.deepEqual(replay.result, sheet);
   }
-  assert.ok(slices > 10);
-  assert.deepEqual(replay.result, sheet);
+  const { stats } = algiz.sheet;
+  assert.deepEqual([algiz.seed, stats.gates, stats.runes, stats.glanced, stats.thunder, stats.bait], [19, 1, 1 << (RUNE.algiz - 1), 1, 1, 1]);
+  assert.ok(stats.scattered > 0 && stats.beast !== BELL_RESULT.pending);
 });

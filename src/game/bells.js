@@ -8,14 +8,20 @@
 // a stall, about to meet a gust front or near the rim, so a kettlebell is never one more thing on
 // top of a moment the pilot is already fighting.
 //
+// Once a run the giant throws the Beast: the first throw once the pilot has reached 1,000 m is his
+// 48 kg bell, with a longer warning and aimed as far ahead again, and a close call by it is worth
+// more. A pilot holding Algiz's blessing (meet-runes.js) has the next bell that would hit glance
+// off instead, which spends the blessing.
+//
 // Pure, like the sky it is thrown in: no 3D, no page, no clock and no randomness but its own
 // draws from the run's seed (never the sky's generator), and nothing allocated once it is made.
 // It is stepped only through run-step.js, after the sky, and the only thing it ever changes
-// outside itself is the strike a hit calls.
+// outside itself is the strike a hit calls. It reads the meet only for the blessing it holds.
 import { createFlight, stepFlight } from './flight.js';
 import { CLOUD_DEFAULT_SEED, CLOUD_STRIKE, CLOUD_ZONE } from './cloudbase-state.js';
 import { RUN } from './run-step.js';
-import { surfaceAt } from './terrain.js';
+import { surfaceAt } from './ground.js';
+import { RUNE } from './meet-runes.js';
 
 export const BELLS = Object.freeze({
   from: 550,                        // m of peak before the first throw
@@ -38,16 +44,28 @@ export const BELLS = Object.freeze({
 });
 export const BELL_POOL = 2;
 
+// The Beast: the first throw once the peak has reached `from` is Hrungnir's own `kg` bell, once a
+// run. Its warning is `lead` seconds, and its aim flies the held controls as far ahead; it falls
+// from above and beside that aim along the same slant as any bell, as much further out as its
+// lead is longer, so it comes down no faster than the others and only from higher.
+export const BEAST = Object.freeze({
+  from: 1000,                       // m of peak at or past which the next throw is the Beast
+  lead: 3.2,                        // s from its throw, and its warning, to it reaching the aim
+  kg: 48,                           // its weight, for its look and sound
+});
+
 // What a bell is doing, and how its fall came out. A bell is `warning` from the throw until it
-// has hit or passed the pilot, then falls `away` for the view, then is idle again.
+// has hit or passed the pilot, then falls `away` for the view, then is idle again. One that came
+// within a strike's reach of a pilot holding Algiz `glanced` off instead of hitting.
 export const BELL_PHASE = Object.freeze({ idle: 0, warning: 1, away: 2 });
-export const BELL_RESULT = Object.freeze({ pending: 0, hit: 1, close: 2, dodged: 3, shielded: 4, hidden: 5 });
+export const BELL_RESULT = Object.freeze({ pending: 0, hit: 1, close: 2, dodged: 3, shielded: 4, hidden: 5, glanced: 6 });
 
 const { idle: IDLE, warning: WARNING, away: AWAY } = BELL_PHASE;
-const { pending: PENDING, hit: HIT, close: CLOSE, dodged: DODGED, shielded: SHIELDED, hidden: HIDDEN } = BELL_RESULT;
+const { pending: PENDING, hit: HIT, close: CLOSE, dodged: DODGED, shielded: SHIELDED, hidden: HIDDEN, glanced: GLANCED } = BELL_RESULT;
 const TAU = Math.PI * 2;
-// Steps the aim is flown ahead: the bell's lead in the run's own fixed steps.
+// Steps the aim is flown ahead: each bell's lead in the run's own fixed steps.
 const LOOK = Math.round(BELLS.lead / RUN.step);
+const BEAST_LOOK = Math.round(BEAST.lead / RUN.step);
 // How near a bell came to the pilot before it has been anywhere near: far beyond any call.
 const FAR = 999;
 const mix = (from, to, amount) => from + (to - from) * amount;
@@ -73,10 +91,16 @@ function draw(seed, n) {
  *   clear                      seconds every block has stayed away
  *   retry                      run seconds before which a refused aim is not tried again
  *   thrown, hits, close, dodged  bells thrown this run, and how many hit, nearly hit and missed
+ *   glanced                    bells that would have hit and glanced off Algiz instead
  *   warning                    the bell whose warning is showing, or -1
+ *   beast                      the Beast: `n`, which throw it was (counting from 0; -1 until it is
+ *                              thrown), and `result`, how it came out (BELL_RESULT; pending while
+ *                              it falls, and if the run ended first)
  *   bells[BELL_POOL]
  *     phase, result            BELL_PHASE and BELL_RESULT
  *     at                       run seconds it was thrown
+ *     lead                     s from the throw to the aim: BELLS.lead, or BEAST.lead for the Beast
+ *     beast                    whether it is the Beast
  *     fromX, fromY, fromZ      where it falls from
  *     aimX, aimY, aimZ         where the glider would be `lead` seconds after the throw, held on
  *     x, y, z                  where it is now: on the line from `from` through the aim, and on
@@ -97,9 +121,11 @@ export function createBells() {
     hits: 0,
     close: 0,
     dodged: 0,
+    glanced: 0,
     warning: -1,
+    beast: { n: -1, result: PENDING },
     bells: Array.from({ length: BELL_POOL }, () => ({
-      phase: IDLE, at: 0, fromX: 0, fromY: 0, fromZ: 0, aimX: 0, aimY: 0, aimZ: 0, x: 0, y: 0, z: 0,
+      phase: IDLE, at: 0, lead: B.lead, beast: false, fromX: 0, fromY: 0, fromZ: 0, aimX: 0, aimY: 0, aimZ: 0, x: 0, y: 0, z: 0,
       kg: B.kg[0], near: FAR, result: PENDING, circling: false,
     })),
   };
@@ -114,23 +140,27 @@ export function createBells() {
     state.seed = seed >>> 0;
     state.due = -1;
     state.clear = state.retry = 0;
-    state.thrown = state.hits = state.close = state.dodged = 0;
+    state.thrown = state.hits = state.close = state.dodged = state.glanced = 0;
     state.warning = -1;
+    state.beast.n = -1;
+    state.beast.result = PENDING;
     for (let i = 0; i < state.bells.length; i++) {
       const bell = state.bells[i];
       bell.phase = IDLE;
       bell.result = PENDING;
       bell.at = bell.fromX = bell.fromY = bell.fromZ = bell.aimX = bell.aimY = bell.aimZ = bell.x = bell.y = bell.z = 0;
+      bell.lead = B.lead;
+      bell.beast = false;
       bell.kg = B.kg[0];
       bell.near = FAR;
       bell.circling = false;
     }
   }
 
-  // Where the glider will be `lead` seconds from now if the pilot holds what they are doing: the
-  // wing copied as it is and flown on step by step the way run-step.js flies it, in the air the
+  // Where the glider will be `steps` fixed steps from now if the pilot holds what they are doing:
+  // the wing copied as it is and flown on step by step the way run-step.js flies it, in the air the
   // sky has now. Only the wing is stepped; the sky stays where it is and is only read.
-  function aim(sky, g, controls) {
+  function aim(sky, g, controls, steps) {
     const pos = ahead.pos;
     Object.assign(ahead, g);
     ahead.pos = pos;
@@ -138,7 +168,7 @@ export function createBells() {
     pos.y = g.pos.y;
     pos.z = g.pos.z;
     Object.assign(held, controls);
-    for (let i = 0; i < LOOK; i++) {
+    for (let i = 0; i < steps; i++) {
       sky.sample(pos, ahead.yaw, forces);
       air.lift = forces.lift;
       air.sink = forces.sink;
@@ -202,10 +232,11 @@ export function createBells() {
 
   // Moves a bell down its line and settles how it came out. It can only meet the pilot while it is
   // level with the wing, in the band a raven strikes in, and it meets them as a raven would: inside
-  // the strike's reach it hits, unless cloud hides the pilot or the shield is up.
-  function fall(bell, sky, g, now) {
+  // the strike's reach it hits, unless cloud hides the pilot or the shield is up. One that would
+  // hit a pilot `warded` by Algiz glances off instead, and is counted so the meet can spend it.
+  function fall(bell, sky, g, now, warded) {
     const t = now - bell.at;
-    const along = t / B.lead;
+    const along = t / bell.lead;
     bell.x = bell.fromX + (bell.aimX - bell.fromX) * along;
     bell.y = bell.fromY + (bell.aimY - bell.fromY) * along;
     bell.z = bell.fromZ + (bell.aimZ - bell.fromZ) * along;
@@ -218,47 +249,63 @@ export function createBells() {
         bell.near = Math.min(bell.near, across);
         if (across < K.radius) {
           if (sky.state.pilot.cloud >= K.cover) bell.result = HIDDEN;
-          else if (sky.strike(-1)) {
+          else if (warded && sky.state.pilot.shield === 0) {
+            bell.result = GLANCED;
+            state.glanced += 1;
+          } else if (sky.strike(-1)) {
             bell.result = HIT;
             state.hits += 1;
           } else bell.result = SHIELDED;
         }
       } else if (above <= -K.half) passed(bell);
     }
-    if (t >= B.lead + B.fall) {
+    if (t >= bell.lead + B.fall) {
       // Fallen as far as the view follows it; a pilot far below it was never in its way.
       if (bell.result === PENDING) passed(bell);
       bell.phase = IDLE;
     } else if (bell.result !== PENDING) bell.phase = AWAY;
+    if (bell.beast) state.beast.result = bell.result;
   }
 
   // Throws the next bell at where the held controls take the glider, or, if that is no place to
-  // throw at, puts the throw off for `retry`.
+  // throw at, puts the throw off for `retry`. The first throw once the peak has reached BEAST.from
+  // is the Beast, aimed as far ahead as its warning is long, and a Beast refused is the Beast still.
   function hurl(world, now) {
     const { sky, g } = world;
     const n = state.thrown;
-    const pos = aim(sky, g, world.controls);
+    const beast = state.beast.n < 0 && sky.state.peak >= BEAST.from;
+    const lead = beast ? BEAST.lead : B.lead;
+    const pos = aim(sky, g, world.controls, beast ? BEAST_LOOK : LOOK);
     if (!fair(sky, pos.x, pos.y, pos.z)) {
       state.retry = now + B.retry;
       return;
     }
     const bell = state.bells[n % BELL_POOL];
     const bearing = draw(state.seed, 1 + 4 * n) * TAU;
+    // How much further out it starts than a bell with the usual lead: 1 for every bell but the Beast.
+    const out = lead / B.lead;
     bell.phase = WARNING;
     bell.result = PENDING;
     bell.at = now;
+    bell.lead = lead;
+    bell.beast = beast;
     bell.aimX = pos.x;
     bell.aimY = pos.y;
     bell.aimZ = pos.z;
-    bell.fromX = bell.x = pos.x - Math.sin(bearing) * B.side;
-    bell.fromY = bell.y = pos.y + B.drop;
-    bell.fromZ = bell.z = pos.z + Math.cos(bearing) * B.side;
-    bell.kg = B.kg[Math.floor(draw(state.seed, 3 + 4 * n) * B.kg.length)];
+    bell.fromX = bell.x = pos.x - Math.sin(bearing) * B.side * out;
+    bell.fromY = bell.y = pos.y + B.drop * out;
+    bell.fromZ = bell.z = pos.z + Math.cos(bearing) * B.side * out;
+    // The Beast's weight is its own; its draw is left unused, so every bell after it is the same.
+    bell.kg = beast ? BEAST.kg : B.kg[Math.floor(draw(state.seed, 3 + 4 * n) * B.kg.length)];
     bell.near = FAR;
     bell.circling = Math.abs(g.yawRate) > B.turning && g.bar < 0.5;
     const gap = sky.state.peak >= B.often ? B.oftener : B.every;
     state.due = now + mix(gap[0], gap[1], draw(state.seed, 2 + 4 * n));
     state.thrown = n + 1;
+    if (beast) {
+      state.beast.n = n;
+      state.beast.result = PENDING;
+    }
   }
 
   // One step, after the sky's. The bells in the air fall first, so one that has gone frees the
@@ -269,7 +316,9 @@ export function createBells() {
     // A run that has ended, or a step that moves no time, leaves everything as it is.
     if (!sky.state.active || !Number.isFinite(dt) || dt <= 0) return;
     const now = sky.state.elapsed;
-    for (let i = 0; i < state.bells.length; i++) if (state.bells[i].phase !== IDLE) fall(state.bells[i], sky, g, now);
+    // Algiz, as the meet held it after the last step: the next bell that would hit glances off.
+    const warded = world.meet ? world.meet.state.runes.blessing.rune === RUNE.algiz : false;
+    for (let i = 0; i < state.bells.length; i++) if (state.bells[i].phase !== IDLE) fall(state.bells[i], sky, g, now, warded);
     state.clear = blocked(sky, g) ? 0 : state.clear + dt;
     if (state.due < 0 && sky.state.peak >= B.from) state.due = now + mix(B.first[0], B.first[1], draw(state.seed, 0));
     if (state.due >= 0 && now >= state.due && now >= state.retry && state.clear >= B.quiet) hurl(world, now);
