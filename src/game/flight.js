@@ -30,21 +30,24 @@ export const FLIGHT = Object.freeze({
 });
 
 // One brake, deeper the longer it is held. Depth runs 0 to 1: it is taken up to `light` at
-// `take` per second, lingers on the way to `shelf` (for `linger.run` seconds in a Cloudbase run,
-// where the light brake is a tool for circling tight, and `linger.fjord` otherwise, where the
-// brake is mostly the way down), then is pulled deep at `pull`. Let go, it falls at `dump` until
-// it is back at `light` and at `release` after that, so letting go for 70 ms returns even a full
-// brake to a light one and starts its linger again.
+// `take` per second, lingers on the way to `shelf` (for `linger.run` seconds in a Good Lift run,
+// where the light brake is a tool for circling tight, eased every couple of seconds, and a brake
+// held on is a hard one within the second after; `linger.fjord` otherwise, where the brake is
+// mostly the way down), then is pulled deep at `pull`. Let go, it falls at `dump` until it is back
+// at `light` and at `release` after that, so letting go for `ease` (70 ms) returns even a full brake
+// to a light one and starts its linger again: the ease a pilot circling on it gives it.
 export const BRAKE = Object.freeze({
-  light: 0.35, shelf: 0.5, take: 1.75, linger: Object.freeze({ fjord: 0.6, run: 8 }), pull: 1.0, release: 2.5, dump: 10,
+  light: 0.35, shelf: 0.5, take: 1.75, linger: Object.freeze({ fjord: 0.6, run: 1.8 }), pull: 1.0, release: 2.5, dump: 10, ease: 0.07,
 });
 
 // The stall. The wing lets go when its slower half runs out of airspeed: `felt` is the airspeed
 // less `arm` for each rad/s of turn (the inside wing flies slower) and less `rough` in a gust
 // from behind. While the brake is held and `felt` is under `safe` the load fills, at `fill` per
-// second when `felt` is down at `slow` and at most `cap` times that; it only drains, at `drain`,
-// once the wing is flying again. `rough` must stay under the margin a light-braked circle has
-// (8.6 - 1.05 - 7.2 = 0.35), so that a gust alone never loads a light brake.
+// second on the light brake when `felt` is down at `slow`, `fillDeep` more on the full deep brake,
+// and at most `cap` times that; it only drains, at `drain`, once the wing is flying again. A deep
+// brake held in a run stalls within about five seconds of the press. `rough` must stay under the
+// margin a light-braked circle has (8.6 - 1.05 - 7.2 = 0.35), so that a gust alone never loads a
+// light brake, and a gust front on its tail loads it slowly enough to ride out.
 //
 // At a full load the wing stalls for `time` seconds and then surges for `surge` more before the
 // controls come back; with the brake let go all of it runs `letGo` times faster. Turning harder
@@ -55,7 +58,7 @@ export const BRAKE = Object.freeze({
 // A change of wind bigger than `jump` in one step is the glider being put somewhere else, not a
 // gust, and is not felt.
 export const STALL = Object.freeze({
-  arm: 1.0, safe: 7.2, slow: 6.5, rough: 0.3, cap: 2.5, fill: 0.2, drain: 0.5, spin: 0.35, surge: 0.5, letGo: 1.5, jump: 1.5,
+  arm: 1.0, safe: 7.2, slow: 6.5, rough: 0.3, cap: 2.5, fill: 0.2, fillDeep: 0.3, drain: 0.5, spin: 0.35, surge: 0.5, letGo: 1.5, jump: 1.5,
   forgiving: Object.freeze({ time: 0.9, sink: 8, yaw: 1.2, cut: 0, floor: 20 }),
   harsh: Object.freeze({ time: 2.4, sink: 24, yaw: 1.2, cut: 1, floor: 0 }),
 });
@@ -106,9 +109,12 @@ export const PITCH = Object.freeze({
 // is under the floor); every way out of lift ends near 0.
 export const FALL = Object.freeze({ feel: 0.5, drop: 2.5, floor: 4, rest: 1.5 });
 
-// A wing that surges past its line tucks its leading edge under for `time` seconds, `sink` the
-// faster down, with the hands off it and its heading held.
-export const TUCK = Object.freeze({ time: 0.8, sink: 12 });
+// A wing that surges past its line front-collapses: its leading edge folds under for `time` seconds,
+// `sink` the faster down, with the hands off it and its heading held. It is pumped open as a struck
+// wing is (CLOUD_STRIKE.pump): each time the brake has been held `pump.hold` seconds and is let go,
+// it opens `pump.cut` sooner, `pump.most` times at most. Left alone it costs some 29 m, pumped
+// twice some 14.
+export const TUCK = Object.freeze({ time: 1.6, sink: 18, pump: Object.freeze({ hold: 0.3, cut: 0.4, most: 2 }) });
 
 // The swing side to side: wingovers. A turn's bank comes in as it always has, eased (`lean`), but
 // `share` of it swings as a pendulum of `period` seconds that keeps 0.73 of itself each half-swing,
@@ -128,8 +134,28 @@ export const ROLL = Object.freeze({ share: 0.3, period: 2.37, damping: 0.1, limi
 // faster down. No stall: the wing is flying.
 export const TIP = Object.freeze({ time: 1, yaw: 1.2, sink: 14 });
 
+// Loops. A wingover banked past `entry` (66°) with the brake pressed there rolls on over its top and
+// round its flight line, the press counting from `early` before the bank gets there to `after` once
+// it has fallen back, the window a swap at that top counts in (swing-watch.js WATCH). Pressed as the
+// wing surges toward its fold (pitchPeak `surge` or further ahead, where the gauge says to catch it:
+// the watch's surge is this one), the brake is the catch and loops nothing. Round the loop: the pilot under the wing at the loop's bottom and over it at its top. The
+// loop is a pendulum of `period` seconds that must carry over its top: the entry gives it `cap`
+// (its energy in squares of the pendulum's frequency: 0 hanging still, 2 just carrying the top), it
+// spends `damping` of its rate each second, and each press on time, ▲ (the bar) as the pilot passes
+// over the wing and ▼ (the brake) as they pass under it, within `window` seconds either side, tops
+// it up by at most `top`, back to `cap`. Pressed on time it goes round every 2.4 s or so, for as long
+// as the presses keep coming; a press skipped, it cannot carry its next top and rolls out, swinging
+// back down into a wingover that fades. The wrong key, or a press out of its window, botches it: it
+// falls out at once, and where the wing can fold it front-collapses (TUCK). Falling out, it spends
+// `settle` of its rate each second, and hands back to the wingover's swing once it would swing no
+// further than `settled` either way, so that rolling out never tips the wing. It sinks `sink` the
+// faster while it goes round, some 32 m a loop.
+export const LOOP = Object.freeze({ period: 3.6, damping: 0.33, settle: 2.5, settled: 1.15, cap: 3.5, top: 1, window: 0.3, sink: 12, entry: 1.152, early: 0.12, after: 0.2, surge: PITCH.line - 0.21 });
+
 const PITCH_W = (2 * Math.PI) / PITCH.period;
 const ROLL_W = (2 * Math.PI) / ROLL.period;
+const LOOP_W = (2 * Math.PI) / LOOP.period;
+const TURN = 2 * Math.PI;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const smooth = (from, to, value) => {
@@ -140,6 +166,20 @@ const smooth = (from, to, value) => {
 // arithmetic, which every engine rounds alike, where Math.sin may differ in its last bit between a
 // browser and the server that flies its run again.
 const sine = (x) => x * (1 - ((x * x) / 6) * (1 - (x * x) / 20));
+// The sine of any angle, by the same plain arithmetic: brought into the quarter turns either side
+// of nought, then its series to the ninth power, within 4e-6 of the true one. A loop goes all the
+// way round, where the swings never pass a quarter turn.
+export function sineRound(x) {
+  let a = x - TURN * Math.floor(x / TURN + 0.5);
+  if (a > Math.PI / 2) a = Math.PI - a;
+  else if (a < -Math.PI / 2) a = -Math.PI - a;
+  const a2 = a * a;
+  return a * (1 - (a2 / 6) * (1 - (a2 / 20) * (1 - (a2 / 42) * (1 - a2 / 72))));
+}
+// A loop's energy at its angle and rate, in squares of its pendulum's frequency, and the most it may
+// have to hand back to a wingover's swing: a swing that tops out at LOOP.settled.
+const loopEnergy = (angle, rate) => (rate * rate) / (2 * LOOP_W * LOOP_W) + 1 - sineRound(angle + Math.PI / 2);
+const SETTLED = 1 - sineRound(LOOP.settled + Math.PI / 2);
 
 // Sink for an airspeed, on the one curve through least sink and trim; and what the deep brake
 // adds on top of it, which rides on how far the hands are down and not on the airspeed.
@@ -156,6 +196,19 @@ const MUSH = FLIGHT.sink.deep - sinkAt(FLIGHT.speed.deep);
  *                             fast that swing rolls
  *   rollRest, rollSpeed       where the swing hangs for the turn asked, and the airspeed it lends
  *   tip, tipSide              seconds left of a tip collapse, and the folded half (-1 left, 1 right)
+ *   loop                      0, or the way a loop is going round: 1 rolling right, -1 left
+ *   loopAngle, loopRate       how far round it is from the pilot under the wing (rad), and how fast
+ *   loopNext                  the angle of its next moment to press at: an odd half turn its top
+ *                             (▲), an even one its bottom (▼)
+ *   loopSince, loopLate       seconds since its last moment, and whether that one waits for a press
+ *   loopEarly                 whether its next moment has been pressed for already
+ *   loopOut, loopBotched      whether it is falling out, and whether a wrong press made it
+ *   loops, loopTimed          loops gone all the way round, and presses on time, this flight
+ *   keys                      the brake, the bar and the ears as they were held last step (1, 2, 4)
+ *   steepLeft                 seconds left in which the brake may still loop a wingover: `after`
+ *                             from its last step banked past a loop's entry
+ *   loopAsk                   seconds left in which a press of the brake still loops a wingover
+ *                             once it banks past a loop's entry
  *   speed, sink, vy           airspeed, the wing's own sink (before the turn and the air), climb
  *   turn                      the turn really flown, -1 to 1
  *   lift, liftSide            the air it is in, written by whoever samples the air
@@ -170,7 +223,8 @@ const MUSH = FLIGHT.sink.deep - sinkAt(FLIGHT.speed.deep);
  *                             fast it is swinging
  *   pitchPush                 rad/s of push the swing is still owed
  *   under                     the air the wing has been flying in (lift less sink), a fall's measure
- *   tuck                      seconds left of a tuck
+ *   tuck                      seconds left of a front collapse (a tuck)
+ *   tuckHeld, tuckPumps       how long the brake has been held through it, and the pumps it has had
  *   fallRest, fallArmed       seconds before another fall of the air may surge the wing, and
  *                             whether the air has stopped falling since the last
  */
@@ -178,8 +232,10 @@ export function createFlight(pos = { x: 0, y: 0, z: 0 }) {
   return {
     pos, yaw: 0, yawRate: 0, bank: 0, speed: FLIGHT.speed.trim, sink: FLIGHT.sink.trim, vy: 0, turn: 0, lift: 0, liftSide: 0,
     brake: 0, bar: 0, stallLoad: 0, stall: 0, stallSide: 0, stallHarsh: false, grip: true, windX: 0, windZ: 0, felt: false,
-    ears: 0, pitch: 0, pitchRate: 0, pitchPush: 0, under: 0, tuck: 0, fallRest: 0, fallArmed: true,
+    ears: 0, pitch: 0, pitchRate: 0, pitchPush: 0, under: 0, tuck: 0, tuckHeld: 0, tuckPumps: 0, fallRest: 0, fallArmed: true,
     lean: 0, roll: 0, rollRate: 0, rollRest: 0, rollSpeed: 0, tip: 0, tipSide: 0,
+    loop: 0, loopAngle: 0, loopRate: 0, loopNext: 0, loopSince: 0, loopLate: false, loopEarly: false, loopOut: false, loopBotched: false,
+    loops: 0, loopTimed: 0, keys: 0, steepLeft: 0, loopAsk: 0,
   };
 }
 
@@ -189,9 +245,11 @@ export function createFlight(pos = { x: 0, y: 0, z: 0 }) {
  */
 export function releaseFlight(g) {
   g.brake = g.bar = g.stallLoad = g.stall = g.stallSide = 0;
-  g.ears = g.pitch = g.pitchRate = g.pitchPush = g.under = g.tuck = g.fallRest = 0;
+  g.ears = g.pitch = g.pitchRate = g.pitchPush = g.under = g.tuck = g.tuckHeld = g.tuckPumps = g.fallRest = 0;
   g.lean = g.bank;
   g.roll = g.rollRate = g.rollRest = g.rollSpeed = g.tip = g.tipSide = 0;
+  g.loop = g.loopAngle = g.loopRate = g.loopNext = g.loopSince = g.keys = g.loops = g.loopTimed = g.steepLeft = g.loopAsk = 0;
+  g.loopLate = g.loopEarly = g.loopOut = g.loopBotched = false;
   g.fallArmed = true;
   g.stallHarsh = false;
   g.grip = true;
@@ -224,6 +282,9 @@ export function settleFlight(g, speed = FLIGHT.speed.trim) {
  *            to side as the turn does (a Good Lift run and the fjord); left out, it never swings
  *   folds    the wing can fold itself here: a surge past its line tucks it and a wingover past its
  *            limit tips it (high in a Good Lift run); left out, a swing past either is only stopped
+ *   steered  the edge of the map has the turn, turning the glider back (past a run's sky, or the
+ *            fjord's bounds): it turns the glider even round a loop, which otherwise holds its
+ *            heading
  *   safe     the wing cannot stall here (over the fjord): the load stops short of it, as it
  *            does near the ground
  *   climb    a climb rate to hold instead of flying the air, or null; set, the glider is flying
@@ -242,7 +303,7 @@ export function stepFlight(g, controls, air, dt) {
   const swing = !!controls.swing && !controls.locked && !auto;
   // One disaster at a time: a raven strike or the autopilot ends a stall, a tuck and a tip.
   if (g.stall > 0 && (controls.locked || auto)) g.stall = g.stallSide = g.stallLoad = 0;
-  if (controls.locked || auto) g.tuck = g.tip = 0;
+  if (controls.locked || auto) g.tuck = g.tuckHeld = g.tuckPumps = g.tip = 0;
   const wasStalled = g.stall > 0;
   // What kind of stall it is was settled as it began.
   const fall = g.stallHarsh ? STALL.harsh : STALL.forgiving;
@@ -251,15 +312,44 @@ export function stepFlight(g, controls, air, dt) {
   const falling = g.stall > STALL.surge;
   if (wasStalled && !stalled) g.stallSide = g.stallLoad = 0;
   if (!controls.brake) g.grip = true;
-  // A tucked or tipped wing is the air's until it opens again.
+  // A collapsed wing is pumped open: each time the brake has been held long enough and is let go,
+  // it opens that much sooner, a few times at most. Counted before the collapse is read, so a pump
+  // that opens it gives the hands back on this very step. A hold is a whole number of steps, given
+  // half a step to spare as the clock sums them.
+  if (g.tuck > 0) {
+    if (controls.brake) g.tuckHeld += dt;
+    else {
+      if (g.tuckHeld >= TUCK.pump.hold - dt / 2 && g.tuckPumps < TUCK.pump.most) {
+        g.tuck = Math.max(0, g.tuck - TUCK.pump.cut);
+        g.tuckPumps += 1;
+      }
+      g.tuckHeld = 0;
+    }
+  }
+  // A collapsed or tipped wing is the air's until it opens again.
   const tucked = g.tuck > 0;
   if (tucked) g.tuck = Math.max(0, g.tuck - dt);
   const tipped = g.tip > 0;
   if (tipped) g.tip = Math.max(0, g.tip - dt);
-  // Whether the pilot's hands reach the wing at all, and whether the brake bites: not until the
-  // ears are out, its first work being to let them go.
+  // Whether the pilot's hands reach the wing at all.
   const hands = !wasStalled && !controls.locked && !auto && !tucked && !tipped;
-  const pulling = hands && controls.brake && g.grip && g.ears === 0;
+  // The keys pressed this step: a loop's entry and its presses are the moment a key goes down.
+  const keys = (controls.brake ? 1 : 0) | (controls.bar ? 2 : 0) | (controls.ears ? 4 : 0);
+  const pressed = keys & ~g.keys;
+  g.keys = keys;
+  // A wingover banked past a loop's entry rolls on over its top with the brake pressed there, from a
+  // little before it gets there (`loopAsk`) to a little after it falls back (`steepLeft`), unless the
+  // press is the catch of a surge; a strike or the autopilot takes a loop over as it does everything
+  // else, and it falls out.
+  const asked = (pressed & 1) !== 0 && !(g.pitchRate < 0 && pitchPeak(g) < -LOOP.surge);
+  g.loopAsk = asked ? LOOP.early : (pressed & 1) !== 0 ? 0 : Math.max(0, g.loopAsk - dt);
+  const entering = g.loop === 0 && swing && hands && g.ears === 0 && g.loopAsk > 0 && g.steepLeft > 0;
+  if (entering) startLoop(g);
+  if (g.loop !== 0 && !swing) g.loopOut = true;
+  const looping = g.loop !== 0;
+  // Whether the brake bites: not until the ears are out, its first work being to let them go, and
+  // not while a loop goes round, where the brake and the bar are its presses.
+  const pulling = hands && controls.brake && g.grip && g.ears === 0 && !looping;
 
   // The air the wing has been flying in, and how far it has just fallen away from that. The first
   // air after a release is where it starts from, as with the wind.
@@ -284,16 +374,16 @@ export function stepFlight(g, controls, air, dt) {
   // The ears come in while asked for with the hands on the wing and the brake off it, and open once
   // let go: slowly by themselves, quickly with a touch of the brake, and at once whenever the wing
   // is not the pilot's (a stall, a strike, a tuck, the autopilot).
-  if (!hands) g.ears = 0;
+  if (!hands || looping) g.ears = 0;
   else if (controls.ears && !controls.brake) g.ears = Math.min(1, g.ears + dt / EARS.fold);
   else if (g.ears > 0) g.ears = Math.max(0, g.ears - dt / (controls.brake ? EARS.dab : EARS.open));
-  const barWant = hands && controls.bar && !controls.brake && !controls.ears ? 1 : 0;
+  const barWant = hands && controls.bar && !controls.brake && !controls.ears && !looping ? 1 : 0;
   g.bar = clamp(g.bar + clamp(barWant - g.bar, -FLIGHT.ease.bar * dt, FLIGHT.ease.bar * dt), 0, 1);
   // How much of the light brake is on, and how much of the deep.
   const light = clamp(g.brake / BRAKE.light, 0, 1);
   const deep = smooth(BRAKE.shelf, 1, g.brake);
 
-  if (swing) {
+  if (swing && !looping) {
     if (hands) {
       // The brake taken up pushes the wing back and let go pushes it ahead; a deep brake only as
       // it is let go; the bar ahead as it comes on.
@@ -325,9 +415,10 @@ export function stepFlight(g, controls, air, dt) {
       g.pitchRate += (-PITCH_W * PITCH_W * g.pitch - damp * g.pitchRate - (hands ? PITCH.air * drop : 0)) * dt + give;
     }
     g.pitch += g.pitchRate * dt;
-    // Surged past its line where it can fold, the leading edge tucks under.
+    // Surged past its line where it can fold, the leading edge tucks under: a front collapse.
     if (controls.folds && hands && g.ears === 0 && g.pitch < -line && g.pitchRate < 0) {
       g.tuck = TUCK.time;
+      g.tuckHeld = g.tuckPumps = 0;
       g.pitchRate = g.pitchPush = 0;
     }
   } else {
@@ -340,15 +431,22 @@ export function stepFlight(g, controls, air, dt) {
     : FLIGHT.turn.trim;
   // With the ears in the wing turns by weight shift alone.
   if (g.ears > 0) turnMax += (EARS.turn - turnMax) * g.ears;
-  // A falling wing turns by itself or not at all; in the surge, and tucked, it only holds its
-  // heading; tipped, it hooks toward its folded half.
-  g.turn = falling ? g.stallSide : stalled || tucked || tipped ? 0 : controls.turn;
-  const yawWant = falling ? g.stallSide * fall.yaw : tipped ? g.tipSide * TIP.yaw : stalled || tucked ? 0 : controls.turn * turnMax;
+  // A falling wing turns by itself or not at all; in the surge, tucked, and going round a loop, it
+  // only holds its heading, unless the edge of the map is turning it back; tipped, it hooks toward
+  // its folded half.
+  g.turn = falling ? g.stallSide : stalled || tucked || tipped || looping ? 0 : controls.turn;
+  const held = stalled || tucked || (looping && !controls.steered);
+  const yawWant = falling ? g.stallSide * fall.yaw : tipped ? g.tipSide * TIP.yaw : held ? 0 : controls.turn * turnMax;
   g.yawRate += (yawWant - g.yawRate) * Math.min(1, dt * FLIGHT.ease.yaw);
   // The airspeed the wingover's swing lends this step, and the sink its roll costs.
   let lent = 0;
   let drag = 0;
-  if (swing) {
+  if (looping) {
+    // Round a loop the heading holds (or the edge of the map turns it) and the bank is the loop's.
+    g.yaw += g.yawRate * dt;
+    // The press that entered it is spent: it is no press for the loop's first moment.
+    stepLoop(g, entering ? 0 : pressed, hands, !!controls.folds && !controls.safe, dt);
+  } else if (swing) {
     // The bank a turn eases in as it always has, and the swing on top of it: `share` of that bank
     // hangs as a pendulum, and the turn asked for sets where it hangs, so changing the turn pushes
     // it. Everything beyond the eased bank turns, trades and drags; a held turn has none of it.
@@ -370,6 +468,7 @@ export function stepFlight(g, controls, air, dt) {
     }
     const roll = bank - g.lean;
     const rate = (roll - g.roll) / dt;
+    g.steepLeft = Math.abs(bank) >= LOOP.entry ? LOOP.after : Math.max(0, g.steepLeft - dt);
     g.roll = roll;
     g.bank = bank;
     g.yaw += (g.yawRate + (ROLL.turn * Math.sign(bank) * Math.max(0, Math.abs(bank) - ROLL.steep)) / scale) * dt;
@@ -379,7 +478,7 @@ export function stepFlight(g, controls, air, dt) {
     g.yaw += g.yawRate * dt;
     g.bank += (g.yawRate * FLIGHT.bank * (g.speed / FLIGHT.speed.trim) - g.bank) * Math.min(1, dt * FLIGHT.ease.bank);
     g.lean = g.bank;
-    g.roll = g.rollRate = g.rollRest = 0;
+    g.roll = g.rollRate = g.rollRest = g.steepLeft = 0;
   }
 
   // A gust is the wind changing under a wing that keeps its way: what the wind gains along the
@@ -425,6 +524,7 @@ export function stepFlight(g, controls, air, dt) {
   if (falling) sink += fall.sink;
   if (tucked) sink += TUCK.sink;
   if (tipped) sink += TIP.sink;
+  if (looping) sink += LOOP.sink;
 
   if (stalled) {
     // The meter empties as the wing comes back.
@@ -434,7 +534,7 @@ export function stepFlight(g, controls, air, dt) {
     // Swung far back, the wing meets the air steeper than its airspeed says.
     if (swing && g.pitch > PITCH.lean) felt -= PITCH.aoa * (g.pitch - PITCH.lean);
     if (pulling && felt < STALL.safe) {
-      g.stallLoad += STALL.fill * light * clamp((STALL.safe - felt) / (STALL.safe - STALL.slow), 0, STALL.cap) * dt;
+      g.stallLoad += (STALL.fill * light + STALL.fillDeep * deep) * clamp((STALL.safe - felt) / (STALL.safe - STALL.slow), 0, STALL.cap) * dt;
     } else if (felt >= STALL.safe) {
       // Letting go is not enough by itself: the load only goes once the wing is flying again.
       g.stallLoad -= STALL.drain * dt;
@@ -457,6 +557,88 @@ export function stepFlight(g, controls, air, dt) {
   g.pos.z += (-Math.cos(g.yaw) * g.speed + air.windZ) * dt;
   g.pos.y += g.vy * dt;
   return g;
+}
+
+// A wingover banked past a loop's entry rolls on over its top: the loop starts there, the way the
+// bank was going, with its full `cap`, and the swings stop.
+function startLoop(g) {
+  g.loop = Math.sign(g.bank);
+  g.loopAngle = Math.abs(g.bank);
+  g.loopRate = LOOP_W * Math.sqrt(2 * Math.max(0, LOOP.cap - loopEnergy(g.loopAngle, 0)));
+  g.loopNext = Math.PI;
+  g.loopSince = 0;
+  g.loopLate = g.loopEarly = g.loopOut = g.loopBotched = false;
+  g.pitch = g.pitchRate = g.pitchPush = 0;
+  g.lean = g.roll = g.rollRate = g.rollRest = g.rollSpeed = g.steepLeft = g.loopAsk = 0;
+}
+
+// A loop, one step: round it goes under its own weight, losing some of itself, its moments come a
+// half turn apart (the top, ▲, an odd one; the bottom, ▼, an even one), and each press on time tops
+// it up. A press for a moment counts from `window` before it to `window` after; a moment that has
+// passed unpressed waits that long, and then is missed, and the loop will not carry its next top.
+// Any other press botches it: it falls out at once, and where the wing can fold (`folds`) it
+// front-collapses. Falling out, it goes on under its own weight until its bank is back within a
+// wingover's, and hands that bank and its rate back to the swing.
+function stepLoop(g, pressed, hands, folds, dt) {
+  const damping = g.loopOut ? LOOP.settle : LOOP.damping;
+  g.loopRate += (-LOOP_W * LOOP_W * sineRound(g.loopAngle) - damping * g.loopRate) * dt;
+  g.loopAngle += g.loopRate * dt;
+  g.loopSince += dt;
+  if (!g.loopOut) {
+    if (g.loopAngle >= g.loopNext) {
+      g.loopLate = !g.loopEarly;
+      g.loopEarly = false;
+      g.loopSince = 0;
+      g.loopNext += Math.PI;
+      // Its bottom: once round.
+      if (g.loopAngle >= TURN) {
+        g.loopAngle -= TURN;
+        g.loopNext -= TURN;
+        g.loops += 1;
+      }
+    }
+    if (g.loopLate && g.loopSince > LOOP.window) g.loopLate = false;
+    if (pressed !== 0 && hands) {
+      // ▲ (the bar's 2) at the top, ▼ (the brake's 1) at the bottom; the moment just gone is the
+      // other kind from the one coming.
+      const topNext = Math.round(g.loopNext / Math.PI) % 2 === 1;
+      const toNext = g.loopRate > 0 ? (g.loopNext - g.loopAngle) / g.loopRate : Infinity;
+      if (g.loopLate && pressed === (topNext ? 1 : 2)) {
+        g.loopLate = false;
+        topUp(g);
+      } else if (!g.loopEarly && toNext <= LOOP.window && pressed === (topNext ? 2 : 1)) {
+        g.loopEarly = true;
+        topUp(g);
+      } else {
+        g.loopOut = g.loopBotched = true;
+        g.loopRate *= 0.5;
+        if (folds) {
+          g.tuck = TUCK.time;
+          g.tuckHeld = g.tuckPumps = 0;
+        }
+      }
+    }
+    // Short of carrying its top, it falls out.
+    if (g.loopRate <= 0) g.loopOut = true;
+  }
+  const bank = g.loopAngle - TURN * Math.floor(g.loopAngle / TURN + 0.5);
+  g.bank = g.loop * bank;
+  if (g.loopOut && Math.abs(bank) <= ROLL.limit && loopEnergy(bank, g.loopRate) <= SETTLED) {
+    // Back within a wingover's reach, and swinging gently enough to stay there: the swing has the
+    // bank again, and its rate.
+    g.roll = g.bank;
+    g.rollRate = g.loop * g.loopRate;
+    g.lean = g.rollRest = g.rollSpeed = 0;
+    g.loop = g.loopAngle = g.loopRate = g.loopNext = g.loopSince = 0;
+    g.loopLate = g.loopEarly = g.loopOut = g.loopBotched = false;
+  }
+}
+
+// A press on time: the loop topped up, by at most `top`, back to its `cap`.
+function topUp(g) {
+  const add = clamp(LOOP.cap - loopEnergy(g.loopAngle, g.loopRate), 0, LOOP.top);
+  g.loopRate = Math.sqrt(g.loopRate * g.loopRate + 2 * LOOP_W * LOOP_W * add);
+  g.loopTimed += 1;
 }
 
 /**

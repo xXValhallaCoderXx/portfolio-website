@@ -40,13 +40,14 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
   there, and steering takes control back.
 - Space, ↓ and S (▼ on a touch screen) are one brake that goes deeper the longer it is held. A
   fifth of a second in it is light: the wing slows to where it sinks least and turns a circle of
-  about 8 m instead of 14. Held on, it goes deep (after about half a second over the fjord, eight
-  seconds in Good Lift): slow and steep, the way down into a ring. A meter under the hint shows
-  it, and letting go of the key for a fifteenth of a second (70 ms) returns a deep brake to a
-  light one. Over the fjord the wing never stalls, however the brake is held, and the meter shows
+  about 8 m instead of 14. Held on, it goes deep (after about half a second over the fjord, under
+  two in Good Lift, so a pilot circling on it there taps it every couple of seconds): slow and
+  steep, the way down into a ring. A meter under the hint shows it, and letting go of the key for a
+  fifteenth of a second (70 ms) returns a deep brake to a light one. Over the fjord the wing never stalls, however the brake is held, and the meter shows
   no red. Past the arch it can: red grows in from the right as the wing nears a stall, held into
-  the red it stalls, and in a turn it spins toward the inside wing; it recovers by itself, sooner
-  with the brake let go. ↑ or W is the speed bar: hands up, faster, sinking more and turning
+  the red it stalls (a brake held on stalls within about five seconds of the press, sooner in a
+  turn), and in a turn it spins toward the inside wing; it recovers by itself, sooner with the brake
+  let go, which a LET GO by the wing says. ↑ or W is the speed bar: hands up, faster, sinking more and turning
   wider. In Good Lift, ← and → held together push the bar as well, as ◀ and ▶ do on a phone.
 - In Good Lift the wing is flown, not only held:
   - **Big ears.** E (both ▼ pressed together on a phone, then either keeps them in so the other
@@ -59,23 +60,39 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     it ahead; a deep brake let go, the air dropping away under the wing (climbing into a storm
     cloud's base, leaving lift late, dodging on the bar out of a core) and a harsh stall flying
     again surge it far ahead. Braked as it surges, and held till it swings back, it is caught:
-    about 0.5 s in, it peaks under 45°. Left alone, above 260 m it crosses its line (57°) and the
-    leading edge tucks under for 0.8 s, about 10 m; lower, and over the fjord, it is only stopped
-    there. A light brake already biting holds it. No light is lost to a tuck. Braking as the wing
-    swings back instead makes the swing bigger: that is pitching.
+    about 0.5 s in, it peaks under 45°. Left alone, it crosses its line (57°) and the wing
+    front-collapses, at any height in a run: its leading edge folds under for 1.6 s, about 29 m
+    (`TUCK`), pumped open as a struck wing is, a HOLD and a LET GO by the wing saying when. Over the
+    fjord it is only stopped there. A light brake already biting holds it. No light is lost to a
+    collapse. Braking as the wing swings back instead makes the swing bigger: that is pitching.
   - **The stall's second beat.** A stall above 260 m ends in a surge to catch: let go, then brake.
     A brake held all through the stall has lost its grip, so it must be let go and pressed again.
   - **Wingovers.** A turn reversed as its bank tops out swings the wing further the other way
     (`ROLL`): 45° from one swap, 62° by the third, 74° by the sixth, climbing and slowing at each
     top and diving fast through each bottom, and always losing height. Swapped too fast or too
-    slow it never builds. Above 260 m a wingover past 78° unloads the outer wing and its tip folds
-    for a second (`TIP`): a hook toward it and about 13 m, and no light.
-  - **Tricks and style.** Pitching a swing bigger (three forward peaks in a row) and linked
-    wingovers (from the second top) are tricks, scored in style points by how far each swing
-    goes, more for each linked (`meet-style.js`). A set lands once the wing flies level and calm
-    for a second with three or more in it; a tuck, a tip, a stall or a strike loses it. Style only
-    counts above 260 m, where a trick can go wrong, and it is never kilograms: it shows in the
-    readouts, beside the TOTAL on the sheet, and in two feats, never on the board. The swing gauge
+    slow it never builds. In a run a wingover past 78° unloads the outer wing and its tip folds for
+    a second (`TIP`): a hook toward it and about 13 m, and no light.
+  - **Loops.** At the top of a wingover banked past 66°, the brake (▼) instead of the swap rolls
+    the wing on over its top and round its flight line (`LOOP`), pressed in the window the swap
+    there would count in: from 0.12 s before the bank passes 66° to 0.2 s after it falls back. A
+    press that catches a surge is a catch, never a loop. Round a loop only the newer of ▲ and ▼
+    held counts (the page's `createLoopKeys`), so a key still held from the last moment is no press,
+    and past the sky's edge the wind still turns the glider back. It keeps going round, about every
+    2.4 s and 32 m lower each time, for as long as ▲ comes as the pilot passes over the wing and ▼
+    as they pass under it, each within 0.3 s of its moment; the gauge turns into a ring with the
+    pilot going round it, and an UP or a DOWN by the wing says when (on a phone the right-hand ▼ is
+    ▲ while a loop goes round). Skip a press and the loop rolls out cleanly into a fading
+    wingover, which is how one ends. The wrong key, or a press out of its window, botches it: in a
+    run the wing front-collapses as it falls out; over the fjord it only rolls out.
+  - **Tricks and style.** Pitching a swing bigger (three forward peaks in a row), linked
+    wingovers (from the second top) and loops (60 a time round) are tricks, scored in style points
+    by how far each swing goes, more for each linked (`meet-style.js`). A set lands once the wing
+    flies level and calm for a second with three or more in it; a collapse, a tip, a stall or a
+    strike loses it. Style counts anywhere in a run, where a trick can go wrong, and it multiplies
+    the score a run is ranked by: the TOTAL in kilograms × (1 + style/1000), up to twice it
+    (`score.js`), so 512.5 kg with 260 style scores 646. The kilograms stay the meet's: the lifts,
+    the feats and the 1,000 lb club. The board, the medals, beat-the-bot, challenges and the share
+    line go by the score; the server works the style out again from the run's log. The swing gauge
     under the pilot (`swing-gauge.js`, over the fjord too) shows where the wing is, the bands a
     trick is judged in, and the moment to catch, to press or let go, or to swap the turn. A big
     sign by the wing says the same (CATCH, BRAKE, LET GO or SWAP) with a ring that closes on the
@@ -84,9 +101,16 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     the other way, or a dodge, is never told to swap; the first top of a wingover shows its swap on
     the gauge alone. Hands on time are answered with a chime and ✓ NICE, and a caught surge with
     a snap and ✓ CAUGHT. A lone element, as a dodge turned straight back can make, is no set yet.
-  - **Pumping a fold.** A wing folded by a raven or a kettlebell opens 0.4 s sooner for each time
-    the brake is held for at least 0.3 s and let go, twice at most: about 55 m lost becomes about
-    31 m. Taps shorter than that, or a brake held all through, do nothing.
+  - **Pumping a fold.** A wing folded by a raven or a kettlebell, or front-collapsed, opens 0.4 s
+    sooner for each time the brake is held for at least 0.3 s and let go, twice at most: about 55 m
+    lost to a strike becomes about 31 m. Taps shorter than that, or a brake held all through, do
+    nothing. A HOLD by the wing, its ring filling over the hold, then a LET GO, say when, with
+    ✓ 1/2 and ✓ 2/2 as each pump counts and a chime and ✓ OPEN as the pumped wing opens.
+  - **The briefing.** A device's first three runs open with the game and its keys told over the
+    gate, for the keys or the touch screen it is flown by; the flight waits there until any key or
+    tap, and the run, its clock and its log start then. The key that flies does nothing more until
+    it is let go; on a short screen a drag scrolls the card and only a tap on it flies; Esc leaves
+    Good Lift with no run flown or counted.
 - Landing at a place opens the same section the page shows. "Open on page" leaves the flight at
   that section; Escape, the exit button and the browser's back button leave it too.
 - A manual landing briefly shows distance from the centre, a grade, points and the best distance
@@ -197,11 +221,11 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     full, in lift faintly, and while all the fog is within reach not at all. Until a visitor has
     seen it said for twelve seconds, the hint line says its word when it has nothing more pressing
     (`src/game/run-glide.js`; `fjord.glide.state`).
-  - **The meet sheet.** When a run ends, the sheet shows the TOTAL, the peak and the best, the
-    reps flown and how many were to depth, the climb drawn over the rising fog, a row of lights for
-    every lift (a filled white disc or a hollow red ring, with the judge's name, so colour is never
-    the only sign), the feats, and a line to share the run by, such as
-    `Good Lift · Daily #12 · 512.5 kg · 1,412 m · ⚪⚪⚪ ⚪🔴⚪`. R flies again, `[ new sky ]` gives
+  - **The meet sheet.** When a run ends, the sheet shows the SCORE (`SCORE 646 · 512.5 kg × 1.26
+    style`), the peak and the best score, the tricks landed, the reps flown and how many were to
+    depth, the climb drawn over the rising fog, a row of lights for every lift (a filled white disc
+    or a hollow red ring, with the judge's name, so colour is never the only sign), the feats, and a
+    line to share the run by, such as `Good Lift · Daily #12 · 646 pts · 512.5 kg · 1,412 m · ⚪⚪⚪ ⚪🔴⚪`. R flies again, `[ new sky ]` gives
     practice and `[ today's sky ]` returns to the Daily Sky. The sheet covers the game's own
     switches, so it carries the music's (`[ music: on ]`, or B).
   - **The skald, the byname and the medals.** Under the ending, a skald's verse speaks to the
@@ -216,10 +240,11 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     Cloud-shy (no second in cloud on a climb past 750 m). As the sheet opens, three bots fly the
     same sky in the page, each in its own world, a few milliseconds at a time while the page is
     idle (`meet-bots.js`): TST, the pilot holding its line on the light brake, and the collector.
-    What they lift sets the sky's medals, lightest bronze and heaviest gold, and a run takes one
-    for each bot it out-lifts (total, then peak, as the board ranks): one line, such as
-    `medals: bronze 115 kg · silver 145 kg (TST) · gold 360 kg · yours: silver`, announced to a
-    screen reader as it arrives, without moving the focus. Out-lifting TST earns Beat the bot.
+    What they score sets the sky's medals, lightest bronze and heaviest gold (a bot flies no tricks,
+    so its score is its total), and a run takes one for each bot it outscores (score, then peak, as
+    the board ranks): one line, such as `medals: bronze 115 pts · silver 145 pts (TST) · gold 360
+    pts · yours: silver`, announced to a screen reader as it arrives, without moving the focus.
+    Outscoring TST earns Beat the bot.
     They stop while a run is flown. The visit keeps what they came to on its last 16 skies, so
     none of those is flown twice, and the store keeps the Daily Sky's for the day. Each slice asks
     some 4 ms of the page, and on a page busy every frame they still land in seconds.
@@ -228,20 +253,21 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     replayed in the page (`replay.js`), and only a run that replays to the very same sheet gets a
     link and a place on the board. The share line carries that link, `/good-lift/daily#vs=…`
     (a whole run is about 1-2 KB of it). Opening it replays the run before the start screen, which
-    shows what it truly came to (`to beat: … kg · … m · verified`; what a link claims is never
+    shows what it truly came to (`to beat: … pts · … m · verified`; what a link claims is never
     trusted), then flies the same sky; the sheet gives the verdict, and a race on today's sky puts
     the challenger on the day's board. `SIM_VERSION` (`src/game/sim-version.js`) names the rules a
     run was flown under: a test fingerprints every tuning table, so changing how a run flies without
     a new version fails `npm test`, and a link from other rules is refused rather than misread.
     Version 2 brought the peaked cores and reps to depth, version 3 the iron in the sky, the rune
-    stones and the Beast, and version 4 the wing flown, not only held: big ears, the swing over the
-    pilot and its tuck, wingovers and their tip, the stall's second beat and pumping a fold open.
+    stones and the Beast, and version 4 the wing flown, not only held: big ears, a brake that goes
+    deep within two seconds, the swing over the pilot and its front collapse, wingovers and their
+    tip, loops, the stall's second beat, pumping a fold open, and style multiplying the score.
   - **Feats and the board.** Opener, Under the horn, Giant-dodger, Clean meet, the 1,000 lb club,
     Wingover ×5, Pitched 45°, Training block (the Daily Sky seven days in a row) and Beat the bot
     are Good Lift's own feats:
     the sheet names any new ones when it opens (Beat the bot when the bots land), never during a
     run, and they never move the fjord's belt. Each Daily Sky keeps a board of this browser's ten
-    best runs, ranked by total, then peak, then the earlier run, under three initials and the
+    best runs, ranked by score, then peak, then the earlier run, under three initials and the
     run's byname, with TST pinned among them where it ranks as the bot to beat (never stored as
     anyone's run). Initials are written in the runes of the Elder Futhark over their letters (ᚱᛖᚾ
     over REN, `meet-initials.js`), in a 7 KB cut of Noto Sans Runic that comes with the game

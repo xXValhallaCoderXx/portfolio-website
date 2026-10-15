@@ -60,9 +60,11 @@ test('over the fjord a surge is said as in a run, the first trick of a flight is
   assert.equal(hint({ safeTricks: true, pitching: true }), 'safe here — past the arch, tricks can fold');
   assert.equal(hint({ pitching: true }), 'pitch: brake when ahead, let go when behind');
   assert.equal(hint({ wingover: true, touch: true }), 'wingover — ◀ ▶ in turn as each swing peaks');
+  assert.equal(hint({ wingover: true, loopable: true }), 'big wingover — ▼ at its top to loop over');
+  assert.equal(hint({ looping: true, wingover: true }), 'loop — ▲ over the wing, ▼ under it');
   assert.equal(hint({ nearRing: true, unvisited: false, surging: true, wingover: true }), '');
   assert.match(hint({ stall: 1, surging: true }), /^stalled/);
-  for (const facts of [{ surging: true }, { surging: true, touch: true }, { safeTricks: true }, { pitching: true }, { pitching: true, touch: true }, { wingover: true }, { wingover: true, touch: true }]) {
+  for (const facts of [{ surging: true }, { surging: true, touch: true }, { safeTricks: true }, { pitching: true }, { pitching: true, touch: true }, { wingover: true }, { wingover: true, touch: true }, { loopable: true }, { looping: true }]) {
     assert.ok([...hint(facts)].length <= HINT_WIDTH, hint(facts));
   }
 });

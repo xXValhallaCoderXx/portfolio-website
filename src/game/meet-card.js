@@ -4,6 +4,7 @@
 // sheet the way a visitor does. A run's numbers come from meet-sheet.js's summariseRun; its byname
 // and its verse are worked out in meet-bynames.js and meet-verse.js.
 import { WORLD_BOARD } from './board-world.js';
+import { scoreOf } from './score.js';
 
 // The judges, in the order their lights stand: bit 0 of a lift's `red` is the first.
 export const JUDGES = Object.freeze(['contact', 'control', 'airspace']);
@@ -27,11 +28,14 @@ export const FEATS = Object.freeze([
   Object.freeze({ id: 'wingover-five', name: 'Wingover ×5', text: 'Land five linked wingovers past 50°.' }),
   Object.freeze({ id: 'pitched-45', name: 'Pitched 45°', text: 'Pitch the wing 45° ahead and catch it.' }),
   Object.freeze({ id: 'training-block', name: 'Training block', text: 'Fly the Daily Sky seven days in a row.', streak: 7 }),
-  Object.freeze({ id: 'beat-the-bot', name: 'Beat the bot', text: 'Out-lift TST, the test pilot, on the same sky.', bot: true }),
+  Object.freeze({ id: 'beat-the-bot', name: 'Beat the bot', text: 'Outscore TST, the test pilot, on the same sky.', bot: true }),
 ]);
 
 /** Kilograms as a meet writes them: a decimal only for a half (182.5, 180, 1,240). */
 export const kilos = (value) => (value ?? 0).toLocaleString('en-GB', { maximumFractionDigits: 1 });
+
+/** A run's score ({ total, style }, score.js) as the sheet writes it: whole points (646, 1,240). */
+export const points = (run) => scoreOf(run).toLocaleString('en-GB');
 
 /** Metres, with their thousands marked. */
 export const metres = (value) => Math.floor(value ?? 0).toLocaleString('en-GB');
@@ -60,6 +64,7 @@ export function featsFor(result) {
 export function trickSaid(stats) {
   const said = [];
   if (stats.wingovers > 0) said.push(`wingover ×${stats.wingovers}`);
+  if ((stats.loops ?? 0) > 0) said.push(`loop ×${stats.loops}`);
   if (stats.pitch > 0) said.push(`pitched ${stats.pitch}°`);
   return said.length ? `tricks: ${said.join(' · ')}` : '';
 }
@@ -68,10 +73,11 @@ export function trickSaid(stats) {
  * What the sheet says once the bots have landed (good-lift.js's `bots`: the sky's `medals`, lightest
  * first, the `medal` the run took, '' for none, and the feats that `fresh`ly earned), for whoever
  * cannot see the line that shows them:
- *   Medals: bronze 145 kg, silver 160 kg, set by TST, gold 375 kg. Yours: silver. New feat: Beat the bot.
+ *   Medals: bronze 145 pts, silver 160 pts, set by TST, gold 375 pts. Yours: silver. New feat: Beat the bot.
+ * A bot flies no tricks, so the score that sets a medal is its total.
  */
 export function medalsSaid({ medals, medal, fresh = [] }) {
-  const marks = medals.map((mark) => `${mark.medal} ${kilos(mark.total)} kg${mark.by === 'tst' ? ', set by TST' : ''}`).join(', ');
+  const marks = medals.map((mark) => `${mark.medal} ${points(mark)} pts${mark.by === 'tst' ? ', set by TST' : ''}`).join(', ');
   const feats = FEATS.filter((feat) => fresh.includes(feat.id)).map((feat) => feat.name);
   return `Medals: ${marks}. Yours: ${medal || 'none'}.${feats.length ? ` New feat${feats.length === 1 ? '' : 's'}: ${feats.join(', ')}.` : ''}`;
 }
@@ -111,12 +117,13 @@ export const lightsOf = (red) => JUDGES.map((_, i) => ((red >> i) & 1 ? '🔴' :
 
 /**
  * The line a run is shared by, and under it the link that races it:
- *   Good Lift · Daily #12 · 512.5 kg · 1,412 m · ⚪⚪⚪ ⚪🔴⚪ 🔴🔴⚪
- * `label` names the sky ('Daily #12', 'Sky 7f3a2c1e'), and `link` is the challenge's address.
+ *   Good Lift · Daily #12 · 646 pts · 512.5 kg · 1,412 m · ⚪⚪⚪ ⚪🔴⚪ 🔴🔴⚪
+ * `label` names the sky ('Daily #12', 'Sky 7f3a2c1e'), and `link` is the challenge's address. The
+ * score (the total lifted by the style it landed) leads; the kilograms say what was lifted.
  */
 export function shareText(result, { label, link = '' }) {
   const lights = result.lifts.map((lift) => lightsOf(lift.red)).join(' ');
-  const line = ['Good Lift', label, `${kilos(result.total)} kg`, `${metres(result.peak)} m`, lights].filter(Boolean).join(' · ');
+  const line = ['Good Lift', label, `${points({ total: result.total, style: result.style ?? result.stats?.style })} pts`, `${kilos(result.total)} kg`, `${metres(result.peak)} m`, lights].filter(Boolean).join(' · ');
   return link ? `${line}\n${link}` : line;
 }
 

@@ -44,7 +44,7 @@ test('a run\'s id is a digest of the run alone: its rules, seed and controls, ne
 });
 
 test('a row of the world board is kept clean: named, never blocked, its numbers whole and its id a run\'s, and nothing more', () => {
-  const row = { who: 'REN', byname: BYNAMES[0].id, total: 512.5, peak: 1412, red: [0, 2, 4], at: 1_792_000_000_000, id: 'a'.repeat(WORLD_BOARD.id) };
+  const row = { who: 'REN', byname: BYNAMES[0].id, total: 512.5, style: 0, peak: 1412, red: [0, 2, 4], at: 1_792_000_000_000, id: 'a'.repeat(WORLD_BOARD.id) };
   assert.deepEqual(normalizeWorldRow(row), row);
   // The device a run came from, and anything else, never leaves the function.
   assert.deepEqual(normalizeWorldRow({ ...row, device: 'f'.repeat(32), log: 'AQ', extra: 1 }), row);

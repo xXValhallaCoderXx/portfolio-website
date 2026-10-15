@@ -33,6 +33,7 @@ import { DAILY_EPOCH, DAY_MS, dayOf } from '../../src/game/good-lift-address.js'
 import { isBlocked } from '../../src/game/meet-initials.js';
 import { bynameFor } from '../../src/game/meet-bynames.js';
 import { BOARD, boardKey, outranks } from '../../src/game/board.js';
+import { byRank } from '../../src/game/score.js';
 import { WORLD_BOARD, digest, normalizeWorldRow, runId } from '../../src/game/board-world.js';
 
 export const LIMITS = Object.freeze({
@@ -164,8 +165,6 @@ export function createLimiter(perMinute = LIMITS.minute) {
 // a different name on every day's board, and the token is never stored.
 const deviceOn = (key, token) => digest(`${key} ${token}`, 32);
 
-// Of two rows, which ranks first: the heavier total, then the higher peak, then the run that came first.
-const byRank = (a, b) => b.total - a.total || b.peak - a.peak || a.at - b.at;
 
 /**
  * A day's board as the function keeps it, cleanly read from the document the store holds (`doc`,
@@ -365,7 +364,9 @@ export function createBoard({ store, now = Date.now, log = () => {}, limits = LI
       return refuse(422, 'mismatch');
     }
     const key = boardKey(SIM_VERSION, run.day);
-    const row = { who: run.initials, byname: bynameFor(sheet), total: sheet.total, peak: sheet.peak, red: sheet.lifts.map((lift) => lift.red), at, id, flight: await flightOf(sheet) };
+    // The style is the replay's own: a log claims none, and the score the board ranks by is the total
+    // lifted by it (score.js), so the board's order is this replay's, never a browser's say-so.
+    const row = { who: run.initials, byname: bynameFor(sheet), total: sheet.total, style: sheet.stats.style, peak: sheet.peak, red: sheet.lifts.map((lift) => lift.red), at, id, flight: await flightOf(sheet) };
     const entry = { row, device: await deviceOn(key, sent.token) };
     return change(key, (doc) => judge(doc, entry, { version: SIM_VERSION, day: run.day, at, limits }), at);
   }

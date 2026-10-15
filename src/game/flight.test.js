@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FLIGHT, BRAKE, EARS, FALL, PITCH, ROLL, STALL, TIP, TUCK, createFlight, pitchPeak, pitchPhase, releaseFlight, rollPhase, settleFlight, stepFlight } from './flight.js';
+import { FLIGHT, BRAKE, EARS, FALL, LOOP, PITCH, ROLL, STALL, TIP, TUCK, createFlight, pitchPeak, pitchPhase, releaseFlight, rollPhase, settleFlight, sineRound, stepFlight } from './flight.js';
 
 const STEP = 1 / 60;
 const HIGH = 5000;
@@ -65,7 +65,7 @@ test('random steering, lift and drift match the flight the game used to carry, t
   assert.equal(g.stallLoad, 0);
 });
 
-test('the brake is light a fifth of a second after it is pressed, goes deep in about a second over the fjord and lingers eight seconds in a run', () => {
+test('the brake is light a fifth of a second after it is pressed, goes deep in about a second over the fjord and lingers under two seconds in a run', () => {
   const reach = (controls, depth) => until(aloft(), controls, stillAir(), (g) => g.brake >= depth);
   assert.ok(near(reach(handsUp({ brake: true }), BRAKE.light), 0.2, 0.02));
   assert.ok(near(reach(handsUp({ brake: true }), BRAKE.shelf), 0.2 + BRAKE.linger.fjord, 0.05));
@@ -122,9 +122,10 @@ test('sink follows one curve from the light brake through trim to the bar, with 
   const controls = handsUp({ bar: true });
   let last = fly(g, controls, stillAir(), 6).sink;
   controls.bar = false;
-  controls.brake = true;
   controls.linger = true;
   for (let i = 0; i < 6 * 60; i++) {
+    // Held light, eased for a step as it is about to leave the light band.
+    controls.brake = g.brake < BRAKE.shelf - 0.02;
     stepFlight(g, controls, stillAir(), STEP);
     assert.ok(Math.abs(g.sink - last) < 0.1, 'sink never jumps');
     last = g.sink;
@@ -155,15 +156,18 @@ test('a deep brake held on stalls the wing in a few seconds, sooner in a turn an
     return [until(g, controls, stillAir(), (wing) => wing.stall > 0), g];
   };
   const [straight, wing] = stallAfter(handsUp({ brake: true }));
-  assert.ok(straight > 5 && straight < 10, `stalled ${straight.toFixed(1)} s after the press`);
+  assert.ok(straight > 2.5 && straight < 5, `stalled ${straight.toFixed(1)} s after the press`);
   assert.equal(wing.stallSide, 0);
   const [turning, spun] = stallAfter(handsUp({ brake: true, turn: 1 }));
-  assert.ok(turning < straight - 1.5, `in a turn ${turning.toFixed(1)} s`);
+  assert.ok(turning < straight - 0.5, `in a turn ${turning.toFixed(1)} s`);
   assert.equal(spun.stallSide, 1);
   assert.equal(stallAfter(handsUp({ brake: true, turn: -1 }))[1].stallSide, -1);
-  // In a run the same hold lasts the linger longer, and then goes just as surely.
+  // In a run the same hold lasts the linger longer, and then goes just as surely: within about
+  // five seconds of the press flying straight, sooner in a turn.
   const [lingering] = stallAfter(handsUp({ brake: true, linger: true, harsh: true, turn: 1 }));
-  assert.ok(lingering > BRAKE.linger.run + 2 && lingering < BRAKE.linger.run + 6);
+  assert.ok(lingering > BRAKE.linger.run + 1.5 && lingering < BRAKE.linger.run + 3.5, `in a run, turning, ${lingering.toFixed(1)} s`);
+  const [run] = stallAfter(handsUp({ brake: true, linger: true, harsh: true }));
+  assert.ok(run > 4 && run < 6, `in a run, straight, ${run.toFixed(1)} s`);
 });
 
 test('letting go just before the stall saves the wing, and the load only drains once it is flying again', () => {
@@ -200,7 +204,8 @@ test('a front from behind takes airspeed off a braked wing and tips it into the 
   const behind = fronted(-5, 1); // north is -z: this wind blows the way the wing is going
   const ahead = fronted(5, 0);
   assert.ok(behind.dip > 0.5, `the gust took ${behind.dip.toFixed(2)} m/s`);
-  assert.ok(behind.stalled < calm.stalled - 1.5, `stalled at ${behind.stalled.toFixed(1)} s instead of ${calm.stalled.toFixed(1)} s`);
+  // The deep brake stalls the wing within a second or two of the front here; the front takes most of that.
+  assert.ok(behind.stalled < calm.stalled - 0.5, `stalled at ${behind.stalled.toFixed(1)} s instead of ${calm.stalled.toFixed(1)} s`);
   assert.ok(ahead.stalled >= calm.stalled, 'a gust on the nose never brings the stall forward');
 
   // A wind that is simply there, however strong, and a circle flown in it, are not felt.
@@ -616,7 +621,12 @@ test('taking up the light brake swings the wing back about 16°, and letting it 
   const g = aloft();
   const controls = swinging({ brake: true });
   let back = 0;
-  fly(g, controls, stillAir(), 7.5, () => (back = Math.max(back, g.pitch)));
+  // Held light a long while, eased for a step as it is about to go deep, as a pilot taps it.
+  fly(g, controls, stillAir(), 7.5, () => {
+    back = Math.max(back, g.pitch);
+    controls.brake = g.brake < BRAKE.shelf - 0.02;
+  });
+  controls.brake = true;
   assert.ok(near(back / DEG, 16.4, 1), `${(back / DEG).toFixed(1)}° back`);
   assert.ok(g.brake < BRAKE.shelf, 'still the light brake');
   controls.brake = false;
@@ -829,11 +839,18 @@ test('swung ahead the wing gathers airspeed and swung back it gives it up, and n
 });
 
 test('a wing swung far back on the light brake builds stall load that the same brake never builds upright, and a safe wing never stalls', () => {
+  // On the light brake, eased for a step whenever it is about to go deep.
   const load = (pitch, over = {}) => {
-    const g = fly(aloft(), swinging({ brake: true, ...over }), stillAir(), 3);
+    const g = aloft();
+    const controls = swinging({ brake: true, ...over });
+    const light = () => (controls.brake = g.brake < BRAKE.shelf - 0.02);
+    fly(g, controls, stillAir(), 3, light);
     g.pitch = pitch;
     let most = 0;
-    fly(g, swinging({ brake: true, ...over }), stillAir(), 1.5, () => (most = Math.max(most, g.stallLoad)));
+    fly(g, controls, stillAir(), 1.5, () => {
+      light();
+      most = Math.max(most, g.stallLoad);
+    });
     return most;
   };
   assert.ok(load(1) > 0.03, `${load(1).toFixed(3)} swung back`);
@@ -862,7 +879,7 @@ test('a raven strike, the autopilot and a falling stall take the swing over', ()
   assert.ok(g.stall > STALL.surge && near(g.pitch, PITCH.stall, 0.1), `${(g.pitch / DEG).toFixed(1)}° back`);
 });
 
-test('a tucked wing is the air\'s for 0.8 s: the hands and steering do nothing, it holds its heading and comes down about ten metres more', () => {
+test('a front-collapsed wing is the air\'s for 1.6 s: the hands and steering do nothing, it holds its heading and comes down about 29 m more', () => {
   const g = aloft();
   const twin = aloft();
   g.pitchRate = twin.pitchRate = -2.8;
@@ -879,6 +896,31 @@ test('a tucked wing is the air\'s for 0.8 s: the hands and steering do nothing, 
   const plain = fly(aloft(), swinging(), stillAir(), TUCK.time - STEP + 4);
   const extra = from - g.pos.y - (HIGH - plain.pos.y);
   assert.ok(near(extra, TUCK.sink * TUCK.time, 1.5), `the tuck cost ${extra.toFixed(1)} m more`);
+});
+
+test('a front collapse is pumped open: each brake held 0.3 s and let go opens it 0.4 s sooner, twice at most, and a shorter hold is no pump', () => {
+  const lasted = (pattern) => {
+    const g = aloft();
+    g.pitchRate = -2.8;
+    const controls = swinging({ folds: true });
+    until(g, controls, stillAir(), (wing) => wing.tuck > 0, 2);
+    let t = 0;
+    const open = until(g, controls, stillAir(), (wing) => {
+      t += STEP;
+      controls.brake = pattern(t);
+      return wing.tuck === 0;
+    }, 3);
+    return [open, g.tuckPumps];
+  };
+  const [alone] = lasted(() => false);
+  // Held 0.35 s and let go for 0.1, as the reference pilots pump (CATCH).
+  const [pumped, pumps] = lasted((t) => t % 0.45 < 0.35);
+  const [short, none] = lasted((t) => t % 0.3 < 0.2);
+  assert.ok(near(alone, TUCK.time, 2 * STEP), `left alone it opened after ${alone.toFixed(2)} s`);
+  assert.equal(pumps, TUCK.pump.most);
+  assert.ok(near(pumped, TUCK.time - TUCK.pump.most * TUCK.pump.cut, 2 * STEP), `pumped, after ${pumped.toFixed(2)} s`);
+  assert.equal(none, 0, 'held too short, it is no pump');
+  assert.ok(near(short, TUCK.time, 2 * STEP));
 });
 
 test('with the ears in nothing tucks, and they damp the swing', () => {
@@ -1173,4 +1215,173 @@ test('pitchPhase says when a free swing next turns and where, and when it would 
   const surge = Object.assign(aloft(), { pitch: -0.2, pitchRate: -2.6 });
   const said = pitchPhase(surge, {});
   assert.ok(said.toLine < said.toPeak, JSON.stringify(said));
+});
+
+// Wingovers swapped at each top until one tops out past a loop's entry, the brake pressed there,
+// and then `press(k, top)` asked what to do at each of the loop's moments (the first top is 1): 'on'
+// to press its key there, a number to press that many seconds late, 'skip', or 'wrong' for the other
+// key. Flies until the loop is over or `seconds` have gone, and says what came of it.
+function looped({ press = () => 'on', folds = true, safe = false, seconds = 24 } = {}) {
+  const g = aloft();
+  const controls = swinging({ turn: 1, harsh: true, folds, safe });
+  fly(g, controls, stillAir(), 20);
+  controls.turn = -1;
+  let rolling = 0;
+  let last = 0;
+  let entered = false;
+  for (let i = 0; i < 40 * 60 && !entered; i++) {
+    stepFlight(g, controls, stillAir(), STEP);
+    const rate = g.bank - last;
+    if (rolling * rate < 0) {
+      if (Math.abs(g.bank) >= LOOP.entry) {
+        controls.brake = true;
+        stepFlight(g, controls, stillAir(), STEP);
+        controls.brake = false;
+        entered = true;
+      } else controls.turn = g.bank > 0 ? -1 : 1;
+    }
+    if (rate !== 0) rolling = rate;
+    last = g.bank;
+  }
+  assert.ok(entered && g.loop !== 0, 'the loop began');
+  controls.turn = 0;
+  const from = g.pos.y;
+  const round = [];
+  let t = 0;
+  let k = 0;
+  let next = g.loopNext;
+  let due = null;
+  let tucked = false;
+  let mostLoad = 0;
+  while (t < seconds && g.loop !== 0) {
+    if (g.loopNext !== next) {
+      k += 1;
+      const top = Math.round(next / Math.PI) % 2 === 1;
+      const what = press(k, top);
+      if (what !== 'skip') due = { at: t + (typeof what === 'number' ? what : 0), key: (what === 'wrong') === top ? 'brake' : 'bar' };
+      next = g.loopNext;
+    }
+    controls.brake = controls.bar = false;
+    if (due && t >= due.at) controls[due.key] = t < due.at + 0.1;
+    const loops = g.loops;
+    stepFlight(g, controls, stillAir(), STEP);
+    t += STEP;
+    if (g.loops > loops) round.push(t);
+    tucked ||= g.tuck > 0;
+    mostLoad = Math.max(mostLoad, g.stallLoad);
+    // Round the loop the wing never swings, and the turn it went in with eases out.
+    if (g.loop !== 0) assert.ok(g.pitch === 0 && Math.abs(g.yawRate) < (t < 3 ? 1 : 1e-3), `t ${t.toFixed(2)}: pitch ${g.pitch}, yaw rate ${g.yawRate}`);
+  }
+  return { g, loops: round.length, each: round.length > 1 ? (round.at(-1) - round[0]) / (round.length - 1) : NaN, lost: from - g.pos.y, t, tucked, mostLoad };
+}
+
+test('a wingover banked past 66° rolls on over its top with the brake pressed there, and goes round for as long as ▲ over the wing and ▼ under it come on time', () => {
+  const { loops, each, lost, t, mostLoad, g } = looped();
+  assert.ok(loops >= 9 && t >= 24 - 1e-9, `${loops} loops in ${t.toFixed(1)} s`);
+  assert.ok(near(each, 2.4, 0.2), `${each.toFixed(2)} s a loop`);
+  assert.ok(near(lost / loops, 32, 4), `${(lost / loops).toFixed(1)} m a loop`);
+  assert.equal(mostLoad, 0, 'with no stall load');
+  assert.ok(g.loopTimed >= 2 * loops, `${g.loopTimed} presses on time`);
+  // A press as late as 0.25 s still counts.
+  assert.ok(looped({ press: () => 0.25 }).loops >= 9);
+  // No brake, no loop: the same wingover never goes over the top.
+  const g2 = aloft();
+  const controls = swinging({ turn: 1, harsh: true, folds: true });
+  fly(g2, controls, stillAir(), 20);
+  controls.turn = -1;
+  fly(g2, controls, stillAir(), 10);
+  assert.ok(g2.loop === 0 && Math.abs(g2.bank) <= ROLL.limit + 1e-9);
+});
+
+test('a press skipped rolls the loop out cleanly into a wingover\'s swing, and a wrong one collapses the wing where it can fold and only rolls it out over the fjord', () => {
+  for (const k of [3, 4]) {
+    const skipped = looped({ press: (n) => (n === k ? 'skip' : 'on') });
+    assert.ok(skipped.loops <= 2 && skipped.g.loop === 0 && !skipped.tucked, `skipping moment ${k}: ${skipped.loops} loops`);
+    assert.ok(Math.abs(skipped.g.bank) <= ROLL.limit + 1e-9, 'handed back within a wingover\'s bank');
+  }
+  const botched = looped({ press: (n) => (n === 3 ? 'wrong' : 'on') });
+  assert.ok(botched.tucked && botched.g.loop === 0, 'a front collapse where the wing can fold');
+  const safe = looped({ press: (n) => (n === 3 ? 'wrong' : 'on'), folds: false });
+  assert.ok(!safe.tucked && safe.g.loop === 0, 'only rolled out over the fjord');
+  // Never pressed at all, the entry alone carries it round once.
+  assert.ok(looped({ press: () => 'skip' }).loops <= 1);
+});
+
+test('the hand-back to the wingover\'s swing is continuous, and the swing then fades', () => {
+  const { g } = looped({ press: (n) => (n === 3 ? 'skip' : 'on') });
+  const controls = swinging({ harsh: true, folds: true });
+  let last = g.bank;
+  let jump = 0;
+  fly(g, controls, stillAir(), 8, () => {
+    jump = Math.max(jump, Math.abs(g.bank - last));
+    last = g.bank;
+  });
+  assert.ok(jump < 0.15, `the bank moved at most ${jump.toFixed(3)} rad a step`);
+  assert.ok(Math.abs(g.bank) < 0.2 && g.loop === 0, `settled at ${(g.bank / DEG).toFixed(1)}°`);
+});
+
+// The wingovers looped() flies, swapped at each top until one tops out past a loop's entry, with the
+// brake pressed for 0.05 s from `brakeAt` seconds in, the wing surging there if `surge`: when that
+// top's bank passed the entry and fell back from it, whether a loop began, and the wing and its
+// controls as they were left.
+function steepWingovers(brakeAt = Infinity, surge = false) {
+  const g = aloft();
+  const controls = swinging({ turn: 1, harsh: true, folds: true });
+  fly(g, controls, stillAir(), 20);
+  controls.turn = -1;
+  let rolling = 0;
+  let last = 0;
+  let up = NaN;
+  let down = NaN;
+  for (let i = 0; i < 40 * 60 && g.loop === 0 && !(i * STEP > brakeAt + LOOP.early + 0.1); i++) {
+    const t = i * STEP;
+    controls.brake = t >= brakeAt && t < brakeAt + 0.05;
+    if (surge && controls.brake && t < brakeAt + STEP / 2) {
+      g.pitch = -0.3;
+      g.pitchRate = -2;
+    }
+    stepFlight(g, controls, stillAir(), STEP);
+    if (Number.isNaN(up) && Math.abs(g.bank) >= LOOP.entry) up = t + STEP;
+    if (!Number.isNaN(up) && Number.isNaN(down) && Math.abs(g.bank) < LOOP.entry) down = t + STEP;
+    const rate = g.bank - last;
+    if (rolling * rate < 0 && Math.abs(g.bank) < LOOP.entry && Number.isNaN(up)) controls.turn = g.bank > 0 ? -1 : 1;
+    if (rate !== 0) rolling = rate;
+    last = g.bank;
+  }
+  return { up, down, looped: g.loop !== 0, g, controls };
+}
+
+test('a tap of the brake loops a wingover from 0.12 s before its bank passes 66° until 0.2 s after it falls back, the window a swap there counts in', () => {
+  const { up, down, looped: flown } = steepWingovers();
+  assert.ok(!flown && down - up > 0.1, `past 66° from ${up.toFixed(2)} s to ${down.toFixed(2)} s`);
+  for (const [at, loops] of [[up - 0.2, false], [up - 0.1, true], [up, true], [down, true], [down + 0.15, true], [down + 0.25, false]]) {
+    assert.equal(steepWingovers(at).looped, loops, `tapped ${(at - up).toFixed(2)} s from passing 66°, ${(at - down).toFixed(2)} s from falling back`);
+  }
+});
+
+test('round a loop the heading holds whatever the turn asked, unless the edge of the map is turning the glider back', () => {
+  const { up } = steepWingovers();
+  const swung = (turn, steered) => {
+    const { g, controls } = steepWingovers(up);
+    Object.assign(controls, { turn, steered });
+    const yaw = g.yaw;
+    fly(g, controls, stillAir(), 1.5);
+    assert.ok(g.loop !== 0 && !g.loopOut, 'still going round');
+    return g.yaw - yaw;
+  };
+  // The pilot's turn does nothing: only the turn it went in with, easing out, moves the heading.
+  assert.equal(swung(1, false), swung(0, false));
+  assert.ok(Math.abs(swung(0, false)) < 0.3);
+  // The edge's turns it back the way it asks, round and round as it goes.
+  assert.ok(swung(1, true) - swung(0, false) > 0.5, `${swung(1, true).toFixed(2)} rad`);
+});
+
+test('the brake pressed at a steep top as the wing surges is its catch, and loops nothing', () => {
+  const { up } = steepWingovers();
+  assert.ok(steepWingovers(up).looped, 'calm, the press loops it');
+  assert.ok(!steepWingovers(up, true).looped, 'surging, it catches the surge');
+});
+
+test('the sine of any angle is plain arithmetic within 1e-5 of the true one, all the way round and beyond', () => {
+  for (let x = -20; x <= 20; x += 0.01) assert.ok(Math.abs(sineRound(x) - Math.sin(x)) < 1e-5, `at ${x.toFixed(2)}`);
 });

@@ -72,6 +72,7 @@ export function summariseRun(world, reason) {
       style: style ? style.state.total : 0,
       wingovers: style ? style.state.wingovers : 0,
       pitch: style ? style.state.pitch : 0,
+      loops: style ? style.state.mostLoops : 0,
     },
     trace: {
       alt: trace ? Array.from(trace.alt.subarray(0, n)) : [],

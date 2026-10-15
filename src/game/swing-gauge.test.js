@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CUES, SWING_GAUGE, swingGauge } from './swing-gauge.js';
+import { CUES, LOOP_STEPS, SWING_GAUGE, swingGauge } from './swing-gauge.js';
 import { createSwingWatch } from './swing-watch.js';
-import { BRAKE, PITCH, ROLL, createFlight, stepFlight } from './flight.js';
+import { BRAKE, PITCH, ROLL, TUCK, createFlight, stepFlight } from './flight.js';
 
 const STEP = 1 / 60;
 const DEG = Math.PI / 180;
@@ -158,11 +158,68 @@ test('the first top after a reversal shows its swap on the gauge alone, and only
   assert.ok(toldAfter.includes(swaps - 1) || toldAfter.includes(swaps), 'and still told at the last');
 });
 
-test('the red ends warn only where the wing can fold, as it comes near the tuck or the tip', () => {
-  const near = (folds, pitch, bank = 0) => swingGauge(Object.assign(createFlight(), { pitch, bank }), createSwingWatch().state, folds, STEP, {});
+test('a folded wing says hold the brake, its ring filling, then let go, while pumps are left; a stalled one held on says let go', () => {
+  const watch = createSwingWatch().state;
+  const gauge = {};
+  const read = (wing, hands) => {
+    swingGauge(wing, watch, true, STEP, gauge, hands);
+    return [gauge.cue, gauge.coming, Number(gauge.soon.toFixed(3))];
+  };
+  // A front collapse, its pumps the wing's own.
+  const g = Object.assign(createFlight({ x: 0, y: 5000, z: 0 }), { tuck: 1.2, tuckHeld: 0, tuckPumps: 0 });
+  assert.deepEqual(read(g), [CUES.pump, CUES.pump, 1]);
+  g.tuckHeld = TUCK.pump.hold / 2;
+  assert.deepEqual(read(g), [CUES.pump, CUES.pump, 0.5]);
+  g.tuckHeld = TUCK.pump.hold;
+  assert.deepEqual(read(g), [CUES.release, CUES.release, 0]);
+  assert.equal(gauge.on, true, 'and the gauge is up for it');
+  g.tuckPumps = TUCK.pump.most;
+  assert.deepEqual(read(g).slice(0, 2), [CUES.none, CUES.none], 'pumped all it can be: nothing more to do');
+  // A struck wing, its pumps as run-step.js counts them.
+  const struck = createFlight({ x: 0, y: 5000, z: 0 });
+  assert.deepEqual(read(struck, { brake: true, fold: 1.5, held: 0.1, pumps: 1 }).slice(0, 2), [CUES.pump, CUES.pump]);
+  assert.deepEqual(read(struck, { brake: true, fold: 1.5, held: 0.3, pumps: 1 }).slice(0, 2), [CUES.release, CUES.release]);
+  // Stalled: let go, while the brake is still held.
+  const stalled = Object.assign(createFlight({ x: 0, y: 5000, z: 0 }), { stall: 1.5 });
+  assert.deepEqual(read(stalled, { brake: true, fold: 0, held: 0, pumps: 0 }).slice(0, 2), [CUES.release, CUES.release]);
+  assert.deepEqual(read(stalled, { brake: false, fold: 0, held: 0, pumps: 0 }).slice(0, 2), [CUES.none, CUES.none]);
+});
+
+test('round a loop it says ▲ as the pilot comes over the wing and ▼ as they come under it, foretold as each moment comes, and nothing once it falls out', () => {
+  const watch = createSwingWatch().state;
+  const gauge = {};
+  const read = (over) => {
+    swingGauge(Object.assign(createFlight({ x: 0, y: 5000, z: 0 }), { loop: 1, loopRate: 3, loopNext: Math.PI }, over), watch, true, STEP, gauge);
+    return [gauge.mode, gauge.cue, gauge.coming];
+  };
+  // Its top 0.17 s off, within the window: ▲, lit.
+  assert.deepEqual(read({ loopAngle: Math.PI - 0.5 }), ['loop', CUES.up, CUES.up]);
+  // 0.67 s off: foretold, its ring closing.
+  assert.deepEqual(read({ loopAngle: Math.PI - 2 }), ['loop', CUES.none, CUES.up]);
+  assert.ok(gauge.soon > 0.5 && gauge.soon < 1, `soon ${gauge.soon}`);
+  assert.equal(gauge.on, true);
+  // Its top just gone unpressed: still ▲, for a press that is late. Its bottom coming: ▼.
+  assert.deepEqual(read({ loopAngle: Math.PI + 0.2, loopNext: 2 * Math.PI, loopLate: true }), ['loop', CUES.up, CUES.up]);
+  assert.deepEqual(read({ loopAngle: 2 * Math.PI - 0.4, loopNext: 2 * Math.PI }), ['loop', CUES.down, CUES.down]);
+  // Pressed for already, or falling out: nothing to do. Falling out, the ring goes, for the bank it
+  // swings back with and any fold it ended in.
+  assert.deepEqual(read({ loopAngle: Math.PI - 0.5, loopEarly: true }).slice(1), [CUES.none, CUES.none]);
+  assert.deepEqual(read({ loopAngle: Math.PI - 0.5, loopOut: true }).slice(1), [CUES.none, CUES.none]);
+  assert.notEqual(gauge.mode, 'loop');
+  assert.equal(gauge.round, 0);
+  // The dot goes round its ring: a quarter turn the way a right loop goes.
+  read({ loopAngle: Math.PI / 2 });
+  assert.equal(gauge.round, LOOP_STEPS / 4);
+  read({ loop: -1, loopAngle: Math.PI / 2 });
+  assert.equal(gauge.round, -LOOP_STEPS / 4);
+});
+
+test('the red ends warn only where the wing can fold, as it comes near the tuck or the tip, and never round a loop', () => {
+  const near = (folds, pitch, bank = 0, loop = 0) => swingGauge(Object.assign(createFlight(), { pitch, bank, loop, loopAngle: Math.abs(bank) }), createSwingWatch().state, folds, STEP, {});
   assert.equal(near(true, -(PITCH.line - 2 * DEG)).near, true);
   assert.equal(near(true, -(PITCH.line - 10 * DEG)).near, false);
   assert.equal(near(true, 0, ROLL.limit - 2 * DEG).near, true);
+  assert.equal(near(true, 0, ROLL.limit - 2 * DEG, 1).near, false);
   assert.equal(near(false, -(PITCH.line - 2 * DEG)).near, false);
   assert.deepEqual([near(false, 0).safe, near(true, 0).safe], [true, false]);
 });

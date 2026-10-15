@@ -24,10 +24,12 @@ test('the share line reads exactly as expected, lights in judging order and the 
   const result = { ...run([lift(250, 0), lift(500, 0b010), lift(750, 0), lift(0, 0b011)], { total: 512.5 }), peak: 1412.4 };
   assert.equal(
     shareText(result, { label: 'Daily #12', link: 'https://example.test/good-lift/daily#vs=AQGv' }),
-    'Good Lift · Daily #12 · 512.5 kg · 1,412 m · ⚪⚪⚪ ⚪🔴⚪ ⚪⚪⚪ 🔴🔴⚪\nhttps://example.test/good-lift/daily#vs=AQGv',
+    'Good Lift · Daily #12 · 513 pts · 512.5 kg · 1,412 m · ⚪⚪⚪ ⚪🔴⚪ ⚪⚪⚪ 🔴🔴⚪\nhttps://example.test/good-lift/daily#vs=AQGv',
   );
   // A run that never reached a line has no lights to show, and no dangling dot for them.
-  assert.equal(shareText({ ...run([], { total: 0 }), peak: 80 }, { label: 'Sky 7f3a2c1e' }), 'Good Lift · Sky 7f3a2c1e · 0 kg · 80 m');
+  assert.equal(shareText({ ...run([], { total: 0 }), peak: 80 }, { label: 'Sky 7f3a2c1e' }), 'Good Lift · Sky 7f3a2c1e · 0 pts · 0 kg · 80 m');
+  // Style multiplies the score the line leads with; the kilograms stay what was lifted.
+  assert.match(shareText({ ...result, style: 260 }, { label: 'Daily #12' }), /^Good Lift · Daily #12 · 646 pts · 512\.5 kg · /);
   assert.equal(lightsOf(0b101), '🔴⚪🔴');
   assert.deepEqual(JUDGES, ['contact', 'control', 'airspace']);
 });
@@ -67,6 +69,7 @@ test('the trick feats ask five linked wingovers or a pitched swing caught 45° a
   assert.deepEqual(tricked({}), ['opener']);
   assert.equal(trickSaid({ wingovers: 5, pitch: 47 }), 'tricks: wingover ×5 · pitched 47°');
   assert.equal(trickSaid({ wingovers: 3, pitch: 0 }), 'tricks: wingover ×3');
+  assert.equal(trickSaid({ wingovers: 4, loops: 3, pitch: 0 }), 'tricks: wingover ×4 · loop ×3');
   assert.equal(trickSaid({ wingovers: 0, pitch: 0 }), '');
   assert.equal(trickSaid({}), '');
 });
@@ -83,9 +86,9 @@ test('once the bots land, the sheet says the medals lightest first, which one TS
   ];
   assert.equal(
     medalsSaid({ medals, medal: 'silver', fresh: ['beat-the-bot'] }),
-    'Medals: bronze 145 kg, silver 237.5 kg, set by TST, gold 1,240 kg. Yours: silver. New feat: Beat the bot.',
+    'Medals: bronze 145 pts, silver 238 pts, set by TST, gold 1,240 pts. Yours: silver. New feat: Beat the bot.',
   );
-  assert.equal(medalsSaid({ medals, medal: '' }), 'Medals: bronze 145 kg, silver 237.5 kg, set by TST, gold 1,240 kg. Yours: none.');
+  assert.equal(medalsSaid({ medals, medal: '' }), 'Medals: bronze 145 pts, silver 238 pts, set by TST, gold 1,240 pts. Yours: none.');
 });
 
 test('the barogram stays in its frame, with the fog under the flight and the horn where it sounded', () => {

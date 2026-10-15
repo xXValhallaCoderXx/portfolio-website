@@ -58,7 +58,8 @@ export const BOT_FLIGHT = Object.freeze({
 
 /**
  * The sky's medals, from what its bots came to (`scores`, in BOTS order): bronze the lightest of
- * them, gold the heaviest, ranked the way the board ranks runs (total, then peak). Each is
+ * them, gold the heaviest, ranked the way the board ranks runs (the score, then the peak; a bot flies
+ * no tricks, so its score is its total). Each is
  * { medal, total, peak, by }, `by` being the id of the bot that set it, lightest first.
  */
 export function medalsOf(scores) {
@@ -84,14 +85,14 @@ export function medalFor(run, scores) {
 
 /**
  * The run still to be held up against TST once the bots land on its sky, after the sheet of `run`
- * ({ seed, reason, total, peak }) has opened: `run` itself if the sky judged it and it outranks the
+ * ({ seed, reason, total, style, peak }) has opened: `run` itself if the sky judged it and it outranks the
  * run `owed` before on the same sky, or else that one. What was owed on another sky is dropped:
  * its sheet was put away before the bots landed, and they have left that sky. null for none.
  */
 export function owing(owed, run) {
   const before = owed?.seed === run.seed ? owed : null;
   const judged = run.reason === 'fog' || run.reason === 'landed';
-  return judged && (!before || outranks(run, before)) ? { seed: run.seed, total: run.total, peak: run.peak } : before;
+  return judged && (!before || outranks(run, before)) ? { seed: run.seed, total: run.total, style: run.style ?? 0, peak: run.peak } : before;
 }
 
 /**

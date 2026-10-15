@@ -1363,3 +1363,124 @@
 .good-lift-swatch.standard {
   background: linear-gradient(90deg, #8fa7bd, #c6d6e4 50%, #8fa7bd);
 }
+
+/* ---- the briefing a device's first runs open with: the game and its keys told over the gate, the
+   flight waiting there until any key or tap. In the controls panel's look, and scrolling inside
+   itself on a short screen. The keys shown are the device's own. */
+
+.fj-brief {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 4;
+  width: min(460px, calc(100vw - 32px));
+  max-height: calc(100svh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 18px 16px;
+  border: 1px solid var(--rule);
+  background: var(--panel);
+  font-size: 13px;
+  line-height: 1.5;
+  transform: translate(-50%, -50%);
+}
+
+.fj-brief small {
+  display: block;
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+.fj-brief b {
+  display: block;
+  margin: 2px 0 8px;
+  color: var(--cyan);
+  font-size: 20px;
+  letter-spacing: 0.3em;
+}
+
+.fj-brief p {
+  margin: 0 0 10px;
+}
+
+.fj-brief dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0 0 12px;
+}
+
+.fj-brief dt {
+  color: var(--blue);
+}
+
+.fj-brief dd {
+  margin: 0;
+  color: var(--dim);
+}
+
+.fj-brief em {
+  display: block;
+  color: #fff;
+  font-style: normal;
+  letter-spacing: 0.12em;
+  text-align: center;
+  animation: fj-brief-go 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes fj-brief-go {
+  to {
+    opacity: 0.45;
+  }
+}
+
+.fj-brief .fj-brief-touch {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .fj-brief .fj-brief-keys {
+    display: none;
+  }
+
+  .fj-brief dl.fj-brief-touch {
+    display: grid;
+  }
+
+  .fj-brief span.fj-brief-touch {
+    display: inline;
+  }
+}
+
+/* A phone on its side has little height: the card closes up so it seldom needs scrolling, and when
+   it does a drag scrolls it (only a tap on it flies, game.js). */
+@media (max-height: 420px) {
+  .fj-brief {
+    width: min(560px, calc(100vw - 32px));
+    max-height: calc(100svh - 16px);
+    padding: 10px 16px 12px;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .fj-brief b {
+    margin: 0 0 6px;
+    font-size: 17px;
+  }
+
+  .fj-brief p,
+  .fj-brief dl {
+    margin-bottom: 8px;
+  }
+
+  .fj-brief dl {
+    gap: 2px 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fj-brief em {
+    animation: none;
+  }
+}

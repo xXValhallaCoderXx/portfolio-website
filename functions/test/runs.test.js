@@ -92,7 +92,7 @@ function service({ limits = OPEN, store = fakeStore() } = {}) {
 
 // The row a run's own replay makes, as the board should show it, taken at `at`.
 async function rowOf({ sheet, log }, at = NOW) {
-  return { who: log.initials, byname: bynameFor(sheet), total: sheet.total, peak: sheet.peak, red: sheet.lifts.map((lift) => lift.red), at, id: await runId(log) };
+  return { who: log.initials, byname: bynameFor(sheet), total: sheet.total, style: sheet.stats.style, peak: sheet.peak, red: sheet.lifts.map((lift) => lift.red), at, id: await runId(log) };
 }
 
 test('a named run of the Daily Sky goes on the world board as its replay came to, and anyone may see it but not the device it came from', async () => {
@@ -213,7 +213,7 @@ test('a run whose log claims another total or peak than its replay comes to is t
 
 // Rows for the board's own rules: a run's numbers as any run might have them, its id and its device.
 const hex = (n, digits) => n.toString(16).padStart(digits, '0');
-const row = (n, total, peak, at = NOW + n) => ({ who: 'ABC', byname: '', total, peak, red: [0], at, id: hex(n, WORLD_BOARD.id) });
+const row = (n, total, peak, at = NOW + n, style = 0) => ({ who: 'ABC', byname: '', total, style, peak, red: [0], at, id: hex(n, WORLD_BOARD.id) });
 const device = (n) => hex(n, 32);
 const ON = { version: SIM_VERSION, day: DAY, at: NOW };
 // Puts each [row, device] on a board in turn, as runs come in, and returns the last reply and the board.
@@ -226,6 +226,18 @@ function board(entries, doc = null) {
   }
   return { doc, result, rows: readDay(doc).rows };
 }
+
+test('the board ranks by the score, the total lifted by the style, as the page does: lighter but with style can outrank heavier', () => {
+  // 100 kg with 260 style is 126 points, over 120 kg of none; 100 kg with 200 style ties 120 kg, and
+  // the higher peak goes first.
+  const { rows } = board([
+    [row(1, 120, 500), device(1)],
+    [row(2, 100, 500, NOW + 2, 260), device(2)],
+    [row(3, 100, 600, NOW + 3, 200), device(3)],
+  ]);
+  assert.deepEqual(rows.map((each) => each.id), [2, 3, 1].map((n) => hex(n, WORLD_BOARD.id)));
+  assert.deepEqual(rows.map((each) => each.style), [260, 200, 0]);
+});
 
 test('the board ranks by total, then by peak, then by which run came first', () => {
   const { rows, result } = board([

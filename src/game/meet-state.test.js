@@ -242,9 +242,11 @@ test('a full circle the flock\'s way in a hunted thermal loads 2.5 kg, and the l
   const rep = circle(1, 12);
   assert.ok(rep.circles > 1.3 && rep.circles < 2, `${rep.circles.toFixed(2)} circles`);
   assert.deepEqual([rep.state.reps, rep.state.bar, rep.state.count], [1, MEET.rep, 4]);
-  // The launch column has no flock to turn with.
+  // The launch column has no flock to turn with. (Flown hands up, its pilot does not catch the surge
+  // the column's edge sends it, and the front collapse holds its heading a moment: a circle and a
+  // little more.)
   const column = circle(0, 12);
-  assert.ok(column.circles > 1.3);
+  assert.ok(column.circles > 1, `${column.circles.toFixed(2)} circles`);
   assert.deepEqual([column.state.reps, column.state.bar], [0, 0]);
   // Against the flock nothing counts, and turning back against it undoes a circle in progress:
   // 6 s the flock's way, half a second against (enough to pass `against`) and 6.5 s the flock's

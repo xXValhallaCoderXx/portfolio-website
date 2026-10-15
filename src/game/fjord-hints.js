@@ -1,7 +1,7 @@
 // The one line of advice free flight over the fjord shows, chosen from what is happening right now.
 // As in a run (cloudbase-hints.js) the first rule that matches wins, a stalled wing is said
 // first, and a line is held long enough to read (hints.js). Kept free of game code so it can be tested.
-import { pitchHint, stallHint, surgeHint, wingoverHint } from './hints.js';
+import { LOOPABLE_HINT, LOOP_HINT, pitchHint, stallHint, surgeHint, wingoverHint } from './hints.js';
 
 // Over a ring this many metres up, there is still a way to come down to it worth saying.
 export const RING_HIGH = 28;
@@ -23,6 +23,8 @@ export const LOW = 45;
  *   surging           the wing is surging toward its line and wants catching
  *   safeTricks        a trick is being flown for the first time this flight
  *   pitching          a swing is being pitched bigger, and `wingover` a wingover is under way
+ *   loopable          a wingover under way banked steep enough to loop from, and `looping` a loop
+ *                     going round
  */
 export function fjordHint(facts) {
   const stalled = stallHint(facts.stall, facts.stallSide);
@@ -38,7 +40,9 @@ export function fjordHint(facts) {
   // first trick of a flight told it is safe here, then how to fly it.
   if (facts.surging) return surgeHint(facts.touch);
   if (facts.safeTricks) return 'safe here — past the arch, tricks can fold';
+  if (facts.looping) return LOOP_HINT;
   if (facts.pitching) return pitchHint(facts.touch);
+  if (facts.loopable) return LOOPABLE_HINT;
   if (facts.wingover) return wingoverHint(facts.touch);
   if (facts.agl < LOW && facts.sinking) return 'low — steer for the amber sparks to climb';
   if (facts.airtime < 9) return 'lit pillars are places to land · amber sparks are rising air';

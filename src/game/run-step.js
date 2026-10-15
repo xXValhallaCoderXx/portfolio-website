@@ -40,7 +40,7 @@ const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 export function createRunWorld({
   sky,
   g = createFlight({ x: CLOUD_GATE.x, y: CLOUD_GATE.y, z: CLOUD_GATE.z }),
-  controls = { turn: 0, brake: false, bar: false, ears: false, locked: false, harsh: false, linger: true, swing: false, folds: false, safe: false, climb: null },
+  controls = { turn: 0, brake: false, bar: false, ears: false, locked: false, harsh: false, linger: true, swing: false, folds: false, steered: false, safe: false, climb: null },
   air = { lift: 0, sink: 0, windX: 0, windZ: 0, calm: false, rough: 0, clearance: Infinity },
   bells = null,
   meet = null,
@@ -125,20 +125,25 @@ export function stepRun(world, intent, dt = RUN.step) {
   // A folded wing keeps hooking round the way it was going and takes no steering; past the edge
   // of the sky the wind turns the glider back in, whatever else is happening.
   const collapsed = pilot.collapse > 0;
+  const outside = !sky.inside(g.pos);
   let turn = intent.turn;
   if (collapsed) turn = world.hook * FLIGHT.turn.hook;
-  if (!sky.inside(g.pos)) turn = clamp(wrapAngle(Math.atan2(CLOUD_ZONE.x - g.pos.x, -(CLOUD_ZONE.z - g.pos.z)) - g.yaw) * 2, -1, 1);
+  if (outside) turn = clamp(wrapAngle(Math.atan2(CLOUD_ZONE.x - g.pos.x, -(CLOUD_ZONE.z - g.pos.z)) - g.yaw) * 2, -1, 1);
   controls.turn = turn;
   controls.brake = !!intent.brake;
   controls.bar = !!intent.bar;
   controls.ears = !!intent.ears;
   controls.locked = collapsed;
-  // A stall only costs real height above the ravens' grace height; low over the launch hill it
-  // is the gentle kind, and a surge there swings out and back without tucking. The wing swings
-  // over the pilot everywhere in a run. The brake lingers light here, for circling tight.
+  // A stall only costs real height above the ravens' grace height; low over the launch hill it is
+  // the gentle kind. The wing swings over the pilot everywhere in a run, and can fold itself
+  // anywhere in one: a surge left uncaught collapses it, a wingover too steep tips it; but not while
+  // the wind past the edge of the sky turns it back in, which is the sky's doing, not the pilot's,
+  // and turns it even round a loop. The brake lingers light here, for circling tight, eased every
+  // couple of seconds.
   controls.harsh = g.pos.y >= CLOUD_RAVENS.grace;
   controls.swing = true;
-  controls.folds = controls.harsh;
+  controls.folds = !outside;
+  controls.steered = outside;
   controls.linger = true;
   controls.safe = false;
   controls.climb = null;

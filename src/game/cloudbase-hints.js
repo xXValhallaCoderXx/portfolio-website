@@ -3,7 +3,7 @@
 // can be read and tested by itself. What every hint shares with free flight (the width of a line,
 // how long it stays up, the lines for a stalled wing) is in hints.js, and passed on from here.
 import { BRAKE } from './flight.js';
-import { pitchHint, stallHint, surgeHint, wingoverHint } from './hints.js';
+import { LOOPABLE_HINT, LOOP_HINT, pitchHint, stallHint, surgeHint, wingoverHint } from './hints.js';
 import { MEET } from './meet-state.js';
 import { BLESSING, RUNE } from './meet-runes.js';
 
@@ -23,7 +23,7 @@ export const CENTRE_RIDES = 6;
 // taught on the way to the first this many, and the moment to turn is said for `TURN_SAID` seconds.
 export const ENTRY_RIDES = 4;
 export const TURN_SAID = 1.5;
-// A front tuck is explained for this many seconds after it, for the next surge, and a tip collapse
+// A front collapse is explained for this many seconds after it opens, for the next surge, and a tip collapse
 // for the next wingover.
 export const TUCK_SAID = 2;
 export const TIP_SAID = 2;
@@ -81,7 +81,8 @@ export const BLESSED = Object.freeze([
  *   touch         the on-screen buttons are in use
  *   harsh         a stall here is the costly kind, with a surge to catch as it ends
  *   surging       the wing is surging toward a fold and wants catching (1), or not (0)
- *   tucked        seconds since the wing last tucked for a surge left uncaught
+ *   tuck          seconds left of a front collapse, the wing's own for a surge left uncaught
+ *   tucked        seconds since the last one opened
  *   tipped        seconds since a wingover too steep last tipped the wing
  *   nearTuck      a surge is within a few degrees of tucking the wing, and `nearTip` a wingover of
  *                 tipping it (only where it can fold)
@@ -90,8 +91,9 @@ export const BLESSED = Object.freeze([
  *   inHand        what the set of tricks in hand is, once it has two in it ('' for none), and
  *                 `inHandPitch` whether the last of them was a pitched swing
  *   pitching      a swing is being pitched bigger, and `wingover` a wingover is under way
+ *   loopable      a wingover under way banked steep enough to loop from, and `looping` a loop
+ *                 going round
  *   tricksLanded  sets of tricks landed this run
- *   unscored      seconds since a trick was flown below the grace height, where style does not count
  *   ears          how far the big ears are in, 0 to 1; `earsUsed` they have been pulled this run,
  *                 and `earsClimb` seconds they have been held fully in climbing air
  *   approach      a hunted thermal's flock is ahead to fly into, turning `approachDir`
@@ -123,17 +125,17 @@ export const BLESSED = Object.freeze([
  *   shallow       the last circle in this thermal was off its core: a rep, but not to depth
  */
 export function cloudbaseHint(facts) {
-  // A folded wing is pumped open: the brake held a moment and let go, twice.
-  if (facts.collapse > 0) {
-    const pump = facts.touch ? 'hold ▼, let go, twice' : 'hold brake, let go, twice';
-    return facts.bellHit ? `kettlebell hit — ${pump}` : `raven strike — ${pump}`;
-  }
+  // A folded wing is pumped open: the brake held a moment and let go, twice. A front collapse, the
+  // wing's own, the same.
+  const pump = facts.touch ? 'hold ▼, let go, twice' : 'hold brake, let go, twice';
+  if (facts.collapse > 0) return facts.bellHit ? `kettlebell hit — ${pump}` : `raven strike — ${pump}`;
+  if (facts.tuck > 0) return `front collapse — ${pump}`;
   const stalled = stallHint(facts.stall, facts.stallSide, facts.harsh);
   if (stalled) return stalled;
-  // A surge is caught with the brake held till the wing swings back, and the tuck it ends in says
-  // so for the next one.
+  // A surge is caught with the brake held till the wing swings back, and the collapse it ends in
+  // says so for the next one.
   if (facts.surging > 0) return surgeHint(facts.touch);
-  if (facts.tucked < TUCK_SAID) return facts.touch ? 'front tuck — hold ▼ as the wing surges' : 'front tuck — brake as the wing surges';
+  if (facts.tucked < TUCK_SAID) return facts.touch ? 'front collapse — hold ▼ as the wing surges' : 'front collapse — brake as the wing surges';
   if (facts.tipped < TIP_SAID) return 'tip collapse — stop swapping short of red';
   // Near a fold a trick can come to, said before it does.
   if (facts.nearTuck) return facts.touch ? 'too far ahead — ▼ sooner' : 'too far ahead — brake it sooner';
@@ -175,12 +177,14 @@ export function cloudbaseHint(facts) {
   if (facts.blessed < 3 && BLESSED[facts.blessing]) return BLESSED[facts.blessing];
   if (facts.depth < 2.5) return `depth — centred circle, ${MEET.deep * times} kg on the bar`;
   // A set of tricks landed or lost, and while one is being flown, how to land it, and how to fly it
-  // until two have landed. Below the grace height, once, that it counts for nothing there.
+  // until two have landed.
   if (facts.landed < TRICK_SAID) return `landed — ${facts.trick}, +${facts.points.toLocaleString('en-GB')} style`;
   if (facts.lost < LOST_SAID) return 'trick lost — level out to land the next';
-  if (facts.unscored < TRICK_SAID) return 'style counts from 260 m — climb first';
+  // Round a loop: its keys, until two sets have landed, and then how to roll out of it.
+  if (facts.looping) return facts.tricksLanded < TRICKS_TAUGHT || !facts.inHand ? LOOP_HINT : `${facts.inHand} — skip a press to roll out`;
   if (facts.inHand) return facts.inHandPitch ? `${facts.inHand} — brake the surge to land it` : `${facts.inHand} — level out to land it`;
   if (facts.pitching && facts.tricksLanded < TRICKS_TAUGHT) return pitchHint(facts.touch);
+  if (facts.loopable && facts.tricksLanded < TRICKS_TAUGHT) return LOOPABLE_HINT;
   if (facts.wingover && facts.tricksLanded < TRICKS_TAUGHT) return wingoverHint(facts.touch);
   if (facts.elapsed < 8) return 'circle in the amber column to climb';
   if (facts.fogClearance < FOG_NEAR) return facts.lift > 3 ? 'fog closing in — keep climbing' : 'fog closing in — fly to the ravens';
@@ -219,7 +223,7 @@ export function cloudbaseHint(facts) {
   // pilot who climbs well hears for the rest of the run.
   if (facts.front && facts.fronts <= FRONTS_TAUGHT) return 'plates on the gust — widen your circle';
   // Then how the brake helps: held light it tightens the circle, and left on it goes deep.
-  if (facts.thermal > 0 && facts.rides <= 4) return facts.touch ? 'ease off ▼ once a circle or it goes deep' : 'ease the brake each circle or it goes deep';
+  if (facts.thermal > 0 && facts.rides <= 4) return facts.touch ? 'ease off ▼ every 2 s or it goes deep' : 'ease the brake every 2 s or it goes deep';
   if (facts.thermal === 0) return 'circling ravens mark the next lift';
   if (facts.searching > 4) return 'ravens circle where air rises — fly there';
   return '';

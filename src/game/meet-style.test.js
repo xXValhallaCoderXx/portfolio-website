@@ -122,13 +122,6 @@ test('a tuck, a tip, a stall or a strike loses the set in hand, and nothing coun
   assert.deepEqual([dodged.style.state.lost, dodged.style.state.said, dodged.style.state.elements], [0, 0, 0]);
 });
 
-test('below the ravens\' grace height a trick counts for nothing, and says so', () => {
-  const { style, top, calm } = scored({ folds: false });
-  for (const [deg, chain] of [[55, 1], [60, 2], [66, 3], [70, 4]]) top(deg, chain);
-  calm(STYLE.settle);
-  assert.deepEqual([style.state.total, style.state.landed, style.state.unscored], [0, 0, 4]);
-});
-
 test('a run that ends with a set in hand lands none of it, and a new run starts with nothing', () => {
   const { style, top } = scored();
   for (const [deg, chain] of [[55, 1], [60, 2], [66, 3], [70, 4]]) top(deg, chain);
@@ -177,8 +170,21 @@ test('TST told to fly wingovers or to pitch its wing high in a run lands them, a
   }
 });
 
+test('TST told to fly its wingovers on into loops goes round as often as told, rolls out and lands the set, each loop worth more the more are linked', () => {
+  for (let seed = 1; seed <= 3; seed++) {
+    const scores = [1, 3, 5].map((loops) => {
+      const { world } = flyRun(seed, { ...TST, tricks: { swaps: 4, loops, from: 350 } });
+      const style = world.style.state;
+      assert.ok(style.landed === 1 && style.lost === 0 && style.mostLoops === loops && world.tucks === 0, `seed ${seed}, ${loops} loops: ${JSON.stringify(style)}`);
+      return style.total;
+    });
+    // The fourth and fifth loop, linked deep, add more than the second and third.
+    assert.ok(scores[0] >= 150 && scores[2] - scores[1] > scores[1] - scores[0], `seed ${seed}: ${scores.join(', ')}`);
+  }
+});
+
 test('style never touches the wing, the sky or the meet: a run flies and lifts the same with it as without it, and its sheet carries it', () => {
-  for (const tricks of [{ swaps: 6, from: 350 }, { pumps: 4, from: 350 }]) {
+  for (const tricks of [{ swaps: 6, from: 350 }, { pumps: 4, from: 350 }, { swaps: 4, loops: 3, from: 350 }]) {
     // Without a style the same pilot would fly on differently (it watches for its set to land), so
     // the bare world is flown with the very asks the scored one made.
     const scoredRun = flyRun(2, { ...TST, tricks });

@@ -278,15 +278,15 @@ test('a run flown in between stops the bots, who fly on from where they were for
 test('the run held up against TST is the best the sky judged since the bots were last asked for that sky, whichever sheet it was on', () => {
   const sheet = (seed, total, peak = 1000, reason = 'fog') => ({ seed, reason, total, peak, at: total });
   // A judged run is owed; a run its pilot ended is not, and leaves the one owed before it be.
-  assert.deepEqual(owing(null, sheet(7, 200)), { seed: 7, total: 200, peak: 1000 });
+  assert.deepEqual(owing(null, sheet(7, 200)), { seed: 7, total: 200, style: 0, peak: 1000 });
   assert.equal(owing(null, sheet(7, 900, 2000, 'quit')), null);
   assert.deepEqual(owing({ seed: 7, total: 200, peak: 1000 }, sheet(7, 900, 2000, 'quit')), { seed: 7, total: 200, peak: 1000 });
   // On the same sky the better run is owed, a touchdown judged as the fog judges.
   assert.deepEqual(owing({ seed: 7, total: 200, peak: 1000 }, sheet(7, 150)), { seed: 7, total: 200, peak: 1000 });
-  assert.deepEqual(owing({ seed: 7, total: 200, peak: 1000 }, sheet(7, 200, 1001, 'landed')), { seed: 7, total: 200, peak: 1001 });
+  assert.deepEqual(owing({ seed: 7, total: 200, peak: 1000 }, sheet(7, 200, 1001, 'landed')), { seed: 7, total: 200, style: 0, peak: 1001 });
   // Another sky's run is forgotten: the bots have left its sky.
   assert.equal(owing({ seed: 7, total: 200, peak: 1000 }, sheet(8, 0, 0, 'quit')), null);
-  assert.deepEqual(owing({ seed: 7, total: 900, peak: 1000 }, sheet(8, 100)), { seed: 8, total: 100, peak: 1000 });
+  assert.deepEqual(owing({ seed: 7, total: 900, peak: 1000 }, sheet(8, 100)), { seed: 8, total: 100, style: 0, peak: 1000 });
 });
 
 test('what the bots tell a sheet names its run and sky, the medals, the one it took, TST for the board, and whether it beat TST', () => {

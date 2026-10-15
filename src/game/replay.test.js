@@ -82,9 +82,9 @@ function flyLive(seed, bitsOf, { quit = Infinity, meta = {} } = {}) {
 // Twenty-four runs, each flown live by one kind of pilot: arrows held, both arrows for the bar on
 // a phone, arrows tapped, a pilot who ends the run part of the way up, one who lands, the collector
 // at the keys after the trails' plates and its runes' stones, and one holding its line on the light
-// brake that takes Algiz's stone (on sky 266, where it also sprays its bar, has a bell glance off,
-// meets the Beast and catches a plate under a cloud and the fog's bait: under SIM_VERSION 3 it was
-// sky 19, and 35 when the wing first dived).
+// brake that takes Algiz's stone (on sky 98, where it also sprays its bar, has a bell glance off,
+// meets the Beast and catches a plate under a cloud and the fog's bait: it was sky 266 until the
+// brake's linger came down to 1.8 s, under SIM_VERSION 3 sky 19, and 35 when the wing first dived).
 const SKIES = [
   ...[1, 2, 3, 4, 5, 6].map((seed) => ({ seed, pilot: () => keys() })),
   ...[7, 8, 9, 10].map((seed) => ({ seed, pilot: () => keys({ brake: 'eased' }, { hold: 6, chord: true }), meta: { touch: true, initials: 'TST' } })),
@@ -92,7 +92,7 @@ const SKIES = [
   ...[14, 15, 16, 17].map((seed) => ({ seed, pilot: () => keys({ brake: 'eased' }), quit: (14 + 23 * (seed - 14)) * 60 + seed })),
   ...[18, 19, 20].map((seed) => ({ seed, pilot: lander })),
   ...[21, 22, 23].map((seed) => ({ seed, pilot: () => keys({ ...TST, collect: true }, { hold: 6 }) })),
-  { seed: 266, pilot: () => keys({ brake: 'eased', gates: [RUNE.algiz] }) },
+  { seed: 98, pilot: () => keys({ brake: 'eased', gates: [RUNE.algiz] }) },
 ];
 
 // Each run flown live once, for every test here to replay.
@@ -126,10 +126,10 @@ test('a recorded run replays to the same total, peak, lights, ending and barogra
   // Between them the runs did everything a run can: each ending, lines judged white and red, under
   // the horn too, reps and trails, kettlebells that hit, came close, missed and glanced off Algiz,
   // the Beast among them, plates met on the wind, plates sprayed off the bar and caught back, and
-  // rune gates taken. (On these skies under SIM_VERSION 4: 18 fog, 4 quit and 2 landed; 85 lines,
-  // 47 lifts with a red light and 15 under the horn; 75 reps and 90 trails; 73 kettlebells, 32 of
-  // them hits, 12 close calls, 27 dodged and 1 glanced off, and 12 Beasts; 13 plates off gust fronts;
-  // 53 plates sprayed and 18 caught back; and 3 gates. Under 3: 78 lines, 45 red and 14 under the
+  // rune gates taken. (On these skies under SIM_VERSION 4: 17 fog, 4 quit and 3 landed; 84 lines,
+  // 44 lifts with a red light and 14 under the horn; 79 reps and 92 trails; 71 kettlebells, 31 of
+  // them hits, 10 close calls, 27 dodged and 1 glanced off, and 13 Beasts; 13 plates off gust fronts;
+  // 73 plates sprayed and 23 caught back; and 1 gate. Under 3: 78 lines, 45 red and 14 under the
   // horn; 68 reps and 86 trails; 67 kettlebells, 33 hits, 6 close, 27 dodged, 1 glanced and 9
   // Beasts; 14 off the fronts; 65 sprayed and 22 back; 1 gate.)
   for (const [what, count] of Object.entries(seen)) assert.ok(count > 0, `${count} ${what}`);
@@ -267,7 +267,7 @@ function arraysMadeBy(run) {
 
 test('a replay makes no array or buffer as it flies, only the sheet it hands back at the end, whatever the run met', () => {
   assert.ok(arraysMadeBy(() => new Float32Array(1)) > 0 && arraysMadeBy(() => {}) === 0, 'the watch sees what it should');
-  // A pilot at the keys, and the one that takes Algiz's stone on sky 266, which sprays its bar, has
+  // A pilot at the keys, and the one that takes Algiz's stone on sky 98, which sprays its bar, has
   // a bell glance off, meets the Beast and catches a plate under a cloud and the fog's bait. What
   // the engine boxes for itself is not watched here: replaying the same keys with each version's
   // modules loaded fresh, it comes to some 213 bytes a step with the kettlebells and 173 without,
@@ -286,6 +286,6 @@ test('a replay makes no array or buffer as it flies, only the sheet it hands bac
     assert.deepEqual(replay.result, sheet);
   }
   const { stats } = algiz.sheet;
-  assert.deepEqual([algiz.seed, stats.gates, stats.runes, stats.glanced, stats.thunder, stats.bait], [266, 1, 1 << (RUNE.algiz - 1), 1, 1, 1]);
+  assert.deepEqual([algiz.seed, stats.gates, stats.runes, stats.glanced, stats.thunder, stats.bait], [98, 1, 1 << (RUNE.algiz - 1), 1, 1, 1]);
   assert.ok(stats.scattered > 0 && stats.beast !== BELL_RESULT.pending);
 });

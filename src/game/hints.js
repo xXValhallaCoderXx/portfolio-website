@@ -23,12 +23,15 @@ export const surgeHint = (touch) => (touch ? 'wing surging — hold ▼ till it 
 /** How to pitch a swing bigger, and how to fly wingovers, said the way the pilot's hands work. */
 export const pitchHint = (touch) => (touch ? 'pitch: ▼ when ahead, let go when behind' : 'pitch: brake when ahead, let go when behind');
 export const wingoverHint = (touch) => (touch ? 'wingover — ◀ ▶ in turn as each swing peaks' : 'wingover — swap turns as each swing peaks');
+// A wingover steep enough to loop from, and a loop going round: the same keys on every device.
+export const LOOPABLE_HINT = 'big wingover — ▼ at its top to loop over';
+export const LOOP_HINT = 'loop — ▲ over the wing, ▼ under it';
 
 // The wing has folded, stalled, surged or tucked, is about to stall, a kettlebell is coming or the
 // pilot is in cloud: these cannot wait their turn. Nor can Gjallarhorn, said with its call for its
 // three seconds, nor the moment to turn into a core, which is gone within the second.
 export const URGENT = Object.freeze([
-  'raven strike', 'kettlebell', 'stalled', 'spin', 'wing surging', 'front tuck', 'tip collapse', 'too far ahead', 'too steep', 'brake in the red',
+  'raven strike', 'kettlebell', 'stalled', 'spin', 'wing surging', 'front collapse', 'tip collapse', 'too far ahead', 'too steep', 'brake in the red',
   'gust coming', 'brake going deep',
   'in cloud', 'Gjallarhorn', 'turn ▶ now', 'turn ◀ now',
 ]);

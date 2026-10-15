@@ -10,7 +10,7 @@ const KEY = boardKey(1, DAY);
 
 // A whole row: a run flown here, unnamed and with no byname, every light white. Each run on a day
 // needs its own log.
-const row = (fields = {}) => ({ who: '', via: 'me', total: 100, peak: 600, red: [0, 0, 0], at: 1_000, log: 'AQ', byname: '', ...fields });
+const row = (fields = {}) => ({ who: '', via: 'me', total: 100, style: 0, peak: 600, red: [0, 0, 0], at: 1_000, log: 'AQ', byname: '', ...fields });
 const logs = (board, key = KEY) => rowsFor(board, key).map(({ log }) => log);
 
 test('the ten best runs of a day are kept, best total first, then peak, then the earliest', () => {
@@ -89,10 +89,15 @@ test('old days are forgotten, under any version of the rules', () => {
 });
 
 test('a damaged row is dropped rather than repaired', () => {
-  const good = { who: 'REN', via: 'link', total: 512.5, peak: 1412, red: [0, 2, 0, 7], at: 1_791_000_000_000, log: 'AQGv-_x9', byname: 'unstruck' };
+  const good = { who: 'REN', via: 'link', total: 512.5, style: 260, peak: 1412, red: [0, 2, 0, 7], at: 1_791_000_000_000, log: 'AQGv-_x9', byname: 'unstruck' };
   assert.deepEqual(normalizeRow(good), good);
   assert.notEqual(normalizeRow(good).red, good.red);
   assert.deepEqual(normalizeRow({ ...good, total: 0, peak: 0, red: [], at: 0, who: '', via: 'me', byname: '' }), { ...good, total: 0, peak: 0, red: [], at: 0, who: '', via: 'me', byname: '' });
+  // A row from before style was carried has none; a style that is not a whole number of 5 points is damage.
+  const older = { ...good };
+  delete older.style;
+  assert.deepEqual(normalizeRow(older), { ...good, style: 0 });
+  for (const style of [-5, 7, 2.5, '260']) assert.equal(normalizeRow({ ...good, style }), null, String(style));
   assert.deepEqual(normalizeRow({ ...good, ghost: true }), good, 'anything else in a row is left behind');
   assert.equal(normalizeRow({ ...good, log: 'A'.repeat(ROW.log - 1) }).log.length, ROW.log - 1);
   assert.deepEqual(normalizeRow({ ...good, red: Array(ROW.lights).fill(7) }).red, Array(ROW.lights).fill(7));
@@ -205,7 +210,7 @@ test('the bot to beat is pinned among the day\'s runs where it ranks, a run that
   assert.deepEqual(order(withBot(rows, { ...tst, total: 0, peak: 0 })), ['a', 'b', 'c', 'd', 'bot']);
   assert.deepEqual(order(withBot([], tst)), ['bot']);
   const pinned = shown[2];
-  assert.deepEqual(pinned, { who: 'TST', via: 'bot', total: 200, peak: 600, red: [0, 1], at: 0, log: '', byname: '' });
+  assert.deepEqual(pinned, { who: 'TST', via: 'bot', total: 200, style: 0, peak: 600, red: [0, 1], at: 0, log: '', byname: '' });
   assert.notEqual(pinned.red, tst.red);
   // A new list of the caller's own rows, which are left as they were.
   assert.equal(rows.length, 4);
@@ -221,7 +226,7 @@ test('what a day\'s bots came to is kept whole or not at all', () => {
   const kept = {
     key: boardKey(2, DAY),
     seed: 0xfeedbeef,
-    scores: [{ total: 237.5, peak: 1040, red: [0, 0, 1, 0] }, { total: 145, peak: 1152, red: [] }, { total: 360, peak: 1300, red: [0, 0, 0, 0, 0] }],
+    scores: [{ total: 237.5, style: 0, peak: 1040, red: [0, 0, 1, 0] }, { total: 145, style: 0, peak: 1152, red: [] }, { total: 360, style: 0, peak: 1300, red: [0, 0, 0, 0, 0] }],
   };
   assert.deepEqual(normalizeBots(kept), kept);
   assert.deepEqual(normalizeBots({ ...kept, extra: 1, scores: kept.scores.map((score) => ({ ...score, reason: 'fog' })) }), kept, 'anything else is left behind');
@@ -247,7 +252,7 @@ test('what a day\'s bots came to is kept whole or not at all', () => {
   for (const [why, fields] of Object.entries(damaged)) assert.equal(normalizeBots({ ...kept, ...fields }), null, why);
   for (const nonsense of [null, undefined, 'bots', 7, [], [kept]]) assert.equal(normalizeBots(nonsense), null);
   // A score is held to a row's rules, and a key read for its day as the board reads it.
-  assert.deepEqual(normalizeScore({ total: 2.5, peak: 0, red: [7], who: 'X' }), { total: 2.5, peak: 0, red: [7] });
+  assert.deepEqual(normalizeScore({ total: 2.5, peak: 0, red: [7], who: 'X' }), { total: 2.5, style: 0, peak: 0, red: [7] });
   assert.equal(normalizeScore({ total: 2.5, peak: 0, red: Array(ROW.lights + 1).fill(0) }), null);
   assert.equal(boardDay(boardKey(2, DAY)), DAY);
   for (const key of ['2:day', '02:20756', '__proto__', 7]) assert.ok(Number.isNaN(boardDay(key)), String(key));

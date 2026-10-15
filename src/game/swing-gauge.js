@@ -2,10 +2,10 @@
 // act. A dot moves across a cross, up for the wing ahead and down for behind, left and right with
 // the bank; ticks mark the bands a trick is judged in (swing-watch.js BANDS), and red ends the folds
 // the wing can come to, where it can come to them. As a moment comes the dot lights up with what to
-// do: brake to catch a surge, press or let go to pitch the swing bigger, swap the turn as a
-// wingover tops out. Worked out here without a page, so it can be tested, and kept small: the fjord
-// shows it too.
-import { BRAKE, PITCH, ROLL, pitchPeak, pitchPhase, rollPhase } from './flight.js';
+// do: pump a folded wing open, let go of a stalled one, brake to catch a surge, press or let go to
+// pitch the swing bigger, swap the turn as a wingover tops out. Worked out here without a page, so
+// it can be tested, and kept small: the fjord shows it too.
+import { BRAKE, LOOP, PITCH, ROLL, TUCK, pitchPeak, pitchPhase, rollPhase } from './flight.js';
 import { BANDS, WATCH, bandOf } from './swing-watch.js';
 
 const DEG = Math.PI / 180;
@@ -26,8 +26,19 @@ export const SWING_GAUGE = Object.freeze({
   fresh: 3, stalling: 0.6, lead: 0.8,
 });
 
-// The moments to act, as the gauge names them.
-export const CUES = Object.freeze({ none: 0, catch: 1, press: 2, release: 3, left: 4, right: 5 });
+// The moments to act, as the gauge names them. `pump` is holding the brake into a fold, and
+// `release` letting go: of a pump held long enough, of a stalled wing, or of a pitched swing's brake.
+// `up` and `down` are a loop's: ▲ as the pilot passes over the wing, ▼ as they pass under it.
+export const CUES = Object.freeze({ none: 0, catch: 1, press: 2, release: 3, left: 4, right: 5, pump: 6, up: 7, down: 8 });
+
+// Steps of the loop's ring the dot goes round in.
+export const LOOP_STEPS = 72;
+
+// The pilot's hands, for a gauge that has none to read: no brake, and no struck wing.
+const NO_HANDS = Object.freeze({ brake: false, fold: 0, held: 0, pumps: 0 });
+// Half a step of the run's clock (1/60 s): a pump's hold counts from there, as run-step.js and
+// stepFlight count it.
+const HALF_STEP = 1 / 120;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 // Where a wingover's swing will next top out, and the swing fore and aft next turn, worked out once
@@ -37,17 +48,24 @@ const swing = { toPeak: Infinity, peak: 0, toLine: Infinity };
 
 /**
  * Writes what the gauge shows into `out` for the wing `g` (flight.js) and its watch's `watch`
- * (swing-watch.js state), `folds` saying whether the wing can fold here (high in a run) and `dt`
- * the seconds since the last frame:
+ * (swing-watch.js state), `folds` saying whether the wing can fold here (in a run) and `dt` the
+ * seconds since the last frame. `hands` are the pilot's: `brake`, the brake key held, and for a wing
+ * a raven or a kettlebell has folded, `fold`, the seconds of it left, `held`, how long the brake has
+ * been held into it, and `pumps`, the pumps it has had (run-step.js); a front collapse's are the
+ * wing's own (`g.tuck`, `tuckHeld`, `tuckPumps`).
  *
  *   on      whether it is up
- *   mode    'pitch' or 'roll': the arm that counts
+ *   mode    'pitch' or 'roll': the arm that counts; or 'loop', round a loop, its ring
+ *   round   round a loop, where the pilot is on its ring, in LOOP_STEPS from under the wing the
+ *           way it goes
+ *   loopable a wingover topping out steep enough that the brake there would loop it
  *   x, y    where the dot is: x from -100 (all the way left) to 100, y from -67 (as far ahead as the
  *           arm reaches) to 33 (as far behind), in whole steps
  *   cue     the moment to act (CUES), shown on the gauge
  *   coming  the moment to act that is coming or has come (CUES), and `soon`, how soon: from 1, `lead`
  *           seconds off or more, to 0 as it comes, and 0 while it lasts; for a catch, how soon the
- *           surge peaks, which it must be braked before. Only this is told aloud and by the wing:
+ *           surge peaks, which it must be braked before; for a pump, how much of its hold is left.
+ *           Only this is told aloud and by the wing:
  *           a swap only once a wingover is under way, so the first top after a reversal, which a
  *           circle turned the other way or a dodge makes too, shows its swap on the gauge alone
  *   band    the band the last peak reached, 0 to 4, while it is fresh
@@ -57,7 +75,7 @@ const swing = { toPeak: Infinity, peak: 0, toLine: Infinity };
  *
  * Keeps nothing of its own but `out`, and makes nothing.
  */
-export function swingGauge(g, watch, folds, dt, out) {
+export function swingGauge(g, watch, folds, dt, out, hands = NO_HANDS) {
   const G = SWING_GAUGE;
   const now = watch.clock;
   const peak = pitchPeak(g);
@@ -68,8 +86,40 @@ export function swingGauge(g, watch, folds, dt, out) {
   let cue = CUES.none;
   let coming = CUES.none;
   let soon = 1;
-  // Nothing to do but fly out of a fold or a stall, or let go of a brake near the stall.
-  if (g.tuck === 0 && g.tip === 0 && g.stall === 0 && g.stallLoad < SWING_GAUGE.stalling) {
+  const struck = hands.fold > 0;
+  if (struck || g.tuck > 0) {
+    // A folded wing, struck or collapsed, is pumped open: the brake held, its ring filling as the
+    // hold does, then let go, while pumps are left.
+    const held = struck ? hands.held : g.tuckHeld;
+    if ((struck ? hands.pumps : g.tuckPumps) < TUCK.pump.most) {
+      cue = coming = held >= TUCK.pump.hold - HALF_STEP ? CUES.release : CUES.pump;
+      soon = cue === CUES.pump ? 1 - held / TUCK.pump.hold : 0;
+    }
+  } else if (g.stall > 0 && hands.brake) {
+    // Stalled with the brake still held: the wing flies again sooner let go, and a costly stall's
+    // brake bites again only once it has been.
+    cue = coming = CUES.release;
+    soon = 0;
+  } else if (g.loop !== 0) {
+    // Round a loop: ▲ as the pilot passes over the wing, ▼ as they pass under it, foretold as each
+    // moment comes and lit from LOOP.window before it to as long after, until it has its press.
+    // Falling out, nothing.
+    if (!g.loopOut) {
+      const topNext = Math.round(g.loopNext / Math.PI) % 2 === 1;
+      const toNext = g.loopRate > 0 ? (g.loopNext - g.loopAngle) / g.loopRate : Infinity;
+      if (g.loopLate) {
+        cue = coming = topNext ? CUES.down : CUES.up;
+        soon = 0;
+      } else if (!g.loopEarly && toNext <= LOOP.window) {
+        cue = coming = topNext ? CUES.up : CUES.down;
+        soon = 0;
+      } else if (!g.loopEarly && toNext <= G.lead) {
+        coming = topNext ? CUES.up : CUES.down;
+        soon = toNext / G.lead;
+      }
+    }
+  } else if (g.tip === 0 && g.stall === 0 && g.stallLoad < SWING_GAUGE.stalling) {
+    // Nothing to do but fly out of a tip, or let go of a brake near the stall.
     if (g.pitchRate < 0 && peak < -WATCH.surge) {
       // A surge heading for the fold: brake till it swings back, and before it peaks.
       cue = coming = CUES.catch;
@@ -112,10 +162,18 @@ export function swingGauge(g, watch, folds, dt, out) {
       }
     }
   }
-  const asked = coming !== CUES.none || Math.abs(peak) >= G.pitch || Math.abs(g.bank) >= G.bank;
+  const asked = coming !== CUES.none || Math.abs(peak) >= G.pitch || Math.abs(g.bank) >= G.bank || g.loop !== 0;
   out.left = asked ? G.linger : Math.max(0, (out.left ?? 0) - dt);
   out.on = out.left > 0;
-  out.mode = rolling ? 'roll' : 'pitch';
+  // Round a loop its ring; falling out of one, the bank it swings back with, and any fold it ended in.
+  const round = g.loop !== 0 && !g.loopOut;
+  out.mode = round ? 'loop' : rolling ? 'roll' : 'pitch';
+  // Round a loop, the dot's step on its ring, the way the loop goes, from under the wing.
+  const turned = round ? g.loopAngle / (2 * Math.PI) : 0;
+  out.round = (((Math.round((turned - Math.floor(turned)) * LOOP_STEPS) % LOOP_STEPS) + LOOP_STEPS) % LOOP_STEPS) * (round && g.loop < 0 ? -1 : 1);
+  // A wingover under way, topping out past a loop's entry or just back from it: the brake there
+  // loops it (flight.js `steepLeft`).
+  out.loopable = g.loop === 0 && rolling && watch.linking === 1 && (g.steepLeft > 0 || Math.abs(phase.bank) >= LOOP.entry);
   out.cue = cue;
   out.coming = coming;
   out.soon = soon;
@@ -125,6 +183,6 @@ export function swingGauge(g, watch, folds, dt, out) {
   else out.band = now - watch.frontAt <= G.fresh ? bandOf(BANDS.pitch, watch.front) : 0;
   const line = PITCH.line + PITCH.held * clamp(g.brake / BRAKE.light, 0, 1);
   out.safe = !folds;
-  out.near = !!folds && ((g.pitch < 0 && -g.pitch >= line - G.near) || Math.abs(g.bank) >= ROLL.limit - G.near);
+  out.near = !!folds && g.loop === 0 && ((g.pitch < 0 && -g.pitch >= line - G.near) || Math.abs(g.bank) >= ROLL.limit - G.near);
   return out;
 }

@@ -1317,7 +1317,7 @@ function circleInGust({ heading = null, at = 0, late = 0, seconds = 40 }) {
     const want = bearing - thermal.dir * (Math.PI / 2) * clamp(1 - (distance - 9) / 28, 0, 1.4);
     controls.turn = clamp(wrapAngle(want - g.yaw) * 2.5, -1, 1);
     deepFor = g.brake >= BRAKE.shelf ? deepFor + STEP : 0;
-    if (tap <= 0 && (late > 0 ? deepFor >= late : g.brake > BRAKE.shelf - 0.01)) tap = 0.2;
+    if (tap <= 0 && (late > 0 ? deepFor >= late : g.brake > BRAKE.shelf - 0.01)) tap = BRAKE.ease;
     tap -= STEP;
     controls.brake = tap <= 0 && g.stall === 0;
     run.sample(g.pos, g.yaw, forces);
@@ -1356,11 +1356,12 @@ test('a circle on the light brake rides out every gust, and a brake left deep is
   assert.ok(quiet.furthest < 17, `the quiet circle strayed ${quiet.furthest.toFixed(1)} m from the core`);
   const carried = Math.max(...light.map((trial) => trial.furthest));
   assert.ok(carried > quiet.furthest + 10 && carried < 60, `the worst gust carried the pilot ${carried.toFixed(0)} m from the core`);
-  // Left deep for three seconds a circle, the wing gets close without any gust and never there.
-  const control = circleInGust({ late: 3 });
+  // Left deep for 1.2 s a circle, the wing loads without any gust and never stalls; a tenth of a
+  // second longer and it would by itself, so quickly does a deep brake stall in a turn.
+  const control = circleInGust({ late: 1.2 });
   assert.equal(control.stalled, false);
-  assert.ok(control.load > 0.4 && control.load < 0.95, `the load reached ${control.load.toFixed(2)} with no gust`);
-  const deep = trials(3);
+  assert.ok(control.load > 0.25 && control.load < 0.95, `the load reached ${control.load.toFixed(2)} with no gust`);
+  const deep = trials(1.2);
   const share = (group) => group.filter((trial) => trial.stalled).length / Math.max(1, group.length);
   const onTail = deep.filter((trial) => trial.offTail < Math.PI / 3);
   const onNose = deep.filter((trial) => trial.offTail > (2 * Math.PI) / 3);

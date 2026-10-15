@@ -774,10 +774,11 @@ const MOTION = {
   earFold: 1.25,
   earTuck: 0.3,
   earsRaise: 0.7,
-  // A tuck folds the leading edge `tuckDrop` down and `tuckBack` back under the wing, in the wing
-  // file's units, leaving the trailing edge where it was.
-  tuckDrop: 0.05,
-  tuckBack: 0.03,
+  // A front collapse (a tuck) folds the leading edge `tuckDrop` down and `tuckBack` back under the
+  // wing, in the wing file's units, leaving the trailing edge where it was: deep enough to read at
+  // a glance from behind, as a collapse is.
+  tuckDrop: 0.08,
+  tuckBack: 0.05,
   // The flight's own swing over the pilot (flight.js's pitch), drawn as it is: eased at `swingEase`
   // a second, so a strike or the autopilot taking it over is never a snap, and stopped at `swingMost`
   // either way. The pilot hangs under the lines through `hang` of it.

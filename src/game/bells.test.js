@@ -800,9 +800,11 @@ test('the same seed throws the same kettlebells, a used set throws them as a new
 test('what each kettlebell is comes from the seed and its number alone, however the run is flown', () => {
   // The same sky flown two ways: the throws come at other moments and at other aims, but the k-th
   // bell's side, weight and drawn gap are the same, and so is the first one's wait.
-  // Sky 9, where both meet four bells (under SIM_VERSION 3 it was sky 17, where one of them now
-  // meets the Beast second: thrown further out, as every Beast is, it would not be the same bell).
-  const ways = [createReferencePilot(), dodger(0.4, { brake: 'eased' })].map((pilot) => flyThrows(runWorld(9), pilot));
+  // Sky 11, where both meet three bells or more before either meets the Beast (it was sky 9 until the
+  // brake's linger came down to 1.8 s, when one of them met the Beast fourth; under SIM_VERSION 3 it
+  // was sky 17, where one of them met it second: thrown further out, as every Beast is, it would not
+  // be the same bell).
+  const ways = [createReferencePilot(), dodger(0.4, { brake: 'eased' })].map((pilot) => flyThrows(runWorld(11), pilot));
   const [one, other] = ways;
   const count = Math.min(one.throws.length, other.throws.length);
   assert.ok(count >= 3);

@@ -1,5 +1,5 @@
-// Good Lift's own progress on this device, under its own localStorage key. It holds the best total
-// and peak, the tonnage and the runs ever flown, the feats earned, the Daily Sky streak, the
+// Good Lift's own progress on this device, under its own localStorage key. It holds the best total,
+// peak and score (score.js), the tonnage and the runs ever flown, the feats earned, the Daily Sky streak, the
 // initials the board shows and whether they are the pilot's opt-in to the world board, the board
 // itself (board.js), and what the bots (meet-bots.js) came to on the last Daily Sky they flew, so
 // that sky flown again that day never flies them again. The kit those earn is worked out from it
@@ -19,6 +19,7 @@
 // that), never with a store read long before, or a run recorded in another tab is written over.
 import { addRow, boardKey, emptyBoard, normalizeBoard, normalizeBots, pruneBoard } from './board.js';
 import { dayOf } from './good-lift-address.js';
+import { scoreOf, styleOf } from './score.js';
 import { SIM_VERSION } from './sim-version.js';
 import { isBlocked } from './meet-initials.js';
 import { normalizeKit } from './wing-kit.js';
@@ -132,7 +133,7 @@ export function kitSheet(store, worn, fresh = []) {
  * null: one day's, as a later day's takes its place.
  */
 export function emptyStore() {
-  return { v: 1, best: { total: 0, peak: 0 }, tonnage: 0, runs: 0, feats: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: emptyBoard(), bots: null };
+  return { v: 1, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: emptyBoard(), bots: null };
 }
 
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -163,6 +164,11 @@ export function normalizeStore(raw) {
     if (!isRecord(raw)) return store;
     if (isAmount(raw.best?.total)) store.best.total = raw.best.total;
     if (isAmount(raw.best?.peak)) store.best.peak = raw.best.peak;
+    // The best score, kept since style came to multiply the total (score.js). It is never less than
+    // the best total's own score, which a run with no style scores: a store from before style
+    // counted, with none kept, starts from that, so its next run is no new best for a total it has
+    // already beaten.
+    store.best.score = Math.max(isAmount(raw.best?.score) ? raw.best.score : 0, scoreOf({ total: store.best.total }));
     if (isAmount(raw.tonnage)) store.tonnage = raw.tonnage;
     if (isCount(raw.runs)) store.runs = raw.runs;
     if (Array.isArray(raw.feats)) store.feats = [...new Set(raw.feats.filter((id) => FEAT_IDS.includes(id)))];
@@ -328,9 +334,11 @@ export function recordRun(store, run, { version = SIM_VERSION, now = Date.now() 
   // A number no run can bank counts as nothing, so a bad one cannot spoil the bests or the tonnage.
   const total = isAmount(run.total) ? run.total : 0;
   const peak = isAmount(run.peak) ? run.peak : 0;
+  const style = styleOf(run.style);
   const today = dayOf(now);
   store.best.total = Math.max(store.best.total, total);
   store.best.peak = Math.max(store.best.peak, peak);
+  store.best.score = Math.max(store.best.score, scoreOf({ total, style }));
   store.tonnage += total;
   store.runs += 1;
   pruneBoard(store.board, today);
@@ -351,7 +359,7 @@ export function recordRun(store, run, { version = SIM_VERSION, now = Date.now() 
     if (daily.streak >= TRAINING_BLOCK) earned.add('training-block');
     const judged = run.reason === 'fog' || run.reason === 'landed';
     if (judged && typeof run.log === 'string' && run.log !== '') {
-      const row = { who: store.initials, via: 'me', total: run.total, peak: run.peak, red: run.red, at: run.at, log: run.log, byname: run.byname };
+      const row = { who: store.initials, via: 'me', total: run.total, style, peak: run.peak, red: run.red, at: run.at, log: run.log, byname: run.byname };
       ({ rank, best } = addRow(store.board, boardKey(version, run.day), row));
     }
   }

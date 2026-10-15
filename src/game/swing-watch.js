@@ -1,10 +1,10 @@
 // What the wing's swings are doing, watched step by step: the peaks of its swing fore and aft and
-// of its wingovers, a swing being pumped bigger, a surge caught, the pilot's hands on time, and
-// anything that breaks a trick off. It only reads the flight (flight.js), so a run, its replays and the fjord
+// of its wingovers, its loops, a swing being pumped bigger, a surge caught, the pilot's hands on
+// time, and anything that breaks a trick off. It only reads the flight (flight.js), so a run, its replays and the fjord
 // all see the same tricks; a run's style is scored from it (meet-style.js), and the swing gauge
 // (swing-gauge.js) and the sounds read it. Kept small and free of page code: the fjord carries it.
 
-import { PITCH, pitchPeak } from './flight.js';
+import { LOOP, pitchPeak } from './flight.js';
 
 // The bands a trick is judged in, in degrees: a pitched swing by how far ahead it peaks, a wingover
 // by how far it banks at its top. Each top band sits a few degrees under the fold the swing risks
@@ -20,7 +20,7 @@ export const BANDS = Object.freeze({ pitch: Object.freeze([20, 30, 40, 50]), rol
 //   grow     a forward peak still builds the swing if it falls short of the last by no more than this
 //   surge    a swing going forward toward a peak this far ahead or further is a surge heading for
 //            the fold (the tuck line less a margin to brake in): braked as it goes, it is caught as
-//            it turns back short of the line
+//            it turns back short of the line, and the brake there loops no wingover (LOOP.surge)
 //   calm     under this much pitch, and `still` rad/s of it, the swing fore and aft is calm
 //   top      a wingover's top counts from this much bank
 //   gap      wingovers' tops on alternate sides this close together are one chain of them
@@ -36,7 +36,7 @@ export const BANDS = Object.freeze({ pitch: Object.freeze([20, 30, 40, 50]), rol
 //   within   a swing is being pumped while its last forward peak and the pilot's last press or
 //            let-go of the brake are no older than this
 export const WATCH = Object.freeze({
-  half: 0.26, grow: 0.05, surge: PITCH.line - 0.21, calm: 0.175, still: 0.3, within: 4, top: 0.7, gap: 2, level: 0.785,
+  half: 0.26, grow: 0.05, surge: LOOP.surge, calm: 0.175, still: 0.3, within: 4, top: 0.7, gap: 2, level: 0.785,
   wing: 0.759, early: 0.12, late: 0.2, pump: 0.45, pumped: 0.35, straight: 1,
 });
 
@@ -71,7 +71,10 @@ export function bandOf(bands, angle) {
  *   calm                  seconds the wing has been level and calm
  *   timed, timedKind      the pilot's hands on time so far, and the last: 1 a press just after a
  *   timedAt               pitched swing peaked ahead, 2 a let-go just after it peaked behind, 3 a
- *                         wingover's turn swapped at its top; and when
+ *                         wingover's turn swapped at its top, 4 a loop's ▲ over the wing, 5 its ▼
+ *                         under it; and when
+ *   looping, loops        1 while a loop goes round, and loops gone all the way round so far
+ *   loopAt                when the last one did
  *   swappedAt, wingTop    when the turn was last reversed, and whether the last top was a
  *                         wingover's (1) or not (0)
  *   linking               1 while a wingover is under way: its last top not long gone, and the
@@ -82,6 +85,7 @@ export function createSwingWatch() {
     clock: 0, fronts: 0, backs: 0, front: 0, back: 0, frontAt: -Infinity, backAt: -Infinity, building: 0,
     catches: 0, caughtPeak: 0, caughtAt: -Infinity, brakeAt: -Infinity, pumping: 0, tops: 0, top: 0, topSide: 0, topAt: -Infinity, chain: 0, breaks: 0, broke: 0, calm: 0,
     timed: 0, timedKind: 0, timedAt: -Infinity, swappedAt: -Infinity, wingTop: 0, linking: 0,
+    looping: 0, loops: 0, loopAt: -Infinity,
   };
   // The swing as it was last step, to find its turns, whether a surge is heading for the fold, and
   // whether something has the wing.
@@ -98,11 +102,16 @@ export function createSwingWatch() {
   let swappedTo = 0;
   let braked = false;
   let topAnswered = true;
+  // The wing's own counts of its loops and of their presses on time, as last seen.
+  let loopsSeen = 0;
+  let loopTimedSeen = 0;
 
   function reset() {
     state.clock = state.fronts = state.backs = state.front = state.back = state.building = 0;
     state.catches = state.caughtPeak = state.tops = state.top = state.topSide = state.chain = state.breaks = state.broke = state.calm = 0;
-    state.timed = state.timedKind = state.wingTop = state.linking = state.pumping = 0;
+    state.timed = state.timedKind = state.wingTop = state.linking = state.pumping = state.looping = state.loops = 0;
+    state.loopAt = -Infinity;
+    loopsSeen = loopTimedSeen = 0;
     state.frontAt = state.backAt = state.topAt = state.timedAt = state.swappedAt = state.caughtAt = state.brakeAt = -Infinity;
     pitchRate = bankWas = rolling = way = straightFor = swappedTo = 0;
     broken = braked = surging = false;
@@ -186,6 +195,27 @@ export function createSwingWatch() {
     const built = state.building >= 2 && state.front >= WATCH.pumped && state.caughtAt < state.frontAt;
     state.pumping = built && now - state.frontAt <= WATCH.within && now - state.brakeAt <= WATCH.within ? 1 : 0;
 
+    // A loop going round: each time round, and each press on time, as the wing counts them (a flight
+    // begun again counts from nought). Round a loop the bank wraps, and its tops are none of a
+    // wingover's: the watch of the bank starts over once it is back.
+    state.looping = g.loop !== 0 ? 1 : 0;
+    if (g.loops < loopsSeen) loopsSeen = g.loops;
+    if (g.loopTimed < loopTimedSeen) loopTimedSeen = g.loopTimed;
+    if (g.loops > loopsSeen) {
+      state.loops += g.loops - loopsSeen;
+      state.loopAt = now;
+      loopsSeen = g.loops;
+    }
+    if (g.loopTimed > loopTimedSeen) {
+      onTime(controls?.bar ? 4 : 5, now);
+      loopTimedSeen = g.loopTimed;
+    }
+    if (state.looping) {
+      rolling = 0;
+      bankWas = g.bank;
+      state.calm = 0;
+      return;
+    }
     // A wingover tops out where the bank stops rolling.
     const rate = g.bank - bankWas;
     if (rolling * rate < 0 && Math.abs(g.bank) >= WATCH.top) {

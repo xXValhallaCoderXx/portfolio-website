@@ -112,6 +112,41 @@ export function createTouchEars() {
 }
 
 /**
+ * Round a loop the brake and the bar are its presses, ▼ under the wing and ▲ over it, and a log can
+ * only write the two together as the ears, with the brake over the bar (inputBits): ▲ pressed with
+ * ▼ still held would never be seen, and ▼ let go with ▲ held would read as a press of ▲. So round
+ * one only the newer of the two held is flown, and letting go of it hands nothing back to the other
+ * until that is pressed again. `step(brake, bar, round)` takes whether each is held this fixed step
+ * and whether a loop is going round, and says which to fly ({ brake, bar }, one object reused);
+ * outside a loop both are flown as they are held.
+ */
+export function createLoopKeys() {
+  // The newer of the two still held ('brake', 'bar' or null), and each as it was held last step.
+  let newest = null;
+  let brakeWas = false;
+  let barWas = false;
+  const out = { brake: false, bar: false };
+
+  function reset() {
+    newest = null;
+    brakeWas = barWas = false;
+  }
+
+  function step(brake, bar, round) {
+    if (brake && !brakeWas) newest = 'brake';
+    else if (bar && !barWas) newest = 'bar';
+    if ((newest === 'brake' && !brake) || (newest === 'bar' && !bar)) newest = null;
+    brakeWas = brake;
+    barWas = bar;
+    out.brake = round ? newest === 'brake' : brake;
+    out.bar = round ? newest === 'bar' : bar;
+    return out;
+  }
+
+  return { reset, step };
+}
+
+/**
  * Records a run's controls step by step, into one buffer made here and reused for every run.
  *
  *   reset()      starts a new log

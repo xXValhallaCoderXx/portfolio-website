@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { INPUT, LOG_FORMAT, MAX_LINK, MAX_STEPS, TOUCH_EARS, createRecorder, createTouchEars, decodeLog, encodeLog, inputBits } from './recorder.js';
+import { INPUT, LOG_FORMAT, MAX_LINK, MAX_STEPS, TOUCH_EARS, createLoopKeys, createRecorder, createTouchEars, decodeLog, encodeLog, inputBits } from './recorder.js';
 import { createRunWorld, finishRun, startRun, stepBits } from './run-step.js';
 import { createReferencePilot } from './pilots.js';
 import { createCloudbaseRun } from './cloudbase-state.js';
@@ -244,6 +244,25 @@ test('both ▼ pressed together are the ears, held in by either, and a change of
   assert.deepEqual(TOUCH_EARS, { together: 12, hold: 6 });
   assert.ok(Object.isFrozen(TOUCH_EARS));
 });
+test('round a loop only the newer of the brake and the bar held is flown, and letting it go hands nothing back to the other', () => {
+  const keys = createLoopKeys();
+  // [brake held, bar held, a loop going round] a step at a time, and what is flown.
+  const flown = (steps) => steps.map(([brake, bar, round = true]) => {
+    const { brake: b, bar: r } = keys.step(brake, bar, round);
+    return `${b ? 'v' : '-'}${r ? '^' : '-'}`;
+  });
+  // ▼ held from the entry and ▲ pressed over the wing: ▲, as it goes down, and ▼ let go after it
+  // is nothing.
+  assert.deepEqual(flown([[true, false], [true, false], [true, true], [true, true], [false, true], [false, false]]), ['v-', 'v-', '-^', '-^', '-^', '--']);
+  // ▲ held from the top and ▼ tapped under the wing: ▼, and let go, nothing, not a press of ▲.
+  assert.deepEqual(flown([[false, true], [true, true], [true, true], [false, true], [false, true], [false, false]]), ['-^', 'v-', 'v-', '--', '--', '--']);
+  // The one passed over is flown again once it is let go and pressed again.
+  assert.deepEqual(flown([[false, true], [true, true], [false, true], [false, false], [false, true]]), ['-^', 'v-', '--', '--', '-^']);
+  // Outside a loop both are flown as they are held, and the log's own order settles them.
+  keys.reset();
+  assert.deepEqual(flown([[true, true, false], [false, true, false], [true, false, false]]), ['v^', '-^', 'v-']);
+});
+
 test('a whole run fits in under two kilobytes of link', () => {
   const pilots = {
     'arrows held 150 ms': () => keys({}, { hold: 9 }),

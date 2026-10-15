@@ -6,6 +6,7 @@ import { createCloudbaseRun } from './cloudbase-state.js';
 import { MEET, PLATE_KIND, createMeet } from './meet-state.js';
 import { GATE, GATES, RUNE } from './meet-runes.js';
 import { BELL_RESULT, createBells } from './bells.js';
+import { BRAKE } from './flight.js';
 
 // Good Lift's balance: whole runs with Hrungnir's kettlebells and the meet, flown by the reference
 // pilots (pilots.js) through the one step every run takes, the way a player meets them. The rules
@@ -213,13 +214,15 @@ test('the Beast, warned and aimed 3.2 s ahead, is dodged by changing what you do
   const dodger = beasts('dodger');
   const holding = beasts('holding');
   // On these seeds TST meets the Beast on 31 skies and it never hits, as only one of its 133 other
-  // bells does; the pilot holding its line meets it on 28 of 40 and is hit by 17 (and by 106 of its
-  // 132 others; 14 of 35 on 1001 to 1040). Under SIM_VERSION 3, TST met it on 31 and the line-holder
-  // on 6 of 12, hit by 5: since the wing surges, a line-holder who catches it changes its line now
-  // and then.
+  // bells does; the pilot holding its line meets it on 29 of 40 and is hit by 13 (14 of 31 on 1001 to
+  // 1040). Its misses are of two kinds: by a metre or two, or by 12 to 49 m, where the Beast came
+  // just as the pilot left a lift that was dying, as at 1,000 m it often is. Before the brake's
+  // linger came down to 1.8 s it was hit by 17 of 28 (14 of 35 on 1001 to 1040); under SIM_VERSION 3,
+  // TST met it on 31 and the line-holder on 6 of 12, hit by 5: since the wing surges, a line-holder
+  // who catches it changes its line now and then.
   assert.ok(dodger.thrown >= 25, `${dodger.thrown} Beasts thrown at TST`);
   assert.ok(dodger.hits / dodger.thrown <= dodger.others + 0.05, `${dodger.hits} of ${dodger.thrown} Beasts hit TST`);
-  assert.ok(holding.thrown >= 3 && holding.hits / holding.thrown >= 0.5, `${holding.hits} of ${holding.thrown} Beasts hit the pilot holding its line`);
+  assert.ok(holding.thrown >= 3 && holding.hits / holding.thrown >= 0.4, `${holding.hits} of ${holding.thrown} Beasts hit the pilot holding its line`);
 });
 
 test('TST, dodging every kettlebell thrown at it, still passes 1,000 m on three skies in four', () => {
@@ -410,6 +413,7 @@ test('a collector flies at the next plate still ahead on a laid trail, on the ba
 
 test('told to recover, a pilot circles back through its own sprayed plates on the light brake, the nearest first, while the collector leaves every plate off the trail to chance', () => {
   let circling = 0;
+  let eased = 0;
   const ignored = { [PLATE_KIND.wind]: 0, [PLATE_KIND.thunder]: 0, [PLATE_KIND.bait]: 0, [PLATE_KIND.scatter]: 0 };
   for (const seed of firstSkies(8)) {
     const world = meetWorld(seed);
@@ -429,9 +433,12 @@ test('told to recover, a pilot circles back through its own sprayed plates on th
       const { pos, yaw } = world.g;
       const sprayed = loose.filter((plate) => plate.live && plate.kind === PLATE_KIND.scatter);
       if (sprayed.length) {
-        // Its own plates first: the nearest, turning hard on the light brake.
+        // Its own plates first: the nearest, turning hard on the light brake, eased as it is about to
+        // go deep.
         const nearest = sprayed.reduce((a, b) => (Math.hypot(a.x - pos.x, a.z - pos.z) <= Math.hypot(b.x - pos.x, b.z - pos.z) ? a : b));
-        assert.deepEqual(intent, { turn: clamp(wrapAngle(Math.atan2(nearest.x - pos.x, -(nearest.z - pos.z)) - yaw) * 2.5, -1, 1), brake: true, bar: false });
+        assert.deepEqual({ ...intent, brake: true }, { turn: clamp(wrapAngle(Math.atan2(nearest.x - pos.x, -(nearest.z - pos.z)) - yaw) * 2.5, -1, 1), brake: true, bar: false });
+        if (!intent.brake) eased += 1;
+        assert.ok(world.g.brake < BRAKE.shelf + 0.01, `the brake never deep: ${world.g.brake}`);
         circling += 1;
       } else {
         assert.deepEqual(intent, collecting);
@@ -447,6 +454,7 @@ test('told to recover, a pilot circles back through its own sprayed plates on th
   // in the sky for 99 s, under clouds for 56 s, over the fog for 13 s and its own sprayed ones for
   // 38 s.
   assert.ok(circling >= 30 * 60, `${(circling / 60).toFixed(1)} s circling back`);
+  assert.ok(eased > 0 && eased < circling / 10, `eased ${eased} steps of ${circling}`);
   assert.ok(Object.values(ignored).every((steps) => steps >= 10 * 60), JSON.stringify(ignored));
 });
 
