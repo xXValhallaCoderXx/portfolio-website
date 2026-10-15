@@ -48,10 +48,11 @@ export const LIMITS = Object.freeze({
 });
 
 // Where the page is served from, the only origins whose pages may read what the function says
-// (index.js hands these to the function's CORS): the site, its Firebase preview channels, and a
-// development server on this machine. Anyone may still ask it without a browser; nothing here is
+// (index.js hands these to the function's CORS): the site at its own domain and at Firebase's
+// addresses, its Firebase preview channels, and a development server on this machine. Anyone may still ask it without a browser; nothing here is
 // secret, and a run is judged the same whoever sends it.
 export const ORIGINS = Object.freeze([
+  'https://renate-gouveia.dev',
   'https://renate-gouveia-portfolio.web.app',
   'https://renate-gouveia-portfolio.firebaseapp.com',
   /^https:\/\/renate-gouveia-portfolio--[a-z0-9-]+\.web\.app$/,

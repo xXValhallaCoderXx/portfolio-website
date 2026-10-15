@@ -518,11 +518,12 @@ test('a day\'s document is read cleanly: damaged rows, a run or a device twice a
 test('only the site, its preview channels and a development server here may read what the function says', () => {
   const allowed = (origin) => ORIGINS.some((each) => (typeof each === 'string' ? each === origin : each.test(origin)));
   for (const origin of [
-    'https://renate-gouveia-portfolio.web.app', 'https://renate-gouveia-portfolio.firebaseapp.com',
+    'https://renate-gouveia.dev', 'https://renate-gouveia-portfolio.web.app', 'https://renate-gouveia-portfolio.firebaseapp.com',
     'https://renate-gouveia-portfolio--prelaunch-a1b2c3d4.web.app', 'http://localhost:5173', 'http://127.0.0.1:4173', 'http://localhost',
   ]) assert.equal(allowed(origin), true, origin);
   for (const origin of [
     'https://example.com', 'http://renate-gouveia-portfolio.web.app', 'https://renate-gouveia-portfolio.web.app.example.com',
+    'http://renate-gouveia.dev', 'https://renate-gouveia.dev.example.com', 'https://evil-renate-gouveia.dev',
     'https://evil--renate-gouveia-portfolio.web.app', 'http://localhost.example.com', 'https://localhost:5173', 'null', '',
   ]) assert.equal(allowed(origin), false, origin);
 });

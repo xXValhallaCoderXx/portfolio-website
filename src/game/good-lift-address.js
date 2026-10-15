@@ -13,8 +13,8 @@ export const GAME_PATH = '/good-lift';
 export const DAILY_PATH = `${GAME_PATH}/daily`;
 // One UTC day, in milliseconds. A day's sky changes at midnight UTC and nowhere else.
 export const DAY_MS = 86_400_000;
-// The UTC day of Daily #1 (14 October 2026); set again on the day Good Lift ships.
-export const DAILY_EPOCH = 20_740;
+// The UTC day of Daily #1: 15 October 2026, the day Good Lift shipped.
+export const DAILY_EPOCH = 20_741;
 
 /** The UTC day number of `now` (milliseconds since 1970). */
 export const dayOf = (now = Date.now()) => Math.floor(now / DAY_MS);

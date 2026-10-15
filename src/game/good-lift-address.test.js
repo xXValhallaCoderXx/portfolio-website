@@ -34,7 +34,7 @@ test('the day changes at midnight UTC and nowhere else, and Daily #1 is the epoc
   assert.equal(dayOf(midnight - 1), DAILY_EPOCH - 1);
   assert.equal(dayOf(midnight + DAY_MS - 1), DAILY_EPOCH);
   assert.equal(dayOf(midnight + DAY_MS), DAILY_EPOCH + 1);
-  assert.equal(dayOf(Date.UTC(2026, 9, 14, 23, 59)), DAILY_EPOCH);
+  assert.equal(dayOf(Date.UTC(2026, 9, 15, 23, 59)), DAILY_EPOCH);
   assert.equal(dailyNumber(DAILY_EPOCH), 1);
   assert.equal(dailyNumber(DAILY_EPOCH + 11), 12);
 });
