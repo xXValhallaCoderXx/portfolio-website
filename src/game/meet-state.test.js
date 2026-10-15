@@ -7,7 +7,7 @@ import { TST } from './pilots.js';
 import { createRunWorld, startRun, stepRun } from './run-step.js';
 import { createReferencePilot } from './pilots.js';
 import { CLOUD_POOL, cloudFogSpeed, createCloudbaseRun } from './cloudbase-state.js';
-import { FLIGHT, STALL } from './flight.js';
+import { FLIGHT, STALL, TUCK } from './flight.js';
 
 const STEP = 1 / 60;
 const TAU = Math.PI * 2;
@@ -242,9 +242,11 @@ test('a full circle the flock\'s way in a hunted thermal loads 2.5 kg, and the l
   const rep = circle(1, 12);
   assert.ok(rep.circles > 1.3 && rep.circles < 2, `${rep.circles.toFixed(2)} circles`);
   assert.deepEqual([rep.state.reps, rep.state.bar, rep.state.count], [1, MEET.rep, 4]);
-  // The launch column has no flock to turn with.
+  // The launch column has no flock to turn with. (Flown hands up, its pilot does not catch the surge
+  // the column's edge sends it, and the front collapse holds its heading a moment: a circle and a
+  // little more.)
   const column = circle(0, 12);
-  assert.ok(column.circles > 1.3);
+  assert.ok(column.circles > 1, `${column.circles.toFixed(2)} circles`);
   assert.deepEqual([column.state.reps, column.state.bar], [0, 0]);
   // Against the flock nothing counts, and turning back against it undoes a circle in progress:
   // 6 s the flock's way, half a second against (enough to pass `against`) and 6.5 s the flock's
@@ -292,6 +294,22 @@ test('a full circle the flock\'s way in a hunted thermal loads 2.5 kg, and the l
     `${collapse.state.turned.toFixed(2)} rad after the collapse and ${hooked.toFixed(2)} in it`);
   assert.ok(collapse.circles > 1.6);
   assert.equal(collapse.state.reps, 0);
+});
+
+test('a front tuck, like a stall, loses the circle in progress', () => {
+  // Tucked 6 s into a circle: what the wing turns after the tuck is short of a circle, where the
+  // same flight without it makes a rep.
+  const tucked = circle(1, 13, {
+    before: ({ g }, i) => {
+      if (i === 360) g.tuck = TUCK.time;
+    },
+    after: ({ g, meet }) => {
+      if (g.tuck > 0) assert.equal(meet.state.turned, 0);
+    },
+  });
+  assert.ok(tucked.state.turned > 0 && tucked.state.turned < TAU, `${tucked.state.turned.toFixed(2)} rad after the tuck`);
+  assert.equal(tucked.state.reps, 0);
+  assert.equal(circle(1, 13).state.reps, 1);
 });
 
 test('a new ride starts its own circle, and flying out of a lift and back into it does not', () => {

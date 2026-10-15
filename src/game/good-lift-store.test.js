@@ -48,16 +48,16 @@ afterEach(() => {
 });
 
 test('a fresh or damaged store reads as empty, and a good one round-trips', () => {
-  assert.deepEqual(emptyStore(), { v: 1, best: { total: 0, peak: 0 }, tonnage: 0, runs: 0, feats: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: { days: {} }, bots: null });
+  assert.deepEqual(emptyStore(), { v: 1, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: { days: {} }, bots: null });
   assert.deepEqual(readStore(memoryStorage()), emptyStore());
   for (const text of ['{broken', 'null', '[]', '"store"', '42', JSON.stringify({ best: 'high' })]) {
     assert.deepEqual(readStore(memoryStorage({ [GAME_STORE]: text })), emptyStore(), text);
   }
 
   const storage = memoryStorage();
-  const store = { ...emptyStore(), best: { total: 512.5, peak: 1412 }, tonnage: 1240, runs: 7, feats: ['opener', 'clean-meet'], daily: { last: DAY, streak: 3 }, initials: 'REN' };
-  addRow(store.board, KEY, { who: 'REN', via: 'me', total: 512.5, peak: 1412, red: [0, 2, 4], at: NOON, log: 'AQGv-_x9' });
-  addRow(store.board, KEY, { who: 'TOR', via: 'link', total: 487.5, peak: 1301, red: [0, 0, 1], at: NOON - 1, log: 'AQGw' });
+  const store = { ...emptyStore(), best: { total: 512.5, peak: 1412, score: 646 }, tonnage: 1240, runs: 7, feats: ['opener', 'clean-meet'], daily: { last: DAY, streak: 3 }, initials: 'REN' };
+  addRow(store.board, KEY, { who: 'REN', via: 'me', total: 512.5, style: 260, peak: 1412, red: [0, 2, 4], at: NOON, log: 'AQGv-_x9' });
+  addRow(store.board, KEY, { who: 'TOR', via: 'link', total: 487.5, style: 0, peak: 1301, red: [0, 0, 1], at: NOON - 1, log: 'AQGw' });
   assert.equal(writeStore(store, storage), true);
   assert.deepEqual(JSON.parse(storage.items.get(GAME_STORE)), store);
   assert.deepEqual(readStore(storage), store);
@@ -71,9 +71,15 @@ test('a fresh or damaged store reads as empty, and a good one round-trips', () =
   assert.deepEqual(normalizeStore({
     v: 7, best: { total: -1, peak: 1412 }, tonnage: NaN, runs: 2.5, feats: ['opener', 'opener', 'unknown', 'beat-the-bot', 3],
     daily: { last: DAY, streak: 0 }, initials: 'ren', board: { days: { yesterday: { rows: [] } } }, unlocked: ['airborne'],
-  }), { ...emptyStore(), best: { total: 0, peak: 1412 }, feats: ['opener', 'beat-the-bot'] });
+  }), { ...emptyStore(), best: { total: 0, peak: 1412, score: 0 }, feats: ['opener', 'beat-the-bot'] });
   // No best or tonnage is negative, and the run count is a whole number small enough to count up from.
-  assert.deepEqual(normalizeStore({ best: { total: 512.5, peak: -1 }, tonnage: -5, runs: 2 ** 53 }), { ...emptyStore(), best: { total: 512.5, peak: 0 } });
+  assert.deepEqual(normalizeStore({ best: { total: 512.5, peak: -1 }, tonnage: -5, runs: 2 ** 53 }), { ...emptyStore(), best: { total: 512.5, peak: 0, score: 513 } });
+  // A best score is read as the bests are, and is never less than the best total's own: a store from
+  // before style multiplied the total, with none kept, starts from that.
+  assert.equal(normalizeStore({ best: { total: 512.5, peak: 1412, score: 646 } }).best.score, 646);
+  assert.equal(normalizeStore({ best: { total: 512.5, peak: 1412 } }).best.score, 513);
+  assert.equal(normalizeStore({ best: { total: 512.5, peak: 1412, score: -1 } }).best.score, 513);
+  assert.equal(normalizeStore({ best: { total: 512.5, peak: 1412, score: 400 } }).best.score, 513);
   assert.equal(normalizeStore({ runs: 2 ** 53 - 1 }).runs, 2 ** 53 - 1);
   // A streak and its day stand or fall together.
   assert.deepEqual(normalizeStore({ daily: { last: 0, streak: 4 } }).daily, { last: 0, streak: 0 });
@@ -87,7 +93,7 @@ test('a fresh or damaged store reads as empty, and a good one round-trips', () =
   read.best.total = 0;
   read.feats.push('opener');
   read.board.days[KEY].rows[0].red.push(7);
-  assert.deepEqual(store.best, { total: 512.5, peak: 1412 });
+  assert.deepEqual(store.best, { total: 512.5, peak: 1412, score: 646 });
   assert.deepEqual(store.feats, ['opener', 'clean-meet']);
   assert.deepEqual(store.board.days[KEY].rows[0].red, [0, 2, 4]);
 });
@@ -134,19 +140,19 @@ test('recording a run raises the bests and the tonnage and counts it', () => {
   const first = recordRun(store, run({ kind: 'practice', day: 0, total: 150, peak: 900 }), AT);
   assert.equal(first.store, store);
   assert.deepEqual(placed(first), { feats: [], rank: 0, best: false });
-  assert.deepEqual([store.best, store.tonnage, store.runs], [{ total: 150, peak: 900 }, 150, 1]);
+  assert.deepEqual([store.best, store.tonnage, store.runs], [{ total: 150, peak: 900, score: 150 }, 150, 1]);
   // Each best is raised on its own.
   recordRun(store, run({ kind: 'sky', day: 0, total: 100, peak: 1200 }), AT);
-  assert.deepEqual([store.best, store.tonnage, store.runs], [{ total: 150, peak: 1200 }, 250, 2]);
+  assert.deepEqual([store.best, store.tonnage, store.runs], [{ total: 150, peak: 1200, score: 150 }, 250, 2]);
   // An empty run still counts.
   recordRun(store, run({ kind: 'vs', day: 0, total: 0, peak: 80, reason: 'landed' }), AT);
-  assert.deepEqual([store.best, store.tonnage, store.runs], [{ total: 150, peak: 1200 }, 250, 3]);
+  assert.deepEqual([store.best, store.tonnage, store.runs], [{ total: 150, peak: 1200, score: 150 }, 250, 3]);
   // A number no run can bank counts as nothing, rather than spoiling the store.
   recordRun(store, run({ kind: 'practice', day: 0, total: NaN, peak: -5 }), AT);
-  assert.deepEqual([store.best, store.tonnage, store.runs], [{ total: 150, peak: 1200 }, 250, 4]);
+  assert.deepEqual([store.best, store.tonnage, store.runs], [{ total: 150, peak: 1200, score: 150 }, 250, 4]);
   // Tonnage keeps adding up in whole plates.
   for (let i = 0; i < 400; i++) recordRun(store, run({ kind: 'practice', day: 0, total: 512.5, peak: 1000 }), AT);
-  assert.deepEqual([store.best, store.tonnage, store.runs], [{ total: 512.5, peak: 1200 }, 250 + 400 * 512.5, 404]);
+  assert.deepEqual([store.best, store.tonnage, store.runs], [{ total: 512.5, peak: 1200, score: 513 }, 250 + 400 * 512.5, 404]);
   assert.deepEqual(normalizeStore(JSON.parse(JSON.stringify(store))), store);
 });
 
@@ -237,7 +243,7 @@ test('only daily runs reach the board, and feats are earned once', () => {
   // A Daily Sky goes on its day's board, under the store's initials, as this device's own run.
   const first = recordRun(store, run({ total: 200, peak: 800, red: [0, 2, 0, 4], log: 'daily1', feats: ['opener', 'opener', 'made-up'], byname: 'horn-lifter' }), AT);
   assert.deepEqual(placed(first), { feats: ['opener'], rank: 1, best: true });
-  assert.deepEqual(rowsFor(store.board, KEY), [{ who: 'REN', via: 'me', total: 200, peak: 800, red: [0, 2, 0, 4], at: NOON - 120_000, log: 'daily1', byname: 'horn-lifter' }]);
+  assert.deepEqual(rowsFor(store.board, KEY), [{ who: 'REN', via: 'me', total: 200, style: 0, peak: 800, red: [0, 2, 0, 4], at: NOON - 120_000, log: 'daily1', byname: 'horn-lifter' }]);
   // A lighter run ranks below it, and a feat earned again is not earned anew. `best` says whether this
   // run now leads its day, as addRow does; the leading row itself is the first of rowsFor.
   assert.deepEqual(placed(recordRun(store, run({ total: 100, log: 'daily2', feats: ['under-the-horn', 'opener'] }), AT)), { feats: ['under-the-horn'], rank: 2, best: false });
@@ -264,14 +270,15 @@ test('only daily runs reach the board, and feats are earned once', () => {
   assert.deepEqual(earnFeats(store, ['beat-the-bot', 'opener', 'made-up']), ['beat-the-bot']);
   assert.deepEqual(earnFeats(store, new Set(['beat-the-bot'])), []);
   for (const nonsense of [undefined, null, 7, 'opener', { 0: 'opener', length: 1 }]) assert.deepEqual(earnFeats(store, nonsense), []);
-  assert.deepEqual(store.feats, [...FEAT_IDS.filter((id) => id !== 'training-block')]);
+  // Every feat these runs earned: all but the streak's and the tricks', which none of them flew.
+  assert.deepEqual(store.feats, [...FEAT_IDS.filter((id) => !['training-block', 'wingover-five', 'pitched-45'].includes(id))]);
 });
 
 test('a run ended early counts toward the runs, the bests and the streak, but takes no place on the board', () => {
   const store = emptyStore();
   const quit = recordRun(store, run({ total: 250, peak: 900, reason: 'quit', log: 'quitter', feats: ['opener'] }), AT);
   assert.deepEqual(placed(quit), { feats: ['opener'], rank: 0, best: false });
-  assert.deepEqual([store.best, store.tonnage, store.runs, store.daily], [{ total: 250, peak: 900 }, 250, 1, { last: DAY, streak: 1 }]);
+  assert.deepEqual([store.best, store.tonnage, store.runs, store.daily], [{ total: 250, peak: 900, score: 250 }, 250, 1, { last: DAY, streak: 1 }]);
   assert.deepEqual(store.board, emptyBoard());
   // Only the fog or a touchdown judges a run: one with no reason, or a reason unknown, is not placed either.
   for (const reason of [undefined, '', 'ghost']) assert.equal(recordRun(store, run({ reason, log: `unjudged${reason}` }), AT).rank, 0, String(reason));
@@ -396,7 +403,7 @@ test('what the bots came to on the day\'s sky is kept beside the board, whole or
   const bots = {
     key: boardKey(2, DAY),
     seed: 4_236_776_022,
-    scores: [{ total: 115, peak: 1040, red: [0, 0, 0, 1, 0] }, { total: 145, peak: 1152, red: [0] }, { total: 160, peak: 1110, red: [] }],
+    scores: [{ total: 115, style: 0, peak: 1040, red: [0, 0, 0, 1, 0] }, { total: 145, style: 0, peak: 1152, red: [0] }, { total: 160, style: 0, peak: 1110, red: [] }],
   };
   const storage = memoryStorage();
   updateStore((store) => {

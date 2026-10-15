@@ -684,6 +684,28 @@ test('finishing a run clears the collapse, the cloud and the thermal the pilot w
   assert.deepEqual(run.windAt(thermal.x, 300, thermal.z, { x: 4, z: 4, front: 1, rough: 1 }), { x: 0, z: 0, front: 0, rough: 0 });
 });
 
+test('reopen brings a fold back sooner, never past open, and does nothing to an open wing or an ended run', () => {
+  const run = createCloudbaseRun({ hazards: false });
+  run.reset(700, 3);
+  const { pilot } = run.state;
+  assert.equal(run.reopen(CLOUD_STRIKE.pump.cut), false, 'an open wing');
+  assert.equal(run.strike(), true);
+  const shield = pilot.shield;
+  assert.equal(run.reopen(CLOUD_STRIKE.pump.cut), true);
+  assert.ok(Math.abs(pilot.collapse - (CLOUD_STRIKE.collapse - CLOUD_STRIKE.pump.cut)) < 1e-12);
+  assert.equal(pilot.shield, shield, 'the shield stays up as it was');
+  for (const nothing of [0, -1, Number.NaN]) assert.equal(run.reopen(nothing), false);
+  assert.equal(run.reopen(10), true);
+  assert.equal(pilot.collapse, 0, 'never past open');
+  assert.equal(run.reopen(CLOUD_STRIKE.pump.cut), false);
+  // Once the run is over nothing is reopened.
+  const ended = createCloudbaseRun({ hazards: false });
+  ended.reset(700, 3);
+  ended.strike();
+  ended.finish();
+  assert.equal(ended.reopen(CLOUD_STRIKE.pump.cut), false);
+});
+
 test('a sample can be written into the caller\'s own object, and carries the wind and the gust on the tail', () => {
   const run = createCloudbaseRun();
   const out = { lift: 9, sink: 9, liftSide: 9, windX: 9, windZ: 9, rough: 9 };
@@ -1136,28 +1158,39 @@ const passing = (flights, altitude) => flights.filter((flight) => flight.peak >=
 const total = (flights, key) => flights.reduce((sum, flight) => sum + flight[key], 0);
 const firstSkies = (count) => Array.from({ length: count }, (_, i) => i + 1);
 
-// Measured over 80 skies (seeds 1 to 40 and 1001 to 1040) under SIM_VERSION 1, then 2: peak min /
+// Measured over 80 skies (seeds 1 to 40 and 1001 to 1040) under SIM_VERSION 1, 2, then 4: peak min /
 // median / max; the share passing 500, 1,000 and 1,500 m; strikes and stalls a run. Turning at
-// random, each lift's way is a coin toss made once for its site.
+// random, each lift's way is a coin toss made once for its site (not measured again under 4).
 //   hands up, no hazards           1   1092 / 1531 / 1770 m   100 / 100 / 63%   0     0
 //                                  2    983 / 1254 / 1565 m   100 /  99 /  1%   0     0
+//                                  4    993 / 1255 / 1572 m   100 /  99 /  1%   0     0
 //   hands up, with the flock       1    815 / 1338 / 1765 m   100 /  94 / 19%   0.8   0
 //                                  2    619 / 1106 / 1381 m   100 /  70 /  0%   1.0   0
+//                                  4    639 / 1134 / 1472 m   100 /  80 /  0%   1.1   0
 //   hands up, turning at random    1    500 / 1175 / 1698 m    99 /  76 /  8%   1.8   0
 //                                  2    403 /  965 / 1341 m    99 /  41 /  0%   2.1   0
 //   hands up, against the flock    1    616 / 1056 / 1496 m   100 /  61 /  0%   2.7   0
 //                                  2    366 /  801 / 1208 m    96 /  16 /  0%   3.2   0
+//                                  4    635 /  925 / 1283 m   100 /  31 /  0%   3.3   0
 //   light brake, no hazards        1   1292 / 1731 / 2008 m   100 / 100 / 93%   0     0
 //                                  2   1163 / 1766 / 2073 m   100 / 100 / 90%   0     0
+//                                  4   1188 / 1749 / 2088 m   100 / 100 / 90%   0     0
 //   light brake, with the flock    1    883 / 1329 / 1749 m   100 /  96 / 20%   1.8   0
 //                                  2    625 / 1358 / 1938 m   100 /  94 / 28%   1.8   0
+//                                  4    835 / 1429 / 1930 m   100 /  98 / 36%   1.9   0
 //   eased 2 s late, with the flock 1    616 / 1262 / 1638 m   100 /  86 /  8%   1.8   0
 //                                  2    835 / 1254 / 1800 m   100 /  86 / 14%   1.8   0
+//                                  4    872 / 1357 / 1871 m   100 /  94 / 20%   1.7   0
 //   never eased, with the flock    1    721 / 1023 / 1368 m   100 /  51 /  0%   1.9   3.7
 //                                  2    640 / 1027 / 1359 m   100 /  54 /  0%   2.0   3.8
+//                                  4    786 / 1091 / 1407 m   100 /  61 /  0%   1.9   4.0
 // Version 3 left every row as version 2 had it, to the run: it added only the meet's plates, gates
 // and Beast, which no pilot here meets, and the sky flies exactly as it did (run-step.test.js's
-// goldens of these pilots came out the same to the bit).
+// goldens of these pilots came out the same to the bit). Version 4 moved the rows with no hazards
+// only a little (no fold to pump and no cloud base to surge into, only the wing's own swing and its
+// surges out of a core), and lifted the others: a fold pumped open costs a third less height, and
+// with every pilot catching its wing, only one tuck came in these 560 runs (on sky 1, a deep brake
+// let go 2 s late).
 // Version 2's hunted cores peak at their middle. A light-brake circle round it rides 30% more than
 // a hands-up one, which gets what the whole core gave before, so the light brake climbs as high as
 // it did or a little higher, while hands up, the way a new player circles, comes down 210 to 280 m
@@ -1186,10 +1219,11 @@ test('a reference pilot who turns with each flock usually passes 1,000 m, the ha
   }
   for (const flight of [...withFlock, ...calm]) assert.ok(flight.peak >= 400, `a run peaked at ${flight.peak.toFixed(0)} m`);
   assert.ok(calm.every((flight) => flight.strikes === 0 && flight.cloud === 0));
-  // On these seeds: 35 of the 40 with no hazards pass 1,500 m; with the flock 27 of 30 pass
-  // 1,000 m and 7 pass 1,500 m, with 26 strikes in the first 20 against 71 when turning against it.
-  // Hands up they are 1 of 40; 22 and none of 30; 21 strikes against 55. Under SIM_VERSION 1, when
-  // this flew hands up: 28 of 40; 29 and 10 of 30; 13 strikes against 58.
+  // On these seeds: 35 of the 40 with no hazards pass 1,500 m; with the flock 29 of 30 pass
+  // 1,000 m and 13 pass 1,500 m, with 34 strikes in the first 20 against 76 when turning against it
+  // (under SIM_VERSION 2 and 3: 27 and 7 of 30, and 26 strikes against 71). Hands up, under 2, they
+  // were 1 of 40; 22 and none of 30; 21 strikes against 55. Under SIM_VERSION 1, when this flew hands
+  // up: 28 of 40; 29 and 10 of 30; 13 strikes against 58.
   assert.ok(passing(calm, 1500) >= 18, `${passing(calm, 1500)} of 40 runs with no hazards passed 1,500 m`);
   assert.ok(passing(withFlock, 1000) >= 22, `${passing(withFlock, 1000)} of 30 runs with the flock passed 1,000 m`);
   assert.ok(passing(withFlock, 1500) <= 17, `${passing(withFlock, 1500)} of 30 runs with the flock passed 1,500 m`);
@@ -1205,8 +1239,9 @@ test('the wind costs the reference pilot height, and the light brake eased on ti
   const still = fly({ wind: false });
   const windy = fly({});
   const braked = fly({}, { brake: 'eased' });
-  // On these seeds the means are 1360 m in still air, 1239 m in the wind and 1789 m on the brake,
-  // which beats hands up in all 20 skies (under SIM_VERSION 1: 1684, 1573 and 1756 m, and 19 of 20).
+  // On these seeds the means are 1363 m in still air, 1237 m in the wind and 1781 m on the brake,
+  // which beats hands up in all 20 skies (under SIM_VERSION 2 and 3: 1360, 1239 and 1789 m, and all
+  // 20; under 1: 1684, 1573 and 1756 m, and 19 of 20).
   assert.ok(mean(still) - mean(windy) > 50, `the wind cost ${(mean(still) - mean(windy)).toFixed(0)} m`);
   assert.ok(mean(braked) - mean(windy) > 90, `the light brake won ${(mean(braked) - mean(windy)).toFixed(0)} m`);
   assert.ok(braked.filter((flight, i) => flight.peak > windy[i].peak).length >= 14);
@@ -1228,20 +1263,21 @@ test('among the ravens a brake eased on time or two seconds late does not stall,
     assert.equal(flight.reason, 'fog');
     assert.ok(flight.seconds < 180);
   }
-  // On these seeds: no stall eased or late; held, 74 stalls in 20 runs and never none, peaking
-  // 460 m under eased on average (958 m against 1,420 m) and 90 m under hands up (1,051 m). Under
-  // SIM_VERSION 1 it was 310 m under eased and 370 m under hands up (1,018 m against 1,331 and
-  // 1,386 m): hands up now circles off the peak of a core, which the brake never eased still
-  // circles tight round between its stalls, so it is that much nearer hands up.
+  // On these seeds under SIM_VERSION 4: no stall eased or late; held, 79 stalls in 20 runs and never
+  // fewer than three, peaking 378 m under eased on average (1,071 m against 1,448 m) and level with
+  // hands up (1,080 m): each harsh stall now ends in a surge it catches, and the folds it meets are
+  // pumped open, as everyone's are. Under 2 and 3 it was 460 m under eased and 90 m under hands up
+  // (958 m against 1,420 and 1,051 m; over two other sets of seeds, 10 m over hands up and 2 m
+  // under, so no pin holds it there); under SIM_VERSION 1, 310 m under eased and 370 m under hands
+  // up (1,018 m against 1,331 and 1,386 m).
   assert.equal(total(eased, 'stalls'), 0);
   assert.ok(total(late, 'stalls') <= 2, `${total(late, 'stalls')} stalls easing two seconds late`);
   assert.ok(held.every((flight) => flight.stalls >= 1));
   assert.ok(total(held, 'stalls') >= 40, `${total(held, 'stalls')} stalls with the brake never eased`);
   assert.ok(mean(eased) - mean(held) > 150, `holding the brake cost ${(mean(eased) - mean(held)).toFixed(0)} m against easing it`);
-  assert.ok(mean(handsUp) - mean(held) > 50, `holding the brake cost ${(mean(handsUp) - mean(held)).toFixed(0)} m against hands up`);
   // Eased on time it is much the better way to fly, even though it meets more birds: its circle
-  // round the peaked middle of a core climbs 30% faster than hands up (370 m higher here; under
-  // SIM_VERSION 1 it was only no worse, 55 m lower).
+  // round the peaked middle of a core climbs 30% faster than hands up (368 m higher here, 370 m
+  // under SIM_VERSION 2; under 1 it was only no worse, 55 m lower).
   assert.ok(mean(eased) - mean(handsUp) > 150, `the light brake eased on time won ${(mean(eased) - mean(handsUp)).toFixed(0)} m`);
   assert.ok(passing(eased, 1000) >= 14, `${passing(eased, 1000)} of 20 runs on the light brake passed 1,000 m`);
 });
@@ -1281,7 +1317,7 @@ function circleInGust({ heading = null, at = 0, late = 0, seconds = 40 }) {
     const want = bearing - thermal.dir * (Math.PI / 2) * clamp(1 - (distance - 9) / 28, 0, 1.4);
     controls.turn = clamp(wrapAngle(want - g.yaw) * 2.5, -1, 1);
     deepFor = g.brake >= BRAKE.shelf ? deepFor + STEP : 0;
-    if (tap <= 0 && (late > 0 ? deepFor >= late : g.brake > BRAKE.shelf - 0.01)) tap = 0.2;
+    if (tap <= 0 && (late > 0 ? deepFor >= late : g.brake > BRAKE.shelf - 0.01)) tap = BRAKE.ease;
     tap -= STEP;
     controls.brake = tap <= 0 && g.stall === 0;
     run.sample(g.pos, g.yaw, forces);
@@ -1320,11 +1356,12 @@ test('a circle on the light brake rides out every gust, and a brake left deep is
   assert.ok(quiet.furthest < 17, `the quiet circle strayed ${quiet.furthest.toFixed(1)} m from the core`);
   const carried = Math.max(...light.map((trial) => trial.furthest));
   assert.ok(carried > quiet.furthest + 10 && carried < 60, `the worst gust carried the pilot ${carried.toFixed(0)} m from the core`);
-  // Left deep for three seconds a circle, the wing gets close without any gust and never there.
-  const control = circleInGust({ late: 3 });
+  // Left deep for 1.2 s a circle, the wing loads without any gust and never stalls; a tenth of a
+  // second longer and it would by itself, so quickly does a deep brake stall in a turn.
+  const control = circleInGust({ late: 1.2 });
   assert.equal(control.stalled, false);
-  assert.ok(control.load > 0.4 && control.load < 0.95, `the load reached ${control.load.toFixed(2)} with no gust`);
-  const deep = trials(3);
+  assert.ok(control.load > 0.25 && control.load < 0.95, `the load reached ${control.load.toFixed(2)} with no gust`);
+  const deep = trials(1.2);
   const share = (group) => group.filter((trial) => trial.stalled).length / Math.max(1, group.length);
   const onTail = deep.filter((trial) => trial.offTail < Math.PI / 3);
   const onNose = deep.filter((trial) => trial.offTail > (2 * Math.PI) / 3);

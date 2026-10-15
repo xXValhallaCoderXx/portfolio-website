@@ -748,6 +748,7 @@ const MOTION = {
   stallKick: 0.3,
   spinRoll: 1.5, // how hard a wing folded on one side rolls toward that side (a push, per whole fold)
   pilotFollow: 0.6, // how much of each swing the pilot's body leans along with
+  leanMost: 0.65, // the most bank the pilot leans into: a thermalling turn's, never a wingover's
   armPull: 0.7, // how far the pilot's arm comes down with a full pull on that side's brake
   brakeShown: 0.6, // how much of that full pull the hands show at the light brake, so it is seen at all
   steerDeep: 0.25, // how much a full steer still adds to the pull on top of the full brake
@@ -765,6 +766,30 @@ const MOTION = {
   brakeCentre: 0.45,
   luff: 0.0148, // how far the trailing edge flutters as the wing nears a stall
   foldBlend: 0.2, // how far either side of the middle a fold of one half fades out
+  // Big ears: the outer cells of each half fold down and in about a hinge `earHinge` of the wing's
+  // width out from the middle (70% of the way to the tip), by up to `earFold` radians: under 84°, so
+  // the cloth is never turned inside out along the span. The folded chord narrows by `earTuck`, and
+  // the hands go up to the outer lines, `earsRaise` of the speed bar's height.
+  earHinge: 0.35,
+  earFold: 1.25,
+  earTuck: 0.3,
+  earsRaise: 0.7,
+  // A front collapse (a tuck) folds the leading edge `tuckDrop` down and `tuckBack` back under the
+  // wing, in the wing file's units, leaving the trailing edge where it was: deep enough to read at
+  // a glance from behind, as a collapse is.
+  tuckDrop: 0.08,
+  tuckBack: 0.05,
+  // The flight's own swing over the pilot (flight.js's pitch), drawn as it is: eased at `swingEase`
+  // a second, so a strike or the autopilot taking it over is never a snap, and stopped at `swingMost`
+  // either way. The pilot hangs under the lines through `hang` of it.
+  swingEase: 12,
+  swingMost: 1.25,
+  hang: 0.85,
+  // With that swing drawn, where the pace and the brake hold the wing once it has died away
+  // (`speedPitch`, `brakePitch`) is eased in at `trimEase` a second, never sprung, so it adds no
+  // swing of its own to the flight's.
+  trimEase: 2,
+  heave: 2.5, // how hard the side of the wing over a core is lifted as the moment to turn in comes (a push)
   tipFlutter: 0.012, // how much the wingtips shake in rough air
   ripple: 0.004, // how much the surface ripples along the span
   breathing: 0.008, // how much the whole arc flexes open and shut
@@ -812,6 +837,24 @@ export function flexWing(x, y, z, air, out) {
   let fold = air.collapse;
   if (air.foldLeft > 0 || air.foldRight > 0) {
     fold = Math.max(fold, air.foldRight + (air.foldLeft - air.foldRight) * smooth(-MOTION.foldBlend, MOTION.foldBlend, x));
+  }
+  // A tuck folds the leading edge down and back under the wing, and the trailing edge stays.
+  if (air.tuck > 0) {
+    const lead = (1 - aft) * (1 - aft) * air.tuck;
+    lift -= MOTION.tuckDrop * lead;
+    z -= MOTION.tuckBack * lead;
+  }
+  // Big ears fold each tip down and in about its hinge, calm (the tips shiver only as the rest of
+  // the cloth does); a collapse on top of them takes the wing over.
+  if (air.ears > 0) {
+    const past = Math.abs(x) - MOTION.earHinge;
+    if (past > 0) {
+      const ears = air.ears * (1 - Math.min(1, fold));
+      const angle = MOTION.earFold * ears;
+      x = Math.sign(x) * (MOTION.earHinge + past * Math.cos(angle));
+      lift -= past * Math.sin(angle);
+      z *= 1 - (MOTION.earTuck * ears * past) / (0.5 - MOTION.earHinge);
+    }
   }
   if (fold <= 0) return out.set(x, y + lift, z);
   // A collapsed wing folds in from its tips, lets them drop, and thrashes.
@@ -1052,15 +1095,16 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
     });
 
   // The swing is two springs, one fore-and-aft and one side to side, each pulled toward a resting
-  // angle and pushed around by the air.
-  const sway = { pitch: 0, pitchRate: 0, roll: 0, rollRate: 0, collapse: 0, lastBank: 0, lastLift: 0, lastStall: 0 };
+  // angle and pushed around by the air. `swing` is the flight's own swing fore and aft, eased.
+  const sway = { pitch: 0, pitchRate: 0, roll: 0, rollRate: 0, collapse: 0, swing: 0, trim: 0, lastBank: 0, lastLift: 0, lastStall: 0 };
   // What `pose` has been handed, eased: the steering on each side, the brake, the speed bar, the
   // flutter near a stall and the stall itself, each 0 to 1, and `rest`, the radians the hands sit
   // lower while flying. From those, what the trailing edge feels: `trail` along all of it from the
   // brake, and `trailLeft` and `trailRight` on each side from steering. The folds are as handed in.
+  // `ears` and `tuck` are how far the big ears are in and the leading edge tucked, each 0 to 1.
   const air = {
     time: 0, rough: 0, steerLeft: 0, steerRight: 0, brake: 0, bar: 0, rest: 0, luff: 0, stall: 0,
-    trail: 0, trailLeft: 0, trailRight: 0, collapse: 0, foldLeft: 0, foldRight: 0,
+    trail: 0, trailLeft: 0, trailRight: 0, collapse: 0, foldLeft: 0, foldRight: 0, ears: 0, tuck: 0,
   };
   // What an emergency does to the gear, each from 0 to 1: the wing crumpling, being gathered in,
   // and the arm throwing the reserve. Whoever stages the emergency sets these.
@@ -1081,14 +1125,16 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
         ? (MOTION.brakeShown * air.brake) / BRAKE.light
         : MOTION.brakeShown + ((1 - MOTION.brakeShown) * (air.brake - BRAKE.light)) / (1 - BRAKE.light);
     // How far the hand is down its line: the brake, and steering on top of it (only a little more
-    // on a deep brake). In a stall the hands let go of the lines altogether.
-    const pull = (1 - air.stall) * (shown + steer * (1 - (1 - MOTION.steerDeep) * shown));
+    // on a deep brake). In a stall the hands let go of the lines altogether, and with the ears in
+    // they hold the outer lines and the pilot steers by weight alone.
+    const pull = (1 - air.stall) * (shown + steer * (1 - air.ears) * (1 - (1 - MOTION.steerDeep) * shown));
     // Hands up on the speed bar, or thrown up in a stall a little short of that, so that they can
-    // be seen to flail. A raised hand leaves its rest; a hand pulling its brake stays down, from a
-    // third of a full pull on exactly where it would be without the bar.
+    // be seen to flail, or up on the outer lines with the ears in. A raised hand leaves its rest; a
+    // hand pulling its brake stays down, from a third of a full pull on exactly where it would be
+    // without the bar.
     const hold = 1 - Math.min(1, 3 * pull);
-    const up = Math.max(air.bar, air.stall) * hold;
-    const high = MOTION.armRaise * Math.max(air.bar, MOTION.stallRaise * air.stall) * hold;
+    const up = Math.max(air.bar, air.stall, air.ears) * hold;
+    const high = MOTION.armRaise * Math.max(air.bar, MOTION.stallRaise * air.stall, MOTION.earsRaise * air.ears) * hold;
     const angle =
       air.rest * (1 - Math.min(1, pull)) * (1 - up) +
       high -
@@ -1302,9 +1348,12 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
       const { edgeLeft, edgeRight, tipLeft, tipRight } = marks;
       out.edgeLeft = (edgeLeft.y - flexWing(edgeLeft.x, edgeLeft.y, edgeLeft.z, air, point).y) * metres;
       out.edgeRight = (edgeRight.y - flexWing(edgeRight.x, edgeRight.y, edgeRight.z, air, point).y) * metres;
-      // The left tip is the file's +x end, and the right tip its -x end.
+      // The left tip is the file's +x end, and the right tip its -x end: how far each has come in,
+      // and how far it has dropped.
       out.tipLeft = (tipLeft.x - flexWing(tipLeft.x, tipLeft.y, tipLeft.z, air, point).x) * metres;
+      out.dropLeft = (tipLeft.y - point.y) * metres;
       out.tipRight = (flexWing(tipRight.x, tipRight.y, tipRight.z, air, point).x - tipRight.x) * metres;
+      out.dropRight = (tipRight.y - point.y) * metres;
       return out;
     },
     /**
@@ -1318,24 +1367,38 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
      * (flight.js's, 0 to 1). `luff` is how near the wing is to a stall, 0 to 1, and `stall` is 1
      * while it is stalled. `foldLeft` and `foldRight` are how far the pilot's left and right halves
      * of the wing are folded, 0 to 1, already eased by whoever folds them (gear.collapse still
-     * folds all of it). `rough` is a gust on the tail, 0 to 1. Any of these shares under a
-     * thousandth is taken as none, so that one eased out without ever reaching 0 costs nothing.
+     * folds all of it). `rough` is a gust on the tail, 0 to 1. `ears` is how far the big ears are
+     * in and `tuck` how far its leading edge is tucked under (each 0 to 1, eased by whoever hands
+     * them in), and `heave` a moment's lift of the side of the wing over a core, -1 (left) to 1
+     * (right), as the moment to turn in comes. Any of these shares under a thousandth is taken as
+     * none, so that one eased out without ever reaching 0 costs nothing.
+     *
+     * `swing`, the flight's own swing over the pilot (flight.js's pitch, radians, positive with the
+     * wing behind), is left out by the hero picture and the 404 scene, whose glider swings as it
+     * always has. Handed in, it is drawn as it is, and the springs keep only what the air does to the
+     * wing: the brake, the pace and a stall already swing it through the flight, and where the pace
+     * and the brake hold it once that swing dies is eased in, never sprung.
      */
     pose({
       dt, time, bank, pace, turn, lift, liftSide, landed,
       flying = false, brake = 0, bar = 0, luff = 0, stall = 0, foldLeft = 0, foldRight = 0, rough = 0,
+      ears = 0, tuck = 0, heave = 0, swing,
     }) {
       const { clamp } = THREE.MathUtils;
       const step = Math.min(dt, 0.1);
+      const flown = swing !== undefined;
       if (step > 0) {
         const bankRate = clamp((bank - sway.lastBank) / step, -3, 3);
         const liftRate = clamp((lift - sway.lastLift) / step, -20, 20);
         // The moment the wing stalls it is flung back, once.
         const stalled = share(stall);
-        const kick = stalled > 0 && !(sway.lastStall > 0) ? MOTION.stallKick : 0;
+        const kick = !flown && stalled > 0 && !(sway.lastStall > 0) ? MOTION.stallKick : 0;
         sway.lastBank = bank;
         sway.lastLift = lift;
         sway.lastStall = stalled;
+        if (flown) sway.swing = settle(sway.swing, clamp(swing, -MOTION.swingMost, MOTION.swingMost), Math.min(1, step * MOTION.swingEase));
+        air.ears = settle(air.ears, share(ears), Math.min(1, step * 6));
+        air.tuck = share(tuck);
 
         air.time = time;
         air.collapse = gear.collapse;
@@ -1363,18 +1426,22 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
         const held = 1 - air.stall;
         const steering = 1 - (1 - MOTION.steerDeep) * air.brake;
         air.trail = air.brake * held;
-        air.trailLeft = air.steerLeft * steering * held;
-        air.trailRight = air.steerRight * steering * held;
+        // With the ears in, the hands are off the brakes and steering pulls no edge down.
+        air.trailLeft = air.steerLeft * steering * held * (1 - air.ears);
+        air.trailRight = air.steerRight * steering * held * (1 - air.ears);
 
         const pull = MOTION.swingSpeed ** 2;
         const drag = 2 * MOTION.swingDamping * MOTION.swingSpeed;
         const gust = MOTION.gusts * air.rough;
         // Faster flight puts the wing ahead (negative pitch) and the brake holds it back; a turn
         // starting or ending rolls it first. Nearing a stall it hangs back and rocks to and fro,
-        // and once stalled it drops back further, rocking no more.
+        // and once stalled it drops back further, rocking no more. A flight's own swing already
+        // carries the stall and the swings the pace and the brake set going, so with it the spring
+        // rests on the rocking alone, and where the pace and the brake hold the wing is eased in.
         const hunting = air.luff * held;
-        const pitchRest =
-          -pace * MOTION.speedPitch + MOTION.brakePitch * air.brake + MOTION.luffPitch * hunting + MOTION.stallPitch * air.stall;
+        const sits = -pace * MOTION.speedPitch + MOTION.brakePitch * air.brake;
+        const pitchRest = flown ? MOTION.luffPitch * hunting : sits + MOTION.luffPitch * hunting + MOTION.stallPitch * air.stall;
+        if (flown) sway.trim = settle(sway.trim, clamp(sits, -0.5, 0.5), Math.min(1, step * MOTION.trimEase));
         const rollRest = -bankRate * MOTION.turnLead;
         // Rising air knocks the wing back and lifts the side nearer its core, and a wing folded on
         // one side rolls toward it.
@@ -1382,10 +1449,12 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
           liftRate * MOTION.liftKick +
           gust * (Math.sin(time * 1.7) * 0.6 + Math.sin(time * 3.1 + 1.3) * 0.4) +
           MOTION.luffRock * hunting * Math.sin(time * 3.6);
-        const rollPush =
+        let rollPush =
           liftRate * liftSide * MOTION.liftKick +
           gust * (Math.sin(time * 1.3 + 2.1) * 0.6 + Math.sin(time * 2.7 + 0.5) * 0.4) +
           MOTION.spinRoll * (air.foldLeft - air.foldRight);
+        // The side over a core lifts as the moment to turn into it comes.
+        if (Math.abs(heave) >= 0.001) rollPush += MOTION.heave * heave;
         sway.pitchRate += kick;
         const slices = Math.ceil(step * 90);
         const h = step / slices;
@@ -1399,9 +1468,15 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
         sway.collapse += ((landed ? -1.25 : 0) - sway.collapse) * Math.min(1, step * 5);
       }
 
-      sling.rotation.set(sway.pitch + sway.collapse, 0, sway.roll);
-      // The pilot leans along with each swing, and into a turn.
-      seat.rotation.set(sway.pitch * MOTION.pilotFollow, 0, sway.roll * MOTION.pilotFollow - bank * 0.35);
+      sling.rotation.set(sway.pitch + sway.trim + sway.collapse + sway.swing, 0, sway.roll);
+      // The pilot leans along with each swing, hangs under the flight's own, and leans into a turn:
+      // as far as a thermalling turn takes it (its bank of 0.63 at most), and no further however
+      // steep a wingover banks the whole rig, which already rolls the pilot with it.
+      seat.rotation.set(
+        (sway.pitch + sway.trim) * MOTION.pilotFollow + sway.swing * MOTION.hang,
+        0,
+        sway.roll * MOTION.pilotFollow - clamp(bank, -MOTION.leanMost, MOTION.leanMost) * 0.35,
+      );
       placeholder.rotation.x = sway.collapse * 0.4;
       if (rig) redraw();
     },

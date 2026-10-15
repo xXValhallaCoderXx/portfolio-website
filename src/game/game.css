@@ -59,7 +59,8 @@
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 3;
+  /* Over the toasts, which come later and would otherwise cover it. */
+  z-index: 4;
   width: min(380px, calc(100vw - 32px));
   /* On a short screen the list scrolls inside itself, so its last buttons can always be reached. */
   max-height: calc(100svh - 72px);
@@ -217,6 +218,16 @@
   color: #ff546b;
 }
 
+/* The big ears fill the track in a violet of their own: not the light brake's cyan, the deep
+   brake's amber or the stall's red. */
+.fj-brake[data-state='ears'] i:first-child {
+  background: #b9a4ff;
+}
+
+.fj-brake[data-state='ears'] b {
+  color: #b9a4ff;
+}
+
 .fj-brake[data-state='near'] span {
   animation: fj-brake-near 0.28s steps(2, jump-none) infinite;
 }
@@ -236,6 +247,400 @@
 
 .lost .fj-brake {
   display: none;
+}
+
+/* ---- the swing gauge, between the pilot and the hint
+
+   A cross whose dot is the wing as the pilot sees it (swing-gauge.js): up for the wing ahead, down
+   for behind, across with the bank, the middle two-thirds of the way down. The arm that counts is
+   bright and the other dim; ticks mark the bands a trick is judged in, cyan up to the last peak's
+   and white for the next; red ends mark the folds, only where the wing can come to them. As a
+   moment to act comes, the dot lights up with what to do. Only transforms and states change. */
+.fj-swing {
+  position: absolute;
+  bottom: 92px;
+  left: 50%;
+  width: 200px;
+  height: 72px;
+  border-radius: 6px;
+  background: rgba(6, 10, 19, 0.35);
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 0.25s;
+  pointer-events: none;
+  contain: layout style;
+}
+
+.fj-swing[data-on='1'] {
+  opacity: 1;
+}
+
+.fj-swing-x,
+.fj-swing-y {
+  position: absolute;
+  background: rgba(198, 214, 228, 0.4);
+  transition: opacity 0.2s;
+}
+
+.fj-swing-x {
+  top: 67%;
+  right: 0;
+  left: 0;
+  height: 2px;
+  margin-top: -1px;
+}
+
+.fj-swing-y {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+}
+
+.fj-swing[data-mode='roll'] .fj-swing-y,
+.fj-swing[data-mode='pitch'] .fj-swing-x {
+  opacity: 0.3;
+}
+
+.fj-swing-x i,
+.fj-swing-y i {
+  position: absolute;
+  background: rgba(198, 214, 228, 0.7);
+}
+
+.fj-swing-x i {
+  top: -4px;
+  width: 2px;
+  height: 10px;
+  margin-left: -1px;
+}
+
+.fj-swing-y i {
+  left: -4px;
+  width: 10px;
+  height: 2px;
+  margin-top: -1px;
+}
+
+/* The bands reached by the last peak, and the next to reach. */
+.fj-swing[data-band='1'] .t1,
+.fj-swing[data-band='2'] :is(.t1, .t2),
+.fj-swing[data-band='3'] :is(.t1, .t2, .t3),
+.fj-swing[data-band='4'] i {
+  background: var(--cyan);
+}
+
+.fj-swing[data-band='0'] .t1,
+.fj-swing[data-band='1'] .t2,
+.fj-swing[data-band='2'] .t3,
+.fj-swing[data-band='3'] .t4 {
+  background: #fff;
+}
+
+.fj-swing-x b,
+.fj-swing-y b {
+  position: absolute;
+  background: rgba(255, 84, 107, 0.45);
+}
+
+.fj-swing-x b {
+  top: -2px;
+  height: 6px;
+}
+
+.fj-swing-y b {
+  left: -2px;
+  width: 6px;
+}
+
+.fj-swing[data-safe='1'] :is(.fj-swing-x, .fj-swing-y) b {
+  display: none;
+}
+
+.fj-swing[data-near='1'] :is(.fj-swing-x, .fj-swing-y) b {
+  background: #ff546b;
+  animation: fj-swing-near 0.5s steps(2, jump-none) infinite;
+}
+
+@keyframes fj-swing-near {
+  to {
+    opacity: 0.35;
+  }
+}
+
+.fj-swing-at,
+.fj-swing-at > span {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
+.fj-swing-at b {
+  position: absolute;
+  top: 67%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: #c6d6e4;
+  box-shadow: 0 0 6px rgba(6, 10, 19, 0.9);
+}
+
+.fj-swing:not([data-cue='']) .fj-swing-at b {
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(45, 212, 238, 0.55), 0 0 14px rgba(45, 212, 238, 0.7);
+}
+
+.fj-swing-at b::after {
+  position: absolute;
+  bottom: 15px;
+  left: 50%;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  text-shadow: 0 0 6px var(--bg);
+  transform: translateX(-50%);
+}
+
+.fj-swing[data-cue='catch'] .fj-swing-at b::after,
+.fj-swing[data-cue='press'] .fj-swing-at b::after,
+.fj-swing[data-cue='pump'] .fj-swing-at b::after {
+  content: '▼';
+}
+
+.fj-swing[data-cue='release'] .fj-swing-at b::after {
+  content: '▽';
+}
+
+.fj-swing[data-cue='left'] .fj-swing-at b::after {
+  content: '◀';
+}
+
+.fj-swing[data-cue='right'] .fj-swing-at b::after {
+  content: '▶';
+}
+
+/* The catch and a fold's pump are the ones that cannot wait: their dot is ringed in white. */
+.fj-swing:is([data-cue='catch'], [data-cue='pump']) .fj-swing-at b {
+  box-shadow: 0 0 0 3px #fff, 0 0 16px rgba(255, 255, 255, 0.7);
+}
+
+/* Round a loop the cross gives way to its ring: the wing at its middle and the pilot the dot going
+   round it, ▲ where they pass over the wing and ▼ where they pass under it, lit as each moment
+   comes. Only the dot's holder turns. */
+.fj-swing-loop {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border: 1px solid rgba(198, 214, 228, 0.45);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.fj-swing-loop em {
+  position: absolute;
+  left: 100%;
+  margin-left: 8px;
+  color: var(--dim);
+  font-size: 10px;
+  font-style: normal;
+  line-height: 1;
+}
+
+.fj-swing-loop em:first-child {
+  top: -2px;
+}
+
+.fj-swing-loop em:last-child {
+  bottom: -2px;
+}
+
+.fj-swing-loop > span {
+  position: absolute;
+  inset: 0;
+}
+
+.fj-swing-loop b {
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.fj-swing[data-mode='loop'] .fj-swing-loop {
+  opacity: 1;
+}
+
+.fj-swing[data-mode='loop'] :is(.fj-swing-x, .fj-swing-y, .fj-swing-at) {
+  opacity: 0;
+}
+
+.fj-swing[data-cue='up'] .fj-swing-loop em:first-child,
+.fj-swing[data-cue='down'] .fj-swing-loop em:last-child {
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fj-swing[data-near='1'] :is(.fj-swing-x, .fj-swing-y) b {
+    animation: none;
+  }
+}
+
+.lost .fj-swing,
+.cloudbase-ended .fj-swing {
+  display: none;
+}
+
+/* ---- the prompt to act on a swing, by the wing
+
+   A big sign over the wing (or beside it, the side a wingover's turn swaps to), with the word for
+   what to do and a ring that closes on it as the moment comes: lit white as it comes, ember for a
+   surge to catch, and a cyan tick when the hands were on time. Placed by transform, and only
+   while it shows. */
+.fj-cue {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* Over the toasts, which come before it (a moment to act cannot wait behind an achievement), and
+     under the menu. */
+  z-index: 3;
+  display: none;
+  width: 60px;
+  height: 60px;
+  margin: -30px 0 0 -30px;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.fj-cue:not([data-cue='']),
+.fj-cue[data-good='1'] {
+  display: block;
+}
+
+.fj-cue i {
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(45, 212, 238, 0.85);
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(45, 212, 238, 0.45);
+  will-change: transform;
+}
+
+.fj-cue b {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(6, 10, 19, 0.55);
+  color: rgba(234, 244, 255, 0.75);
+  font-size: 28px;
+  font-weight: normal;
+  line-height: 1;
+}
+
+.fj-cue small {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-top: 6px;
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-shadow: 0 0 6px var(--bg);
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+/* The moment has come: lit. */
+.fj-cue[data-live='1'] b {
+  background: rgba(45, 212, 238, 0.35);
+  color: #fff;
+  box-shadow: 0 0 0 3px #fff, 0 0 22px rgba(45, 212, 238, 0.8);
+}
+
+.fj-cue[data-live='1'] small {
+  color: #fff;
+}
+
+/* A surge to catch and a fold to pump open cannot wait: ember, lit at once. The pump's ring closes
+   as its hold fills. */
+.fj-cue:is([data-cue='catch'], [data-cue='pump']) i {
+  border-color: var(--ember);
+  box-shadow: 0 0 14px rgba(255, 157, 74, 0.6);
+}
+
+.fj-cue:is([data-cue='catch'], [data-cue='pump']) b {
+  background: rgba(255, 157, 74, 0.35);
+  color: #fff;
+  box-shadow: 0 0 0 3px var(--ember), 0 0 22px rgba(255, 157, 74, 0.75);
+}
+
+.fj-cue:is([data-cue='catch'], [data-cue='pump']) small {
+  color: var(--ember);
+}
+
+/* The hands on time: a cyan tick that pops, and is gone. */
+.fj-cue[data-good='1'] i {
+  transform: scale(1) !important;
+  border-color: var(--cyan);
+}
+
+.fj-cue[data-good='1'] b {
+  background: rgba(45, 212, 238, 0.45);
+  color: #fff;
+  box-shadow: 0 0 24px rgba(45, 212, 238, 0.9);
+  animation: fj-cue-good 0.35s ease-out both;
+}
+
+.fj-cue[data-good='1'] small {
+  color: var(--cyan);
+}
+
+@keyframes fj-cue-good {
+  from {
+    scale: 1.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fj-cue[data-good='1'] b {
+    animation: none;
+  }
+}
+
+.lost .fj-cue,
+.cloudbase-ended .fj-cue {
+  display: none !important;
+}
+
+@media (pointer: coarse) {
+  .fj-cue {
+    width: 52px;
+    height: 52px;
+    margin: -26px 0 0 -26px;
+  }
+
+  .fj-cue b {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 560px) {
+  .fj-swing {
+    width: 168px;
+    height: 64px;
+  }
 }
 
 .fj-labels {
@@ -417,12 +822,19 @@
 }
 
 /* Sound and the way out, repeated inside the menu for when the row above has no room for them.
-   In a run the music's switch joins them, so they wrap rather than run off a phone's menu. */
+   In a run the music's switch joins them, so they wrap rather than run off a phone's menu. They
+   come first, under the run's own button, so a short screen never scrolls them out of reach. */
 .fj-keys-more {
   display: none;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 12px;
+  margin: 0 0 12px;
+}
+
+/* What only the fjord has (landing, time sped up, flying to a pillar) is left out of a run's menu. */
+.cloudbase .fj-keys-fjord,
+.cloudbase-ended .fj-keys-fjord {
+  display: none;
 }
 
 /* ---- a touch screen, or any window this narrow: as little over the flight as will do */
@@ -547,6 +959,22 @@
     height: 6px;
   }
 
+  /* The button the swing gauge says to press now, ringed in white: a ▼ to catch, press or pump,
+     dashed to let it go, an arrow to swap a wingover's turn. The brake's own amber and a stall's red,
+     below, show over it. */
+  .fj-touch:is([data-cue='catch'], [data-cue='press'], [data-cue='pump'], [data-cue='down']) [data-input='brake'],
+  .fj-touch[data-cue='up'] [data-input='bar'],
+  .fj-touch[data-cue='left'] [data-input='left'],
+  .fj-touch[data-cue='right'] [data-input='right'] {
+    border-color: #fff;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.5), 0 0 18px rgba(45, 212, 238, 0.55);
+  }
+
+  .fj-touch[data-cue='release'] [data-input='brake'] {
+    border-style: dashed;
+    border-color: #fff;
+  }
+
   /* The ▼ under the thumb says it too: amber as the light brake runs out, red near the stall. */
   .fj-touch[data-brake='late'] [data-input='brake'],
   .fj-touch[data-brake='deep'] [data-input='brake'] {
@@ -558,6 +986,19 @@
   .fj-touch[data-brake='stalled'] [data-input='brake'] {
     border-color: #ff546b;
     box-shadow: 0 0 0 4px rgba(255, 84, 107, 0.55), 0 0 22px rgba(255, 84, 107, 0.6);
+  }
+
+  /* Violet with the ears in, both ▼ holding them. */
+  .fj-touch[data-brake='ears'] [data-input='brake'] {
+    border-color: #b9a4ff;
+    box-shadow: 0 0 0 3px rgba(185, 164, 255, 0.45);
+  }
+
+  /* Between the pilot and the hint, clear of the meter and the thumbs. */
+  .fj-swing {
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 112px);
+    width: 168px;
+    height: 64px;
   }
 }
 
@@ -575,6 +1016,19 @@
 
   .fj-brake b {
     display: none;
+  }
+
+  /* Held sideways it drops to the bottom too, above the meter between the middle buttons. */
+  .fj-swing {
+    bottom: calc(max(8px, env(safe-area-inset-bottom)) + 14px);
+    width: 150px;
+    height: 52px;
+  }
+
+  .fj-swing-loop {
+    width: 36px;
+    height: 36px;
+    margin: -18px 0 0 -18px;
   }
 }
 
@@ -599,7 +1053,7 @@
 
 .fj-keys > [data-do='cloudbase'],
 .fj-keys > [data-do='quit-cloudbase'] {
-  margin-top: 10px;
+  margin-bottom: 10px;
   min-height: 44px;
 }
 

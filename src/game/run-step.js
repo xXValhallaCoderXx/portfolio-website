@@ -4,8 +4,9 @@
 // order, so a run flown in a browser can be flown again anywhere else and come out the same. Kept
 // free of 3D and page code: the ground it touches down on is ground.js's, not terrain.js's.
 import { FLIGHT, createFlight, settleFlight, stepFlight } from './flight.js';
-import { CLOUD_GATE, CLOUD_RAVENS, CLOUD_ZONE } from './cloudbase-state.js';
+import { CLOUD_GATE, CLOUD_RAVENS, CLOUD_STRIKE, CLOUD_ZONE } from './cloudbase-state.js';
 import { surfaceAt } from './ground.js';
+import { createSwingWatch } from './swing-watch.js';
 
 // Seconds a run is stepped by, everywhere. Touching down within `ground` metres of the surface
 // ends a run, ring or not.
@@ -22,31 +23,41 @@ const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 /**
  * Everything one run needs, made once and reused for every run after it. `sky` is a
  * createCloudbaseRun(); `g`, `controls` and `air` may be handed in so the game draws the very
- * objects the run steps. `bells` and `meet` are the Good Lift layer, or null to fly the bare sky.
+ * objects the run steps. `bells` and `meet` are the Good Lift layer, or null to fly the bare sky,
+ * and `style` (meet-style.js) scores the run's tricks, or null to leave them unscored.
  *
+ *   watch   what the wing's swings are doing (swing-watch.js), stepped with the wing
  *   hook    which way a folded wing hooks round: the way it was turning when it was struck
  *   struck  strikes already answered with a hook
  *   stalls  stalls begun this run
+ *   tucks   front tucks this run: surges left uncaught past the wing's line
+ *   tips    tip collapses this run: wingovers swung past the wing's limit
+ *   pump    the brake held into the fold so far (s) and the pumps it has had (`held`, `n`)
  *   steps   fixed steps flown this run
- *   intent  what stepBits last asked of the wing ({ turn, brake, bar }): one object, reused
+ *   intent  what stepBits last asked of the wing ({ turn, brake, bar, ears }): one object, reused
  *   trace   the barogram: `alt`, `fog` and `total` (m, m, kg) for each second flown, `n` of them
  */
 export function createRunWorld({
   sky,
   g = createFlight({ x: CLOUD_GATE.x, y: CLOUD_GATE.y, z: CLOUD_GATE.z }),
-  controls = { turn: 0, brake: false, bar: false, locked: false, harsh: false, linger: true, safe: false, climb: null },
+  controls = { turn: 0, brake: false, bar: false, ears: false, locked: false, harsh: false, linger: true, swing: false, folds: false, steered: false, safe: false, climb: null },
   air = { lift: 0, sink: 0, windX: 0, windZ: 0, calm: false, rough: 0, clearance: Infinity },
   bells = null,
   meet = null,
+  style = null,
 } = {}) {
   return {
-    sky, g, controls, air, bells, meet,
+    sky, g, controls, air, bells, meet, style,
+    watch: createSwingWatch(),
     forces: { lift: 0, sink: 0, liftSide: 0, windX: 0, windZ: 0, rough: 0 },
     hook: 1,
     struck: 0,
     stalls: 0,
+    tucks: 0,
+    tips: 0,
+    pump: { held: 0, n: 0 },
     steps: 0,
-    intent: { turn: 0, brake: false, bar: false },
+    intent: { turn: 0, brake: false, bar: false, ears: false },
     trace: {
       alt: new Float32Array(TRACE.length), fog: new Float32Array(TRACE.length), total: new Float32Array(TRACE.length), n: 0,
     },
@@ -73,11 +84,14 @@ export function startRun(world, seed) {
   g.yaw = CLOUD_GATE.yaw;
   settleFlight(g);
   world.hook = 1;
-  world.struck = world.stalls = world.steps = 0;
+  world.struck = world.stalls = world.tucks = world.tips = world.steps = 0;
+  world.pump.held = world.pump.n = 0;
   world.intent.turn = 0;
-  world.intent.brake = world.intent.bar = false;
+  world.intent.brake = world.intent.bar = world.intent.ears = false;
   world.bells?.reset(seed);
   world.meet?.reset();
+  world.watch.reset();
+  world.style?.reset();
   // Nothing of the last run's climb is left behind the first sample of this one: the run at rest.
   trace.alt.fill(0);
   trace.fog.fill(0);
@@ -89,24 +103,47 @@ export function startRun(world, seed) {
 
 /**
  * Flies one step of `dt` seconds with the pilot asking for `intent` ({ turn from -1 to 1, brake,
- * bar }). Returns 'fog' or 'landed' when the run ends on this step, and null while it goes on.
+ * bar, ears }). Returns 'fog' or 'landed' when the run ends on this step, and null while it goes on.
  */
 export function stepRun(world, intent, dt = RUN.step) {
-  const { sky, g, controls, air, forces } = world;
+  const { sky, g, controls, air, forces, pump } = world;
   const pilot = sky.state.pilot;
+  // A folded wing is pumped open: each time the brake has been held long enough and is let go, the
+  // fold is that much shorter, a few times at most. Counted before the fold is read, so a pump that
+  // opens the wing gives the hands back on this very step.
+  if (pilot.collapse > 0) {
+    if (intent.brake) {
+      pump.held += dt;
+    } else {
+      // A hold is a whole number of steps, given half a step to spare as the clock sums them.
+      if (pump.held >= CLOUD_STRIKE.pump.hold - dt / 2 && pump.n < CLOUD_STRIKE.pump.most && sky.reopen(CLOUD_STRIKE.pump.cut)) pump.n += 1;
+      pump.held = 0;
+    }
+  } else {
+    pump.held = pump.n = 0;
+  }
   // A folded wing keeps hooking round the way it was going and takes no steering; past the edge
   // of the sky the wind turns the glider back in, whatever else is happening.
   const collapsed = pilot.collapse > 0;
+  const outside = !sky.inside(g.pos);
   let turn = intent.turn;
   if (collapsed) turn = world.hook * FLIGHT.turn.hook;
-  if (!sky.inside(g.pos)) turn = clamp(wrapAngle(Math.atan2(CLOUD_ZONE.x - g.pos.x, -(CLOUD_ZONE.z - g.pos.z)) - g.yaw) * 2, -1, 1);
+  if (outside) turn = clamp(wrapAngle(Math.atan2(CLOUD_ZONE.x - g.pos.x, -(CLOUD_ZONE.z - g.pos.z)) - g.yaw) * 2, -1, 1);
   controls.turn = turn;
   controls.brake = !!intent.brake;
   controls.bar = !!intent.bar;
+  controls.ears = !!intent.ears;
   controls.locked = collapsed;
-  // A stall only costs real height above the ravens' grace height; low over the launch hill it
-  // is the gentle kind. The brake lingers light here, for circling tight.
+  // A stall only costs real height above the ravens' grace height; low over the launch hill it is
+  // the gentle kind. The wing swings over the pilot everywhere in a run, and can fold itself
+  // anywhere in one: a surge left uncaught collapses it, a wingover too steep tips it; but not while
+  // the wind past the edge of the sky turns it back in, which is the sky's doing, not the pilot's,
+  // and turns it even round a loop. The brake lingers light here, for circling tight, eased every
+  // couple of seconds.
   controls.harsh = g.pos.y >= CLOUD_RAVENS.grace;
+  controls.swing = true;
+  controls.folds = !outside;
+  controls.steered = outside;
   controls.linger = true;
   controls.safe = false;
   controls.climb = null;
@@ -123,8 +160,13 @@ export function stepRun(world, intent, dt = RUN.step) {
   g.liftSide = forces.liftSide;
 
   const stalled = g.stall > 0;
+  const tucked = g.tuck > 0;
+  const tipped = g.tip > 0;
   stepFlight(g, controls, air, dt);
   if (g.stall > 0 && !stalled) world.stalls += 1;
+  if (g.tuck > 0 && !tucked) world.tucks += 1;
+  if (g.tip > 0 && !tipped) world.tips += 1;
+  world.watch.step(dt, g, pilot.collapse > 0, controls);
   if (g.pos.y - surfaceAt(g.pos.x, g.pos.z) <= RUN.ground) return 'landed';
 
   const ended = sky.step(dt, g.pos);
@@ -137,26 +179,31 @@ export function stepRun(world, intent, dt = RUN.step) {
     world.hook = Math.sign(g.yawRate) || 1;
   }
   world.meet?.step(dt, world);
+  world.style?.step(dt, world);
   world.steps += 1;
   if (world.steps % TRACE.every === 0) sample(world);
   return ended;
 }
 
 /**
- * Flies one fixed step with the pilot's four controls as `bits`: 1 left, 2 right, 4 brake and 8 the
- * speed bar (recorder.js's INPUT). Both ways at once is the speed bar, held straight: on a touch
- * screen it is the only way to the bar, and on keys it is the same, so the run a log replays never
- * depends on the device it was flown on. This is the one way live play and replays fly a run; the
- * reference pilots, which steer by degrees, call stepRun. Returns what stepRun returns.
+ * Flies one fixed step with the pilot's controls as `bits`: 1 left, 2 right, 4 brake and 8 the
+ * speed bar, and the brake and the bar together (12) the big ears (recorder.js's INPUT). Both ways
+ * at once is the speed bar, held straight: on a touch screen it is the only way to the bar, and on
+ * keys it is the same, so the run a log replays never depends on the device it was flown on. The
+ * ears take the bar's own bit, not that chord: both ways with the brake is still the brake. This is
+ * the one way live play and replays fly a run; the reference pilots, which steer by degrees, call
+ * stepRun. Returns what stepRun returns.
  */
 export function stepBits(world, bits) {
   const { intent } = world;
   const left = (bits & 1) !== 0;
   const right = (bits & 2) !== 0;
   const both = left && right;
+  const ears = (bits & 12) === 12;
   intent.turn = both ? 0 : (right ? 1 : 0) - (left ? 1 : 0);
-  intent.brake = (bits & 4) !== 0;
-  intent.bar = both || (bits & 8) !== 0;
+  intent.ears = ears;
+  intent.brake = !ears && (bits & 4) !== 0;
+  intent.bar = !ears && (both || (bits & 8) !== 0);
   return stepRun(world, intent, RUN.step);
 }
 
@@ -168,6 +215,7 @@ export function stepBits(world, bits) {
  */
 export function finishRun(world, reason) {
   world.meet?.finish(reason, world);
+  world.style?.finish(reason);
   world.sky.finish();
   return world;
 }

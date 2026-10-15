@@ -1,4 +1,4 @@
-// A run's log: the four controls held at every fixed step. Given the seed of its sky, that is all a
+// A run's log: the controls held at every fixed step. Given the seed of its sky, that is all a
 // run of Good Lift is made of (run-step.js flies a run from nothing else), so a log replays to the
 // very run it was recorded from (replay.js), travels in a challenge link (#vs=) and is the proof a
 // board row keeps of its total. Pure and free of imports, like the step it feeds.
@@ -31,9 +31,17 @@ export const MAX_STEPS = 14_400;
 // Characters of a link read at all. A whole run's log comes to a few hundred, or about two thousand
 // for a pilot tapping the arrows five times a second all the way up.
 export const MAX_LINK = 8_192;
-// The four controls, as the bits of one fixed step (run-step.js's stepBits): left and right
-// together are the speed bar, so a phone with only the two arrows can push it.
-export const INPUT = Object.freeze({ left: 1, right: 2, brake: 4, bar: 8 });
+// The controls, as the bits of one fixed step (run-step.js's stepBits): left and right together are
+// the speed bar, so a phone with only the two arrows can push it, and the brake and the bar
+// together are the big ears. The brake has always won over the bar, so that pair meant nothing of
+// its own until the ears took it, and the links of runs flown before them fly as they always did.
+export const INPUT = Object.freeze({ left: 1, right: 2, brake: 4, bar: 8, ears: 12 });
+
+// Both ▼ on a touch screen pressed together are the big ears: the second within `together` fixed
+// steps of the first, and both held `hold` steps. After that either ▼ keeps them in, so the other
+// thumb can steer. A change of thumb starts from one ▼ held far longer than `together`, and a quick
+// handover lets go within `hold`, so neither is ever the ears, however long the thumbs overlap.
+export const TOUCH_EARS = Object.freeze({ together: 12, hold: 6 });
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 // Each character's six bits, by its code; -1 for any character base64url does not use.
@@ -55,9 +63,87 @@ function need(ok, what, value) {
   if (!ok) throw new RangeError(`a log cannot hold ${what} ${typeof value === 'string' ? JSON.stringify(value) : String(value)}`);
 }
 
-/** The bits of one step for the keys held as `input` ({ left, right, brake, bar }, as the game keeps them). */
+/**
+ * The bits of one step for the controls held as `input` ({ left, right, brake, bar, ears }, as the
+ * game keeps them). The brake wins over the ears and the ears over the bar, so the brake and the bar
+ * are only ever written together as the ears: the bar still held while braking is the brake, as the
+ * step always flew it.
+ */
 export function inputBits(input) {
-  return (input.left ? INPUT.left : 0) | (input.right ? INPUT.right : 0) | (input.brake ? INPUT.brake : 0) | (input.bar ? INPUT.bar : 0);
+  const turn = (input.left ? INPUT.left : 0) | (input.right ? INPUT.right : 0);
+  return turn | (input.brake ? INPUT.brake : input.ears ? INPUT.ears : input.bar ? INPUT.bar : 0);
+}
+
+/**
+ * Tells, step by step, whether the two ▼ of a touch screen are holding the big ears (TOUCH_EARS).
+ * `step(first, second)` takes whether each ▼ is held this fixed step and says whether the ears are;
+ * nothing else is read, so the bits a run records are all its replay needs.
+ */
+export function createTouchEars() {
+  // Steps since each ▼ went down (-1 while it is up), how long both have been held, and whether
+  // the ears are in.
+  let first = -1;
+  let second = -1;
+  let both = 0;
+  let on = false;
+
+  function reset() {
+    first = second = -1;
+    both = 0;
+    on = false;
+  }
+
+  function step(a, b) {
+    first = a ? first + 1 : -1;
+    second = b ? second + 1 : -1;
+    if (!a && !b) {
+      on = false;
+      both = 0;
+      return false;
+    }
+    if (on) return true;
+    // Both down, and the later of the two went down within `together` steps of the earlier.
+    both = a && b && Math.abs(first - second) <= TOUCH_EARS.together ? both + 1 : 0;
+    on = both >= TOUCH_EARS.hold;
+    return on;
+  }
+
+  return { reset, step, get on() { return on; } };
+}
+
+/**
+ * Round a loop the brake and the bar are its presses, ▼ under the wing and ▲ over it, and a log can
+ * only write the two together as the ears, with the brake over the bar (inputBits): ▲ pressed with
+ * ▼ still held would never be seen, and ▼ let go with ▲ held would read as a press of ▲. So round
+ * one only the newer of the two held is flown, and letting go of it hands nothing back to the other
+ * until that is pressed again. `step(brake, bar, round)` takes whether each is held this fixed step
+ * and whether a loop is going round, and says which to fly ({ brake, bar }, one object reused);
+ * outside a loop both are flown as they are held.
+ */
+export function createLoopKeys() {
+  // The newer of the two still held ('brake', 'bar' or null), and each as it was held last step.
+  let newest = null;
+  let brakeWas = false;
+  let barWas = false;
+  const out = { brake: false, bar: false };
+
+  function reset() {
+    newest = null;
+    brakeWas = barWas = false;
+  }
+
+  function step(brake, bar, round) {
+    if (brake && !brakeWas) newest = 'brake';
+    else if (bar && !barWas) newest = 'bar';
+    if ((newest === 'brake' && !brake) || (newest === 'bar' && !bar)) newest = null;
+    brakeWas = brake;
+    barWas = bar;
+    out.brake = round ? newest === 'brake' : brake;
+    out.bar = round ? newest === 'bar' : bar;
+    return out;
+  }
+
+  return { reset, step };
 }
 
 /**

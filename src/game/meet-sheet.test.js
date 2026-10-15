@@ -6,11 +6,12 @@ import { createReferencePilot } from './pilots.js';
 import { CLOUD_GATE, createCloudbaseRun } from './cloudbase-state.js';
 import { MEET, MEET_POOL, createMeet } from './meet-state.js';
 import { createBells } from './bells.js';
+import { createStyle } from './meet-style.js';
 
-// A run on `seed` with the meet and the kettlebells, flown by the reference pilot (pilots.js) until
-// the fog, and ended as live play ends it.
+// A run on `seed` with the meet, the kettlebells and the style, flown by the reference pilot
+// (pilots.js) until the fog, and ended as live play ends it.
 function flown(seed, pilot = {}) {
-  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells() }), seed);
+  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle() }), seed);
   const reference = createReferencePilot(pilot);
   const intent = { turn: 0, brake: false, bar: false };
   let reason = null;
@@ -25,7 +26,7 @@ function flown(seed, pilot = {}) {
 test('a run\'s sheet is what its world holds: every lift judged in order with the mist last, the counters, and the peak to the whole metre', () => {
   for (const seed of [1, 2, 3]) {
     const { world, reason } = flown(seed, { brake: 'eased' });
-    const { sky, g, meet, bells, trace } = world;
+    const { sky, g, meet, bells, trace, style } = world;
     const met = meet.state;
     const sheet = summariseRun(world, reason);
     assert.deepEqual(Object.keys(sheet), ['seed', 'reason', 'steps', 'seconds', 'total', 'peak', 'lifts', 'stats', 'trace']);
@@ -39,10 +40,11 @@ test('a run\'s sheet is what its world holds: every lift judged in order with th
       scattered: met.scattered, recovered: met.recovered,
       thrown: bells.state.thrown, dodged: bells.state.dodged, hits: bells.state.hits, glanced: bells.state.glanced, beast: bells.state.beast.result,
       gates: met.runes.taken, runes: met.runes.runes,
+      style: style.state.total, wingovers: style.state.wingovers, pitch: style.state.pitch, loops: style.state.mostLoops,
     });
-    // The plate sources first, then what strikes cost, the kettlebells and the gates.
+    // The plate sources first, then what strikes cost, the kettlebells, the gates and the style.
     assert.deepEqual(Object.keys(sheet.stats), ['strikes', 'stalls', 'cloud', 'reps', 'deep', 'trails', 'wind', 'thunder', 'bait', 'close',
-      'scattered', 'recovered', 'thrown', 'dodged', 'hits', 'glanced', 'beast', 'gates', 'runes']);
+      'scattered', 'recovered', 'thrown', 'dodged', 'hits', 'glanced', 'beast', 'gates', 'runes', 'style', 'wingovers', 'pitch', 'loops']);
     assert.deepEqual(sheet.trace, { alt: [...trace.alt.subarray(0, trace.n)], fog: [...trace.fog.subarray(0, trace.n)], total: [...trace.total.subarray(0, trace.n)], n: trace.n });
     assert.ok(sheet.lifts.length >= 4 && sheet.stats.thrown >= 2 && sheet.trace.n > 100, JSON.stringify(sheet.stats));
   }
@@ -85,7 +87,7 @@ test('a quit is any ending but the fog and a touchdown, and a world with no meet
   assert.deepEqual([sheet.total, sheet.lifts, sheet.steps, sheet.trace.n], [0, [], 20 * 60, 21]);
   assert.deepEqual(sheet.stats, {
     strikes: 0, stalls: 0, cloud: 0, reps: 0, deep: 0, trails: 0, wind: 0, thunder: 0, bait: 0, close: 0, scattered: 0, recovered: 0,
-    thrown: 0, dodged: 0, hits: 0, glanced: 0, beast: 0, gates: 0, runes: 0,
+    thrown: 0, dodged: 0, hits: 0, glanced: 0, beast: 0, gates: 0, runes: 0, style: 0, wingovers: 0, pitch: 0, loops: 0,
   });
   assert.ok(sheet.peak > CLOUD_GATE.y);
 });

@@ -156,7 +156,7 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
   const [world, setWorld] = useState(null);
   // Whether the game beyond the arch is still on its way ('loading') or would not come ('failed').
   const [sky, setSky] = useState('');
-  // A challenge link's run to beat, once read and replayed: { who, total, peak } or { error }.
+  // A challenge link's run to beat, once read and replayed: { who, total, score, peak } or { error }.
   const [rival, setRival] = useState(null);
   // Visitors who ask for reduced motion get the missing page's text and links without the fall.
   const [lostStage, setLostStage] = useState(() => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'still' : 'gliding'));
@@ -350,7 +350,7 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
               </p>
             ) : (
               <p>
-                // to beat: {rival.who || 'a pilot'} · {rival.total.toLocaleString('en-GB', { maximumFractionDigits: 1 })} kg ·{' '}
+                // to beat: {rival.who || 'a pilot'} · {rival.score.toLocaleString('en-GB')} pts ·{' '}
                 {rival.peak.toLocaleString('en-GB')} m · verified
               </p>
             ))}
@@ -361,8 +361,9 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
             </button>{' '}
             <button onClick={() => onExit(null)}>[ back to the page ]</button>
           </p>
-          <p className="dim for-keys">← → steer · space brake · ↑ (or ← and → together) speed bar · esc end run · r again · b music</p>
-          <p className="dim for-touch">◀ ▶ steer · ▼ brake · ◀ and ▶ together for the speed bar</p>
+          <p className="dim for-keys">← → steer · space brake · ↑ (or ← and → together) speed bar · e big ears · esc end run · r again · b music</p>
+          <p className="dim for-touch">◀ ▶ steer · ▼ brake · ◀ and ▶ together for the speed bar · ▼ ▼ together for big ears</p>
+          <p className="dim">tricks earn style, which multiplies your score: swap the turn as each swing tops out, pitch the wing and catch it, or loop out of a big wingover; the gauge says when</p>
         </div>
       )}
       {flying && live && !armed && !lost && !address && (

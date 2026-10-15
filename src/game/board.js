@@ -1,8 +1,9 @@
 // Good Lift's local board: the best runs of each Daily Sky flown on this device, kept inside the
 // game's own store (good-lift-store.js, under 'good-lift-v1'). A day's board is the top BOARD.keep
 // runs flown on one UTC day under one version of the rules (sim-version.js), since a run flown
-// under one version is never judged against another. Runs rank by total, then by peak, then by
-// which started first, so a board always has one order.
+// under one version is never judged against another. Runs rank by score (the total lifted by the
+// style its tricks landed, score.js), then by peak, then by which started first, so a board always
+// has one order.
 //
 // Every row keeps its run's log. The log is its proof, because a replay of it flies to the same
 // total, and it is the seam for Slice 2's online board, which will be sent exactly that. A row
@@ -17,6 +18,7 @@
 // day's bots came to is kept beside the board (normalizeBots), so a sky flown again that day never
 // flies them again.
 import { bynameOf } from './meet-bynames.js';
+import { byRank, outranks } from './score.js';
 
 // How much the board remembers: the best `keep` runs of each day, for `days` UTC days (today and
 // the 13 before it). A row is about 1.2 KB, mostly its log, so a full board is some 170 KB.
@@ -52,24 +54,20 @@ export function boardDay(key) {
   return Number(match[2]);
 }
 
-/**
- * Whether run `a` ranks above run `b` ({ total, peak }) by what they banked: the heavier total, or
- * the same total and the higher peak. Of two that tie in both, neither does; the board then puts
- * the earlier run first, and a bot stays ahead of any run that only ties it.
- */
-export const outranks = (a, b) => a.total > b.total || (a.total === b.total && a.peak > b.peak);
-
-// Best first: the heavier total, then the higher peak, then the run that started first. The sort
-// is stable, so a run that ties another exactly in all three ranks after the one already there.
-const byRank = (a, b) => b.total - a.total || b.peak - a.peak || a.at - b.at;
+// Whether one run ranks above another, and the order of a board: by the score, the total lifted by
+// the style (score.js), then the peak, then the earlier run.
+export { outranks };
 
 /**
- * A clean copy of what a run banked, { total, peak, red }, held to the rules a row's are (see
- * normalizeRow), or null when any of the three is damaged. Anything else in the object is left behind.
+ * A clean copy of what a run banked, { total, style, peak, red }, held to the rules a row's are (see
+ * normalizeRow), or null when any of them is damaged. A style missing, as on a row written before
+ * style was carried, is none. Anything else in the object is left behind.
  */
 export function normalizeScore(score) {
   if (!isRecord(score)) return null;
   const { total, peak, red } = score;
+  const style = score.style ?? 0;
+  if (!Number.isInteger(style) || style < 0 || style % 5 !== 0) return null;
   // Twice the total is a whole number of 5 kg exactly when the total is a multiple of 2.5, and
   // doubling is exact in floating point, so no near miss rounds its way onto the board.
   if (!isAmount(total) || !Number.isInteger(total * 2) || (total * 2) % 5 !== 0) return null;
@@ -82,7 +80,7 @@ export function normalizeScore(score) {
     const light = red[i];
     if (!Number.isInteger(light) || light < 0 || light > 7) return null;
   }
-  return { total, peak, red: [...red] };
+  return { total, style, peak, red: [...red] };
 }
 
 /**
@@ -91,6 +89,8 @@ export function normalizeScore(score) {
  *   who     '' for a run flown unnamed, or three capitals A to Z
  *   via     'me' for a run flown here, 'link' for one read from a challenge link
  *   total   kg, a whole number of 2.5 kg steps
+ *   style   the style the run landed (meet-style.js), a whole number of 5 points; with the total, it
+ *           is the score the board ranks by (score.js)
  *   peak    m, whole metres
  *   red     each lift's lights in lift order, the mist last: 0 to 7 (bit 0 contact, bit 1
  *           control, bit 2 airspace), at most ROW.lights of them
@@ -192,14 +192,14 @@ export function pruneBoard(board, today) {
 /**
  * The rows of a day (rowsFor's, best first) with a bot's run pinned among them where it ranks, for
  * the sheet to show: under every run that outranks it and over the rest, so a run that only ties it
- * stays under it. `bot` is { who, total, peak, red }. Its row comes back as a bot's: `via` 'bot',
+ * stays under it. `bot` is { who, total, peak, red }: a bot flies no tricks, so its score is its total. Its row comes back as a bot's: `via` 'bot',
  * with no start, log or byname, which normalizeRow refuses, so it can never be stored as a run. A
  * new list, holding the caller's own rows.
  */
 export function withBot(rows, bot) {
   let place = 0;
   while (place < rows.length && outranks(rows[place], bot)) place += 1;
-  const pinned = { who: bot.who, via: 'bot', total: bot.total, peak: bot.peak, red: [...bot.red], at: 0, log: '', byname: '' };
+  const pinned = { who: bot.who, via: 'bot', total: bot.total, style: bot.style ?? 0, peak: bot.peak, red: [...bot.red], at: 0, log: '', byname: '' };
   return [...rows.slice(0, place), pinned, ...rows.slice(place)];
 }
 

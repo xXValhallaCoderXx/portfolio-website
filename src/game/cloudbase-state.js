@@ -49,9 +49,15 @@ export const CLOUD_RAVENS = Object.freeze({
 // for `collapse` seconds with `sink` added, and nothing can strike again until `shield` runs out;
 // the struck flock scatters `scatter` metres wide for as long. Cloud deeper than `cover` hides the
 // pilot from the birds. `warn` marks the bird about to cross the pilot's path from above.
+//
+// A folded wing is pumped open: the brake held `pump.hold` seconds and let go takes `pump.cut`
+// seconds off the fold, `pump.most` times at most (run-step.js counts them). Taps shorter than the
+// hold, and a brake held through, do nothing: two long, deep pumps are what reopens a real wing.
+// Pumped twice, a fold in a core costs 31 m at its lowest instead of 55.
 export const CLOUD_STRIKE = Object.freeze({
   radius: 4.6, rise: 3, half: 4.5, collapse: 2.4, sink: 26, shield: 8, scatter: 12, cover: 0.15,
   warn: Object.freeze({ above: 25, reach: 8 }),
+  pump: Object.freeze({ hold: 0.3, cut: 0.4, most: 2 }),
 });
 
 // Storm clouds drift through in layers, more of them higher up, and none just under a milestone.
@@ -582,6 +588,14 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
     return true;
   }
 
+  /** Brings a folded wing open `seconds` sooner (a pump of the brake); never past open. The shield stays. */
+  function reopen(seconds) {
+    const pilot = state.pilot;
+    if (!state.active || !(pilot.collapse > 0) || !(seconds > 0)) return false;
+    pilot.collapse = Math.max(0, pilot.collapse - seconds);
+    return true;
+  }
+
   function step(dt, pos) {
     if (!state.active || !Number.isFinite(dt) || dt <= 0) return null;
     state.elapsed += dt;
@@ -705,5 +719,5 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
     return out;
   }
 
-  return { reset, step, sample, inside, depthAt, windAt, gust, strike, finish, get state() { return state; } };
+  return { reset, step, sample, inside, depthAt, windAt, gust, strike, reopen, finish, get state() { return state; } };
 }

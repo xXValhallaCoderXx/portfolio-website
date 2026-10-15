@@ -7,6 +7,7 @@
 import { createCloudbaseRun } from './cloudbase-state.js';
 import { createMeet } from './meet-state.js';
 import { createBells } from './bells.js';
+import { createStyle } from './meet-style.js';
 import { createRunWorld, finishRun, startRun, stepBits } from './run-step.js';
 import { summariseRun } from './meet-sheet.js';
 import { SIM_VERSION } from './sim-version.js';
@@ -34,7 +35,7 @@ export function createReplay({ log }) {
     done = true;
     result = { error: 'version' };
   } else {
-    world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells() }), log.seed);
+    world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle() }), log.seed);
   }
 
   function advance(maxSteps = Infinity) {

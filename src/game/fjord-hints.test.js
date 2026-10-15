@@ -53,3 +53,18 @@ test('held on the frame clock, a fjord line stays up long enough to read, but a 
   assert.equal(holdHint(held, hint({ stall: 1 }), 30.6), 'stalled — let go, the wing flies again');
   assert.equal(holdHint(held, hint({}), 30.6 + HINT_HOLD), '');
 });
+
+test('over the fjord a surge is said as in a run, the first trick of a flight is told it is safe here, and then how to fly it, but never by a ring', () => {
+  assert.equal(hint({ surging: true }), 'wing surging — brake till it swings back');
+  assert.equal(hint({ surging: true, touch: true }), 'wing surging — hold ▼ till it swings back');
+  assert.equal(hint({ safeTricks: true, pitching: true }), 'safe here — past the arch, tricks can fold');
+  assert.equal(hint({ pitching: true }), 'pitch: brake when ahead, let go when behind');
+  assert.equal(hint({ wingover: true, touch: true }), 'wingover — ◀ ▶ in turn as each swing peaks');
+  assert.equal(hint({ wingover: true, loopable: true }), 'big wingover — ▼ at its top to loop over');
+  assert.equal(hint({ looping: true, wingover: true }), 'loop — ▲ over the wing, ▼ under it');
+  assert.equal(hint({ nearRing: true, unvisited: false, surging: true, wingover: true }), '');
+  assert.match(hint({ stall: 1, surging: true }), /^stalled/);
+  for (const facts of [{ surging: true }, { surging: true, touch: true }, { safeTricks: true }, { pitching: true }, { pitching: true, touch: true }, { wingover: true }, { wingover: true, touch: true }, { loopable: true }, { looping: true }]) {
+    assert.ok([...hint(facts)].length <= HINT_WIDTH, hint(facts));
+  }
+});

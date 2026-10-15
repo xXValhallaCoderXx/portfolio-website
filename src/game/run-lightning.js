@@ -1,7 +1,7 @@
 // Lightning in Good Lift's storm clouds. Once the pilot has climbed among them (above
 // CLOUD_STORM.floor), every 9 to 20 seconds one they can see flashes: a bolt runs down out of it,
 // the cloud lights from within (cloudbase.js), the sky behind it brightens, and the thunder comes
-// as long after as sound takes from the bolt. For half a second every hidden thermal's sparks show
+// as long after as sound takes from the bolt. For half a second every hidden thermal's motes show
 // as if close by (cloudbase.js again): a glimpse of where the lift is, for whoever is looking. A
 // visitor who asks for less motion gets the bolt, the cloud's glow and the glimpse in one soft
 // swell, with no flicker and no flash of the sky.
@@ -43,7 +43,7 @@ export const LIGHTNING = Object.freeze({
   // How bright the sky gets toward the bolt at the strike, added to the night, and `wide` of that
   // away from it. The sky is lit on a dome `dome` metres round the camera, inside its far plane.
   sky: 0.3, wide: 0.15, dome: 2400,
-  // s: every hidden thermal's sparks show as if close for `reveal[0]`, then fade out over `reveal[1]`.
+  // s: every hidden thermal's motes show as if close for `reveal[0]`, then fade out over `reveal[1]`.
   reveal: Object.freeze([0.5, 0.25]),
   // s a calm visitor's strike takes to come up: the bolt, the cloud's glow and the glimpse of the
   // lift all swell in together over it, with nothing shown at once.

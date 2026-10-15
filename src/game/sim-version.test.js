@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { SIM_VERSION } from './sim-version.js';
-import { BRAKE, FLIGHT, STALL } from './flight.js';
+import { BRAKE, EARS, FALL, FLIGHT, LOOP, PITCH, ROLL, STALL, TIP, TUCK } from './flight.js';
+import { BANDS, WATCH } from './swing-watch.js';
+import { STYLE } from './meet-style.js';
+import { SCORE } from './score.js';
 import * as SKY from './cloudbase-state.js';
 import { RUN } from './run-step.js';
 import { BAIT, MEET, MEET_POOL, SCATTER, THUNDER, TRAIL, WIND } from './meet-state.js';
@@ -14,15 +17,17 @@ import { ZONES, surfaceAt } from './terrain.js';
 // flown under one version is replayed under it for ever after, by every link and board row that
 // carries it, so the tables of a shipped version never change: a retune is a new version. Pinned
 // on the day a version ships; version 0 is the provisional one Good Lift is built under, and has none.
-const FINGERPRINT = Object.freeze({ 1: '145b525a', 2: 'ba74e01c', 3: '06097c0b' });
+const FINGERPRINT = Object.freeze({ 1: '145b525a', 2: 'ba74e01c', 3: '06097c0b', 4: 'd5990922' });
 
 // Everything a run is flown by that is a number rather than code: the wing's tables, every one of
 // the sky's, the step's, the meet's (its plates off the trail and its rune gates and blessings with
 // it, and the runes' own numbers, which say what a seed's gates offer) and the kettlebells' (the
 // Beast's with them), where each landing zone is cut into the ground (each its x, z, r and h), and
-// the ground under the whole sky, to the centimetre, every 10 m across its square. Code changes are
-// caught elsewhere: by the goldens in run-step.test.js, the reference pilots' pins, and replays of
-// logs recorded in browsers.
+// the ground under the whole sky, to the centimetre, every 10 m across its square. And, since style
+// multiplies the total a run is ranked by and the server works it out again from the log, what a
+// trick is worth: the swing watch's and the style's tables and the score's. Code changes are caught
+// elsewhere: by the goldens in run-step.test.js, the reference pilots' pins, and replays of logs
+// recorded in browsers.
 function material() {
   const zone = SKY.CLOUD_ZONE;
   const ground = [];
@@ -30,7 +35,7 @@ function material() {
     for (let dx = -zone.r; dx <= zone.r; dx += 10) ground.push(Math.round(surfaceAt(zone.x + dx, zone.z + dz) * 100));
   }
   return {
-    FLIGHT, BRAKE, STALL,
+    FLIGHT, BRAKE, STALL, EARS, PITCH, FALL, TUCK, ROLL, TIP, LOOP, BANDS, WATCH, STYLE, SCORE,
     ...Object.fromEntries(Object.entries(SKY).filter(([name]) => name.startsWith('CLOUD_'))),
     RUN, MEET, TRAIL, MEET_POOL, WIND, THUNDER, BAIT, SCATTER, GATES, BLESSING, RUNE, BELLS, BELL_POOL, BEAST,
     ZONES: ZONES.map(({ x, z, r, h }) => ({ x, z, r, h })),
@@ -85,7 +90,7 @@ test('the fingerprint moves with every number in the tables, every landing zone 
   const print = fingerprint(tables);
   // Every table a run is flown by is in it, and the whole of the ground's grid.
   const names = Object.keys(tables);
-  for (const name of ['CLOUD_ZONE', 'CLOUD_GATE', 'CLOUD_LAUNCH', 'CLOUD_WEAR', 'CLOUD_HUNT', 'CLOUD_RAVENS', 'CLOUD_STRIKE', 'CLOUD_STORM', 'CLOUD_WIND', 'CLOUD_GUST', 'CLOUD_POOL',
+  for (const name of ['FLIGHT', 'BRAKE', 'STALL', 'EARS', 'PITCH', 'FALL', 'TUCK', 'ROLL', 'TIP', 'CLOUD_ZONE', 'CLOUD_GATE', 'CLOUD_LAUNCH', 'CLOUD_WEAR', 'CLOUD_HUNT', 'CLOUD_RAVENS', 'CLOUD_STRIKE', 'CLOUD_STORM', 'CLOUD_WIND', 'CLOUD_GUST', 'CLOUD_POOL',
     'MEET', 'TRAIL', 'MEET_POOL', 'WIND', 'THUNDER', 'BAIT', 'SCATTER', 'GATES', 'BLESSING', 'RUNE', 'BELLS', 'BELL_POOL', 'BEAST']) {
     assert.ok(names.includes(name), name);
   }

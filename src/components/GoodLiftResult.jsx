@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { FEATS, JUDGES, barogram, kilos, medalsSaid, metres, shareText, worldSaid } from '../game/meet-card.js';
+import { FEATS, JUDGES, barogram, kilos, medalsSaid, metres, points, shareText, trickSaid, worldSaid } from '../game/meet-card.js';
+import { multiplierOf, rankOf, scoreOf } from '../game/score.js';
 import { bynameOf } from '../game/meet-bynames.js';
 import { isBlocked, runesOf } from '../game/meet-initials.js';
 import { outranks, withBot } from '../game/board.js';
@@ -20,14 +21,19 @@ const TABS = [
 // own place follows them if it is further down.
 const WORLD_SHOWN = 10;
 
-// Who won a race: on the total, and on the peak if the totals are level.
+// Who won a race: on the score (the total lifted by the style), compared exactly as the board does,
+// and on the peak if the scores are level. Two scores apart by less than a point show as one.
 function verdict(mine, theirs) {
   const name = theirs.who || 'they';
-  const ahead = mine.total - theirs.total;
-  if (ahead > 0) return `you won by ${kilos(ahead)} kg`;
-  if (ahead < 0) return `${name} won by ${kilos(-ahead)} kg`;
-  if (mine.peak > theirs.peak) return 'level on kilos; you climbed higher';
-  if (mine.peak < theirs.peak) return `level on kilos; ${name} climbed higher`;
+  const by = (winner, loser) => {
+    const pts = scoreOf(winner) - scoreOf(loser);
+    return pts > 0 ? `${pts.toLocaleString('en-GB')} pts` : 'under a point';
+  };
+  const ahead = rankOf(mine) - rankOf(theirs);
+  if (ahead > 0) return `you won by ${by(mine, theirs)}`;
+  if (ahead < 0) return `${name} won by ${by(theirs, mine)}`;
+  if (mine.peak > theirs.peak) return 'level on points; you climbed higher';
+  if (mine.peak < theirs.peak) return `level on points; ${name} climbed higher`;
   return 'a dead heat';
 }
 
@@ -142,7 +148,7 @@ function BoardRow({ row, place, className = '', tag = '' }) {
         <Pilot who={row.who} via={row.via} byname={row.byname} />
         {tag && <i className="good-lift-tag"> · {tag}</i>}
       </b>
-      <span>{kilos(row.total)} kg</span>
+      <span>{points(row)} pts</span>
       <span>{metres(row.peak)} m</span>
       <span className="good-lift-row-lights" aria-hidden="true">
         {row.red.map((red, index) => (
@@ -227,7 +233,7 @@ function Medals({ bots }) {
       {bots.medals.map((mark, i) => (
         <span key={mark.medal}>
           {i > 0 && ' · '}
-          <b className={`good-lift-medal ${mark.medal}`}>{mark.medal}</b> {kilos(mark.total)} kg
+          <b className={`good-lift-medal ${mark.medal}`}>{mark.medal}</b> {points(mark)} pts
           {mark.by === 'tst' && <i className="good-lift-tag"> (TST)</i>}
         </span>
       ))}
@@ -357,7 +363,7 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
   const said = !landed ? '' : landed.failed ? 'The bots could not fly this sky.' : medalsSaid(landed);
   const earned = new Set([...(result.feats?.earned ?? []), ...(landed?.fresh ?? [])]);
   const fresh = new Set([...(result.feats?.fresh ?? []), ...(landed?.fresh ?? [])]);
-  const best = result.best ?? { total: result.total, peak: result.peak };
+  const best = result.best ?? { total: result.total, peak: result.peak, score: scoreOf(result) };
   // The day's runs, with TST pinned among them once it has flown; numbered as runs, the bot unnumbered.
   const rows = !result.board ? [] : landed?.tst ? withBot(result.board.rows, landed.tst) : result.board.rows;
   let place = 0;
@@ -404,7 +410,15 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
         </p>
         {result.verse && <p className="dim good-lift-verse">{result.verse}</p>}
         <p className="good-lift-total" id={`${id}-total`}>
-          TOTAL <strong>{kilos(result.total)} kg</strong> · peak <strong>{metres(result.peak)} m</strong> · best {kilos(best.total)} kg
+          SCORE <strong>{points(result)}</strong> · {kilos(result.total)} kg
+          {result.stats.style > 0 && (
+            <>
+              {' × '}
+              <span className="good-lift-style">{multiplierOf(result.stats.style).toFixed(2)} style</span>
+            </>
+          )}
+          {' · '}peak <strong>{metres(result.peak)} m</strong>
+          {' · '}best {(best.score ?? scoreOf(best)).toLocaleString('en-GB')} pts
         </p>
         {((result.pilot ?? result.initials) || bynameOf(result.byname)) && (
           <p className="good-lift-who">
@@ -422,6 +436,7 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
           {result.stats.reps > 0 && ` · ${result.stats.reps} rep${result.stats.reps === 1 ? '' : 's'}, ${result.stats.deep || 'none'} to depth`}
         </p>
         <SkyLine result={result} />
+        {trickSaid(result.stats) && <p className="dim good-lift-tricks">{trickSaid(result.stats)}</p>}
         <Medals bots={landed} />
         <p className="good-lift-hide" role="status">
           {said}
@@ -429,7 +444,7 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
 
         {rival && (
           <p className="good-lift-verdict">
-            vs {rival.who || 'a pilot'} · {kilos(rival.total)} kg · {metres(rival.peak)} m — {verdict(result, rival)}
+            vs {rival.who || 'a pilot'} · {points(rival)} pts · {metres(rival.peak)} m — {verdict(result, rival)}
           </p>
         )}
         {fresh.size > 0 && (

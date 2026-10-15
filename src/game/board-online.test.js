@@ -38,7 +38,7 @@ function network(answer = () => ({ ok: true })) {
 const random = (count) => Uint8Array.from({ length: count }, (_, i) => (i * 37 + 11) & 255);
 
 // A row of the world board, and a day's board as the function sends it.
-const row = (n, fields = {}) => ({ who: 'REN', byname: '', total: 500 - 2.5 * n, peak: 900, red: [0, 0], at: 1_792_000_000_000 + n, id: n.toString(16).padStart(WORLD_BOARD.id, '0'), ...fields });
+const row = (n, fields = {}) => ({ who: 'REN', byname: '', total: 500 - 2.5 * n, style: 0, peak: 900, red: [0, 0], at: 1_792_000_000_000 + n, id: n.toString(16).padStart(WORLD_BOARD.id, '0'), ...fields });
 const sent = (rows, day = DAY, version = SIM_VERSION) => ({ version, day, rows });
 
 test('with no function named the world board is off: nothing is fetched, no token is made, and every answer is null', async () => {

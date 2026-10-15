@@ -22,11 +22,13 @@
  *                     the fog's bait, and close calls; plates a strike sprayed off the bar and those
  *                     loaded back; kettlebells thrown, dodged, hit and glanced off Algiz, and how
  *                     the Beast came out (BELL_RESULT; 0 if it was never thrown, or still falling);
- *                     rune gates flown through, and the runes taken (bit rune - 1 for each, RUNE)
+ *                     rune gates flown through, and the runes taken (bit rune - 1 for each, RUNE);
+ *                     and the run's style (meet-style.js): the points its tricks landed, the most
+ *                     wingovers in one set landed, and the deepest pitch caught, in whole degrees
  *   trace             the barogram: `alt`, `fog` and `total` for each run second, `n` of them
  */
 export function summariseRun(world, reason) {
-  const { sky, g, meet, bells, trace } = world;
+  const { sky, g, meet, bells, trace, style } = world;
   const { state } = sky;
   const { pilot } = state;
   const met = meet ? meet.state : null;
@@ -67,6 +69,10 @@ export function summariseRun(world, reason) {
       beast: thrown ? thrown.beast.result : 0,
       gates: met ? met.runes.taken : 0,
       runes: met ? met.runes.runes : 0,
+      style: style ? style.state.total : 0,
+      wingovers: style ? style.state.wingovers : 0,
+      pitch: style ? style.state.pitch : 0,
+      loops: style ? style.state.mostLoops : 0,
     },
     trace: {
       alt: trace ? Array.from(trace.alt.subarray(0, n)) : [],

@@ -9,9 +9,12 @@ import { ORDER, createCloudbase } from './cloudbase.js';
 import { runEffects } from './run-effects.js';
 import { STONES_LEAD, cloudbaseHint } from './cloudbase-hints.js';
 import { holdHint } from './hints.js';
+import { BRAKE, PITCH, ROLL, pitchPeak } from './flight.js';
+import { SWING_GAUGE } from './swing-gauge.js';
+import { CATCH } from './pilots.js';
 import { createRunWorld, finishRun, startRun, stepBits } from './run-step.js';
 import { createWindStreaks } from './wind-streaks.js';
-import { MEET, PLATE_KIND, createMeet } from './meet-state.js';
+import { MEET, PLATE_KIND, TRAIL, createMeet } from './meet-state.js';
 import { BELLS, BELL_PHASE, BELL_RESULT, createBells } from './bells.js';
 import { BLESSING, GATE, GATES, RUNE, RUNE_NAME, RUNE_SIGN } from './meet-runes.js';
 import { createMeetView } from './meet-view.js';
@@ -22,16 +25,19 @@ import { earnFeats, keepEarned, kitAfterRun, kitSheet, readStore, recordRun, set
 import { readKit, writeKit } from './wing-kit.js';
 import { createChalk } from './meet-chalk.js';
 import { addRow, boardKey, outranks, rowsFor } from './board.js';
+import { multiplierOf, scoreOf } from './score.js';
 import { BOTS, createBots, landing, owing } from './meet-bots.js';
 import { bynameFor } from './meet-bynames.js';
 import { verseFor } from './meet-verse.js';
 import { isBlocked } from './meet-initials.js';
 import { SIM_VERSION } from './sim-version.js';
-import { createRecorder, decodeLog, encodeLog, inputBits } from './recorder.js';
+import { createLoopKeys, createRecorder, createTouchEars, decodeLog, encodeLog, inputBits } from './recorder.js';
 import { replayLog } from './replay.js';
+import { STYLE, createStyle } from './meet-style.js';
 import { summariseRun } from './meet-sheet.js';
 import { createMusic } from './music.js';
 import { createSurge } from './run-surge.js';
+import { createEntry } from './run-entry.js';
 import { createOnlineBoard, placeOf, takenOff } from './board-online.js';
 import { LIGHTNING, createLightning } from './run-lightning.js';
 import { GLIDE, createGlideRing } from './run-glide.js';
@@ -46,7 +52,8 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 // and lights, lift for lift.
 const sameSheet = (run, again) => !!again && !again.error && again.reason === run.reason && again.steps === run.steps &&
   again.total === run.total && again.peak === run.peak && again.lifts.length === run.lifts.length &&
-  run.lifts.every((lift, i) => lift.red === again.lifts[i].red && lift.kg === again.lifts[i].kg && lift.good === again.lifts[i].good);
+  run.lifts.every((lift, i) => lift.red === again.lifts[i].red && lift.kg === again.lifts[i].kg && lift.good === again.lifts[i].good) &&
+  again.stats.style === run.stats.style;
 
 // Whether two kits (wing-kit.js's, normalised) are the same wing, helmet and chalk.
 const sameKit = (a, b) => a.wing === b.wing && a.helmet === b.helmet && a.chalk === b.chalk;
@@ -58,6 +65,12 @@ export const JUDGES = Object.freeze(['contact', 'control', 'airspace']);
 // Seconds the lights stay up after a line, and between one pickup and the next for the next to
 // ring a step higher.
 const LIGHTS_FOR = 2.5;
+// When the next plate of a boarded trail is worth the ears: no further off than `ahead` (m), the
+// wing more than `over` metres too high for it on the bar's glide, in lift under `lift` m/s, which
+// the ears' 6 m/s still sinks through.
+const EARS_REACH = Object.freeze({ ahead: 40, over: 2, lift: 6 });
+// A flock worth flying into for the entry's hint: within `range` metres and `ahead` radians of the nose.
+const APPROACH = Object.freeze({ range: 70, ahead: 1 });
 const CHAIN = 2;
 // The pentatonic steps a run of pickups climbs, in semitones.
 const PENTA = [0, 2, 4, 7, 9];
@@ -88,6 +101,12 @@ const OUTCOMES = Object.freeze(['falling', 'hit', 'close', 'dodged', 'shielded',
 // What the run adds to the readouts: the bar's row, the judges' lights, the chevron and the glow
 // along the bottom once Gjallarhorn has sounded.
 const BAR_ROW = /* html */ '<dt class="fj-run">bar</dt><dd class="fj-run" data-hud="bar"></dd>';
+// The run's style (meet-style.js), a row of its own that shows once a set of tricks has landed, and
+// the line above the swing gauge saying the set in hand, and stamping it landed or lost.
+const STYLE_ROW = /* html */ '<dt class="fj-run fj-trick">style</dt><dd class="fj-run fj-trick" data-hud="style"></dd>';
+const STYLE_LINE = /* html */ '<p class="fj-style" aria-hidden="true"></p>';
+// Seconds a set of tricks landed, and one lost, is stamped over the gauge.
+const STAMP = Object.freeze({ landed: 1.6, lost: 1.4 });
 const MARKUP = /* html */ `
   <div class="fj-horn" aria-hidden="true"></div>
   <div class="fj-chevron" aria-hidden="true" hidden></div>
@@ -105,6 +124,29 @@ const MUSIC_BUTTON = /* html */ '<button data-do="music" hidden>[ music: on ]</b
 // Seconds the title card stays up as a run starts: the first of a visit in full, and shorter on
 // every run after it, which gets no typed line.
 const TITLE = Object.freeze({ full: 3.6, short: 2.2 });
+// The briefing: for a device's first `runs` runs, the game and its keys are told over the gate, and
+// the flight waits there until any key or tap. The keys are the ones each device flies by.
+const BRIEF = Object.freeze({ runs: 3 });
+const BRIEF_MARKUP = /* html */ `
+  <div class="fj-brief" role="note" aria-label="How Good Lift is flown" hidden>
+    <small></small>
+    <b>GOOD LIFT</b>
+    <p>Climb in the thermals the ravens circle, and lift at a line every 250 m: three white lights bank the bar. Plates load from your reps, the trails and the dodges. The fog rises under you.</p>
+    <dl class="fj-brief-keys">
+      <dt>← →</dt><dd>turn</dd>
+      <dt>space</dt><dd>brake: tap it every couple of seconds; held, it goes deep and stalls</dd>
+      <dt>↑</dt><dd>speed bar</dd>
+      <dt>e</dt><dd>big ears: sink fast</dd>
+      <dt>tricks</dt><dd>space in time to pitch the wing, ← → at each top for wingovers; from a big one, space to loop, then ↑ over the wing and space under it. Style multiplies your total</dd>
+    </dl>
+    <dl class="fj-brief-touch">
+      <dt>◀ ▶</dt><dd>turn</dd>
+      <dt>▼</dt><dd>brake: tap it every couple of seconds; held, it goes deep and stalls</dd>
+      <dt>◀▶</dt><dd>both: speed bar · ▼ ▼ both: big ears</dd>
+      <dt>tricks</dt><dd>▼ in time to pitch the wing, ◀ ▶ at each top for wingovers; from a big one, ▼ to loop, then ▲ over the wing and ▼ under it. Style multiplies your total</dd>
+    </dl>
+    <em><span class="fj-brief-keys">any key to fly</span><span class="fj-brief-touch">tap to fly</span></em>
+  </div>`;
 // The lights head the column the notifications stack in, which the engine keeps clear of the
 // readouts, so a milestone reached on a line never covers them.
 // The call is also said, in a status line that is always there (a live region that appears with
@@ -150,11 +192,20 @@ export function createGoodLift(host) {
   const panned = (ctx, pan) => sound.panned(ctx, pan);
   const sky = createCloudbaseRun();
   const meet = createMeet();
+  const style = createStyle();
   const bells = createBells();
-  const world = createRunWorld({ sky, g, controls, air, bells, meet });
-  // Feeling for the core: the lift surging as a circle closes on it (run-surge.js).
+  const world = createRunWorld({ sky, g, controls, air, bells, meet, style });
+  // Feeling for the core: the lift surging as a circle closes on it (run-surge.js), and the moment
+  // to turn into one, passing it on the flock's side (run-entry.js).
   const surge = createSurge();
-  const view = createCloudbase({ scene, loadModel: host.loadModel });
+  const entry = createEntry();
+  // Both ▼ of a touch screen pressed together, for the big ears (recorder.js), and the controls the
+  // keys and buttons ask for each step, written into the log as its bits.
+  const touchEars = createTouchEars();
+  const asked = { left: false, right: false, brake: false, bar: false, ears: false };
+  // Round a loop, the newer of the brake and the bar held, each a press of its own.
+  const loopKeys = createLoopKeys();
+  const view = createCloudbase({ scene, loadModel: host.loadModel, calm: host.calm });
   const meetView = createMeetView({ scene, loadModel: host.loadModel, calm: host.calm });
   // The chalk the kit puts on the pilot's hands, puffing as a plate or a rep loads.
   const chalk = createChalk({ scene, calm: host.calm });
@@ -187,13 +238,25 @@ export function createGoodLift(host) {
   // thermal's last rep missed its core; the pickups rung in a row and when the last of them was;
   // the iron off the trail loaded, the sprays and the kg lost; bells turned aside by Algiz, stones
   // flown through and crumbled, and when the last blessing was taken, Algiz turned a bell aside and
-  // Tiwaz lost the bar; and the line of the last stones the climb came level with, and when.
+  // Tiwaz lost the bar; the line of the last stones the climb came level with, and when; whether the
+  // wing was surging, the tucks, tips and pumps answered and when the last tuck and tip came; whether the ears
+  // have been pulled this run, and how long they have been held in climbing air; and when the moment
+  // came to turn into a core, and which way.
   const seen = {
     strikes: 0, bellHit: false, against: 0, searching: 0, rides: 0, riding: 0,
     thrown: 0, hits: 0, close: 0, count: 0, plates: 0, reps: 0, deep: 0, trails: 0, horn: false, shallow: false,
     closeAt: -Infinity, hornAt: -Infinity, deepAt: -Infinity, chain: 0, chainAt: -Infinity, beastClose: false,
     wind: 0, bait: 0, sprays: 0, lost: 0, glanced: 0, gates: 0, crumbled: 0,
     blessedAt: -Infinity, glancedAt: -Infinity, lostAt: -Infinity, levelLine: 0, levelAt: -Infinity,
+    surging: false, tucks: 0, pumps: 0, tuckAt: -Infinity, tips: 0, tipAt: -Infinity, earsUsed: false, earsClimb: 0, turnAt: -Infinity, turnSide: 0,
+  };
+  // The run's style as last answered (meet-style.js): sets landed and lost, the elements in the set in
+  // hand and its name, the style shown and in which form, and when a set last landed or was lost,
+  // with the stamp over the gauge and when it comes down, and what the line over the gauge last
+  // showed (the stamp, or the points of the set in hand).
+  const styled = {
+    landed: 0, lost: 0, elements: 0, total: -1, compact: null, inHand: '', trick: '', points: 0,
+    landedAt: -Infinity, lostAt: -Infinity, stamp: '', stampUntil: -Infinity, stamped: null, pending: -1,
   };
   // The blessing the readouts show, by RUNE.
   let shownRune = RUNE.none;
@@ -226,12 +289,17 @@ export function createGoodLift(host) {
 
   // The run's own readouts, made once and taken away by dispose().
   const rows = stage.querySelector('.fj-hud dl');
-  rows.insertAdjacentHTML('beforeend', BAR_ROW);
+  rows.insertAdjacentHTML('beforeend', BAR_ROW + STYLE_ROW);
   stage.querySelector('.fj-toasts').insertAdjacentHTML('beforebegin', MARKUP);
   stage.querySelector('.fj-toasts').insertAdjacentHTML('afterbegin', LIGHTS);
   stage.querySelector('.fj-hud').insertAdjacentHTML('beforebegin', GATE_MARKUP);
   const barCell = host.hud('bar');
   const varioCell = host.hud('vario');
+  const styleCell = host.hud('style');
+  stage.querySelector('.fj-swing').insertAdjacentHTML('beforebegin', STYLE_LINE);
+  stage.querySelector('.fj-toasts').insertAdjacentHTML('beforebegin', BRIEF_MARKUP);
+  const briefEl = stage.querySelector('.fj-brief');
+  const styleEl = stage.querySelector('.fj-style');
   const hornEl = stage.querySelector('.fj-horn');
   const lightsEl = stage.querySelector('.fj-lights');
   const lightEls = lightsEl.querySelectorAll('i');
@@ -247,7 +315,7 @@ export function createGoodLift(host) {
   for (const sound of stage.querySelectorAll('.fj-hud nav > [data-do="sound"], .fj-keys-more > [data-do="sound"]')) sound.insertAdjacentHTML('afterend', MUSIC_BUTTON);
   const musicButtons = [...stage.querySelectorAll('[data-do="music"]')];
   for (const button of musicButtons) button.addEventListener('click', () => toggleMusic());
-  const ownEls = [...rows.querySelectorAll('.fj-run'), hornEl, lightsEl, saidEl, chevronEl, gatesEl, titleEl, ...musicButtons];
+  const ownEls = [...rows.querySelectorAll('.fj-run'), styleEl, hornEl, lightsEl, saidEl, chevronEl, gatesEl, titleEl, ...musicButtons];
   let lightsTimer = 0;
   let saidTimer = 0;
   let titleTimer = 0;
@@ -277,7 +345,20 @@ export function createGoodLift(host) {
     seen.levelLine = 0;
     seen.bellHit = seen.horn = seen.shallow = seen.beastClose = false;
     seen.closeAt = seen.hornAt = seen.deepAt = seen.chainAt = seen.blessedAt = seen.glancedAt = seen.lostAt = seen.levelAt = -Infinity;
+    seen.tucks = seen.pumps = seen.tips = seen.earsClimb = seen.turnSide = 0;
+    seen.surging = seen.earsUsed = false;
+    seen.tuckAt = seen.tipAt = seen.turnAt = -Infinity;
+    Object.assign(styled, {
+      landed: 0, lost: 0, elements: 0, total: -1, compact: null, inHand: '', trick: '', points: 0,
+      landedAt: -Infinity, lostAt: -Infinity, stamp: '', stampUntil: -Infinity, stamped: null, pending: -1,
+    });
+    styleEl.textContent = '';
+    styleEl.className = 'fj-style';
+    rows.toggleAttribute('data-style', false);
     surge.reset();
+    entry.reset();
+    touchEars.reset();
+    loopKeys.reset();
     varioCell.classList.remove('surge');
     barCell.classList.remove('depth', 'blessed');
     showRune(RUNE.none);
@@ -295,7 +376,14 @@ export function createGoodLift(host) {
     hideLights();
     hornEl.classList.remove('on');
     showChevron(false);
-    showTitle(seed, sky);
+    // A device's first runs are briefed first, the flight waiting at the gate; the rest open with
+    // the title card at once.
+    briefed = null;
+    if (readStore().runs < BRIEF.runs) showBrief(seed, sky);
+    else {
+      briefEl.hidden = true;
+      showTitle(seed, sky);
+    }
     // The music joins the engine's sound (made by now, a click having asked for it) and plays on
     // from run to run. On a phone the game keeps to its ambient sound, which the silent switch
     // silences: a media element playing would otherwise take every sound of the game past it
@@ -313,6 +401,8 @@ export function createGoodLift(host) {
    * its bots, and the world board's answer for the last sheet is not waited for.
    */
   function leave(now = false) {
+    briefed = null;
+    briefEl.hidden = true;
     music.stop(now);
     labelMusic(false);
     bots.pause();
@@ -335,18 +425,39 @@ export function createGoodLift(host) {
     return music.on;
   }
 
+  // Which sky a run is on, as its title card and its briefing name it.
+  const skyLabel = (seed, sky) => (sky?.kind === 'daily'
+    ? `Daily #${dailyNumber(sky.day)} · ${new Date(sky.day * DAY_MS).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}`
+    : `${sky?.kind === 'practice' ? 'practice · ' : ''}sky ${skyId(seed)}`);
+
+  // The briefing a device's first runs open with (BRIEF), the flight waiting at the gate until the
+  // pilot is ready (game.js holds it), and then the title card as it goes.
+  let briefed = null;
+  function showBrief(seed, sky) {
+    briefed = { seed, sky };
+    briefEl.querySelector('small').textContent = skyLabel(seed, sky);
+    briefEl.hidden = false;
+  }
+  function endBrief() {
+    if (!briefed) return;
+    const { seed, sky } = briefed;
+    briefed = null;
+    briefEl.hidden = true;
+    // The run starts now, for the board's tie-break too, not as the card came up.
+    startedAt = Date.now();
+    showTitle(seed, sky);
+  }
+
   // The card a run opens with: which sky it is, GOOD LIFT slammed in over a barbell, and (the first
   // time a visit) a typed line saying what to lift, or who there is to beat.
   function showTitle(seed, sky) {
     clearTimeout(titleTimer);
     const full = !titled;
     titled = true;
-    const label = sky?.kind === 'daily'
-      ? `Daily #${dailyNumber(sky.day)} · ${new Date(sky.day * DAY_MS).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}`
-      : `${sky?.kind === 'practice' ? 'practice · ' : ''}sky ${skyId(seed)}`;
+    const label = skyLabel(seed, sky);
     const rival = sky?.target && !sky.target.error ? sky.target : null;
     const line = rival
-      ? `to beat: ${rival.who || 'a pilot'} · ${kg(rival.total)} kg · ${metres(rival.peak)} m`
+      ? `to beat: ${rival.who || 'a pilot'} · ${scoreOf(rival).toLocaleString('en-GB')} pts · ${metres(rival.peak)} m`
       : 'opener at 250 m · three white lights';
     titleSmall.textContent = label;
     titleLine.textContent = full ? line : '';
@@ -365,12 +476,24 @@ export function createGoodLift(host) {
     saidTimer = setTimeout(() => (saidEl.textContent = `Good Lift. ${label}.${full ? ` ${rival ? line : 'The opener is at 250 metres.'}` : ''}`), 120);
   }
 
-  /** One fixed step with the keys as `input`. Returns 'fog' or 'landed' if the run ended. */
-  function step(dt, input) {
-    // Four keys a step are recorded and flown through the one step every replay flies too, which
-    // reads both ways at once as the speed bar: on a touch screen the only way to it. A run that
-    // outlasts the log flies on unrecorded, and cannot then be raced or put on the board.
-    const bits = inputBits(input);
+  /**
+   * One fixed step with the keys as `input`, and `first` and `second` whether each ▼ of a touch
+   * screen is held. Returns 'fog' or 'landed' if the run ended.
+   */
+  function step(dt, input, first = false, second = false) {
+    // The keys a step are recorded and flown through the one step every replay flies too, which
+    // reads both ways at once as the speed bar: on a touch screen the only way to it. Both ▼ pressed
+    // together are the big ears, as E is on keys. A run that outlasts the log flies on unrecorded,
+    // and cannot then be raced or put on the board.
+    const paired = touchEars.step(first, second);
+    // Round a loop only the newer of the brake and the bar held is flown (createLoopKeys).
+    const keys = loopKeys.step(input.brake, input.bar, g.loop !== 0 && !g.loopOut);
+    asked.left = input.left;
+    asked.right = input.right;
+    asked.bar = keys.bar;
+    asked.brake = keys.brake && !paired;
+    asked.ears = input.ears || paired;
+    const bits = inputBits(asked);
     if (!recorder.push(bits)) whole = false;
     last.collapsed = sky.state.pilot.collapse > 0;
     const ended = stepBits(world, bits);
@@ -416,6 +539,7 @@ export function createGoodLift(host) {
       seen.rides += 1;
       seen.shallow = false;
       surge.reset();
+      entry.reset();
     }
     // The moment the climb first comes level with a set of stones still waiting near it (from
     // STONES_LEAD under their opening's foot to its top): the time to dash for one, said once a set.
@@ -432,8 +556,107 @@ export function createGoodLift(host) {
       sound.play('surge', 0.8, swell, clamp(g.liftSide * 2, -0.7, 0.7));
       flare(varioCell, 'surge');
     }
+    // The moment to turn in: a thump from the core's side, the climb's readout flaring cyan and the
+    // wing over the core lifting, said by the hint with the way to turn.
+    const turnIn = entry.step(dt, g.lift, flock ? flock.strength : 1, g.yawRate, g.liftSide, flock ? flock.dir : 1, flying);
+    if (turnIn) {
+      seen.turnAt = elapsed;
+      seen.turnSide = turnIn;
+      sound.play('lifted', 1, thump, clamp(turnIn * 0.7, -0.7, 0.7));
+      flare(varioCell, 'lifted');
+      effects.heave = turnIn;
+    }
+    answerWing(dt, elapsed);
+    answerStyle(elapsed);
     awardMilestones(sky.state.peak);
     return ended;
+  }
+
+  // Answers what the wing did this step: a surge toward a fold, a tuck or a tip, a pump of a folded
+  // wing, and the ears, which the hints keep count of. A surge caught is the engine's to hear
+  // (game.js), over the fjord as here.
+  function answerWing(dt, elapsed) {
+    const surging = g.tuck === 0 && g.pitchRate < 0 && pitchPeak(g) < -CATCH.surge;
+    if (surging && !seen.surging) sound.play('lurch', 0.4, lurch);
+    seen.surging = surging;
+    // A front collapse flashes and rattles as a strike does: it is as much the wing's loss.
+    if (world.tucks > seen.tucks) {
+      seen.tucks = world.tucks;
+      sound.play('tuck', 0.5, flap);
+      host.flash();
+    }
+    // Held at the last moment it was collapsed, so the hints count from its opening.
+    if (g.tuck > 0) seen.tuckAt = elapsed;
+    // A tip collapse rattles from the side of the half that unloaded.
+    if (world.tips > seen.tips) {
+      seen.tips = world.tips;
+      seen.tipAt = elapsed;
+      sound.play('tip', 0.5, flap, 0.7 * g.tipSide);
+    }
+    // A pump of a folded wing let go in time, a strike's or a front collapse's.
+    const pumps = world.pump.n + g.tuckPumps;
+    if (pumps > seen.pumps) sound.play('pump', 0.2, thunk);
+    seen.pumps = pumps;
+    if (g.ears > 0) seen.earsUsed = true;
+    seen.earsClimb = g.ears >= 0.9 && g.vy > 1 ? seen.earsClimb + dt : 0;
+  }
+
+  // What a set of tricks is called: its wingovers, its loops, its pitched swing, or, mixed, its tricks.
+  function setName({ elements, rolls, loops }) {
+    if (rolls === elements) return `wingover ×${rolls}`;
+    if (loops === elements) return `loop ×${loops}`;
+    return rolls > 0 || loops > 0 ? `tricks ×${elements}` : `pitch ×${elements}`;
+  }
+
+  // Answers what the style did this step (meet-style.js): an element scored in a set in hand, a rush
+  // of air a step higher for each linked (a lone element, as a dodge turned back makes, is no set
+  // yet, and passes unheard and unshown); a set landed, stamped over the gauge, flared on its
+  // readout, rung and said; and one lost, stamped struck through, with a falling pair of notes after
+  // the fold's own sound.
+  function answerStyle(elapsed) {
+    const s = style.state;
+    const inHand = s.elements >= STYLE.inHand;
+    if (s.elements > styled.elements) {
+      styled.inHand = setName(s);
+      if (inHand && s.links > 0) sound.play('swish', 0.08, swish, s.links);
+    }
+    if (s.landed > styled.landed) {
+      styled.landedAt = elapsed;
+      styled.trick = styled.inHand;
+      styled.points = s.said;
+      styled.stamp = 'landed';
+      styled.stampUntil = elapsed + STAMP.landed;
+      styled.stamped = null;
+      sound.play('landed', 0.5, arpeggio);
+      flare(styleCell, 'lifted');
+      if (lightsEl.hidden) {
+        clearTimeout(saidTimer);
+        saidEl.textContent = '';
+        saidTimer = setTimeout(() => (saidEl.textContent = `Trick landed: ${styled.trick}, plus ${styled.points} style.`), 120);
+      }
+    }
+    if (s.lost > styled.lost) {
+      styled.lostAt = elapsed;
+      styled.points = s.said;
+      styled.stamp = 'lost';
+      styled.stampUntil = elapsed + STAMP.lost;
+      styled.stamped = null;
+      sound.play('dud', 0.5, dud);
+    }
+    styled.elements = s.elements;
+    styled.landed = s.landed;
+    styled.lost = s.lost;
+    // The line over the gauge: a stamp while it is up, or else the set in hand and what it is worth;
+    // written only as one of them changes.
+    const stamped = elapsed < styled.stampUntil ? styled.stamp : '';
+    const pending = !stamped && inHand ? s.pending : -1;
+    if (stamped !== styled.stamped || pending !== styled.pending) {
+      styled.stamped = stamped;
+      styled.pending = pending;
+      styleEl.textContent = stamped === 'landed' ? `LANDED +${styled.points.toLocaleString('en-GB')}` : stamped === 'lost' ? `lost +${styled.points.toLocaleString('en-GB')}`
+        : pending >= 0 ? `${styled.inHand} +${pending.toLocaleString('en-GB')}` : '';
+      styleEl.className = stamped ? `fj-style ${stamped}` : 'fj-style';
+    }
   }
 
   // Answers what the meet did this step: a plate or a circle loaded, a trail laid, a strike's
@@ -559,9 +782,10 @@ export function createGoodLift(host) {
     lightning.update(elapsed, g.pos, sky, camera, view.shown);
     view.light(lightning.state.slot, lightning.state.glow);
     view.reveal(lightning.state.reveal);
-    // Ansuz shows the hunted thermals' sparks from twice as far.
+    // Ansuz shows the hunted thermals' motes from twice as far. The blessing keeps its old key,
+    // `sparks`: the rules' fingerprint reads every key of BLESSING, so a new name is a new version.
     const sight = meet.state.runes.blessing.rune === RUNE.ansuz ? BLESSING.sparks : 1;
-    view.update(elapsed, g.pos, sky, camera.position, sight);
+    view.update(elapsed, g.pos, sky, camera.position, sight, host.bright());
     meetView.update(elapsed, g.pos, meet, bells, camera.position, sky);
     chalk.update(elapsed, g.pos, meet);
     glide.update(dt, g.pos, sky, g.lift);
@@ -705,8 +929,19 @@ export function createGoodLift(host) {
     // The bar as it would be lifted at the next line, the empty bar included; where the belt is
     // not shown, the total rides with it.
     const bar = `${kg(lift.bar + MEET.bar)}${lift.horn ? ' kg ×2' : ' kg'}`;
-    barCell.textContent = host.compact() ? `bar ${bar} · total ${kg(lift.total)} kg` : bar;
+    const compact = host.compact();
+    barCell.textContent = compact ? `bar ${bar} · total ${kg(lift.total)} kg` : bar;
     barCell.classList.toggle('doubled', lift.horn);
+    // The style, once a set of tricks has landed, with what it multiplies the total by (score.js):
+    // written as it changes, or as the readouts change form (a phone turned, a window narrowed).
+    const total = style.state.total;
+    if (total !== styled.total || compact !== styled.compact) {
+      styled.total = total;
+      styled.compact = compact;
+      const times = `×${multiplierOf(total).toFixed(2)}`;
+      styleCell.textContent = compact ? `style ${times}` : `${total.toLocaleString('en-GB')} · ${times}`;
+      rows.toggleAttribute('data-style', total > 0);
+    }
     // The blessing held rides beside the bar as its rune, lit up as it is taken.
     showRune(lift.runes.blessing.rune);
     if (quiet) {
@@ -717,6 +952,33 @@ export function createGoodLift(host) {
     moment.collapse = pilot.collapse;
     moment.stall = g.stall;
     moment.stallSide = g.stallSide;
+    moment.harsh = controls.harsh;
+    moment.surging = seen.surging ? 1 : 0;
+    moment.tuck = g.tuck;
+    moment.tucked = elapsed - seen.tuckAt;
+    moment.tipped = elapsed - seen.tipAt;
+    // Near a fold a trick can come to, where the wing can come to one: never round a loop, which banks
+    // it all the way over and neither swings nor tips it.
+    const tuckLine = PITCH.line + PITCH.held * Math.min(1, g.brake / BRAKE.light);
+    moment.nearTuck = controls.folds && g.pitch < 0 && -g.pitch >= tuckLine - SWING_GAUGE.near && g.pitchRate < 0;
+    moment.nearTip = controls.folds && g.loop === 0 && Math.abs(g.bank) >= ROLL.limit - SWING_GAUGE.near;
+    // The tricks: a set landed or lost, the set in hand, and one being flown.
+    moment.landed = elapsed - styled.landedAt;
+    moment.trick = styled.trick;
+    moment.points = styled.points;
+    moment.lost = elapsed - styled.lostAt;
+    moment.inHand = style.state.elements >= STYLE.inHand ? styled.inHand : '';
+    moment.inHandPitch = style.state.last === 1;
+    moment.pitching = world.watch.state.pumping === 1;
+    moment.looping = g.loop !== 0 && !g.loopOut;
+    moment.loopable = effects.gauge.loopable;
+    moment.wingover = world.watch.state.linking === 1 || world.watch.state.chain >= 2;
+    moment.tricksLanded = style.state.landed;
+    moment.ears = g.ears;
+    moment.earsUsed = seen.earsUsed;
+    moment.earsClimb = seen.earsClimb;
+    moment.turnIn = elapsed - seen.turnAt;
+    moment.turnSide = seen.turnSide;
     moment.brake = g.brake;
     moment.deep = effects.deep;
     moment.load = g.stallLoad;
@@ -751,6 +1013,8 @@ export function createGoodLift(host) {
     moment.blessed = elapsed - seen.blessedAt;
     moment.double = runes.blessing.rune === RUNE.tiwaz;
     moment.trail = lift.trail.live && lift.trail.boarded < 0;
+    moment.trailHigh = trailHigh(lift, runes);
+    approach(pilot);
     moment.shallow = seen.shallow;
     moment.depth = elapsed - seen.deepAt;
     // The stones still waiting near the pilot, the line they stand at, when they were raised and
@@ -778,6 +1042,49 @@ export function createGoodLift(host) {
     if (line && line === glide.state.line) taught += Math.max(0, elapsed - hintAt);
     hintAt = elapsed;
     return line;
+  }
+
+  // Whether the next plate ahead on a trail already boarded lies further under the wing than the
+  // bar's glide brings it down by the time it gets there, in air the ears can sink through: the
+  // moment to say they would reach it. Worked out by hand, as stonesNear is.
+  function trailHigh(lift, runes) {
+    const { trail } = lift;
+    if (!trail.live || trail.boarded < 0 || g.lift >= EARS_REACH.lift) return false;
+    const reach = runes.blessing.rune === RUNE.fehu ? BLESSING.reach : TRAIL.reach;
+    const here = (g.pos.x - trail.x) * trail.ux + (g.pos.z - trail.z) * trail.uz;
+    for (let i = 0; i < trail.plates.length; i++) {
+      const plate = trail.plates[i];
+      if (!plate.live || (plate.x - trail.x) * trail.ux + (plate.z - trail.z) * trail.uz < here) continue;
+      const dx = plate.x - g.pos.x;
+      const dz = plate.z - g.pos.z;
+      const across = Math.sqrt(dx * dx + dz * dz);
+      if (across > EARS_REACH.ahead) return false;
+      return g.pos.y - across * trail.slope - plate.y - reach > EARS_REACH.over;
+    }
+    return false;
+  }
+
+  // On the way into a thermal: whether a settled flock that still lifts lies ahead, close enough to
+  // fly into, while the glider is in no hunted thermal yet, and which way that flock turns.
+  function approach(pilot) {
+    moment.approach = false;
+    moment.approachDir = 1;
+    if (pilot.thermal > 0) return;
+    let nearest = APPROACH.range * APPROACH.range;
+    const { thermals } = sky.state;
+    for (let i = 1; i < thermals.length; i++) {
+      const thermal = thermals[i];
+      if (!thermal.live || thermal.move !== 0 || thermal.strength < MEET.alive) continue;
+      const dx = thermal.x - g.pos.x;
+      const dz = thermal.z - g.pos.z;
+      const away = dx * dx + dz * dz;
+      if (away >= nearest) continue;
+      const off = Math.atan2(dx, -dz) - g.yaw;
+      if (Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) > APPROACH.ahead) continue;
+      nearest = away;
+      moment.approach = true;
+      moment.approachDir = thermal.dir;
+    }
   }
 
   // Whether any of the set of stones raised last still waits near the pilot (as its label would
@@ -814,6 +1121,8 @@ export function createGoodLift(host) {
    * retry mid-run, leaving the page) is not recorded at all.
    */
   function finish(reason = 'quit', flown = null, record = true) {
+    briefed = null;
+    briefEl.hidden = true;
     finishRun(world, reason);
     // The sheet, read the way a replay reads it: live play and replays can only differ if the
     // runs themselves did.
@@ -825,6 +1134,8 @@ export function createGoodLift(host) {
     const kind = daily ? 'daily' : flown?.kind === 'daily' ? 'sky' : flown?.kind ?? 'practice';
     const result = {
       ...sheet,
+      // The style the run landed, beside its total: together the score it ranks by (score.js).
+      style: sheet.stats.style,
       kind,
       day: daily ? flown.day : 0,
       label: kind === 'daily' ? `Daily #${dailyNumber(flown.day)}` : `Sky ${skyId(sheet.seed)}`,
@@ -876,20 +1187,22 @@ export function createGoodLift(host) {
     // Into this device's store: the bests, the tonnage, the feats, the daily streak and the day's
     // board. The feats it earned are announced by the sheet as it opens, never during a run.
     const was = readStore();
-    const before = was.best.total;
+    const before = was.best.score;
     const outcome = !record ? { feats: [] } : updateStore((store) => {
       // A rival raced on the day's own sky goes on its board too, as the link it came from, if the
       // sky judged that run: one ended with [ end run ] is on no board, here or where it was flown.
       const { target } = result;
-      if (target && kind === 'daily' && (target.reason === 'fog' || target.reason === 'landed')) addRow(store.board, boardKey(SIM_VERSION, result.day), { who: target.who, via: 'link', total: target.total, peak: target.peak, red: target.red, at: startedAt, log: target.log, byname: target.byname });
+      if (target && kind === 'daily' && (target.reason === 'fog' || target.reason === 'landed')) addRow(store.board, boardKey(SIM_VERSION, result.day), { who: target.who, via: 'link', total: target.total, style: target.style ?? 0, peak: target.peak, red: target.red, at: startedAt, log: target.log, byname: target.byname });
       return recordRun(store, {
-        kind, day: result.day, total, peak, red: lifts.map((each) => each.red), at: startedAt, log: result.log,
+        kind, day: result.day, total, style: result.stats.style, peak, red: lifts.map((each) => each.red), at: startedAt, log: result.log,
         reason: result.reason, feats: featsFor(result), byname: result.byname,
       }, { version: SIM_VERSION, now: Date.now() });
     });
     const stored = readStore();
     result.best = { ...stored.best };
-    result.newBest = result.total > before;
+    // A new best is a better score than any before it: the total lifted by the style (score.js).
+    result.score = scoreOf({ total, style: result.stats.style });
+    result.newBest = result.score > before;
     // The stored streak is as of the last Daily Sky flown: one not flown today or yesterday is over.
     const streak = stored.daily.last >= dayOf(Date.now()) - 1 ? stored.daily.streak : 0;
     result.feats = { earned: stored.feats, fresh: outcome.feats, streak };
@@ -1090,7 +1403,9 @@ export function createGoodLift(host) {
         ? { error: sheet.error }
         : {
           who: isBlocked(read.log.initials) ? '' : read.log.initials,
-          seed: read.log.seed, day: read.log.day, reason: sheet.reason, total: sheet.total, peak: sheet.peak, red: sheet.lifts.map((lift) => lift.red), log: text,
+          seed: read.log.seed, day: read.log.day, reason: sheet.reason, total: sheet.total, style: sheet.stats.style, peak: sheet.peak, red: sheet.lifts.map((lift) => lift.red), log: text,
+          // Its score, worked out here, so the page's start screen can show it without the game's code.
+          score: scoreOf({ total: sheet.total, style: sheet.stats.style }),
           byname: bynameFor(sheet),
         };
     }
@@ -1290,6 +1605,162 @@ export function createGoodLift(host) {
   // A trail laid: three quick tings up the scale, to say there are plates to fetch.
   function sparkle(ctx, at) {
     for (let i = 0; i < 3; i++) ting(ctx, at + i * 0.07, 5 + i * 2, 0.05);
+  }
+
+  // The wing surging ahead toward a fold: its cloth whooshing forward over the pilot, a falling
+  // rush in the band of the canopy's own noise, quicker than a gust's.
+  function lurch(ctx, at) {
+    const air = ctx.createBufferSource();
+    air.buffer = sound.audio.noise;
+    air.loop = true;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = 1.1;
+    band.frequency.setValueAtTime(1300, at);
+    band.frequency.exponentialRampToValueAtTime(420, at + 0.32);
+    const shape = ctx.createGain();
+    shape.gain.setValueAtTime(0, at);
+    shape.gain.linearRampToValueAtTime(0.16, at + 0.04);
+    shape.gain.exponentialRampToValueAtTime(0.001, at + 0.38);
+    air.connect(band).connect(shape).connect(sound.audio.master);
+    air.start(at, Math.random());
+    air.stop(at + 0.4);
+  }
+
+  // A front tuck: the leading edge folding under with a short rattle of loose cloth, shorter and
+  // lighter than a stall's (slump), and with no call in it.
+  function flap(ctx, at, pan = 0) {
+    const cloth = ctx.createBufferSource();
+    cloth.buffer = sound.audio.noise;
+    cloth.loop = true;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = 0.8;
+    band.frequency.value = 900;
+    const rattle = ctx.createGain();
+    rattle.gain.setValueAtTime(0, at);
+    for (let i = 0; i < 9; i++) {
+      const when = at + i * 0.055;
+      rattle.gain.setValueAtTime(0.13 * (1 - i / 10), when);
+      rattle.gain.setValueAtTime(0.02, when + 0.025);
+    }
+    rattle.gain.linearRampToValueAtTime(0, at + 0.55);
+    cloth.connect(band).connect(rattle).connect(pan ? panned(ctx, pan) : sound.audio.master);
+    cloth.start(at, Math.random());
+    cloth.stop(at + 0.56);
+  }
+
+  // A trick's element scored: a rush of air up the canopy's band, with a soft note a pentatonic step
+  // higher for each linked (`links`), so a chain is heard climbing as the plates' tings do, in a
+  // voice of its own.
+  function swish(ctx, at, links = 1) {
+    const air = ctx.createBufferSource();
+    air.buffer = sound.audio.noise;
+    air.loop = true;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = 1.4;
+    band.frequency.setValueAtTime(600, at);
+    band.frequency.exponentialRampToValueAtTime(1800, at + 0.22);
+    const shape = ctx.createGain();
+    shape.gain.setValueAtTime(0, at);
+    shape.gain.linearRampToValueAtTime(0.05, at + 0.06);
+    shape.gain.exponentialRampToValueAtTime(0.001, at + 0.26);
+    air.connect(band).connect(shape).connect(sound.audio.master);
+    air.start(at, Math.random());
+    air.stop(at + 0.28);
+    const steps = [0, 2, 4, 7, 9, 12, 14, 16];
+    const note = ctx.createOscillator();
+    note.type = 'triangle';
+    note.frequency.value = 392 * 2 ** (steps[Math.min(links, steps.length) - 1] / 12);
+    const ring = ctx.createGain();
+    ring.gain.setValueAtTime(0.04, at + 0.04);
+    ring.gain.exponentialRampToValueAtTime(0.001, at + 0.3);
+    note.connect(ring).connect(sound.audio.master);
+    note.start(at + 0.04);
+    note.stop(at + 0.32);
+  }
+
+  // A set of tricks landed: three bright notes up an arpeggio, and a faint shimmer.
+  function arpeggio(ctx, at) {
+    for (const [i, ratio] of [1, 1.5, 2].entries()) {
+      const note = ctx.createOscillator();
+      note.type = 'triangle';
+      note.frequency.value = 523.25 * ratio;
+      const ring = ctx.createGain();
+      ring.gain.setValueAtTime(0.06, at + i * 0.07);
+      ring.gain.exponentialRampToValueAtTime(0.001, at + i * 0.07 + 0.45);
+      note.connect(ring).connect(sound.audio.master);
+      note.start(at + i * 0.07);
+      note.stop(at + i * 0.07 + 0.5);
+    }
+    const shimmer = ctx.createBufferSource();
+    shimmer.buffer = sound.audio.noise;
+    const high = ctx.createBiquadFilter();
+    high.type = 'highpass';
+    high.frequency.value = 5000;
+    const shape = ctx.createGain();
+    shape.gain.setValueAtTime(0.015, at + 0.14);
+    shape.gain.exponentialRampToValueAtTime(0.001, at + 0.6);
+    shimmer.connect(high).connect(shape).connect(sound.audio.master);
+    shimmer.start(at + 0.14, Math.random());
+    shimmer.stop(at + 0.62);
+  }
+
+  // A set of tricks lost: two soft notes falling, after the fold's own sound has had its moment.
+  function dud(ctx, at) {
+    for (const [i, freq] of [196, 164.81].entries()) {
+      const note = ctx.createOscillator();
+      note.type = 'triangle';
+      note.frequency.value = freq;
+      const ring = ctx.createGain();
+      ring.gain.setValueAtTime(0.04, at + 0.25 + i * 0.16);
+      ring.gain.exponentialRampToValueAtTime(0.001, at + 0.25 + i * 0.16 + 0.3);
+      note.connect(ring).connect(sound.audio.master);
+      note.start(at + 0.25 + i * 0.16);
+      note.stop(at + 0.25 + i * 0.16 + 0.32);
+    }
+  }
+
+  // A pump of a folded wing let go: a soft, low thunk of the cloth filling.
+  function thunk(ctx, at) {
+    const tone = ctx.createOscillator();
+    tone.frequency.setValueAtTime(110, at);
+    tone.frequency.exponentialRampToValueAtTime(68, at + 0.12);
+    const shape = ctx.createGain();
+    shape.gain.setValueAtTime(0, at);
+    shape.gain.linearRampToValueAtTime(0.12, at + 0.01);
+    shape.gain.exponentialRampToValueAtTime(0.001, at + 0.16);
+    tone.connect(shape).connect(sound.audio.master);
+    tone.start(at);
+    tone.stop(at + 0.18);
+  }
+
+  // The moment to turn into a core: a low thump from its side, falling where the surge's swell
+  // rises, so the one says turn and the other straighten.
+  function thump(ctx, at, pan) {
+    const out = panned(ctx, pan);
+    const tone = ctx.createOscillator();
+    tone.frequency.setValueAtTime(110, at);
+    tone.frequency.exponentialRampToValueAtTime(55, at + 0.25);
+    const shape = ctx.createGain();
+    shape.gain.setValueAtTime(0, at);
+    shape.gain.linearRampToValueAtTime(0.16, at + 0.008);
+    shape.gain.exponentialRampToValueAtTime(0.001, at + 0.3);
+    tone.connect(shape).connect(out);
+    tone.start(at);
+    tone.stop(at + 0.32);
+    const puff = ctx.createBufferSource();
+    puff.buffer = sound.audio.noise;
+    const low = ctx.createBiquadFilter();
+    low.type = 'lowpass';
+    low.frequency.value = 380;
+    const breath = ctx.createGain();
+    breath.gain.setValueAtTime(0.08, at);
+    breath.gain.exponentialRampToValueAtTime(0.001, at + 0.22);
+    puff.connect(low).connect(breath).connect(out);
+    puff.start(at, Math.random());
+    puff.stop(at + 0.24);
   }
 
   // The lift surging under the wing: a soft swell of air with a low note rising in it, from the
@@ -1772,6 +2243,9 @@ export function createGoodLift(host) {
     begin, step, want, draw, sounds, hud, finish, dispose, last, setInitials, leave, toggleMusic, removeWorldRun, chooseKit,
     /** A touch or a key: a play of the music the browser refused is tried again. */
     nudgeMusic: () => music.nudge(),
+    /** Whether the run is still being briefed, the flight waiting at the gate; and the pilot ready. */
+    get briefing() { return briefed !== null; },
+    endBrief,
     /** The page went out of sight, or came back: the music waits for it. */
     hideMusic: (hidden) => music.hide(hidden),
     get musicState() { return { on: music.on, playing: music.playing, track: music.track, blocked: music.blocked }; },
@@ -1792,6 +2266,7 @@ export function createGoodLift(host) {
     get meet() { return meet; },
     get bells() { return bells; },
     get surge() { return surge; },
+    get entry() { return entry; },
     /** What the hint was last chosen from (cloudbaseHint's facts), as of the last readout. */
     get hintFacts() { return moment; },
     get view() { return view; },
@@ -1801,5 +2276,6 @@ export function createGoodLift(host) {
     get glide() { return glide; },
     get streaks() { return streaks; },
     get world() { return world; },
+    get style() { return style; },
   };
 }

@@ -4,13 +4,14 @@ import { BRAKE_METER, STALL_EFFECTS, brakeMeter, stallEffects } from './stall-ef
 import { BRAKE, STALL, createFlight, stepFlight } from './flight.js';
 
 const STEP = 1 / 60;
-const NONE = { left: 0, right: 0, luff: 0, shake: 0 };
+const NONE = { left: 0, right: 0, luff: 0, shake: 0, tuck: 0 };
 const wing = (fields) => ({ ...createFlight(), ...fields });
 
 test('nothing of a stall reaches the backdrop, a landing, the launch fade, a finished run or the missing page', () => {
   const stalled = wing({ stall: 2, stallSide: 1, stallLoad: 1 });
   for (const mode of ['intro', 'landed', 'launching', 'cloudbase-ended', 'lost']) {
-    assert.deepEqual(stallEffects(mode, stalled, { left: 9, right: 9, luff: 9, shake: 9 }), NONE);
+    assert.deepEqual(stallEffects(mode, stalled, { left: 9, right: 9, luff: 9, shake: 9, tuck: 9 }), NONE);
+    assert.deepEqual(stallEffects(mode, wing({ pitch: -0.8, tuck: 0.5 }), {}), NONE, 'nor of a surge or a tuck');
   }
   // And in the air, a wing with nothing going on is left alone.
   assert.deepEqual(stallEffects('flying', wing({}), {}), NONE);
@@ -132,4 +133,35 @@ test('the cloth flutters with the load it is given, so where a wing cannot stall
   assert.equal(stallEffects('cloudbase', loaded, {}, loaded.stallLoad).luff, stallEffects('cloudbase', loaded, {}).luff);
   // A stall itself still flutters hardest, whatever the load.
   assert.equal(stallEffects('cloudbase', wing({ stall: 1 }), {}, 0).luff, 1);
+});
+
+test('a tuck folds the leading edge and jolts the pilot, less than a stall, and a swinging wing is left to swing as it is', () => {
+  const surging = stallEffects('cloudbase', wing({ pitch: -0.9, pitchRate: -1 }), {});
+  assert.deepEqual(surging, NONE);
+  const tucked = stallEffects('cloudbase', wing({ tuck: 0.5 }), {});
+  assert.equal(tucked.tuck, 1);
+  assert.ok(tucked.shake > 0 && tucked.shake < STALL_EFFECTS.shake, `${tucked.shake} rad of shake`);
+  // A falling stall shakes as hard as ever, tuck or none.
+  const both = stallEffects('cloudbase', wing({ tuck: 0.5, stall: STALL.forgiving.time + STALL.surge }), {});
+  assert.equal(both.shake, STALL_EFFECTS.shake);
+});
+
+test('the meter shows the ears as their own state, filling as they fold in, and a stall still outranks them', () => {
+  const out = {};
+  assert.deepEqual(brakeMeter(0, 0, 0, out, 0.4), { fill: 0.4, red: 0, state: 'ears' });
+  assert.deepEqual(brakeMeter(0, 0, 0, out, 1), { fill: 1, red: 0, state: 'ears' });
+  // A stall outranks the ears, as it outranks the brake.
+  assert.equal(brakeMeter(0.4, 1, 1, out, 1).state, 'stalled');
+  // Without them the meter is the brake's, as it always was.
+  assert.deepEqual(brakeMeter(0.4, 0.2, 0, {}, 0), brakeMeter(0.4, 0.2, 0, {}));
+});
+
+test('a tip collapse folds the half that unloaded, jolting the pilot as a tuck does', () => {
+  for (const side of [-1, 1]) {
+    const tipped = stallEffects('cloudbase', wing({ tip: 0.5, tipSide: side }), {});
+    assert.deepEqual([tipped.left, tipped.right], side < 0 ? [STALL_EFFECTS.tip, 0] : [0, STALL_EFFECTS.tip]);
+    assert.equal(tipped.shake, STALL_EFFECTS.tuck);
+  }
+  // Over in a moment: nothing of it once the wing has opened.
+  assert.deepEqual(stallEffects('cloudbase', wing({ tip: 0, tipSide: 1 }), {}), NONE);
 });

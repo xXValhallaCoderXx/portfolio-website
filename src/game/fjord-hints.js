@@ -1,7 +1,7 @@
 // The one line of advice free flight over the fjord shows, chosen from what is happening right now.
 // As in a run (cloudbase-hints.js) the first rule that matches wins, a stalled wing is said
 // first, and a line is held long enough to read (hints.js). Kept free of game code so it can be tested.
-import { stallHint } from './hints.js';
+import { LOOPABLE_HINT, LOOP_HINT, pitchHint, stallHint, surgeHint, wingoverHint } from './hints.js';
 
 // Over a ring this many metres up, there is still a way to come down to it worth saying.
 export const RING_HIGH = 28;
@@ -20,6 +20,11 @@ export const LOW = 45;
  *   sinking           the glider is going down
  *   airtime           seconds since take-off
  *   touch             the on-screen buttons are in use
+ *   surging           the wing is surging toward its line and wants catching
+ *   safeTricks        a trick is being flown for the first time this flight
+ *   pitching          a swing is being pitched bigger, and `wingover` a wingover is under way
+ *   loopable          a wingover under way banked steep enough to loop from, and `looping` a loop
+ *                     going round
  */
 export function fjordHint(facts) {
   const stalled = stallHint(facts.stall, facts.stallSide);
@@ -31,6 +36,14 @@ export function fjordHint(facts) {
   if (facts.outside) return 'the fog turns you back toward the fjord';
   // Near a ring nothing else is said: there is one thing to do, and only if it is still to do.
   if (facts.nearRing) return facts.unvisited && facts.agl > RING_HIGH ? `hold ${facts.touch ? '▼' : 'space'} to brake down into the ring` : '';
+  // The wing's swings, which nothing folds over the fjord: a surge caught as it is in a run, and the
+  // first trick of a flight told it is safe here, then how to fly it.
+  if (facts.surging) return surgeHint(facts.touch);
+  if (facts.safeTricks) return 'safe here — past the arch, tricks can fold';
+  if (facts.looping) return LOOP_HINT;
+  if (facts.pitching) return pitchHint(facts.touch);
+  if (facts.loopable) return LOOPABLE_HINT;
+  if (facts.wingover) return wingoverHint(facts.touch);
   if (facts.agl < LOW && facts.sinking) return 'low — steer for the amber sparks to climb';
   if (facts.airtime < 9) return 'lit pillars are places to land · amber sparks are rising air';
   if (facts.airtime < 20) return `${facts.touch ? 'tap' : 'click'} a pillar to fly there by itself · hold ${facts.touch ? '»' : 'shift'} to speed up`;

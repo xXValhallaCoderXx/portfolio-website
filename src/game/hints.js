@@ -7,15 +7,34 @@ export const HINT_WIDTH = 43;
 // A line stays up at least this many seconds, so that it can be read before the next.
 export const HINT_HOLD = 1.5;
 
-/** The line for a wing that has stalled, in a run or over the fjord, or '' while it flies. */
-export function stallHint(stall, stallSide) {
+/**
+ * The line for a wing that has stalled, in a run or over the fjord, or '' while it flies. A `harsh`
+ * stall (high in a run) ends in a surge to catch, so it says both beats.
+ */
+export function stallHint(stall, stallSide, harsh = false) {
   if (!(stall > 0)) return '';
+  if (harsh) return stallSide ? 'spin — let go, then brake the surge' : 'stalled — let go, then brake the surge';
   return stallSide ? 'spin — too much brake in the turn, let go' : 'stalled — let go, the wing flies again';
 }
 
-// The wing has folded or stalled, is about to, a kettlebell is coming or the pilot is in cloud:
-// these cannot wait their turn. Nor can Gjallarhorn, said with its call for its three seconds.
-export const URGENT = Object.freeze(['raven strike', 'kettlebell', 'stalled', 'spin', 'brake in the red', 'gust coming', 'brake going deep', 'in cloud', 'Gjallarhorn']);
+/** The line for a wing surging toward a fold, said the way the pilot's hands work (`touch`). */
+export const surgeHint = (touch) => (touch ? 'wing surging — hold ▼ till it swings back' : 'wing surging — brake till it swings back');
+
+/** How to pitch a swing bigger, and how to fly wingovers, said the way the pilot's hands work. */
+export const pitchHint = (touch) => (touch ? 'pitch: ▼ when ahead, let go when behind' : 'pitch: brake when ahead, let go when behind');
+export const wingoverHint = (touch) => (touch ? 'wingover — ◀ ▶ in turn as each swing peaks' : 'wingover — swap turns as each swing peaks');
+// A wingover steep enough to loop from, and a loop going round: the same keys on every device.
+export const LOOPABLE_HINT = 'big wingover — ▼ at its top to loop over';
+export const LOOP_HINT = 'loop — ▲ over the wing, ▼ under it';
+
+// The wing has folded, stalled, surged or tucked, is about to stall, a kettlebell is coming or the
+// pilot is in cloud: these cannot wait their turn. Nor can Gjallarhorn, said with its call for its
+// three seconds, nor the moment to turn into a core, which is gone within the second.
+export const URGENT = Object.freeze([
+  'raven strike', 'kettlebell', 'stalled', 'spin', 'wing surging', 'front collapse', 'tip collapse', 'too far ahead', 'too steep', 'brake in the red',
+  'gust coming', 'brake going deep',
+  'in cloud', 'Gjallarhorn', 'turn ▶ now', 'turn ◀ now',
+]);
 const urgent = (line) => URGENT.some((start) => line.startsWith(start));
 
 /**
