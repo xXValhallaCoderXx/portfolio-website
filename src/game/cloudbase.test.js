@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { CLOUD_GLOW, CLOUD_MILESTONES, CLOUD_POOL, CLOUD_STRIKE, createCloudbase, createCloudbaseRun } from './cloudbase.js';
-import { CLOUD_STORM } from './cloudbase-state.js';
+import { CLOUD_GLOW, CLOUD_LIT, CLOUD_MILESTONES, CLOUD_POOL, CLOUD_STRIKE, FOG_SURFACE, createCloudbase, createCloudbaseRun } from './cloudbase.js';
+import { CLOUD_STORM, CLOUD_ZONE } from './cloudbase-state.js';
 import { RAVEN, rigRaven, poseRaven, ravenEffort } from './ravens.js';
+import { BLESSING } from './meet-runes.js';
 import { createTestLoader, readModel } from './test-models.js';
 
 const STEP = 1 / 60;
@@ -515,6 +516,37 @@ test('hunted sparks and rings are dark beyond 85 m and lit on the axis, while th
   Object.assign(launch, { strength: 0, live: false });
   view.update(4, pos, run);
   assert.equal(sparks[0].visible || cores[0].visible || column.visible, false, 'a spent launch column is gone');
+  view.dispose();
+});
+
+test('under Ansuz a hunted thermal\'s sparks and ring are seen twice as far, drawn as large as that much nearer, and the launch column is as it was', () => {
+  const view = createCloudbase({ scene: new THREE.Scene() });
+  view.begin();
+  const run = createCloudbaseRun();
+  run.reset(80, 3);
+  const [, first, second] = run.state.thermals;
+  const sparks = [0, 1].map((i) => named(view, `sparks-${i}`));
+  const core = named(view, 'core-1');
+  const uniform = (i, name) => sparks[i].material.uniforms[name].value;
+  // 131 m off, half way into the stretched fade (92 to 170 m): dark without the blessing.
+  const far = pilotAt(beyond(first, second, 131), 300);
+  view.update(1, far, run);
+  assert.equal(sparks[1].visible || core.visible, false);
+  assert.equal(uniform(1, 'sight'), 1);
+  view.update(1, far, run, null, BLESSING.sparks);
+  assert.equal(BLESSING.sparks, 2);
+  assert.ok(sparks[1].visible && core.visible);
+  close(uniform(1, 'near'), 0.5, 1e-6);
+  close(core.material.opacity, 0.16, 1e-6);
+  assert.equal(uniform(1, 'sight'), 2, 'its sparks drawn twice the size for their distance');
+  // Twice 85 m out it is dark even so, and within twice 46 m it is all there.
+  view.update(1, pilotAt(beyond(first, second, 171), 300), run, null, BLESSING.sparks);
+  assert.equal(sparks[1].visible, false);
+  view.update(1, pilotAt(beyond(first, second, 92), 300), run, null, BLESSING.sparks);
+  assert.equal(uniform(1, 'near'), 1);
+  // The launch column is lit from anywhere anyway, and its sparks keep their size.
+  assert.equal(uniform(0, 'sight'), 1);
+  assert.equal(uniform(0, 'near'), 1);
   view.dispose();
 });
 
@@ -1170,5 +1202,154 @@ test('the marks of a flock stay bright from take-off until its new lift is full,
   assert.deepEqual([seen.flights, seen.landings], [1, 1]);
   assert.ok(seen.dimmest < 0.4, 'before it left, the dying lift had dimmed the marks');
   assert.equal(thermal.strength >= 0.99, true);
+  view.dispose();
+});
+
+test('lightning lets every hunted thermal show from anywhere for a moment, its sparks held larger, while lift not there yet still shows nothing', () => {
+  const view = createCloudbase({ scene: new THREE.Scene() });
+  view.begin();
+  const run = createCloudbaseRun();
+  run.reset(80, 3);
+  const [, first, second] = run.state.thermals;
+  const sparks = [0, 1, 2].map((i) => named(view, `sparks-${i}`));
+  const cores = [0, 1, 2].map((i) => named(view, `core-${i}`));
+  const uniform = (i, name) => sparks[i].material.uniforms[name].value;
+  // 90 m from the first hunted thermal and further from the other: both dark.
+  const pos = pilotAt(beyond(first, second, 90), 300);
+  view.update(1, pos, run);
+  assert.equal(sparks[1].visible || sparks[2].visible || cores[1].visible || cores[2].visible, false);
+  // Struck: both show as if close by, and their sparks are never drawn tiny.
+  view.reveal(1);
+  view.update(1, pos, run);
+  for (const i of [1, 2]) {
+    assert.equal(sparks[i].visible && cores[i].visible, true, `thermal ${i}`);
+    assert.equal(uniform(i, 'near'), 1);
+    assert.equal(uniform(i, 'flare'), 1);
+    close(cores[i].material.opacity, 0.32 * run.state.thermals[i].strength);
+  }
+  assert.deepEqual([uniform(0, 'near'), uniform(0, 'flare')], [1, 0], 'the launch column is lit from anywhere already');
+  assert.match(sparks[1].material.vertexShader, new RegExp(`1\\.0 \\+ ${(CLOUD_LIT.flare - 1).toFixed(1)} \\* flare, 7\\.0\\)`));
+  // As the glimpse fades, a far thermal shows what is left of it, and a nearer one never less than
+  // it shows from where the pilot is.
+  view.reveal(0.4);
+  view.update(1, pos, run);
+  close(uniform(1, 'near'), 0.4);
+  view.update(1, pilotAt(beyond(first, second, 65.5), 300), run);
+  close(uniform(1, 'near'), 0.5);
+  // Lift whose flock is still on the way has nothing to show, glimpse or not.
+  second.move = 5;
+  view.reveal(1);
+  view.update(1, pos, run);
+  assert.equal(sparks[2].visible || cores[2].visible, false);
+  assert.equal(uniform(2, 'strength'), 0);
+  // Over, it is as before; and a new run opens with none of it.
+  view.reveal(0);
+  view.update(1, pos, run);
+  assert.deepEqual([sparks[1].visible, uniform(1, 'flare')], [false, 0]);
+  view.reveal(1);
+  view.begin();
+  second.move = 0;
+  view.update(1, pos, run);
+  assert.equal(sparks[1].visible || sparks[2].visible, false);
+  view.dispose();
+});
+
+test('the storm cloud lightning leaves wears a lit copy of its own material for a moment, brighter with the strike, and goes back after; one in the camera\'s way stays see-through', () => {
+  const view = createCloudbase({ scene: new THREE.Scene() });
+  view.begin();
+  const run = clearSky();
+  park(run.state.clouds[3], 125, 900, 238);
+  park(run.state.clouds[4], 260, 900, 238);
+  const pos = { x: 125, y: 700, z: 400 };
+  const mesh = (slot) => named(view, `cloud-${slot}`).children[0];
+  view.update(1, pos, run);
+  const solid = mesh(3).material;
+  assert.equal(mesh(4).material, solid);
+  view.light(3, 1);
+  view.update(1, pos, run);
+  const lit = mesh(3).material;
+  assert.notEqual(lit, solid);
+  assert.equal(mesh(4).material, solid, 'only the struck cloud');
+  assert.equal(lit.isMeshStandardMaterial, true);
+  assert.equal(lit.alphaHash, false, 'the same kind of material, so no new shader');
+  assert.equal(lit.emissive.getHex(), CLOUD_LIT.tint);
+  close(lit.emissiveIntensity, CLOUD_GLOW + CLOUD_LIT.glow);
+  assert.equal(solid.emissiveIntensity, CLOUD_GLOW, 'the solid one is never touched');
+  view.light(3, 0.25);
+  view.update(1, pos, run);
+  close(lit.emissiveIntensity, CLOUD_GLOW + 0.25 * CLOUD_LIT.glow);
+  view.light(3, 0);
+  view.update(1, pos, run);
+  assert.equal(mesh(3).material, solid);
+  // In the camera's way it is thinned, struck or not: the glider is seen first.
+  view.light(3, 1);
+  view.update(1, { x: 125, y: 900 - CLOUD_STRIKE.rise, z: 238 + 150 }, run, { x: 125, y: 900, z: 238 - 150 });
+  assert.equal(mesh(3).material.alphaHash, true);
+  view.update(1, pos, run);
+  assert.equal(mesh(3).material, lit, 'and lit again once out of the way');
+  // A new run opens with nothing lit, and the lit copy's light back down.
+  view.begin();
+  view.update(1, pos, run);
+  assert.equal(mesh(3).material, solid);
+  assert.equal(lit.emissiveIntensity, CLOUD_GLOW);
+  view.dispose();
+});
+
+test('with the file\'s cloud loaded, the lit copy glows with the file\'s own picture, the file\'s material is never changed, and dispose releases the copy but nothing of the loader\'s', async () => {
+  const loader = createTestLoader({ maps: true });
+  const view = createCloudbase({ scene: new THREE.Scene(), loadModel: loader.loadModel });
+  await view.begin();
+  const run = clearSky();
+  park(run.state.clouds[2], 125, 900, 238);
+  const pos = { x: 125, y: 700, z: 400 };
+  view.update(1, pos, run);
+  const [mesh] = meshesIn(named(view, 'cloud-2'));
+  const file = mesh.material;
+  const owned = await loader.owned();
+  assert.ok(owned.materials.has(file));
+  view.light(2, 1);
+  view.update(1, pos, run);
+  const lit = mesh.material;
+  assert.ok(!owned.materials.has(lit), 'a copy of the view\'s own');
+  assert.deepEqual([lit.map, lit.emissiveMap], [file.map, file.map]);
+  assert.equal(lit.emissive.getHex(), CLOUD_LIT.tint);
+  close(lit.emissiveIntensity, CLOUD_GLOW + CLOUD_LIT.glow);
+  assert.deepEqual([file.emissive.getHex(), file.emissiveIntensity], [0xffffff, CLOUD_GLOW]);
+  let released = 0;
+  lit.addEventListener('dispose', () => (released += 1));
+  const theirs = watch([...owned.materials, ...owned.textures]);
+  view.dispose();
+  assert.equal(released, 1);
+  neverReleased(theirs, 'material or picture');
+});
+
+test('the view says which storm clouds it drew whole last time, the ones lightning may strike from', () => {
+  const view = createCloudbase({ scene: new THREE.Scene() });
+  assert.equal(view.shown(0), false, 'before a run, none');
+  view.begin();
+  const run = clearSky();
+  const cloud = park(run.state.clouds[6], 125, 900, 238);
+  park(run.state.clouds[7], 125, 2000, 238);
+  const pos = { x: 125, y: cloud.y - CLOUD_STRIKE.rise, z: cloud.z + 150 };
+  view.update(1, pos, run, { x: 300, y: 900, z: 600 });
+  assert.equal(view.shown(6), true);
+  assert.equal(view.shown(7), false, 'too far above the pilot to be drawn');
+  assert.equal(view.shown(8), false, 'not there at all');
+  view.update(1, pos, run, { x: cloud.x, y: cloud.y, z: cloud.z - 150 });
+  assert.equal(view.shown(6), false, 'thinned for being in the camera\'s way');
+  assert.equal(view.shown(CLOUD_POOL.clouds), false);
+  view.reset();
+  view.begin();
+  assert.equal(view.shown(6), false, 'a new run shows none until it is drawn');
+  view.dispose();
+});
+
+test('the fog\'s surface is the disc FOG_SURFACE says, which the glide ring is drawn over', () => {
+  const view = createCloudbase({ scene: new THREE.Scene() });
+  view.begin();
+  const fog = meshesIn(view.root).find((mesh) => mesh.geometry.type === 'CircleGeometry');
+  assert.equal(fog.geometry.parameters.radius, FOG_SURFACE.radius);
+  assert.deepEqual([fog.position.x, fog.position.z], [CLOUD_ZONE.x, CLOUD_ZONE.z]);
+  assert.match(fog.material.fragmentShader, new RegExp(`smoothstep\\(${FOG_SURFACE.edge.toFixed(2)}, 1\\.0, length\\(p\\)\\)`));
   view.dispose();
 });

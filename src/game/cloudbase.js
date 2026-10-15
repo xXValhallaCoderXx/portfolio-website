@@ -11,7 +11,8 @@ export const CLOUD_GLOW = 0.3;
 // Sparks rise through a window `span` metres tall that starts `below` the pilot. The launch
 // column is lit from anywhere. A hunted thermal is only a short stretch of sparks, and it and its
 // ring show in full within `sight[0]` metres of its axis and not at all beyond `sight[1]`: from
-// further off it is the ravens that give it away.
+// further off it is the ravens that give it away. Ansuz's blessing (meet-runes.js) stretches both
+// by BLESSING.sparks, and draws the sparks as large as they would be that much nearer.
 const SPARKS = { launch: { span: 240, below: 100 }, hunted: { span: 120, below: 40 }, sight: [46, 85] };
 
 // A storm cloud is drawn `swell` times the size of its hazard, because the cloud in the file is
@@ -29,6 +30,19 @@ const STORM = { swell: 1.3, tall: 0.563, deep: 0.741, centre: [-0.074, -0.222, 0
 // for what the fog swallows. The glow that is always held above the fog is drawn later still, so
 // that it shows against the fog when the pilot looks down on it.
 export const ORDER = Object.freeze({ fog: 1, aboveFog: 2 });
+
+// The fog's surface is a disc `radius` metres across its middle, over the zone's centre: solid
+// out to `edge` of that radius and fading to nothing at its rim. The glide ring (run-glide.js) is
+// drawn only where it lies over it.
+export const FOG_SURFACE = Object.freeze({ radius: CLOUD_ZONE.r * 1.15, edge: 0.83 });
+
+// Lightning (run-lightning.js) lights the cloud it leaves from within: for a moment that cloud wears
+// a copy of its material whose own light rises from CLOUD_GLOW by up to `glow`, toward the bolt's
+// pale violet `tint`. That light comes through the file's own picture, which is dark underneath:
+// rendered at night with the glow pass, half as much hardly showed. And for a moment every hunted
+// thermal shows as if close: its sparks are then never drawn smaller than `flare` pixels across,
+// so that from a long way off they are still seen.
+export const CLOUD_LIT = Object.freeze({ glow: 4.5, tint: 0xd7dbff, flare: 3 });
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const smoothstep = (from, to, value) => {
@@ -82,6 +96,12 @@ export function createCloudbase({ scene, loadModel = null }) {
   const thermalViews = [];
   const threatViews = [];
   const cloudViews = [];
+  // Lightning's doing: the cloud slot struck and how brightly it is lit (0 to 1), the level its
+  // lit copies were last set to, and how much of every hunted thermal shows from anywhere (0 to 1).
+  // The lit copies of the clouds' materials in use: the stand-in's, then the file's.
+  const struck = { slot: -1, level: 0, shown: -1 };
+  let revealed = 0;
+  let lits = [];
   // Only what this view makes itself goes in these two. Geometry, materials and pictures that
   // come from loadModel stay with its cache, like those of every other model in the game.
   const materials = new Set();
@@ -112,7 +132,7 @@ export function createCloudbase({ scene, loadModel = null }) {
       fragmentShader: `varying vec2 uvPosition; uniform float time;
         void main() {
           vec2 p = (uvPosition - 0.5) * 2.0;
-          float edge = 1.0 - smoothstep(0.83, 1.0, length(p));
+          float edge = 1.0 - smoothstep(${FOG_SURFACE.edge.toFixed(2)}, 1.0, length(p));
           float cloud = sin(p.x * 22.0 + time * 0.13) * sin(p.y * 18.0 - time * 0.11);
           cloud += 0.5 * sin((p.x + p.y) * 37.0 + time * 0.19);
           vec3 color = mix(vec3(0.22, 0.36, 0.51), vec3(0.64, 0.78, 0.86), 0.55 + cloud * 0.13);
@@ -121,7 +141,7 @@ export function createCloudbase({ scene, loadModel = null }) {
       side: THREE.DoubleSide,
       ...transparent,
     }));
-    fog = new THREE.Mesh(ownGeometry(new THREE.CircleGeometry(CLOUD_ZONE.r * 1.15, 64)), fogMaterial);
+    fog = new THREE.Mesh(ownGeometry(new THREE.CircleGeometry(FOG_SURFACE.radius, 64)), fogMaterial);
     fog.rotation.x = -Math.PI / 2;
     fog.position.set(CLOUD_ZONE.x, 0, CLOUD_ZONE.z);
     fog.renderOrder = ORDER.fog;
@@ -157,17 +177,19 @@ export function createCloudbase({ scene, loadModel = null }) {
       }
       const points = new THREE.Points(particleGeometry, ownMaterial(new THREE.ShaderMaterial({
         uniforms: {
-          time: { value: 0 }, strength: { value: 0 }, near: { value: 0 },
+          time: { value: 0 }, strength: { value: 0 }, near: { value: 0 }, sight: { value: 1 }, flare: { value: 0 },
           span: { value: hunted ? SPARKS.hunted.span : SPARKS.launch.span },
         },
-        vertexShader: `uniform float time; uniform float span; varying float edge;
+        // `sight` is how far Ansuz lets the sparks be seen (they are drawn larger for their distance by
+        // as much), and `flare` (0 to 1) is lightning's: it holds them to a larger least size.
+        vertexShader: `uniform float time; uniform float span; uniform float sight; uniform float flare; varying float edge;
           void main() {
             vec3 p = position;
             p.y = mod(p.y * span / 240.0 + time * 15.0, span);
             edge = smoothstep(0.0, 22.0, p.y) * (1.0 - smoothstep(span - 28.0, span, p.y));
             vec4 view = modelViewMatrix * vec4(p, 1.0);
             gl_Position = projectionMatrix * view;
-            gl_PointSize = clamp(170.0 / max(1.0, -view.z), 1.0, 7.0);
+            gl_PointSize = clamp(170.0 * sight / max(1.0, -view.z), 1.0 + ${(CLOUD_LIT.flare - 1).toFixed(1)} * flare, 7.0);
           }`,
         fragmentShader: `uniform float strength; uniform float near; varying float edge;
           void main() {
@@ -217,7 +239,8 @@ export function createCloudbase({ scene, loadModel = null }) {
 
     // Every cloud wears one of the same two materials: the solid one, or a dithered see-through
     // copy for a cloud that would otherwise hide the glider from the camera. Dithering keeps a
-    // thinned cloud in the ordinary depth-sorted pass, so nothing needs sorting by hand.
+    // thinned cloud in the ordinary depth-sorted pass, so nothing needs sorting by hand. The one
+    // lightning leaves wears a third for a moment, lit from within (litCopy).
     const lump = ownGeometry(new THREE.IcosahedronGeometry(0.5, 1));
     const solid = ownMaterial(new THREE.MeshStandardMaterial({
       color: 0x6f6a8c, roughness: 1, metalness: 0, flatShading: true, emissive: 0x6f6a8c, emissiveIntensity: CLOUD_GLOW,
@@ -225,6 +248,8 @@ export function createCloudbase({ scene, loadModel = null }) {
     const veil = ownMaterial(solid.clone());
     veil.alphaHash = true;
     veil.opacity = STORM.thin;
+    const lit = litCopy(solid);
+    lits = [lit];
     for (let i = 0; i < CLOUD_POOL.clouds; i++) {
       const holder = new THREE.Group();
       holder.name = `cloud-${i}`;
@@ -234,23 +259,36 @@ export function createCloudbase({ scene, loadModel = null }) {
       holder.add(mesh);
       root.add(holder);
       // Odd slots are mirrored, so that two clouds side by side are not plainly the same cloud.
-      cloudViews.push({ holder, mirror: i % 2 ? -1 : 1, thin: false, parts: [{ mesh, solid, veil }] });
+      cloudViews.push({ holder, mirror: i % 2 ? -1 : 1, thin: false, lit: false, parts: [{ mesh, solid, veil, lit }] });
     }
+  }
+
+  // A copy of a cloud's material that glows with lightning: the same picture and the same light of
+  // its own, toward the bolt's colour, made brighter while a strike lasts. It is the same kind of
+  // material as the one it copies, so wearing it costs no new shader.
+  function litCopy(material) {
+    const lit = ownMaterial(material.clone());
+    lit.emissive.set(CLOUD_LIT.tint);
+    return lit;
   }
 
   // Puts the cloud from the file in every holder in place of its lump.
   function adoptClouds(model) {
-    // One see-through copy for each material in the file (it has one). The copy shares the
-    // file's picture, which shows through the dither.
+    // One see-through copy and one lit copy for each material in the file (it has one). Both
+    // share the file's picture, which shows through the dither and glows when lit.
     const veils = new Map();
+    const glows = new Map();
     model.traverse((part) => {
       if (!part.isMesh || veils.has(part.material)) return;
       const veil = ownMaterial(part.material.clone());
       veil.alphaHash = true;
       veil.opacity = STORM.thin;
       veils.set(part.material, veil);
+      glows.set(part.material, litCopy(part.material));
     });
     if (!veils.size) throw new Error('The cloud file has nothing to draw.');
+    lits = [...glows.values()];
+    struck.shown = -1;
     model.position.set(STORM.centre[0], STORM.centre[1], STORM.centre[2]);
     for (let i = 0; i < cloudViews.length; i++) {
       const view = cloudViews[i];
@@ -260,9 +298,9 @@ export function createCloudbase({ scene, loadModel = null }) {
       view.holder.add(cloud);
       view.parts.length = 0;
       cloud.traverse((part) => {
-        if (part.isMesh) view.parts.push({ mesh: part, solid: part.material, veil: veils.get(part.material) });
+        if (part.isMesh) view.parts.push({ mesh: part, solid: part.material, veil: veils.get(part.material), lit: glows.get(part.material) });
       });
-      view.thin = false;
+      view.thin = view.lit = false;
     }
   }
 
@@ -289,9 +327,14 @@ export function createCloudbase({ scene, loadModel = null }) {
     return Promise.all([ravens, clouds]).then(() => {});
   }
 
-  function wear(view, thin) {
+  // A cloud in the camera's way is thinned whether lightning has lit it or not: the glider is seen first.
+  function wear(view, thin, lit) {
     view.thin = thin;
-    for (let i = 0; i < view.parts.length; i++) view.parts[i].mesh.material = thin ? view.parts[i].veil : view.parts[i].solid;
+    view.lit = lit;
+    for (let i = 0; i < view.parts.length; i++) {
+      const part = view.parts[i];
+      part.mesh.material = thin ? part.veil : lit ? part.lit : part.solid;
+    }
   }
 
   // Builds on the first call and shows the group on every call. What comes back settles once the
@@ -308,8 +351,11 @@ export function createCloudbase({ scene, loadModel = null }) {
     for (let i = 0; i < threatViews.length; i++) threatViews[i].visible = false;
     for (let i = 0; i < cloudViews.length; i++) {
       cloudViews[i].holder.visible = false;
-      wear(cloudViews[i], false);
+      wear(cloudViews[i], false, false);
     }
+    struck.slot = -1;
+    struck.level = 0;
+    revealed = 0;
     for (let i = 0; i < thermalViews.length; i++) {
       const view = thermalViews[i];
       view.points.visible = view.core.visible = false;
@@ -319,8 +365,10 @@ export function createCloudbase({ scene, loadModel = null }) {
   }
 
   // `time` is the run's clock, `pos` the pilot, `run` the run (or its bare state) and `eye` the
-  // camera's position if clouds in its way should be thinned. Nothing is allocated here.
-  function update(time, pos, run, eye = null) {
+  // camera's position if clouds in its way should be thinned. `sight` is how many times as far as
+  // usual a hunted thermal's sparks and ring are seen: BLESSING.sparks under Ansuz, otherwise 1.
+  // Nothing is allocated here.
+  function update(time, pos, run, eye = null, sight = 1) {
     if (!root || !root.visible || disposed) return;
     const state = run.state ?? run;
     const fogHeight = state.fogHeight;
@@ -334,8 +382,12 @@ export function createCloudbase({ scene, loadModel = null }) {
       const thermal = state.thermals[i];
       // While a flock is still on its way, `x, z` is only where the lift is going to be.
       const strength = thermal.live && thermal.move === 0 ? thermal.strength : 0;
-      const near = view.hunted ? 1 - smoothstep(SPARKS.sight[0], SPARKS.sight[1], Math.hypot(pos.x - thermal.x, pos.z - thermal.z)) : 1;
-      const lit = strength * near > 0.01;
+      const far = view.hunted ? sight : 1;
+      const near = view.hunted ? 1 - smoothstep(SPARKS.sight[0] * far, SPARKS.sight[1] * far, Math.hypot(pos.x - thermal.x, pos.z - thermal.z)) : 1;
+      // While lightning lasts, a hunted thermal shows from anywhere as if close by; lift that is
+      // not there yet (its flock still on the way) has nothing to show.
+      const seen = Math.max(near, revealed);
+      const lit = strength * seen > 0.01;
       if (view.column) {
         view.column.visible = lit;
         view.column.position.set(thermal.x, 900, thermal.z);
@@ -343,9 +395,11 @@ export function createCloudbase({ scene, loadModel = null }) {
       }
       view.points.visible = view.core.visible = lit;
       view.points.material.uniforms.strength.value = strength;
-      view.points.material.uniforms.near.value = near;
+      view.points.material.uniforms.near.value = seen;
+      view.points.material.uniforms.sight.value = far;
+      view.points.material.uniforms.flare.value = view.hunted ? revealed : 0;
       view.points.material.uniforms.time.value = time + view.phase;
-      view.core.material.opacity = 0.32 * strength * near;
+      view.core.material.opacity = 0.32 * strength * seen;
       // The sparks wrap in a window around the pilot, with independent phases. Only object
       // transforms change; particle buffers and materials are reused throughout the run.
       view.points.position.set(thermal.x, Math.max(fogHeight, pos.y - view.below), thermal.z);
@@ -378,8 +432,34 @@ export function createCloudbase({ scene, loadModel = null }) {
       view.holder.scale.set(view.mirror * 2 * cloud.rx * grow, (2 * cloud.ry * grow) / STORM.tall, (2 * cloud.rz * grow) / STORM.deep);
       // The pilot is taken to be at the chest, the point the simulation tests for cloud.
       const thin = eye !== null && inTheWay(cloud, grow * STORM.clear, eye, pos.x, chest, pos.z);
-      if (thin !== view.thin) wear(view, thin);
+      const lit = !thin && i === struck.slot && struck.level > 0;
+      if (thin !== view.thin || lit !== view.lit) wear(view, thin, lit);
     }
+    // Only the struck cloud wears the lit copies, so their light can follow the strike's.
+    if (struck.level !== struck.shown) {
+      struck.shown = struck.level;
+      for (let i = 0; i < lits.length; i++) lits[i].emissiveIntensity = CLOUD_GLOW + CLOUD_LIT.glow * struck.level;
+    }
+  }
+
+  /**
+   * Lightning's doing, for the next update: storm cloud `slot` (or -1, none) lit from within at
+   * `level` (0 to 1).
+   */
+  function light(slot, level) {
+    struck.slot = slot;
+    struck.level = level > 0 ? Math.min(1, level) : 0;
+  }
+
+  /** How much every hunted thermal shows from anywhere at the next update, 0 to 1: lightning's glimpse. */
+  function reveal(amount) {
+    revealed = amount > 0 ? Math.min(1, amount) : 0;
+  }
+
+  /** Whether storm cloud `slot` was drawn whole at the last update: shown, and not thinned for the camera. */
+  function shown(slot) {
+    const view = cloudViews[slot];
+    return !!view && view.holder.visible && !view.thin;
   }
 
   function reset() {
@@ -397,11 +477,12 @@ export function createCloudbase({ scene, loadModel = null }) {
     geometries.clear();
     materials.clear();
     thermalViews.length = threatViews.length = cloudViews.length = 0;
+    lits = [];
     root = fog = floor = boundary = flock = null;
   }
 
   return {
-    begin, update, reset, dispose,
+    begin, update, reset, dispose, light, reveal, shown,
     get root() { return root; },
     get loaded() { return loaded; },
   };

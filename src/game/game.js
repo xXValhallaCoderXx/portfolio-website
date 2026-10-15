@@ -5,20 +5,20 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { WORLD, ZONES, STONES, THERMALS, START, GATEWAY, centerX, heightAt, surfaceAt, buildTerrain } from './terrain.js';
-import { PROJECT_PROPS, loadModel, buildSky, buildPlaces, buildScatter, buildThermals, buildGlider, buildGateway } from './scenery.js';
-import { ACHIEVEMENTS, beltFor, readProgress, writeProgress, emptyProgress } from './achievements.js';
+import { PROJECT_PROPS, loadModel, prefetchModel, buildSky, buildPlaces, buildScatter, buildThermals, buildGlider, buildGateway } from './scenery.js';
+import { ACHIEVEMENTS, GAME_STORE, beltFor, readProgress, writeProgress, emptyProgress } from './achievements.js';
 import { scoreLanding, createLandingLeg } from './landing.js';
 import { sampleApproach, fjordBreeze } from './approach.js';
 import { crossesGateway } from './gateway.js';
-import { createCloudbase, ORDER as CLOUD_ORDER } from './cloudbase.js';
-import { createCloudbaseRun, CLOUD_ZONE, CLOUD_MILESTONES, CLOUD_HUNT, CLOUD_RAVENS } from './cloudbase-state.js';
 import { FLIGHT, BRAKE, createFlight, releaseFlight, settleFlight, stepFlight } from './flight.js';
-import { runEffects } from './run-effects.js';
 import { stallEffects, brakeMeter } from './stall-effects.js';
-import { cloudbaseHint, holdHint } from './cloudbase-hints.js';
+import { holdHint } from './hints.js';
 import { fjordHint } from './fjord-hints.js';
 import { createLost } from './lost.js';
 import { createWindStreaks } from './wind-streaks.js';
+import { varioTone } from './vario.js';
+import { sameGame } from './good-lift-address.js';
+import { clearKit, normalizeKit, readKit } from './wing-kit.js';
 import './game.css';
 
 const { clamp } = THREE.MathUtils;
@@ -34,6 +34,14 @@ const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
 
 // How many times faster the flight runs while boosting or flying itself to a place.
 const HASTE = 3;
+
+// The arch is the door into Good Lift. Within `near` metres of it and closing on it faster than
+// `closing` m/s, the game beyond starts to load, with the `models` it draws, so the warp through it
+// has them in hand. Launch is 127 m from the arch and the way to the hall passes 80 m from it, so
+// an ordinary flight over the fjord fetches none of it.
+const PORTAL = Object.freeze({ near: 70, closing: 3, models: Object.freeze(['raven', 'clouds', 'kettlebell']) });
+// What the arch opens: today's Daily Sky.
+const DAILY = Object.freeze({ kind: 'daily', sky: null, vs: null, bad: null });
 
 // In a Cloudbase run the camera looks up as the pilot climbs, because that is where the ravens
 // and the storm clouds come from. At a full gaze it sits `back` metres further behind and `drop`
@@ -80,7 +88,7 @@ const MARKUP = /* html */ `
         <p>controls</p>
         <dl>
           <dt>← →</dt><dd>steer <span>or A D</span></dd>
-          <dt>space</dt><dd>brake: the longer you hold, the deeper · ease off before the red <span>or ↓ S</span></dd>
+          <dt>space</dt><dd>brake: the longer you hold, the deeper you sink <span>or ↓ S</span></dd>
           <dt>↑</dt><dd>speed bar: hands up, faster and sinking more <span>or W</span></dd>
           <dt>enter</dt><dd>take off again once landed <span>or space</span></dd>
           <dt>shift</dt><dd>hold to speed time up</dd>
@@ -93,7 +101,7 @@ const MARKUP = /* html */ `
         </dl>
         <ul>
           <li>◀ ▶ steer</li>
-          <li>▼ brake: hold longer to sink faster · let go before the red</li>
+          <li>▼ brake: hold longer to sink faster</li>
           <li>» hold to speed time up</li>
           <li>tap a lit pillar or its label to fly there by itself</li>
         </ul>
@@ -102,9 +110,9 @@ const MARKUP = /* html */ `
           <button data-do="sound">[ sound: on ]</button>
           <button data-do="exit">[ <kbd>esc: </kbd>exit ]</button>
         </div>
-        <button data-do="cloudbase" hidden>[ Cloudbase ]</button>
+        <button data-do="cloudbase" hidden>[ Good Lift ]</button>
         <button data-do="quit-cloudbase" hidden>[ end run ]</button>
-        <p class="fj-keys-goal fj-keys-run" hidden>Cloudbase: ravens circle where the air rises · turn the way they turn and climb beside them · keep out of the storm clouds · streaks show the wind and its gusts · time does not speed up in a run</p>
+        <p class="fj-keys-goal fj-keys-run" hidden>Good Lift: climb through a line every 250 m, where three judges light the lift · ravens circle where the air rises: turn the way they turn and climb beside them · a circle centred on the core is a rep to depth, 5 kg: straighten as the lift surges, turn as it fades · Hrungnir throws kettlebells: push the bar, or turn off your line, and from 1,000 m the Beast, heavier, with longer warning · a strike sprays your plates: catch them as they sink · plates ride the gust fronts, hide under storm clouds and, after the horn, bait you down to the fog · at 500 m and 1,000 m rune stones rise: fly through one for its blessing · ← and → together push the bar, as ◀ and ▶ do · keep out of the storm clouds: their lightning shows every thermal for a moment · the ring round you is how far you glide before the fog: cyan, a flock is in reach; amber, climb first · past the arch the brake can stall the wing · time does not speed up in a run<span class="for-keys"> · B switches the music</span></p>
       </aside>
     </nav>
   </div>
@@ -117,6 +125,7 @@ const MARKUP = /* html */ `
     <div class="fj-map-list"></div>
     <footer>
       <button data-do="map">[ <kbd>esc: </kbd>close ]</button>
+      <button data-do="fjord" hidden>[ back to the fjord ]</button>
       <button data-do="reset">[ reset progress ]</button>
     </footer>
   </section>
@@ -136,7 +145,18 @@ const MARKUP = /* html */ `
  * hooks.onProgress(progress)          achievements or visited places changed
  * hooks.onExit()                      the visitor asked to leave the flight
  * hooks.onLost(stage)                 a beat of the missing-page emergency (see lost.js)
- * hooks.onCloudbase(result | null)     a run ended, or its result was dismissed
+ * hooks.onResult(result | null)       a run of Good Lift ended, or its result was put away
+ * hooks.onPortal()                    the glider flew through the arch: the page warps into Good
+ *                                     Lift and calls play()
+ * hooks.onFjord()                     the visitor asked to leave Good Lift for the fjord: the page
+ *                                     changes the address and calls fly()
+ * hooks.onMusic(on)                   Good Lift's music was switched on or off, from anywhere
+ * hooks.onBots(bots)                  the bots landed on the sky a meet sheet shows: its medals,
+ *                                     TST for its board and any feat that earned (good-lift.js
+ *                                     askBots); apart from onResult, so the sheet keeps its focus
+ * hooks.onWorld(world)                the world board answered for the Daily Sky a meet sheet shows:
+ *                                     its best runs, where this browser stands and what became of
+ *                                     the run sent (good-lift.js shareWorld); apart from onResult too
  */
 export function createGame(stage, hooks = {}) {
   stage.insertAdjacentHTML('beforeend', MARKUP);
@@ -167,8 +187,34 @@ export function createGame(stage, hooks = {}) {
   const glider = buildGlider();
   const scatter = buildScatter(() => (terrain.cones.visible = false));
   const gateway = buildGateway();
-  const cloudRun = createCloudbaseRun();
-  let cloudView = null; // Heavy run visuals are allocated only on entry.
+  // What the visitor flies in (wing-kit.js), worn from the first frame, so the hero wears it too.
+  // Only Good Lift changes the kit kept (its kit tab through setKit, and the end of a run), keeping
+  // only what has been earned; fjord.wear tries one on without keeping it. The run reads the chalk
+  // from here.
+  let kit = readKit();
+  function wear(next) {
+    kit = normalizeKit(next);
+    glider.setKit(kit);
+    return { ...kit };
+  }
+  wear(kit);
+  // The game beyond the arch (good-lift.js), loaded and made the first time a run is wanted, and
+  // `portal` set while the flight holds still for it: through the arch, or while it loads.
+  let run = null;
+  let runLoading = null;
+  let portal = false;
+  // The Good Lift address being played (good-lift-address.js), and the sky it came to: what R
+  // flies again, though practice draws a new one every run.
+  let game = null;
+  let gameSky = null;
+  // The sky the run being flown is really on: `gameSky`, unless a seed pinned from the console
+  // overrides it, when it is flown as a named sky (no day's Daily Sky, no board, no daily log).
+  let flownSky = null;
+  // Whether the game beyond the arch would not load when fetched ahead of the arch, so the flight
+  // does not ask again every step; and whether the glider is closing on the arch right now.
+  let prefetchFailed = false;
+  let archNear = false;
+  const inGame = () => mode === 'cloudbase' || mode === 'cloudbase-ended' || portal;
   scene.add(terrain.group, sky.group, places.group, scatter.group, thermals.group, glider.group);
   scene.add(gateway.group);
 
@@ -248,8 +294,6 @@ export function createGame(stage, hooks = {}) {
   // What the pilot asks of the wing and the air it is in, filled afresh at every step.
   const controls = { turn: 0, brake: false, bar: false, locked: false, harsh: false, linger: false, climb: null };
   const air = { lift: 0, sink: 0, windX: 0, windZ: 0, calm: true, rough: 0, clearance: Infinity };
-  // What a Cloudbase run says of the air where the pilot is, written afresh each step.
-  const forces = { lift: 0, sink: 0, liftSide: 0, windX: 0, windZ: 0, rough: 0 };
   const input = { left: false, right: false, bar: false, brake: false, boost: false };
   // Who is holding each control. Two keys, or a key and a button, can hold the same one, and it
   // is only let go when the last of them is.
@@ -279,19 +323,17 @@ export function createGame(stage, hooks = {}) {
   let airtime = 0;
   // How many times faster than the clock the flight is really running this frame.
   let haste = 1;
-  // What a Cloudbase run is doing to the wing, the picture and the camera right now, eased frame
-  // by frame toward what run-effects.js asks for (`want`), with what the hints have seen so far:
-  // strikes already answered, which way the folded wing hooks, seconds spent turning against a
-  // flock and without lift, and the hunted thermals ridden. None of it may outlive the run.
-  // A stall does its own things to the wing in either kind of flying (`stall`, from
-  // stall-effects.js): `foldLeft` and `foldRight` are each half of the wing as shown, from a strike
-  // or a stall, and `fold` the more folded of the two. `stalled` is whether the stall has been
-  // heard, `stalls` how many there have been this run, `deep` seconds the brake has been deep, and
-  // `meter` what the brake meter shows (`meterShown`, what was last written to the page).
+  // What a run is doing to the wing, the picture and the camera right now, eased frame by frame
+  // toward what the run asks for (`want`, written by good-lift.js along with `floor`, the height of
+  // its fog). None of it may outlive the run.
+  // A stall does its own things to the wing (`stall`, from stall-effects.js): `foldLeft` and
+  // `foldRight` are each half of the wing as shown, from a strike or a stall, and `fold` the more
+  // folded of the two. `stalled` is whether the stall has been heard, `deep` seconds the brake has
+  // been deep, and `meter` what the brake meter shows (`meterShown`, what was last written to the page).
+  // `stop` is the wall seconds a good lift still holds the flight still for (written by the run).
   const effects = {
-    fold: 0, veil: 0, veilShown: 0, shake: 0, gaze: 0, want: { fold: 0, veil: 0, shake: 0, gaze: 0 },
-    strikes: 0, hook: 1, against: 0, searching: 0, rides: 0, riding: 0, hint: { line: '', since: 0 }, gazeShown: -1,
-    foldLeft: 0, foldRight: 0, luff: 0, stall: { left: 0, right: 0, luff: 0, shake: 0 }, stalled: false, stallSide: 0, stalls: 0, deep: 0,
+    fold: 0, veil: 0, veilShown: 0, shake: 0, gaze: 0, want: { fold: 0, veil: 0, shake: 0, gaze: 0 }, floor: -Infinity, gazeShown: -1, stop: 0,
+    foldLeft: 0, foldRight: 0, luff: 0, stall: { left: 0, right: 0, luff: 0, shake: 0 }, stalled: false, stallSide: 0, deep: 0,
     meter: { fill: 0, red: 0, state: '' }, meterShown: { fill: -1, red: -1, state: null }, fjordHint: { line: '', since: 0 },
   };
   const veilEl = $('.fj-veil');
@@ -334,13 +376,17 @@ export function createGame(stage, hooks = {}) {
 
   function clearCloudResult() {
     cloudResult = null;
-    hooks.onCloudbase?.(null);
+    hooks.onResult?.(null);
     stage.classList.remove('cloudbase-ended');
   }
 
   function syncCloudbaseEntry() {
     for (const button of stage.querySelectorAll('[data-do="cloudbase"]')) button.hidden = !progress.cloudbase.discovered || mode === 'cloudbase';
     for (const button of stage.querySelectorAll('[data-do="quit-cloudbase"]')) button.hidden = mode !== 'cloudbase';
+    // In Good Lift the places are out of reach, and the way to them is back to the fjord.
+    const running = mode === 'cloudbase' || mode === 'cloudbase-ended';
+    for (const button of stage.querySelectorAll('[data-do="fjord"]')) button.hidden = !running;
+    for (const button of stage.querySelectorAll('.fj-map-list [data-place]')) button.hidden = running;
     $('.fj-keys-run').hidden = !progress.cloudbase.discovered;
     // Time does not speed up in a run, so its button becomes a second brake: one under each thumb,
     // so the brake can be held while steering either way.
@@ -354,23 +400,16 @@ export function createGame(stage, hooks = {}) {
     touchEl.classList.toggle('pairs', second);
   }
 
-  function awardMilestones(peak) {
-    for (const milestone of CLOUD_MILESTONES) {
-      if (peak >= milestone) unlock(`cloudbase-${milestone}`);
-    }
-  }
-
   // Opens the wing, clears the picture and forgets what the last run taught. Every way out of a
   // run comes through here, so a strike or a cloud can never follow the glider anywhere else.
   function clearRunEffects() {
     effects.fold = effects.veil = effects.veilShown = effects.shake = 0;
-    effects.strikes = effects.against = effects.searching = effects.rides = effects.riding = 0;
-    effects.foldLeft = effects.foldRight = effects.luff = effects.stalls = effects.deep = effects.stallSide = 0;
+    effects.foldLeft = effects.foldRight = effects.luff = effects.deep = effects.stallSide = 0;
+    effects.want.fold = effects.want.veil = effects.want.shake = effects.want.gaze = 0;
+    effects.floor = -Infinity;
+    effects.stop = 0;
     effects.stalled = false;
-    effects.hook = 1;
     releaseFlight(g);
-    effects.hint.line = '';
-    effects.hint.since = 0;
     veilEl.style.opacity = '0';
     strikeEl.classList.remove('on');
     hintEl.style.removeProperty('--gaze');
@@ -378,29 +417,22 @@ export function createGame(stage, hooks = {}) {
     if (audio) audio.next = {};
   }
 
-  // A raven has hit the wing: note which way it was turning, flash the picture and make the noise.
-  function struck() {
-    effects.hook = Math.sign(g.yawRate) || 1;
-    if (!calm) {
-      strikeEl.classList.remove('on');
-      void strikeEl.offsetWidth; // reading the layout lets a flash that is still fading start again
-      strikeEl.classList.add('on');
-    }
-    playStrike(effects.hook);
+  // Something has struck the wing: flash the picture (the run makes the noise).
+  function flashStrike() {
+    if (calm) return;
+    strikeEl.classList.remove('on');
+    void strikeEl.offsetWidth; // reading the layout lets a flash that is still fading start again
+    strikeEl.classList.add('on');
   }
 
   function finishCloudbase(reason, show = true) {
     // The run engine already stops its clock when fog catches; UI finalization still follows.
     if (mode !== 'cloudbase') return null;
-    cloudRun.finish();
-    const peak = Math.floor(Math.max(cloudRun.state.peak, g.pos.y));
-    progress.cloudbase.bestAltitude = Math.max(progress.cloudbase.bestAltitude, peak);
-    awardMilestones(peak);
-    const { strikes, cloudTime } = cloudRun.state.pilot;
-    const result = { peak, best: progress.cloudbase.bestAltitude, reason, strikes, stalls: effects.stalls, cloud: Math.round(cloudTime) };
+    // The fog and a touchdown judge what is on the bar; every other way out forfeits it.
+    const result = run.finish(reason, flownSky, show);
+    progress.cloudbase.bestAltitude = Math.max(progress.cloudbase.bestAltitude, result.peak);
     persist();
     clearRunEffects();
-    cloudView?.reset();
     thermals.group.visible = true;
     stage.classList.remove('cloudbase');
     mode = 'cloudbase-ended';
@@ -408,7 +440,7 @@ export function createGame(stage, hooks = {}) {
     clearInput();
     if (show) {
       cloudResult = result;
-      hooks.onCloudbase?.(result);
+      hooks.onResult?.(result);
       stage.classList.add('cloudbase-ended');
       $('.fj-hud dl').hidden = true;
     }
@@ -416,58 +448,136 @@ export function createGame(stage, hooks = {}) {
     return result;
   }
 
-  function beginCloudbase(throughGateway = false) {
-    if (mode === 'intro' || mode === 'lost' || (!throughGateway && !progress.cloudbase.discovered)) return;
+  // Loads and makes the game beyond the arch, once.
+  function loadRun() {
+    runLoading ??= import('./good-lift.js').then(({ createGoodLift }) => {
+      if (disposed) return null;
+      run ??= createGoodLift(host);
+      return run;
+    });
+    return runLoading;
+  }
+
+  // Starts a run of Good Lift on the sky `game` asks for, settled at the gate. The first time, the
+  // game beyond the arch is fetched first, with the flight held still; if it cannot be had, the
+  // flight stays over the fjord and what comes back fails.
+  function beginCloudbase() {
+    if (mode === 'intro' || mode === 'lost' || !game) return Promise.resolve(false);
+    if (!run) {
+      portal = true;
+      clearInput();
+      return loadRun().then(
+        () => (disposed || !game || mode === 'intro' || mode === 'lost' ? false : beginCloudbase()),
+        (error) => {
+          portal = false;
+          runLoading = null;
+          console.warn('Good Lift did not load; staying over the fjord.', error);
+          throw error;
+        },
+      );
+    }
     clearTimeout(fadeTimer);
     $('.fj-fade').classList.remove('on');
     closeMap();
     showKeys(false);
     setAuto(null);
     setHot(null);
-    if (!throughGateway) launchFrom(GATEWAY.x, 80, GATEWAY.z, Math.PI / 2);
-    else closePanel();
-    clearCloudResult();
-    if (!throughGateway) clearInput();
-    else {
-      // Flown in through the arch, the steering carries on, but a boost or a brake held on the way
-      // does not: neither means the same in a run.
-      for (const name of ['boost', 'brake']) {
-        holders[name].clear();
-        input[name] = false;
-      }
-    }
+    launchFrom(GATEWAY.x, 80, GATEWAY.z, Math.PI / 2);
+    clearInput();
     launchReveal = null;
     if (!progress.cloudbase.discovered) {
       progress.cloudbase.discovered = true;
       persist();
     }
-    // Every run flies a sky of its own, laid out from a seed nobody chose.
-    cloudRun.reset(g.pos.y, pinnedSeed ?? (Math.random() * 0x100000000) >>> 0);
     clearRunEffects();
-    cloudView ??= createCloudbase({ scene, loadModel });
-    cloudView.begin();
+    // The day's sky, and a named one, are flown again; practice is a new sky every run. The seed a
+    // console pins overrides them all.
+    if (!gameSky || gameSky.kind === 'practice') gameSky = run.resolveSky(game);
+    flownSky = pinnedSeed == null || pinnedSeed === gameSky.seed ? gameSky : { kind: 'sky', seed: pinnedSeed, day: 0 };
+    // The sound first: the run's music joins it as the run begins.
+    startAudio();
+    run.begin(flownSky.seed, flownSky);
+    portal = false;
     mode = 'cloudbase';
     stage.classList.add('cloudbase');
     thermals.group.visible = false;
     $('.fj-hud dl').hidden = false;
     syncCloudbaseEntry();
     startAudio();
-    if (!throughGateway) snapCamera();
+    snapCamera();
+    return Promise.resolve(true);
   }
 
+  // Through the arch, or [ Good Lift ] from the menu or the map: the flight holds still and takes no
+  // keys while the page warps into Good Lift, which then calls play(). With no page to ask, the
+  // day's sky starts here.
+  function enterPortal() {
+    if (portal) return;
+    portal = true;
+    clearInput();
+    setAuto(null);
+    if (hooks.onPortal) hooks.onPortal();
+    else playGame(DAILY);
+  }
+
+  // Within PORTAL.near metres of the arch and closing on it, Good Lift starts to load (once: if it
+  // will not come, the crossing asks again, and the page can deal with it there).
+  function prefetchRun(dt) {
+    const was = Math.hypot(previousPosition.x - GATEWAY.x, previousPosition.z - GATEWAY.z);
+    const now = Math.hypot(g.pos.x - GATEWAY.x, g.pos.z - GATEWAY.z);
+    archNear = now < PORTAL.near && (was - now) / dt > PORTAL.closing;
+    if (!archNear || runLoading || prefetchFailed) return;
+    loadRun().catch(() => {
+      runLoading = null;
+      prefetchFailed = true;
+    });
+    for (const name of PORTAL.models) prefetchModel(name);
+  }
+
+  /**
+   * Starts Good Lift on the sky `address` asks for (good-lift-address.js), settled at the gate, or
+   * carries on if that sky is already being flown. Settles once the run is under way, and fails if
+   * the game beyond the arch could not be loaded.
+   */
+  function playGame(address) {
+    if (mode === 'lost') idle();
+    if (mode === 'cloudbase' && sameGame(address, game)) return Promise.resolve(true);
+    if (mode === 'intro') {
+      takeControl();
+      launchFrom(GATEWAY.x, 80, GATEWAY.z, Math.PI / 2);
+    }
+    if (!sameGame(address, game)) gameSky = null;
+    game = address;
+    return beginCloudbase();
+  }
+
+  // R, and [ again ]: the same sky once more (a new one in practice). Outside the game, the way in
+  // is through the portal, as the arch would take you.
   function retryCloudbase() {
     if (mode === 'cloudbase') finishCloudbase('quit', false);
-    beginCloudbase();
+    if (!game) return enterPortal();
+    return beginCloudbase();
   }
 
+  // Out of Good Lift and back over the fjord, from the launch: the game's music stops with it.
   function backToFjord() {
     finishCloudbase('quit', false);
+    run?.leave();
+    game = gameSky = flownSky = null;
+    portal = false;
     closeMap();
     showKeys(false);
     setAuto(null);
+    clearCloudResult();
     launchFrom(START.x, START.y, START.z, START.yaw);
     snapCamera();
     syncCloudbaseEntry();
+  }
+
+  // Asks the page to leave Good Lift for the fjord: it changes the address and calls fly().
+  function leaveGame() {
+    if (hooks.onFjord) hooks.onFjord();
+    else backToFjord();
   }
 
   function exitFlight() {
@@ -491,32 +601,24 @@ export function createGame(stage, hooks = {}) {
   function simulate(dt) {
     airtime += dt;
     previousPosition.copy(g.pos);
-    const cloudFlying = mode === 'cloudbase';
-    const inZone = cloudFlying && cloudRun.inside(g.pos);
-    // A raven strike folds the wing: for a moment nothing the pilot does reaches it, and it keeps
-    // hooking round the way it was already turning. Only a run can do this.
-    const collapsed = cloudFlying && cloudRun.state.pilot.collapse > 0;
-    let turn = collapsed ? effects.hook * FLIGHT.turn.hook : (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    if (mode === 'cloudbase') return simulateRun(dt);
+    let turn = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     if (auto) {
       const want = Math.atan2(auto.x - g.pos.x, -(auto.z - g.pos.z));
       turn = clamp(wrapAngle(want - g.yaw) * 2.5, -1, 1);
     }
-    outOfBounds = cloudFlying ? !inZone :
-      Math.abs(g.pos.x) > WORLD.halfX - 50 || g.pos.z < WORLD.north + 45 || g.pos.z > WORLD.south - 45;
+    outOfBounds = Math.abs(g.pos.x) > WORLD.halfX - 50 || g.pos.z < WORLD.north + 45 || g.pos.z > WORLD.south - 45;
     if (outOfBounds) {
       // Past the edge of the map the wind steers you back toward the fjord.
       const tz = clamp(g.pos.z, WORLD.north + 140, WORLD.south - 140);
-      const want = cloudFlying
-        ? Math.atan2(CLOUD_ZONE.x - g.pos.x, -(CLOUD_ZONE.z - g.pos.z))
-        : Math.atan2(centerX(tz) - g.pos.x, -(tz - g.pos.z));
-      turn = clamp(wrapAngle(want - g.yaw) * 2, -1, 1);
+      turn = clamp(wrapAngle(Math.atan2(centerX(tz) - g.pos.x, -(tz - g.pos.z)) - g.yaw) * 2, -1, 1);
     }
 
     // The air where the pilot is. Thermals are weak near the ground, so they never stop you landing.
     const agl = g.pos.y - surfaceAt(g.pos.x, g.pos.z);
     let lift = 0;
     let coreSide = 0;
-    for (const thermal of cloudFlying ? [] : THERMALS) {
+    for (const thermal of THERMALS) {
       const d = Math.hypot(g.pos.x - thermal.x, g.pos.z - thermal.z);
       if (d >= thermal.r) continue;
       const rising = thermal.s * smoothstep(thermal.r, thermal.r * 0.45, d);
@@ -525,29 +627,16 @@ export function createGame(stage, hooks = {}) {
       const right = (thermal.x - g.pos.x) * Math.cos(g.yaw) + (thermal.z - g.pos.z) * Math.sin(g.yaw);
       coreSide += (rising * right) / thermal.r;
     }
-    const approach = !cloudFlying && landingLeg.eligible ? sampleApproach(g.pos.x, g.pos.y, g.pos.z) : { x: 0, z: 0, lift: 0 };
-    if (cloudFlying) {
-      // The run's own air: its lift, the pull of a folded wing or a storm cloud, and a wind that
-      // carries the pilot and gusts.
-      cloudRun.sample(g.pos, g.yaw, forces);
-      lift = inZone ? forces.lift : 0;
-      air.sink = forces.sink;
-      air.windX = forces.windX;
-      air.windZ = forces.windZ;
-      air.rough = forces.rough;
-      g.liftSide = forces.liftSide;
-    } else {
-      // Over the fjord the only wind is the faint drift near each ring: it carries the pilot and
-      // is never a gust.
-      air.sink = 0;
-      air.windX = approach.x;
-      air.windZ = approach.z;
-      air.rough = 0;
-      g.liftSide = lift > 0 ? clamp(coreSide / lift, -1, 1) : 0;
-    }
-    air.calm = !cloudFlying;
-    // Run cores must lift above the east-shore hillside immediately; normal air still fades near ground.
-    lift *= inZone ? 1 : smoothstep(8, 45, agl) * (1 - smoothstep(WORLD.ceiling - 80, WORLD.ceiling, g.pos.y));
+    const approach = landingLeg.eligible ? sampleApproach(g.pos.x, g.pos.y, g.pos.z) : { x: 0, z: 0, lift: 0 };
+    // Over the fjord the only wind is the faint drift near each ring: it carries the pilot and is
+    // never a gust.
+    air.sink = 0;
+    air.windX = approach.x;
+    air.windZ = approach.z;
+    air.rough = 0;
+    air.calm = true;
+    g.liftSide = lift > 0 ? clamp(coreSide / lift, -1, 1) : 0;
+    lift *= smoothstep(8, 45, agl) * (1 - smoothstep(WORLD.ceiling - 80, WORLD.ceiling, g.pos.y));
     lift += approach.lift;
     g.lift = air.lift = lift;
     air.clearance = agl;
@@ -555,10 +644,12 @@ export function createGame(stage, hooks = {}) {
     controls.turn = turn;
     controls.brake = input.brake && !auto;
     controls.bar = input.bar && !auto;
-    controls.locked = collapsed;
-    // A stall only costs real height high in a run; low over the launch hill it is the gentle kind.
-    controls.harsh = cloudFlying && g.pos.y >= CLOUD_RAVENS.grace;
-    controls.linger = cloudFlying;
+    controls.locked = false;
+    controls.harsh = false;
+    controls.linger = false;
+    // Over the fjord the wing cannot stall: the brake still goes deep to come down into a ring,
+    // but the load stops short of the stall. Past the arch, in a run, it can.
+    controls.safe = true;
     controls.climb = null;
     if (auto) {
       // Flying itself, the glider holds a glide path that ends just above the ring, and stays
@@ -573,23 +664,51 @@ export function createGame(stage, hooks = {}) {
       controls.climb = clamp((path - g.pos.y) * 0.9, -6, 6);
     }
     stepFlight(g, controls, air, dt);
-    // A stall beginning or ending is heard once, and counted.
+    afterStep(dt, false);
+
+    const ground = surfaceAt(g.pos.x, g.pos.z);
+    const here = ZONES.find((zone) => Math.hypot(g.pos.x - zone.x, g.pos.z - zone.z) < zone.r);
+    if (here && g.pos.y - ground < 9) land(here);
+    else if (g.pos.y - ground <= 1.4) land(null);
+    else if (mode === 'flying' && !auto) {
+      if (crossesGateway(previousPosition, g.pos, GATEWAY)) enterPortal();
+      else prefetchRun(dt);
+    } else archNear = false;
+  }
+
+  // One step of a run: the keys go to the shared step (run-step.js), which flies the wing and the
+  // sky together exactly as the tests and the replays do; the game only answers what happened.
+  function simulateRun(dt) {
+    const ended = run.step(dt, input);
+    outOfBounds = run.last.outside;
+    afterStep(dt, run.last.collapsed);
+    if (ended === 'landed') {
+      // Down on the ground the run is over, wherever it touched, and no place opens for it. The
+      // sheet is read first, from the wing as the run left it (a replay never moves it: setting it
+      // down first could raise its peak by a metre), and only then is the glider set on the ground.
+      finishCloudbase('landed');
+      g.pos.y = surfaceAt(g.pos.x, g.pos.z) + 1.4;
+    } else if (ended) finishCloudbase(ended);
+  }
+
+  // What every kind of flying does after the wing has moved: the stall heard once and counted,
+  // how long the brake has been deep, the achievements earned in the air and the rune stones.
+  // `collapsed` says a raven strike had the wing, which ends a stall with no sound of refilling.
+  function afterStep(dt, collapsed) {
     if (g.stall > 0 && !effects.stalled) {
       effects.stalled = true;
       effects.stallSide = g.stallSide;
-      effects.stalls += 1;
       playStall(g.stallSide, g.stallHarsh);
     } else if (g.stall === 0 && effects.stalled) {
       effects.stalled = false;
-      // A raven strike ends a stall too, by folding the wing: that is no time for it to fill.
       if (!collapsed) playRefill(effects.stallSide);
     }
     effects.deep = g.brake >= BRAKE.shelf ? effects.deep + dt : 0;
 
-    if (lift > 1 && g.vy > 0) {
+    if (g.lift > 1 && g.vy > 0) {
       climbStart ??= g.pos.y;
       if (g.pos.y - climbStart >= 60) unlock('thermal');
-    } else if (lift < 0.2) {
+    } else if (g.lift < 0.2) {
       climbStart = null;
     }
     if (g.pos.y > 330) unlock('valkyrie');
@@ -603,33 +722,6 @@ export function createGame(stage, hooks = {}) {
         if (progress.stones.length === STONES.length) unlock('runes');
       }
     }
-
-    const ground = surfaceAt(g.pos.x, g.pos.z);
-    const here = ZONES.find((zone) => Math.hypot(g.pos.x - zone.x, g.pos.z - zone.z) < zone.r);
-    if (here && g.pos.y - ground < 9) land(here);
-    else if (g.pos.y - ground <= 1.4) land(null);
-    if (mode === 'cloudbase') {
-      const ended = cloudRun.step(dt, g.pos);
-      const { pilot } = cloudRun.state;
-      if (pilot.strikes > effects.strikes) {
-        effects.strikes = pilot.strikes;
-        struck();
-      }
-      // What the hints want to know, counted in the run's own time so the map pauses it too.
-      effects.searching = g.lift < 1 ? effects.searching + dt : g.lift > 3 ? 0 : effects.searching;
-      const flock = pilot.thermal > 0 ? cloudRun.state.thermals[pilot.thermal] : null;
-      effects.against = flock && Math.abs(g.yawRate) > 0.2 && Math.sign(g.yawRate) !== flock.dir ? effects.against + dt : 0;
-      // A thermal that has moved is a new one to ride; coming back to the same one is not.
-      const riding = flock ? pilot.thermal * 1000 + Math.round(flock.x) : effects.riding;
-      if (riding !== effects.riding) {
-        effects.riding = riding;
-        effects.rides += 1;
-      }
-      awardMilestones(cloudRun.state.peak);
-      if (ended) finishCloudbase(ended);
-    } else if (mode === 'flying' && !auto && crossesGateway(previousPosition, g.pos, GATEWAY)) {
-      beginCloudbase(true);
-    }
   }
 
   function land(zone) {
@@ -642,10 +734,6 @@ export function createGame(stage, hooks = {}) {
       landing = { ...result, bestDistance, expiresAt: Date.now() + 5000 };
       if (distance <= 1) unlock('bullseye');
       if (ZONES.every(({ id }) => progress.landingBests[id] <= 1)) unlock('four-for-four');
-    }
-    if (mode === 'cloudbase') {
-      // Landing content wins over the run ending; the result is rendered inline with it.
-      finishCloudbase('landed');
     }
     mode = 'landed';
     stage.classList.remove('cloudbase-ended');
@@ -714,11 +802,8 @@ export function createGame(stage, hooks = {}) {
   }
 
   function autoFly(zone) {
-    if (!zone || (!isAirborne() && mode !== 'landed')) return;
-    if (mode === 'cloudbase') {
-      finishCloudbase('travel', false);
-      mode = 'flying';
-    }
+    // In Good Lift the places are out of reach: the way back to them is back to the fjord.
+    if (!zone || (!isAirborne() && mode !== 'landed') || inGame()) return;
     clearCloudResult();
     landingLeg.assist();
     closeMap();
@@ -739,8 +824,7 @@ export function createGame(stage, hooks = {}) {
   }
 
   function teleportTo(zone) {
-    if (!zone) return;
-    finishCloudbase('travel', false);
+    if (!zone || inGame()) return;
     closePanel();
     closeMap();
     setAuto(null);
@@ -958,7 +1042,7 @@ export function createGame(stage, hooks = {}) {
     }
     camera.position.lerp(chase, 1 - Math.exp(-dt * 3.2));
     camera.position.y = Math.max(camera.position.y, surfaceAt(camera.position.x, camera.position.z) + 4);
-    if (mode === 'cloudbase') camera.position.y = Math.max(camera.position.y, cloudRun.state.fogHeight + 4);
+    if (mode === 'cloudbase') camera.position.y = Math.max(camera.position.y, effects.floor + 4);
     camera.lookAt(lookAt);
     camera.rotateZ(-g.bank * 0.25);
     if (effects.shake > 0) {
@@ -1048,46 +1132,34 @@ export function createGame(stage, hooks = {}) {
   const touch = matchMedia('(pointer: coarse)').matches;
   // Visitors who ask for less motion keep everything that tells them something and lose the rest.
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  // The wind made visible, drawn after the run's fog so that a gust can be seen coming through it.
-  const streaks = createWindStreaks({ scene, order: CLOUD_ORDER.aboveFog, calm });
-  const moment = {};
+  // The wind made visible over the fjord: a gentle breeze, no gusts (a run draws its own).
+  const streaks = createWindStreaks({ scene, calm });
+
+  // What the game beyond the arch shares with the engine (see good-lift.js).
+  const host = {
+    g, controls, air, scene, camera, loadModel, effects, touch, calm, hud, unlock, stage, view,
+    base: import.meta.env.BASE_URL,
+    onMusic: (on) => hooks.onMusic?.(on),
+    onBots: (bots) => hooks.onBots?.(bots),
+    onWorld: (world) => hooks.onWorld?.(world),
+    compact: () => touch || view.width <= 560,
+    best: () => progress.cloudbase.bestAltitude,
+    flash: flashStrike,
+    sound: { play, panned, get audio() { return audio; } },
+    bright: () => !useBloom,
+    kit: () => ({ ...kit }),
+    wear,
+  };
   const fjordMoment = {};
 
   function hintText() {
     if (!isAirborne() || mapOpen) return '';
-    if (mode === 'cloudbase') {
-      const { pilot, elapsed, fogHeight } = cloudRun.state;
-      const column = pilot.thermal >= 0 ? cloudRun.state.thermals[pilot.thermal] : null;
-      moment.collapse = pilot.collapse;
-      moment.stall = g.stall;
-      moment.stallSide = g.stallSide;
-      moment.brake = g.brake;
-      moment.deep = effects.deep;
-      moment.load = g.stallLoad;
-      moment.gustAhead = pilot.gustAhead;
-      // The pilot's own depth: the picture can be grey while only the camera is in the cloud.
-      moment.cloud = pilot.cloud;
-      moment.outside = outOfBounds;
-      moment.elapsed = elapsed;
-      moment.fogClearance = g.pos.y - fogHeight;
-      moment.lift = g.lift;
-      moment.headroom = pilot.headroom;
-      moment.climbing = g.vy > 2;
-      moment.thermal = pilot.thermal;
-      // A hunted thermal is weak while it starts too; only one past its start is dying.
-      moment.dying = !!column && column.strength < 0.85 && (pilot.thermal === 0 || column.age > CLOUD_HUNT.bloom);
-      moment.flockDir = column ? column.dir : 1;
-      moment.against = effects.against;
-      moment.rides = effects.rides;
-      moment.searching = effects.searching;
-      moment.touch = touch;
-      return holdHint(effects.hint, cloudbaseHint(moment), elapsed);
-    }
     const near = nearestZone(false);
     fjordMoment.stall = g.stall;
     fjordMoment.stallSide = g.stallSide;
     fjordMoment.auto = auto ? auto.label : '';
     fjordMoment.arch = !progress.cloudbase.discovered && airtime < 4 && landingLeg.eligible;
+    fjordMoment.nearArch = archNear && !auto;
     fjordMoment.outside = outOfBounds;
     fjordMoment.nearRing = near.dist < near.zone.r * 2.5;
     fjordMoment.unvisited = !progress.visited.includes(near.zone.id);
@@ -1107,7 +1179,8 @@ export function createGame(stage, hooks = {}) {
   function updateMeter() {
     // Nothing to show with the map open, while flying itself, or anywhere but in the air.
     const shown = isAirborne() && !mapOpen && !auto;
-    brakeMeter(shown ? g.brake : 0, shown ? g.stallLoad : 0, shown ? g.stall : 0, effects.meter);
+    // Only a run can stall, so only a run's meter ever shows red.
+    brakeMeter(shown ? g.brake : 0, shown && mode === 'cloudbase' ? g.stallLoad : 0, shown ? g.stall : 0, effects.meter);
     const was = effects.meterShown;
     const fill = Math.round(effects.meter.fill * 200);
     const red = Math.round(effects.meter.red * 200);
@@ -1135,16 +1208,20 @@ export function createGame(stage, hooks = {}) {
       return;
     }
     if (mode === 'cloudbase') {
-      // The altitude is the one readout every screen shows, so it carries what has hit the wing.
-      const plight = cloudRun.state.pilot.collapse > 0 ? 'collapsed' : g.stall > 0 ? 'stalled' : cloudRun.state.pilot.cloud > 0.25 ? 'in cloud' : 'Cloudbase';
-      hud('alt').textContent = `${Math.floor(g.pos.y)} m · ${plight}`;
-      const clearance = Math.max(0, Math.floor(g.pos.y - cloudRun.state.fogHeight));
-      hud('next').textContent = `${touch || view.width <= 560 ? '' : `peak ${Math.floor(cloudRun.state.peak)} m · `}fog ${clearance} m below`;
-      hud('speed').textContent = `${Math.round(g.speed * 3.6)} km/h`;
-      hud('belt').textContent = `best ${progress.cloudbase.bestAltitude} m`;
-      $('.fj-hint').textContent = hintText();
-      // The compact HUD can wrap on small phones; notifications must start below its real height.
-      $('.fj-toasts').style.top = `${Math.ceil($('.fj-hud dl').getBoundingClientRect().bottom + 8)}px`;
+      // The run writes its own readouts, and says nothing while the map is open.
+      $('.fj-hint').textContent = run.hud(mapOpen);
+      // The notifications, with the judges' lights at their head, run down the middle of the screen.
+      // Wherever they would cross the readouts (which can wrap on small phones) they start below
+      // the readouts' real height, and below the buttons wherever they would cross those. A screen
+      // wide enough to keep them apart keeps them at the top, clear of the title card a run opens
+      // with.
+      const readouts = $('.fj-hud dl').getBoundingClientRect();
+      const buttons = $('.fj-hud nav').getBoundingClientRect();
+      const toasts = $('.fj-toasts');
+      const column = toasts.getBoundingClientRect();
+      if (host.compact() || column.left < readouts.right + 8) toasts.style.top = `${Math.ceil(readouts.bottom + 8)}px`;
+      else if (column.right > buttons.left - 8) toasts.style.top = `${Math.ceil(buttons.bottom + 8)}px`;
+      else toasts.style.removeProperty('top');
       if (mapOpen) drawMap();
       return;
     }
@@ -1228,7 +1305,8 @@ export function createGame(stage, hooks = {}) {
       mapCtx.fill();
     }
     mapCtx.font = '11px ui-monospace, monospace';
-    for (const zone of ZONES) {
+    // In Good Lift the places are out of reach, so the map leaves them off.
+    for (const zone of inGame() ? [] : ZONES) {
       const x = mapX(zone.x);
       const y = mapY(zone.z);
       mapCtx.save();
@@ -1257,7 +1335,7 @@ export function createGame(stage, hooks = {}) {
       mapCtx.stroke();
       mapCtx.fillStyle = '#5ee6ff';
       mapCtx.textAlign = 'left';
-      mapCtx.fillText('Cloudbase', x + 10, y + 3);
+      mapCtx.fillText('Good Lift', x + 10, y + 3);
     }
     mapCtx.save();
     mapCtx.translate(mapX(g.pos.x), mapY(g.pos.z));
@@ -1287,7 +1365,7 @@ export function createGame(stage, hooks = {}) {
     mapOpen = true;
     $('.fj-map').hidden = false;
     if (panel) hooks.onPanel?.(null);
-    if (cloudResult) hooks.onCloudbase?.(null);
+    if (cloudResult) hooks.onResult?.(null);
     drawMap();
   }
 
@@ -1296,14 +1374,14 @@ export function createGame(stage, hooks = {}) {
     mapOpen = false;
     $('.fj-map').hidden = true;
     if (panel) hooks.onPanel?.(panel);
-    if (cloudResult) hooks.onCloudbase?.(cloudResult);
+    if (cloudResult) hooks.onResult?.(cloudResult);
   }
 
   on(mapCanvas, 'click', (event) => {
     const box = mapCanvas.getBoundingClientRect();
     const x = ((event.clientX - box.left) / box.width) * mapCanvas.width;
     const y = ((event.clientY - box.top) / box.height) * mapCanvas.height;
-    const hit = ZONES.find((zone) => Math.hypot(mapX(zone.x) - x, mapY(zone.z) - y) < 16);
+    const hit = !inGame() && ZONES.find((zone) => Math.hypot(mapX(zone.x) - x, mapY(zone.z) - y) < 16);
     if (hit) teleportTo(hit);
     else if (progress.cloudbase.discovered && Math.hypot(mapX(GATEWAY.x) - x, mapY(GATEWAY.z) - y) < 16) retryCloudbase();
   });
@@ -1311,12 +1389,13 @@ export function createGame(stage, hooks = {}) {
   for (const zone of ZONES) {
     const button = document.createElement('button');
     button.textContent = `[ ${zone.label} ]`;
+    button.dataset.place = zone.id;
     on(button, 'click', () => teleportTo(zone));
     $('.fj-map-list').append(button);
   }
   const cloudMapButton = document.createElement('button');
   cloudMapButton.dataset.do = 'cloudbase';
-  cloudMapButton.textContent = '[ Cloudbase ]';
+  cloudMapButton.textContent = '[ Good Lift ]';
   cloudMapButton.hidden = !progress.cloudbase.discovered;
   $('.fj-map-list').append(cloudMapButton);
 
@@ -1324,6 +1403,8 @@ export function createGame(stage, hooks = {}) {
 
   let audio = null;
   let soundOn = true;
+  // The vario's next beep, written in place each time it sounds.
+  const tone = { pitch: 0, gap: 0 };
 
   function startAudio() {
     const Ctx = window.AudioContext ?? window.webkitAudioContext;
@@ -1404,69 +1485,6 @@ export function createGame(stage, hooks = {}) {
     return out;
   }
 
-  // A raven's call: a rough falling croak. `level` is its loudness and `pitch` raises it in alarm.
-  function caw(ctx, at, level, pan, pitch) {
-    const voice = ctx.createOscillator();
-    voice.type = 'sawtooth';
-    voice.frequency.setValueAtTime(470 * pitch, at);
-    voice.frequency.exponentialRampToValueAtTime(330 * pitch, at + 0.26);
-    // The rasp comes from switching the voice on and off some seventy times a second.
-    const rasp = ctx.createOscillator();
-    rasp.type = 'square';
-    rasp.frequency.value = 68;
-    const depth = ctx.createGain();
-    depth.gain.value = 0.45;
-    const throat = ctx.createGain();
-    throat.gain.value = 0.55;
-    rasp.connect(depth).connect(throat.gain);
-    const beak = ctx.createBiquadFilter();
-    beak.type = 'bandpass';
-    beak.frequency.value = 1250;
-    beak.Q.value = 1.4;
-    const shape = ctx.createGain();
-    shape.gain.setValueAtTime(0, at);
-    shape.gain.linearRampToValueAtTime(level, at + 0.02);
-    shape.gain.setTargetAtTime(0, at + 0.14, 0.05);
-    voice.connect(throat).connect(beak).connect(shape).connect(panned(ctx, pan));
-    voice.start(at);
-    rasp.start(at);
-    voice.stop(at + 0.4);
-    rasp.stop(at + 0.4);
-  }
-
-  // A raven strike: a thud, the rattle of a wing losing its shape, and the bird's own complaint.
-  function thud(ctx, at, pan) {
-    const out = panned(ctx, pan);
-    const body = ctx.createOscillator();
-    body.frequency.setValueAtTime(160, at);
-    body.frequency.exponentialRampToValueAtTime(42, at + 0.22);
-    const hit = ctx.createGain();
-    hit.gain.setValueAtTime(0.5, at);
-    hit.gain.exponentialRampToValueAtTime(0.001, at + 0.3);
-    body.connect(hit).connect(out);
-    body.start(at);
-    body.stop(at + 0.32);
-    const cloth = ctx.createBufferSource();
-    cloth.buffer = audio.noise;
-    const flap = ctx.createBiquadFilter();
-    flap.type = 'bandpass';
-    flap.frequency.setValueAtTime(1400, at);
-    flap.frequency.exponentialRampToValueAtTime(320, at + 1.6);
-    const rattle = ctx.createGain();
-    rattle.gain.setValueAtTime(0.28, at);
-    rattle.gain.exponentialRampToValueAtTime(0.05, at + 1.6);
-    rattle.gain.linearRampToValueAtTime(0, at + 2.1);
-    cloth.loop = true;
-    cloth.connect(flap).connect(rattle).connect(out);
-    cloth.start(at, Math.random());
-    cloth.stop(at + 2.15);
-    caw(ctx, at + 0.05, 0.11, pan, 1.25);
-  }
-
-  function playStrike(side) {
-    play('strike', 1, thud, side * 0.4);
-  }
-
   // A stall: the wing slumps with a low drop and its cloth rattles loose, slowing as it goes. No
   // call in it: a stall must never sound like a raven. `level` is softer for the forgiving kind.
   function slump(ctx, at, pan, level) {
@@ -1534,72 +1552,12 @@ export function createGame(stage, hooks = {}) {
     cloth.stop(at + 0.5);
   }
 
-  // A gust front going over: a rush of air that rises, peaks as it arrives and dies away, moving
-  // across from the side it comes from so its direction is heard.
-  function whoosh(ctx, at, level, from) {
-    const air = ctx.createBufferSource();
-    air.buffer = audio.noise;
-    air.loop = true;
-    const band = ctx.createBiquadFilter();
-    band.type = 'bandpass';
-    band.Q.value = 0.6;
-    band.frequency.setValueAtTime(320, at);
-    band.frequency.exponentialRampToValueAtTime(1100, at + 1);
-    band.frequency.exponentialRampToValueAtTime(420, at + 2.4);
-    const shape = ctx.createGain();
-    shape.gain.setValueAtTime(0, at);
-    shape.gain.linearRampToValueAtTime(level, at + 0.9);
-    shape.gain.linearRampToValueAtTime(0, at + 2.4);
-    const out = panned(ctx, 0.8 * from);
-    if (out !== audio.master) {
-      out.pan.setValueAtTime(clamp(0.8 * from, -1, 1), at);
-      out.pan.linearRampToValueAtTime(clamp(-0.8 * from, -1, 1), at + 2.2);
-    }
-    air.connect(band).connect(shape).connect(out);
-    air.start(at, Math.random());
-    air.stop(at + 2.45);
-  }
-
   function playStall(side, harsh) {
     play('stall', 1.2, slump, side * 0.5, harsh ? 1 : 0.7);
   }
 
   function playRefill(side) {
     play('refill', 1, refill, side * 0.3);
-  }
-
-  // The front about to reach the pilot is heard coming a moment before it arrives.
-  function hearGust() {
-    const { pilot, gusts } = cloudRun.state;
-    if (pilot.gustSlot < 0 || pilot.gustIn <= 0 || pilot.gustIn > 0.8) return;
-    const band = gusts[pilot.gustSlot];
-    // It comes from upwind of the pilot: which side is that?
-    const from = -band.ux * Math.cos(g.yaw) - band.uz * Math.sin(g.yaw);
-    play('gust', 2.5, whoosh, 0.05 + 0.012 * band.strength, from);
-  }
-
-  // The nearest raven calls now and then, from the side it is on, so a flock can be found by ear;
-  // one about to cross the pilot's path calls sharply and often.
-  function callRavens() {
-    const { pilot, ravens } = cloudRun.state;
-    if (pilot.shield > 0) return;
-    let nearest = Infinity;
-    let pan = 0;
-    let alarm = null;
-    for (const raven of ravens) {
-      if (raven.fade < 0.5) continue;
-      const dx = raven.x - g.pos.x;
-      const dz = raven.z - g.pos.z;
-      const range = Math.hypot(dx, raven.y - g.pos.y, dz);
-      const side = (dx * Math.cos(g.yaw) + dz * Math.sin(g.yaw)) / Math.max(range, 1);
-      if (raven.threat) alarm ??= side;
-      if (range >= nearest) continue;
-      nearest = range;
-      pan = side;
-    }
-    // The two calls keep separate time: a quiet call a moment ago must not silence the alarm.
-    if (alarm !== null) play('alarm', 1.1, caw, 0.09, alarm, 1.2);
-    else if (nearest < 180) play('caw', 6, caw, 0.012 + 0.05 * (1 - nearest / 180) ** 2, pan, 1);
   }
 
   function updateAudio() {
@@ -1610,7 +1568,7 @@ export function createGame(stage, hooks = {}) {
     const rush = mode === 'lost' ? Math.min(0.14, 0.01 + Math.abs(g.vy) * 0.005) : 0.01;
     // The wind in the lines follows the airspeed: louder and brighter on the bar, dull on the brake.
     audio.wind.gain.setTargetAtTime(flying ? 0.02 + g.speed * 0.004 : rush, now, 0.3);
-    const fogNear = running ? 1 - clamp((g.pos.y - cloudRun.state.fogHeight) / 140, 0, 1) : 0;
+    const fogNear = running ? 1 - clamp((g.pos.y - effects.floor) / 140, 0, 1) : 0;
     // Inside a storm cloud the same rumble swells and the wind goes dull.
     const inCloud = running ? effects.veil : 0;
     audio.rumble.gain.setTargetAtTime(Math.max(fogNear, inCloud * 0.8) * 0.35, now, 0.3);
@@ -1621,16 +1579,14 @@ export function createGame(stage, hooks = {}) {
     audio.luff.gain.setTargetAtTime(0.11 * luff * luff, now, 0.08);
     audio.beat.frequency.setTargetAtTime(8 + 9 * luff, now, 0.08);
     audio.flap.frequency.setTargetAtTime(700 + 500 * luff, now, 0.08);
-    if (running) {
-      callRavens();
-      hearGust();
-    }
+    if (running) run.sounds();
     if (flying && g.vy > 0.4 && now >= audio.nextBeep) {
-      const gap = Math.max(0.11, 0.42 - g.vy * 0.05);
-      audio.osc.frequency.setValueAtTime(620 + g.vy * 85, now);
+      // A run's thermals lift far harder than the fjord's, so its vario has a longer scale.
+      varioTone(g.vy, mode === 'cloudbase', tone);
+      audio.osc.frequency.setValueAtTime(tone.pitch, now);
       audio.beep.gain.setValueAtTime(0.05, now);
-      audio.beep.gain.setValueAtTime(0, now + gap * 0.5);
-      audio.nextBeep = now + gap;
+      audio.beep.gain.setValueAtTime(0, now + tone.gap * 0.5);
+      audio.nextBeep = now + tone.gap;
     } else if (!flying || g.vy <= 0.4) audio.beep.gain.setTargetAtTime(0, now, 0.03);
   }
 
@@ -1652,11 +1608,10 @@ export function createGame(stage, hooks = {}) {
   function fly(zoneId) {
     const zone = ZONES.find((candidate) => candidate.id === zoneId);
     if (mode === 'lost') idle();
+    // Back from Good Lift: the flight starts again from the launch.
+    if (game || mode === 'cloudbase' || mode === 'cloudbase-ended') backToFjord();
     if (mode === 'intro') {
-      $('.fj-hud').hidden = false;
-      stage.classList.add('playing');
-      startAudio();
-      airtime = 0;
+      takeControl();
       launchFrom(START.x, START.y, START.z, START.yaw);
       if (!zone && !revealShown && !progress.cloudbase.discovered && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
         revealShown = true;
@@ -1667,10 +1622,18 @@ export function createGame(stage, hooks = {}) {
           at: new THREE.Vector3(START.x, START.y, START.z).lerp(new THREE.Vector3(GATEWAY.x, 80, GATEWAY.z), 0.55),
         };
       }
-      unlock('airborne');
     }
     if (zone) teleportTo(zone);
     syncCloudbaseEntry();
+  }
+
+  // Out of the backdrop and into the visitor's hands: the readouts, the sound, a fresh clock.
+  function takeControl() {
+    $('.fj-hud').hidden = false;
+    stage.classList.add('playing');
+    startAudio();
+    airtime = 0;
+    unlock('airborne');
   }
 
   /** From a landing, flies itself to the next place not yet visited. */
@@ -1692,6 +1655,8 @@ export function createGame(stage, hooks = {}) {
     lostScene.reset();
     clearCloudResult();
     clearRunEffects();
+    game = gameSky = flownSky = null;
+    portal = false;
     effects.gaze = 0;
     launchReveal = null;
     mode = 'intro';
@@ -1701,6 +1666,7 @@ export function createGame(stage, hooks = {}) {
     clearInput();
     $('.fj-hud').hidden = true;
     stage.classList.remove('playing', 'lost', 'cloudbase', 'cloudbase-ended');
+    run?.leave(true);
     audio?.ctx.suspend();
     if (document.fullscreenElement) document.exitFullscreen();
   }
@@ -1709,6 +1675,11 @@ export function createGame(stage, hooks = {}) {
 
   on(window, 'keydown', (event) => {
     if (mode === 'intro' || event.metaKey || event.ctrlKey || event.altKey) return;
+    run?.nudgeMusic();
+    // Good Lift's music has its own switch, only beyond the arch.
+    if (event.code === 'KeyB' && !event.repeat && inGame()) run?.toggleMusic();
+    // Through the arch, nothing is asked of the flight until Good Lift begins.
+    if (portal) return;
     if (mode === 'lost') {
       // In the emergency there is one thing to do, and several keys that do it.
       if (event.code === 'KeyR' || event.code === 'Space' || event.code === 'Enter') {
@@ -1719,7 +1690,7 @@ export function createGame(stage, hooks = {}) {
       return;
     }
     if (mode === 'cloudbase-ended') {
-      if (event.code === 'Escape') mapOpen ? closeMap() : backToFjord();
+      if (event.code === 'Escape') mapOpen ? closeMap() : leaveGame();
       else if (event.code === 'KeyR' && !event.repeat) retryCloudbase();
       else if (event.code === 'KeyM' && !event.repeat) mapOpen ? closeMap() : openMap();
       else if (event.code === 'KeyL' && !event.repeat) toggleSound();
@@ -1764,6 +1735,9 @@ export function createGame(stage, hooks = {}) {
     clearInput();
   });
   on(window, 'pagehide', () => finishCloudbase('quit', false));
+  on(stage, 'pointerdown', () => run?.nudgeMusic());
+  // Out of sight, Good Lift's music waits for the page to come back.
+  on(document, 'visibilitychange', () => run?.hideMusic(document.hidden));
 
   for (const button of stage.querySelectorAll('.fj-touch button')) {
     const set = (down) => (event) => {
@@ -1786,14 +1760,26 @@ export function createGame(stage, hooks = {}) {
     exit: exitFlight,
     cloudbase: retryCloudbase,
     'quit-cloudbase': () => { showKeys(false); finishCloudbase('quit'); },
+    fjord: () => { closeMap(); leaveGame(); },
     reset: () => {
       finishCloudbase('quit', false);
       Object.assign(progress, emptyProgress());
       writeProgress(emptyProgress());
+      // Good Lift's own store goes too: its bests, feats, streak and board, and the kit they earned.
+      try {
+        localStorage.removeItem(GAME_STORE);
+      } catch {
+        // Storage can be blocked; there is then nothing kept to clear.
+      }
+      clearKit();
       location.reload();
     },
   };
-  for (const button of stage.querySelectorAll('[data-do]')) on(button, 'click', actions[button.dataset.do]);
+  // Through the arch the buttons wait for Good Lift as the keys do, but for sound and fullscreen.
+  for (const button of stage.querySelectorAll('[data-do]')) {
+    const { do: name } = button.dataset;
+    on(button, 'click', () => (portal && name !== 'sound' && name !== 'fullscreen' ? undefined : actions[name]()));
+  }
 
   // ---------------------------------------------------------------- loop
 
@@ -1818,24 +1804,22 @@ export function createGame(stage, hooks = {}) {
     // never hurried: at three times the speed a raven arrives with no warning at all.
     haste = isAirborne() && !mapOpen && (auto || (input.boost && mode !== 'cloudbase')) ? HASTE : 1;
     time += elapsed;
-    backlog += elapsed * haste;
+    // A good lift holds the flight still for a heartbeat: no steps are fed while it lasts, and none
+    // are made up afterwards. The step itself never changes.
+    const stopped = effects.stop > 0;
+    effects.stop = Math.max(0, effects.stop - elapsed);
+    backlog += stopped ? 0 : elapsed * haste;
     while (backlog >= STEP) {
       backlog -= STEP;
-      if (isAirborne() && !mapOpen && !held) simulate(STEP);
+      if (isAirborne() && !mapOpen && !held && !portal) simulate(STEP);
     }
 
     // What the run is doing to the wing and the picture, eased by the real clock. Outside a run
     // the targets are all zero and nothing here writes to the wing, which the 404 scene also folds.
     const inRun = mode === 'cloudbase';
-    runEffects(
-      mode,
-      cloudRun.state.pilot,
-      g.vy,
-      g.pos.y - cloudRun.state.fogHeight,
-      inRun ? cloudRun.depthAt(camera.position.x, camera.position.y, camera.position.z) : 0,
-      effects.want,
-    );
-    stallEffects(mode, g, effects.stall);
+    if (inRun) run.want();
+    else effects.want.fold = effects.want.veil = effects.want.shake = effects.want.gaze = 0;
+    stallEffects(mode, g, effects.stall, mode === 'cloudbase' ? g.stallLoad : 0);
     if (isAirborne()) {
       // A raven strike folds the whole wing; a stall folds a little of both halves, or one of them
       // hard. Each half goes fast and opens again more slowly. The 404 scene folds the wing by
@@ -1911,19 +1895,10 @@ export function createGame(stage, hooks = {}) {
     places.update(time);
     thermals.update(time);
     gateway.update(time);
-    if (mode === 'cloudbase') cloudView?.update(cloudRun.state.elapsed, g.pos, cloudRun, camera.position);
-    // All of the wind in a run; over the fjord a sparse breeze that moves nothing, as the windsocks
-    // show it. Paused with the flight, and drawn brighter once the glow has been dropped.
-    streaks.update(
-      mapOpen || held ? 0 : elapsed,
-      g.pos,
-      camera.position,
-      inRun ? cloudRun.windAt : fjordBreeze,
-      inRun ? 1 : mode === 'flying' ? 0.35 : 0,
-      inRun ? cloudRun.state.fogHeight + 3 : 3,
-      inRun ? cloudRun.state.gusts : null,
-      !useBloom,
-    );
+    // Over the fjord a sparse breeze that moves nothing, as the windsocks show it; a run draws all
+    // of its own wind. Paused with the flight, and drawn brighter once the glow has been dropped.
+    if (inRun) run.draw(mapOpen || held ? 0 : elapsed, mapOpen);
+    streaks.update(mapOpen || held ? 0 : elapsed, g.pos, camera.position, fjordBreeze, mode === 'flying' ? 0.35 : 0, 3, null, !useBloom);
     placeLabels();
     updateAudio();
     hudClock += elapsed;
@@ -1955,12 +1930,20 @@ export function createGame(stage, hooks = {}) {
     glider,
     progress,
     get mode() { return mode; },
-    cloudRun,
-    get cloudView() { return cloudView; },
+    get cloudRun() { return run?.sky ?? null; },
+    get cloudView() { return run?.view ?? null; },
+    // The meet and Hrungnir's kettlebells of the run being flown, and their view.
+    get meet() { return run?.meet ?? null; },
+    get bells() { return run?.bells ?? null; },
+    get meetView() { return run?.meetView ?? null; },
+    // Feeling for the core: how fast the lift is climbing, and the surges felt so far.
+    get surge() { return run?.surge.state ?? null; },
+    // What the run's hint was last chosen from: its facts, as the readouts last wrote them.
+    get hintFacts() { return run?.hintFacts ?? null; },
     get effects() {
       return {
-        seed: cloudRun.state.seed, fold: effects.fold, foldLeft: effects.foldLeft, foldRight: effects.foldRight, luff: effects.luff,
-        veil: effects.veil, gaze: effects.gaze, hook: effects.hook, stalls: effects.stalls, meter: { ...effects.meter }, haste,
+        seed: run?.sky.state.seed ?? null, fold: effects.fold, foldLeft: effects.foldLeft, foldRight: effects.foldRight, luff: effects.luff,
+        veil: effects.veil, gaze: effects.gaze, hook: run?.world.hook ?? 1, stalls: run?.world.stalls ?? 0, meter: { ...effects.meter }, haste, stop: effects.stop,
       };
     },
     // fjord.seed(n) flies the same Cloudbase sky every run until fjord.seed() lets it go;
@@ -1971,7 +1954,26 @@ export function createGame(stage, hooks = {}) {
     get airtime() { return airtime; },
     controls,
     air,
-    streaks,
+    // The streaks being drawn: the run's while one is flown, otherwise the fjord's.
+    get streaks() { return mode === 'cloudbase' && run ? run.streaks : streaks; },
+    // Good Lift's music: switched on, playing now, which track, and whether the browser refused it.
+    get music() { return run?.musicState ?? null; },
+    // The kit worn now, and fjord.wear({ wing, helmet, chalk }) to try any of it on for a look:
+    // earned or not, and never written down (the kit tab is the way to keep a choice), until the
+    // next run ends and puts the kit kept back on. The run's chalk puffs, to start one by hand:
+    // fjord.chalk.puff(x, y, z).
+    get kit() { return { ...kit }; },
+    wear: (next) => {
+      const worn = wear({ ...kit, ...next });
+      run?.chalk.wear(worn.chalk);
+      return worn;
+    },
+    get chalk() { return run?.chalk ?? null; },
+    // The run's lightning (fjord.lightning.fire() strikes now, from a cloud in view if there is one,
+    // and .state says when and where the last struck) and its glide ring (fjord.glide.state: its
+    // word, the flock it judged, its radius and how strongly it is drawn).
+    get lightning() { return run?.lightning ?? null; },
+    get glide() { return run?.glide ?? null; },
     fjordBreeze,
     camera,
     ZONES,
@@ -1984,11 +1986,42 @@ export function createGame(stage, hooks = {}) {
     respawn,
     retryCloudbase,
     backToFjord,
+    play: playGame,
+    // The last run's log and sheet, and a log's text replayed here: QA checks one against the other.
+    get lastRun() { return run?.lastRun ?? null; },
+    // The meet sheet's bots: the sky they fly, how far they are, and what they last told a sheet.
+    get bots() { return run?.bots ?? null; },
+    // The world board: whether the build names one, and what it last told a sheet.
+    get worldBoard() { return run?.worldBoard ?? null; },
+    replay: (text) => run?.replay(text) ?? null,
+    // The Good Lift address being played, and the sky it came to.
+    get game() { return game; },
+    get gameSky() { return flownSky ?? gameSky; },
     spy: (from, at) => (spy = from ? { from, at } : null),
   };
 
   return {
     fly,
+    play: playGame,
+    /** The initials Good Lift's board writes this browser's runs under. */
+    setInitials: (text) => run?.setInitials(text),
+    /** Good Lift's music switched over, from the meet sheet: whether it is now on. */
+    toggleMusic: () => run?.toggleMusic() ?? false,
+    /** This browser's run taken off the world board the meet sheet shows: whether it went. */
+    removeWorldRun: () => run?.removeWorldRun() ?? Promise.resolve(false),
+    /**
+     * The meet sheet's kit tab: `choice` is any of { wing, helmet, chalk } (wing-kit.js). Good Lift
+     * keeps only what has been earned and writes that down, and the glider wears it at once.
+     * Returns the kit now worn.
+     */
+    setKit: (choice) => (run ? run.chooseKit(choice) : { ...kit }),
+    /** The meet sheet, a component that comes with Good Lift: null until it has loaded. */
+    get meetSheet() { return run?.MeetSheet ?? null; },
+    /**
+     * A challenge link's run to beat, read and replayed on its sky once Good Lift has loaded:
+     * { who, total, peak, ... } or { error }.
+     */
+    challenge: (address) => loadRun().then(() => run.challenge(address)),
     idle,
     lost,
     throwReserve,
@@ -2018,7 +2051,7 @@ export function createGame(stage, hooks = {}) {
       listeners.abort();
       sizeWatch.disconnect();
       audio?.ctx.close();
-      cloudView?.dispose();
+      run?.dispose();
       streaks.dispose();
       for (const pass of composer.passes) pass.dispose?.();
       composer.dispose();

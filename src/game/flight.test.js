@@ -420,3 +420,20 @@ test('every number stays finite and inside its range through an hour of random c
     assert.ok(g.speed >= 0 && g.speed < 30 && g.stall >= 0 && Math.abs(g.stallSide) <= 1);
   }
 });
+
+test('a wing made safe never stalls, however long and hard the brake is held in a turn, yet still comes down deep', () => {
+  const g = aloft();
+  const safe = handsUp({ brake: true, turn: 1, harsh: true, linger: true, safe: true });
+  let deepest = 0;
+  fly(g, safe, stillAir(), 40, () => {
+    assert.equal(g.stall, 0);
+    deepest = Math.max(deepest, g.brake);
+  });
+  // The load stops short of the stall, as it does near the ground, and the brake still bites.
+  assert.ok(g.stallLoad <= 0.9 + 1e-12 && g.stallLoad > 0.85, `the load stopped at ${g.stallLoad}`);
+  assert.equal(deepest, 1);
+  assert.ok(g.sink > FLIGHT.sink.deep - 0.5, 'deep brake, the steep way down');
+  // The same hands on a wing that is not safe do stall.
+  const unsafe = aloft();
+  assert.ok(until(unsafe, handsUp({ brake: true, turn: 1, harsh: true, linger: true }), stillAir(), (wing) => wing.stall > 0) < 40);
+});

@@ -1,100 +1,20 @@
 import * as THREE from 'three';
 import { EXPERIENCE, SECTIONS } from '../content.js';
+import { GATEWAY, PLATEAUS, centerX, heightAt, shore, smoothstep, surfaceAt, valueNoise } from './ground.js';
+
+// The shape of the land is ground.js's, free of 3D code so a run can be flown without it; what is
+// built on it here (the places' labels, the stones, the forest, the meshes) is the page's.
+export { GATEWAY, centerX, heightAt, surfaceAt };
 
 // World units are roughly metres. North is -z, east is +x, the fjord surface is y = 0.
 export const WORLD = { halfX: 320, north: -450, south: 450, ceiling: 420 };
 
-// The arch stands across the eastward departure from launch. This corridor describes the
-// pilot's clearance, leaving room above for the canopy and to either side for the wings.
-export const GATEWAY = {
-  x: 85, z: 320, baseY: 52, size: 60, rotationY: Math.PI / 2,
-  corridor: { minZ: 316, maxZ: 324, minY: 70, maxY: 88 },
-};
-
-const smoothstep = (a, b, x) => {
-  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
-  return t * t * (3 - 2 * t);
-};
-const mix = (a, b, t) => a + (b - a) * t;
-
-function hash(ix, iz) {
-  const n = Math.sin(ix * 127.1 + iz * 311.7) * 43758.5453;
-  return n - Math.floor(n);
-}
-
-function valueNoise(x, z) {
-  const ix = Math.floor(x);
-  const iz = Math.floor(z);
-  const fx = x - ix;
-  const fz = z - iz;
-  const ux = fx * fx * (3 - 2 * fx);
-  const uz = fz * fz * (3 - 2 * fz);
-  const a = hash(ix, iz);
-  const b = hash(ix + 1, iz);
-  const c = hash(ix, iz + 1);
-  const d = hash(ix + 1, iz + 1);
-  return a + (b - a) * ux + (c - a) * uz + (a - b - c + d) * ux * uz;
-}
-
-function fbm(x, z) {
-  let value = 0;
-  let amp = 0.5;
-  let freq = 1;
-  for (let i = 0; i < 4; i++) {
-    value += amp * valueNoise(x * freq, z * freq);
-    freq *= 2.03;
-    amp *= 0.5;
-  }
-  return value;
-}
-
-// The fjord is a meandering channel running south to north.
-export const centerX = (z) => 46 * Math.sin(z * 0.011) + 22 * Math.sin(z * 0.026 + 1.3);
-const halfWidth = (z) => 42 + 12 * Math.sin(z * 0.019 + 0.5);
-const shore = (z, side, off) => centerX(z) + side * (halfWidth(z) + off);
-
-function rawHeight(x, z) {
-  const d = Math.abs(x - centerX(z));
-  const t = smoothstep(halfWidth(z) - 10, halfWidth(z) + 190, d);
-  let h = -9 + Math.pow(t, 1.25) * 185;
-  h += (fbm(x * 0.018, z * 0.018) - 0.47) * (10 + 95 * t);
-  h += (fbm(x * 0.07 + 40, z * 0.07) - 0.47) * (2 + 10 * t);
-  h += smoothstep(-340, -440, z) * 130; // the head of the fjord closes in the north
-  h = mix(h, -9, smoothstep(350, 445, z)); // and it opens to the sea in the south
-  h = mix(h, -9, smoothstep(268, 318, Math.abs(x))); // the massif falls back into the sea at its edges
-  return mix(h, -9, smoothstep(-425, -449, z));
-}
-
-// Places to land, one per page section. `side` picks the shore (+1 east, -1 west, 0 mid-fjord) and
-// `off` is metres inland. Each takes its label and name from the section with the same id.
-export const ZONES = [
-  { id: 'about', z: 170, side: 1, off: 44, r: 26 },
-  { id: 'projects', z: -10, side: -1, off: 46, r: 26 },
-  { id: 'experience', z: -190, side: 1, off: 80, r: 24 },
-  { id: 'contact', z: -300, side: 0, off: 0, r: 22, h: 7 },
-].map((zone) => {
+// Places to land, one per page section: each plateau ground.js cuts, with its label and name from
+// the section with the same id.
+export const ZONES = PLATEAUS.map((zone) => {
   const section = SECTIONS.find((candidate) => candidate.id === zone.id);
-  const x = shore(zone.z, zone.side, zone.off);
-  const h = zone.h ?? Math.min(70, Math.max(7, rawHeight(x, zone.z)));
-  return { ...zone, label: section.file, place: section.place, x, h };
+  return { ...zone, label: section.file, place: section.place };
 });
-
-// Terrain height with a flat plateau cut for each landing zone.
-export function heightAt(x, z) {
-  let h = rawHeight(x, z);
-  const crag = Math.hypot((x - GATEWAY.x) / 23, (z - GATEWAY.z) / 60);
-  if (crag < 1.45) h = Math.max(h, mix(GATEWAY.baseY, -9, smoothstep(0.75, 1.45, crag)));
-  for (const zone of ZONES) {
-    const dist = Math.hypot(x - zone.x, z - zone.z);
-    if (zone.id === 'contact') {
-      // Keep the full landing area flat, then drop quickly to water outside the island.
-      if (dist < zone.r * 2.2) h = mix(zone.h, -9, smoothstep(zone.r, zone.r + 8, dist));
-    } else if (dist < zone.r * 2.2) h = mix(zone.h, h, smoothstep(zone.r, zone.r * 2.2, dist));
-  }
-  return h;
-}
-
-export const surfaceAt = (x, z) => Math.max(0, heightAt(x, z));
 
 const ridge = ZONES.find((zone) => zone.id === 'experience');
 

@@ -6,10 +6,15 @@ import { OpenProject } from './components/Sections.jsx';
 import Warp from './components/Warp.jsx';
 import { PROFILE, PROJECTS, ROUTE } from './content.js';
 import { ACHIEVEMENTS, beltFor, readProgress } from './game/achievements.js';
+import { gameHref, readGameAddress } from './game/good-lift-address.js';
 import { pauseProjectVideos } from './projectMedia.js';
 
 const FLY = '/fly';
-const isFlightAddress = () => location.pathname.replace(/\/$/, '') === FLY;
+const isFlyAddress = () => location.pathname.replace(/\/$/, '') === FLY;
+// Good Lift's own addresses, beyond the arch (good-lift-address.js): what they ask for, or null.
+const gameAddress = () => readGameAddress(location);
+// The flight's addresses: the fjord's and the game's.
+const isFlightAddress = () => isFlyAddress() || !!gameAddress();
 // The project whose own page the address names, if it names one.
 const projectAddress = () => {
   const id = location.pathname.match(/^\/projects\/([^/]+)\/?$/)?.[1];
@@ -18,8 +23,13 @@ const projectAddress = () => {
 // Any other address that is neither the page nor the flight is a missing page. It gets its own flight.
 const missingAddress = () => {
   const path = location.pathname.replace(/\/$/, '');
-  return path === '' || path === FLY || path === '/index.html' || projectAddress() ? null : location.pathname;
+  return path === '' || path === FLY || path === '/index.html' || projectAddress() || gameAddress() ? null : location.pathname;
 };
+// How many entries back the page itself lies from this one, or 0 when it is not behind it at all
+// (an address opened directly, or reloaded), so leaving must replace the address instead.
+const backToPage = () => history.state?.home ?? 0;
+// What the arch opens.
+const DAILY = { kind: 'daily', sky: null, vs: null, bad: null };
 
 function readCrt() {
   try {
@@ -31,12 +41,14 @@ function readCrt() {
 
 export default function App() {
   // `armed` records that the visitor has clicked something, which browsers require before sound can play.
-  // `lost` holds the address of a missing page while its emergency plays.
+  // `lost` holds the address of a missing page while its emergency plays, and `game` the Good Lift
+  // address being played.
   const [flight, setFlight] = useState(() => ({
     on: isFlightAddress() || !!missingAddress(),
     target: null,
     armed: false,
     lost: missingAddress(),
+    game: gameAddress(),
   }));
   // The project whose page is open in place of the main page, if any.
   const [project, setProject] = useState(projectAddress);
@@ -45,8 +57,19 @@ export default function App() {
   // The warp that covers the swap between the page and the flight: `swap` runs at its midpoint.
   const [warp, setWarp] = useState(null);
   const warping = useRef(false);
+  // Each warp is a new one, even when it starts in the very frame the last one ends and React lets
+  // the two state changes land together: without its own key the old, finished warp would stay
+  // mounted in its place and the new one's swap would never come.
+  const warps = useRef(0);
+  // The swap the building warp will make at its midpoint. Asked again before then (Back pressed as
+  // the warp starts, a second click), the later request replaces it: the last thing asked for wins.
+  const pending = useRef(null);
+  // Where leaving Good Lift for the fjord should land, while history goes back there.
+  const leaving = useRef(null);
   const flying = useRef(flight.on);
   flying.current = flight.on;
+  const gaming = useRef(!!flight.game);
+  gaming.current = !!flight.game;
   const hud = useRef(null);
   // Where the main page was scrolled to when a project was opened, and the section to show on return.
   const homeScroll = useRef(null);
@@ -55,17 +78,29 @@ export default function App() {
   // Swaps the page and the flight behind a warp. If one is already playing, or the visitor has
   // asked for reduced motion, the swap happens at once instead.
   const transition = useCallback((swap) => {
-    if (warping.current || matchMedia('(prefers-reduced-motion: reduce)').matches) return swap();
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return swap();
+    if (warping.current) {
+      if (pending.current) {
+        pending.current = swap;
+        return undefined;
+      }
+      // Past the midpoint the swap has been made; this one happens at once, under the falling warp.
+      return swap();
+    }
     warping.current = true;
-    setWarp({ swap, crossed: false });
+    pending.current = swap;
+    warps.current += 1;
+    setWarp({ crossed: false, id: warps.current });
+    return undefined;
   }, []);
 
   const takeFlight = useCallback(
     (target = null) =>
       transition(() => {
-        if (!isFlightAddress()) history.pushState({ flight: true }, '', FLY);
+        // A missing page is no page to come back to: leaving puts '/' in place instead.
+        if (!isFlightAddress()) history.pushState({ flight: true, home: missingAddress() ? 0 : backToPage() + 1 }, '', FLY);
         setProject(null);
-        setFlight({ on: true, target, armed: true, lost: null });
+        setFlight({ on: true, target, armed: true, lost: null, game: gameAddress() });
       }),
     [transition],
   );
@@ -75,11 +110,41 @@ export default function App() {
   const leaveFlight = useCallback(
     (sectionId) =>
       transition(() => {
-        if (history.state?.flight) history.back();
+        const steps = backToPage();
+        if (steps) history.go(-steps);
         else history.replaceState(null, '', '/');
-        setFlight({ on: false, target: null, armed: false, lost: null });
+        setFlight({ on: false, target: null, armed: false, lost: null, game: null });
         // Going back makes the browser restore its own scroll position first; let it finish.
         if (sectionId) setTimeout(() => document.getElementById(sectionId)?.scrollIntoView(), 80);
+      }),
+    [transition],
+  );
+
+  // Into Good Lift through the warp: the arch opens today's sky. Already in the game, the sky
+  // changes in place, so Back still leads out of the game.
+  const enterGame = useCallback(
+    (address = DAILY) =>
+      transition(() => {
+        const href = gameHref(address);
+        if (gameAddress()) history.replaceState(history.state, '', href);
+        else history.pushState({ flight: true, game: true, overFly: isFlyAddress(), home: backToPage() && backToPage() + 1 }, '', href);
+        setProject(null);
+        // A place the flight was asked to fly to is no part of the game, nor of the fjord after it.
+        setFlight((current) => ({ ...current, on: true, armed: true, lost: null, target: null, game: gameAddress() }));
+      }),
+    [transition],
+  );
+
+  // Out of Good Lift, through the warp, to the fjord it was entered from.
+  const leaveGame = useCallback(
+    () =>
+      transition(() => {
+        if (history.state?.overFly) {
+          // Back to the fjord's own entry, unless it has since been rewritten (see the popstate).
+          leaving.current = FLY;
+          history.back();
+        } else history.replaceState({ flight: true, home: backToPage() }, '', FLY);
+        setFlight((current) => ({ ...current, on: true, lost: null, target: null, game: null }));
       }),
     [transition],
   );
@@ -116,21 +181,49 @@ export default function App() {
   useEffect(() => {
     // The browser's back and forward buttons move between the page, a project and the flight too.
     const sync = () => {
+      // Going back from the game to the fjord's entry, if that entry has since become another page
+      // (left from a flight opened directly), the fjord is put back in its place.
+      if (leaving.current) {
+        const wanted = leaving.current;
+        leaving.current = null;
+        if (location.pathname.replace(/\/$/, '') !== wanted) history.pushState({ flight: true, home: 0 }, '', wanted);
+      }
       const apply = () => {
         setProject(projectAddress());
         setFlight((current) =>
           isFlightAddress()
-            ? { ...current, on: true, lost: null }
-            : { on: !!missingAddress(), target: null, armed: false, lost: missingAddress() },
+            ? { ...current, on: true, lost: null, game: gameAddress(), target: !!gameAddress() !== !!current.game ? null : current.target }
+            : { on: !!missingAddress(), target: null, armed: false, lost: missingAddress(), game: null },
         );
       };
-      // The warp is for crossing between the page and the flight; between pages there is none.
-      if (isFlightAddress() !== flying.current) transition(apply);
+      // The warp is for crossing between the page, the fjord and the game beyond the arch; between
+      // pages there is none.
+      if (isFlightAddress() !== flying.current || !!gameAddress() !== gaming.current) transition(apply);
       else apply();
     };
     addEventListener('popstate', sync);
     return () => removeEventListener('popstate', sync);
   }, [transition]);
+
+  // After a deploy, an open page can ask for a chunk that is no longer there: load the same address
+  // afresh, once, rather than leave the game half-loaded.
+  useEffect(() => {
+    const reload = (event) => {
+      // Only where the game is being entered: a chunk fetched ahead of the arch can fail quietly,
+      // and the crossing asks for it again on the game's own address.
+      if (!gameAddress()) return;
+      try {
+        if (sessionStorage.getItem('reloaded-for') === location.href) return;
+        sessionStorage.setItem('reloaded-for', location.href);
+      } catch {
+        return;
+      }
+      event.preventDefault();
+      location.reload();
+    };
+    addEventListener('vite:preloadError', reload);
+    return () => removeEventListener('vite:preloadError', reload);
+  }, []);
 
   // While the warp builds, the page's own content pulls away toward the viewer.
   const building = !!warp && !warp.crossed;
@@ -209,8 +302,11 @@ export default function App() {
             armed={flight.armed}
             target={flight.target}
             lost={flight.lost}
+            game={flight.game}
             warping={building}
             onFly={takeFlight}
+            onPortal={enterGame}
+            onFjord={leaveGame}
             onArm={() => setFlight((current) => ({ ...current, armed: true }))}
             onExit={leaveFlight}
             onProgress={setProgress}
@@ -265,8 +361,11 @@ export default function App() {
 
       {warp && (
         <Warp
+          key={warp.id}
           onMidpoint={() => {
-            warp.swap();
+            const swap = pending.current;
+            pending.current = null;
+            swap?.();
             setWarp((current) => current && { ...current, crossed: true });
           }}
           onDone={() => {

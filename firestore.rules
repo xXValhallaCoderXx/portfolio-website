@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// Good Lift's world board is kept in Firestore by one function (functions/), which reads and writes
+// it with the Admin SDK, past these rules. No browser reads or writes Firestore itself: the page asks
+// the function, which replays every run before it ranks it. So every client is refused, everywhere.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

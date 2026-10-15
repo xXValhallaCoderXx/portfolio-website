@@ -22,9 +22,15 @@ export const CLOUD_WEAR = Object.freeze({ full: 16, dead: 26 });
 // lives `life` seconds, taking `bloom` to start and `fade` to die of old age. `s` is the lift
 // that pays for the wind: at 18 m/s, which balanced the game in still air, a breeze of 2 to 4 m/s
 // took 1,500 m from four runs in five that had reached it.
+//
+// A hunted thermal's lift peaks at its middle (`core` 1: it fades over the whole radius, where the
+// launch column stands flat out to 45% of its own) and is `peak` times `s` there. That leaves a
+// centred hands-up circle (14.4 m) the `s` every circle in the core had before, a centred
+// light-brake circle (8.2 m) 30% more, and a circle let drift off the middle less with every
+// metre: the vario rises and falls once a circle, which is what centring by feel is done by.
 export const CLOUD_HUNT = Object.freeze({
   r: 38, s: 19.25, margin: 42, separation: 85, hop: 80, launchClear: 62, tries: 24, rimSteps: 120,
-  life: [50, 66], bloom: 4, fade: 8,
+  life: [50, 66], bloom: 4, fade: 8, core: 1, peak: 1.47,
 });
 
 // Ravens ride each hunted thermal as a ladder of `flock` birds, `stack` metres tall, repeated up
@@ -81,12 +87,17 @@ export const CLOUD_GUST = Object.freeze({
   spread: 0.35, depth: 55, rise: 6, fall: 30, half: 80, soft: 30, lane: 70,
 });
 
+// What the streaks need of this sky to draw its gust bands (wind-streaks.js): the zone they cross,
+// the bands' own shape and the launch hill's lee.
+export const RUN_SKY = Object.freeze({ zone: CLOUD_ZONE, gust: CLOUD_GUST, lee: CLOUD_WIND.lee });
+
 const TAU = Math.PI * 2;
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const ease = (value) => value * value * (3 - 2 * value);
 const mix = (from, to, amount) => from + (to - from) * amount;
 const wrap = (value, span) => ((value % span) + span) % span;
-const profile = (distance, radius) => ease(clamp((radius - distance) / (radius * 0.55), 0, 1));
+// Lift across a column, 0 to 1: flat in the middle, fading over the outer share `fade` of it.
+const profile = (distance, radius, fade = 0.55) => ease(clamp((radius - distance) / (radius * fade), 0, 1));
 export const cloudThermalStrength = (wear) => ease(clamp((CLOUD_WEAR.dead - wear) / (CLOUD_WEAR.dead - CLOUD_WEAR.full), 0, 1));
 export const cloudFogSpeed = (fogHeight, elapsed) => 1.2 + 0.002 * fogHeight + 0.035 * elapsed + 0.95 * Math.max(elapsed - 110, 0);
 
@@ -680,7 +691,10 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
     for (let i = 0; i < state.thermals.length; i++) {
       const thermal = state.thermals[i];
       if (!thermal.live || thermal.strength === 0) continue;
-      const rising = thermal.s * thermal.strength * profile(Math.hypot(pos.x - thermal.x, pos.z - thermal.z), thermal.r);
+      const distance = Math.hypot(pos.x - thermal.x, pos.z - thermal.z);
+      // The launch column is flat across its core; a hunted thermal peaks at its middle.
+      const shape = i ? H.peak * profile(distance, thermal.r, H.core) : profile(distance, thermal.r);
+      const rising = thermal.s * thermal.strength * shape;
       const right = (thermal.x - pos.x) * Math.cos(yaw) + (thermal.z - pos.z) * Math.sin(yaw);
       lift += rising;
       side += (rising * right) / thermal.r;

@@ -123,6 +123,8 @@ export function settleFlight(g, speed = FLIGHT.speed.trim) {
  *   locked   something else has the wing (a raven strike): the pilot's hands do nothing
  *   harsh    a stall here costs real height (high in a Cloudbase run)
  *   linger   the light brake is held long (a Cloudbase run)
+ *   safe     the wing cannot stall here (over the fjord): the load stops short of it, as it
+ *            does near the ground
  *   climb    a climb rate to hold instead of flying the air, or null; set, the glider is flying
  *            itself: no brake, no bar, no stall
  *
@@ -212,7 +214,7 @@ export function stepFlight(g, controls, air, dt) {
       g.stallLoad -= STALL.drain * dt;
     }
     const kind = controls.harsh ? STALL.harsh : STALL.forgiving;
-    const room = (air.clearance ?? Infinity) >= kind.floor;
+    const room = !controls.safe && (air.clearance ?? Infinity) >= kind.floor;
     g.stallLoad = clamp(g.stallLoad, 0, room ? 1 : 0.9);
     if (g.stallLoad >= 1) {
       g.stallHarsh = !!controls.harsh;

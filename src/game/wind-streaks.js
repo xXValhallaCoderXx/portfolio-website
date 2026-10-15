@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { CLOUD_GUST, CLOUD_POOL, CLOUD_WIND, CLOUD_ZONE } from './cloudbase-state.js';
 
 // The wind made visible. Faint streaks of air fill a box that travels with the pilot, each a comet
 // whose bright head points the way the air is going. In a Cloudbase run each gust band crossing the
@@ -9,8 +8,9 @@ import { CLOUD_GUST, CLOUD_POOL, CLOUD_WIND, CLOUD_ZONE } from './cloudbase-stat
 // run's or the fjord's breeze (approach.js). Distances are metres, speeds metres/second, times
 // seconds, and brightness runs from 0 to 1 before the glow, which starts at 0.3.
 export const WIND_STREAKS = Object.freeze({
-  // Streaks in the box around the pilot, and more kept for the gust fronts.
-  count: 140, front: 60,
+  // Streaks in the box around the pilot, more kept for the gust fronts, and the most gust bands
+  // a sky can hold at once, each of which draws one leading edge.
+  count: 140, front: 60, leads: 4,
   // The box: metres across (x), tall (y) and along (z), with `above` metres of its height over the
   // pilot. A streak fades out as either end comes within `margin` of the half-box of a face, so the
   // field has no hard edge; that is longer than half the longest streak, so no lit one pokes out.
@@ -61,8 +61,6 @@ const smoothstep = (from, to, value) => {
 // `value` brought into 0 .. span, or into -span / 2 .. span / 2, by whole spans.
 const wrap = (value, span) => value - span * Math.floor(value / span);
 const wrapCentred = (value, span) => value - span * Math.floor(value / span + 0.5);
-// The launch hill's lee as the run has it: no gust under the first height, all of it by the second.
-const leeAt = (y) => smoothstep(CLOUD_WIND.lee[0], CLOUD_WIND.lee[1], y);
 
 // Roberts' R3 sequence: the n-th point of an even spread through the unit cube, never close to an
 // earlier one, so that the first few streaks (all the fjord shows) are as evenly spread as the lot.
@@ -80,19 +78,24 @@ function dice(seed) {
 }
 
 /**
- * One set of streaks, added to `scene` and drawn at render order `order`: the game passes
- * ORDER.aboveFog from cloudbase.js, so that they are drawn after the run's fog, which would
- * otherwise paint over them. `calm` is for a visitor who asks for reduced motion: fewer streaks, no
- * twinkle, and a field that moves with the air. Everything is made here, once, and belongs to this
- * set alone, so a second game (a React remount) gets a second set.
+ * One set of streaks, added to `scene` and drawn at render order `order`: a run passes
+ * ORDER.aboveFog from cloudbase.js, so that they are drawn after its fog, which would otherwise
+ * paint over them. `calm` is for a visitor who asks for reduced motion: fewer streaks, no
+ * twinkle, and a field that moves with the air. `sky` is the run's sky (RUN_SKY in
+ * cloudbase-state.js: its zone, its gust bands and the launch hill's lee); a set made without one
+ * never draws a gust front, which is all the fjord needs, and so never loads the run. Everything
+ * is made here, once, and belongs to this set alone, so a second game (a React remount) gets a
+ * second set.
  */
-export function createWindStreaks({ scene, order = 0, calm = false }) {
+export function createWindStreaks({ scene, order = 0, calm = false, sky = null }) {
   const W = WIND_STREAKS;
-  const G = CLOUD_GUST;
-  const Z = CLOUD_ZONE;
+  const G = sky?.gust ?? null;
+  const Z = sky?.zone ?? null;
+  // The launch hill's lee as the run has it: no gust under the first height, all of it by the second.
+  const leeAt = sky ? (y) => smoothstep(sky.lee[0], sky.lee[1], y) : () => 1;
   const STEADY = W.count;
   const FRONT = W.front;
-  const SLOTS = CLOUD_POOL.gusts;
+  const SLOTS = W.leads;
   // The steady streaks come first in the buffers, then the gust fronts', then one leading edge per
   // gust slot. Each is one segment: two points of three numbers, tail first.
   const LEADS = STEADY + FRONT;
@@ -108,7 +111,7 @@ export function createWindStreaks({ scene, order = 0, calm = false }) {
   // A front's streak is centred at least this far behind the front and in front of the band's back,
   // so that even the longest one lies wholly in the band; across, it keeps off the band's soft edge.
   const reach = W.frontLength[1] / 2 + 1;
-  const across = G.half - G.soft / 2;
+  const across = G ? G.half - G.soft / 2 : 0;
   const flow = calm ? W.calm.flow : W.flow;
   const twinkle = calm ? 0 : W.twinkle;
 
@@ -352,7 +355,7 @@ export function createWindStreaks({ scene, order = 0, calm = false }) {
   // curtain, which stays put in height as the pilot climbs through it.
   function drawFronts(dt, pos, windAt, gusts, share, fresh, base, boost) {
     const moving = dt > 0;
-    const live = gusts ? Math.min(SLOTS, gusts.length) : 0;
+    const live = gusts && sky ? Math.min(SLOTS, gusts.length) : 0;
     const wanted = FRONT * share;
     for (let j = 0; j < FRONT; j++) {
       const i = STEADY + j;
@@ -421,7 +424,7 @@ export function createWindStreaks({ scene, order = 0, calm = false }) {
   // Each live front's leading edge: where its front line crosses the zone, as wide as the band, a
   // few metres under the pilot. It is what shows a band coming, even on a phone.
   function drawLeads(pos, gusts, level, base, boost) {
-    const live = gusts ? Math.min(SLOTS, gusts.length) : 0;
+    const live = gusts && sky ? Math.min(SLOTS, gusts.length) : 0;
     for (let s = 0; s < SLOTS; s++) {
       const i = LEADS + s;
       const band = s < live && gusts[s].strength > 0 ? gusts[s] : null;

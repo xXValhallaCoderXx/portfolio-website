@@ -18,9 +18,18 @@ const WARM = 0xffb066;
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 const files = new Map();
 
-export function loadModel(name, size, selfLight = 0.07) {
+const fetchModel = (name) => {
   if (!files.has(name)) files.set(name, loader.loadAsync(`${import.meta.env.BASE_URL}models/${name}.glb`));
-  return files.get(name).then((file) => {
+  return files.get(name);
+};
+
+/** Fetches a model into the cache without making one, so it is at hand when first wanted. */
+export function prefetchModel(name) {
+  return fetchModel(name).then(() => true, () => false);
+}
+
+export function loadModel(name, size, selfLight = 0.07) {
+  return fetchModel(name).then((file) => {
     const model = cloneModel(file.scene); // unlike a plain clone, this keeps a skeleton attached to its skin
     model.scale.setScalar(size);
     model.traverse((part) => {
@@ -981,9 +990,22 @@ function landmarks(rest, anchors) {
   };
 }
 
+// Where the glider's kit comes from (see setKit below): the livery and the helmet, each fetched the
+// first time it is worn, a canvas to paint a livery on, and the site's root, under which the
+// owner's own paintings would be. A test hands in its own.
+const KIT_PARTS = Object.freeze({
+  livery: () => import('./livery.js'),
+  helmet: () => import('./helmet.js'),
+  canvas: () => document.createElement('canvas'),
+  get base() {
+    return import.meta.env.BASE_URL;
+  },
+});
+
 // The origin is the pilot; the wing arcs overhead. Forward is -z. `loadModel` is this file's own
-// unless one is handed in, as a test does to build the real glider outside a browser.
-export function buildGlider({ loadModel: load = loadModel } = {}) {
+// unless one is handed in, as a test does to build the real glider outside a browser, and `parts`
+// is where its kit comes from.
+export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } = {}) {
   const group = new THREE.Group();
   group.rotation.order = 'YXZ';
   // The wing and the pilot each hang from the point between the pilot's shoulders, where the
@@ -1020,7 +1042,8 @@ export function buildGlider({ loadModel: load = loadModel } = {}) {
       sling.add(wing);
       seat.add(pilot);
       group.add(lines);
-      rig = { wing, pilot, mesh, rest, anchors, joints, lines, marks: landmarks(rest, anchors) };
+      // `material` is the wing's own, from its file: the standard wing, which a livery never touches.
+      rig = { wing, pilot, mesh, rest, anchors, joints, lines, marks: landmarks(rest, anchors), material: mesh.material };
       return true;
     })
     .catch((error) => {
@@ -1073,6 +1096,85 @@ export function buildGlider({ loadModel: load = loadModel } = {}) {
       MOTION.armTremble * air.luff * Math.sin(air.time * 19 + side) +
       MOTION.armFlail * air.stall * Math.sin(air.time * 11 + 2 * side);
     return clamp(angle, PILOT.arms[0], PILOT.arms[1]);
+  }
+
+  // What the glider wears (wing-kit.js's kit, less the chalk, which is the run's): the wing's livery,
+  // or 'standard', and whether the helmet is on. A part is fetched the first time it is worn, and a
+  // choice made while it was on its way wins over it when it comes. `material` is the wing's dressed
+  // copy of its own material, `livery` the livery it is dressed in and `texture` that livery's
+  // picture, `helmet` the helmet once it is made and `fetching` the helmet on its way.
+  const worn = { wing: 'standard', helmet: false };
+  const dressing = { material: null, livery: '', texture: null, helmet: null, fetching: null };
+
+  // The livery taken off is let go, its picture given back by the graphics card, so that however
+  // many are tried in the kit tab only the one worn is held there (an owner's picture is a few MB
+  // of it). Put on again, it is painted again.
+  function undress() {
+    if (!dressing.texture) return;
+    dressing.texture.dispose();
+    dressing.material.map = dressing.material.emissiveMap = null;
+    dressing.texture = null;
+    dressing.livery = '';
+  }
+
+  // The standard wing is the very material the file came with. A livery is a copy of it with the
+  // painted picture as both its colour and its glow, laid on by the wing's second set of texture
+  // coordinates, worked out once from its resting shape (livery.js).
+  function dressWing() {
+    const id = worn.wing;
+    if (!rig) return Promise.resolve();
+    if (id === 'standard') {
+      rig.mesh.material = rig.material;
+      undress();
+      return Promise.resolve();
+    }
+    return parts.livery().then((livery) => {
+      if (worn.wing !== id) return;
+      const { mesh, rest, material } = rig;
+      if (!livery.LIVERIES[id]) {
+        mesh.material = material;
+        undress();
+        return;
+      }
+      if (!mesh.geometry.attributes.uv1) mesh.geometry.setAttribute('uv1', new THREE.BufferAttribute(livery.wingUv(rest), 2));
+      const dressed = (dressing.material ??= material.clone());
+      if (dressing.livery !== id) {
+        undress();
+        dressing.texture = livery.liveryTexture(id, { canvas: parts.canvas(), base: parts.base });
+        dressing.livery = id;
+      }
+      dressed.map = dressed.emissiveMap = dressing.texture;
+      dressed.emissiveIntensity = livery.LIVERIES[id].glow;
+      dressed.needsUpdate = true;
+      mesh.material = dressed;
+    });
+  }
+
+  // The helmet is made and fitted to the head once (helmet.js), and after that only shown or hidden.
+  // One fetch at a time: only that fetch failing forgets it, so the next wear asks again. (A livery
+  // failing alongside it must not, or a second helmet could be fetched while the first was still
+  // coming; both would be fitted, and the first, forgotten, could never be taken off.)
+  function dressHead() {
+    if (!rig) return Promise.resolve();
+    if (dressing.helmet) dressing.helmet.visible = worn.helmet;
+    if (!worn.helmet || dressing.helmet) return Promise.resolve();
+    if (!dressing.fetching) {
+      const fetching = parts.helmet().then(async (helmets) => {
+        const helmet = await helmets.makeHelmet(load);
+        // Fitted to the head as the file has it: the joints go back to rest, and the next pose turns
+        // them again.
+        for (const joint of Object.values(rig.joints ?? {})) joint.bone.quaternion.copy(joint.rest);
+        helmets.wearHelmet(helmet, rig.pilot);
+        dressing.helmet = helmet;
+      });
+      fetching.catch(() => {
+        if (dressing.fetching === fetching) dressing.fetching = null;
+      });
+      dressing.fetching = fetching;
+    }
+    return dressing.fetching.then(() => {
+      dressing.helmet.visible = worn.helmet;
+    });
   }
 
   // Where a line meets the pilot, in the glider's frame, written into `out`. The matrices it reads
@@ -1158,6 +1260,27 @@ export function buildGlider({ loadModel: load = loadModel } = {}) {
       reserve ??= await loadReserve(load);
       group.add(reserve.canopy, reserve.lines);
       return reserve.canopy;
+    },
+    /**
+     * Dresses the glider in `kit` ({ wing, helmet }, wing-kit.js): a wing that is not a livery is
+     * the standard wing. Settles once it is all on, or at once on the stand-in, which wears nothing.
+     * A part that will not load leaves the glider as it was, and says so.
+     */
+    setKit(kit) {
+      worn.wing = typeof kit?.wing === 'string' ? kit.wing : 'standard';
+      worn.helmet = kit?.helmet === true;
+      return ready
+        .then(() => Promise.all([dressWing(), dressHead()]))
+        .then(() => undefined, (error) => {
+          console.warn('Part of the kit did not load; the glider keeps what it had.', error);
+        });
+    },
+    /** What the glider wears now ({ wing, helmet }), and its helmet once one has been made. */
+    get kit() {
+      return { ...worn };
+    },
+    get helmet() {
+      return dressing.helmet;
     },
     /**
      * For tests and QA: writes into `out`, in metres, how the glider stands after its last pose.
