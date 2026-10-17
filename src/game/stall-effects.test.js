@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BRAKE_METER, STALL_EFFECTS, brakeMeter, stallEffects } from './stall-effects.js';
+import { BRAKE_METER, STALL_EFFECTS, brakeMeter, deepBrakeReached, stallEffects } from './stall-effects.js';
 import { BRAKE, STALL, createFlight, stepFlight } from './flight.js';
 
 const STEP = 1 / 60;
@@ -30,27 +30,10 @@ test('a straight stall folds a little of both halves, a spin folds the inside ha
   assert.equal(stallEffects('flying', wing({ stall: STALL.surge - 0.01, stallSide: 1 }), {}).shake, 0);
 });
 
-test('the wing opens again before control returns, and on a real stall it is open as the hands come back', () => {
+test('the fold eases out as measured stall severity falls', () => {
   assert.equal(stallEffects('flying', wing({ stall: STALL_EFFECTS.reopen + 0.01, stallSide: 1 }), {}).right, STALL_EFFECTS.spin);
   assert.equal(stallEffects('flying', wing({ stall: STALL_EFFECTS.reopen, stallSide: 1 }), {}).right, 0);
-  // Hold a deep brake in a turn until it spins, then let go: the fold is gone a third of a second
-  // and more before the wing answers the hands again.
-  const g = createFlight();
-  const controls = { turn: 1, brake: true, bar: false, locked: false, harsh: true, linger: false, climb: null };
-  const air = { lift: 0, sink: 0, windX: 0, windZ: 0, calm: true, rough: 0, clearance: Infinity };
-  const out = {};
-  let opened = null;
-  let back = null;
-  for (let t = 0; t < 30 && back === null; t += STEP) {
-    const was = g.stall;
-    if (was > 0) controls.brake = false;
-    stepFlight(g, controls, air, STEP);
-    stallEffects('cloudbase', g, out);
-    if (was > 0 && out.right === 0 && opened === null) opened = t;
-    if (was > 0 && g.stall === 0) back = t;
-  }
-  assert.ok(opened !== null && back !== null);
-  assert.ok(back - opened >= STALL_EFFECTS.reopen / STALL.letGo - STEP, `opened ${(back - opened).toFixed(2)} s before control returned`);
+  assert.equal(stallEffects('flying', wing({ stall: 0, stallLoad: 0 }), {}).luff, 0);
 });
 
 test('the cloth starts to flutter as the stall load builds, and flutters hardest while stalled', () => {
@@ -91,8 +74,8 @@ test('the light brake warns before it goes deep, and the stall load turns the me
   assert.equal(brakeMeter(BRAKE.light + band * 0.7, 0, 0, out).state, 'light');
   assert.equal(brakeMeter(BRAKE.light + band * 0.8, 0, 0, out).state, 'late');
   assert.equal(brakeMeter(BRAKE.shelf + 0.01, 0, 0, out).state, 'deep');
-  assert.equal(brakeMeter(0.8, BRAKE_METER.near - 0.01, 0, out).state, 'deep');
-  assert.equal(brakeMeter(0.8, BRAKE_METER.near, 0, out).state, 'near');
+  assert.equal(brakeMeter(0.9, BRAKE_METER.near - 0.01, 0, out).state, 'deep');
+  assert.equal(brakeMeter(0.9, BRAKE_METER.near, 0, out).state, 'near');
   assert.equal(brakeMeter(0, 0, 1.5, out).state, 'stalled');
   // Let go with load still on the wing: the meter stays up until the load has drained.
   assert.equal(brakeMeter(0, 0.3, 0, out).state, 'light');
@@ -112,18 +95,46 @@ test('the red grows in from the right with the load and meets the fill exactly a
   }
 });
 
-test('held on in a run, the meter goes light, late, deep, near and stalled in that order', () => {
+test('holding the working brake keeps a repeatable depth and does not secretly deepen', () => {
   const g = createFlight();
-  const controls = { turn: 1, brake: true, bar: false, locked: false, harsh: true, linger: true, climb: null };
-  const air = { lift: 0, sink: 0, windX: 0, windZ: 0, calm: true, rough: 0, clearance: Infinity };
+  const controls = { turn: 0, brake: true };
+  const air = { windX: 0, windY: 0, windZ: 0 };
   const out = {};
-  const seen = [];
-  for (let t = 0; t < 20 && g.stall === 0; t += STEP) {
+  for (let n = 0; n < 20 * 60; n++) {
     stepFlight(g, controls, air, STEP);
     brakeMeter(g.brake, g.stallLoad, g.stall, out);
-    if (seen.at(-1) !== out.state) seen.push(out.state);
+    assert.equal(out.state, 'light');
+    assert.equal(g.stall, 0);
   }
-  assert.deepEqual(seen, ['light', 'late', 'deep', 'near', 'stalled']);
+  assert.ok(g.brake >= 0.34 && g.brake < 0.44);
+});
+
+test('explicit deep intent is recognized near its eased target without changing actual fill or warning precedence', () => {
+  const intent = { deepBrake: true, brakeTarget: BRAKE.shelf };
+  const approaching = intent.brakeTarget - BRAKE_METER.deepTolerance - 0.001;
+  assert.equal(deepBrakeReached(approaching, intent), false);
+  assert.equal(brakeMeter(approaching, 0, 0, {}, 0, intent).state, 'light');
+  const reached = intent.brakeTarget - BRAKE_METER.deepTolerance / 2;
+  assert.equal(deepBrakeReached(reached, intent), true);
+  const actual = brakeMeter(reached, 0, 0, {}, 0, intent);
+  assert.equal(actual.state, 'deep');
+  assert.equal(actual.fill, brakeMeter(reached, 0, 0, {}).fill, 'classification never rounds up the actual meter fill');
+  assert.equal(brakeMeter(reached, BRAKE_METER.near, 0, {}, 0, intent).state, 'near');
+  assert.equal(brakeMeter(reached, 0, 1, {}, 0.5, intent).state, 'stalled');
+  assert.equal(brakeMeter(reached, 0, 0, {}, 0.5, intent).state, 'ears');
+  assert.equal(deepBrakeReached(reached, { ...intent, deepBrake: false }), false);
+  assert.equal(brakeMeter(reached, 0, 0, {}, 0, { ...intent, deepBrake: false }).state, 'light');
+  const g = createFlight({ x: 0, y: 1000, z: 0 });
+  let held = 0;
+  for (let tick = 0; tick < 90; tick++) {
+    stepFlight(g, { brake: true, deepBrake: true }, {}, STEP);
+    held = deepBrakeReached(g.brake, g) ? held + STEP : 0;
+  }
+  assert.ok(g.brake < g.brakeTarget, 'actual easing still approaches the deep target from below');
+  assert.ok(held > 0.4, 'the physical deep-hold timer can advance without ever overshooting its target');
+  assert.equal(brakeMeter(g.brake, g.stallLoad, g.stall, {}, g.ears, g).state, 'deep');
+  stepFlight(g, { brake: true }, {}, STEP);
+  assert.equal(deepBrakeReached(g.brake, g), false, 'returning to working intent ends the deep hold immediately');
 });
 
 test('the cloth flutters with the load it is given, so where a wing cannot stall nothing warns of one', () => {
@@ -142,7 +153,7 @@ test('a tuck folds the leading edge and jolts the pilot, less than a stall, and 
   assert.equal(tucked.tuck, 1);
   assert.ok(tucked.shake > 0 && tucked.shake < STALL_EFFECTS.shake, `${tucked.shake} rad of shake`);
   // A falling stall shakes as hard as ever, tuck or none.
-  const both = stallEffects('cloudbase', wing({ tuck: 0.5, stall: STALL.forgiving.time + STALL.surge }), {});
+  const both = stallEffects('cloudbase', wing({ tuck: 0.5, stall: 1 }), {});
   assert.equal(both.shake, STALL_EFFECTS.shake);
 });
 

@@ -21,4 +21,13 @@
 //    and loops flown out of them (LOOP); a folded wing pumped open sooner (CLOUD_STRIKE.pump,
 //    TUCK.pump); and the style its tricks earn multiplying the total a run is ranked by (BANDS,
 //    WATCH, STYLE, SCORE).
-export const SIM_VERSION = 4;
+// 5: one energy-based wing and moving wind field; soaring runs up to ten minutes, stable controls,
+//    drifting thermal reps, progressive hazards and individually banked maneuvers. Fresh progress.
+// 6: readable windward ridge lift with a finite crest ceiling; seeded gradual wind shifts and
+//    continuously advected weather. Fresh competitive progress, with the same control bits.
+// 7: begin beyond the stone arch at 100 m with enough clearance to reach either windward ridge.
+//    Controls, terrain and weather are unchanged. Fresh competitive progress for the new start.
+// 8: sharper pitch response, coordinated manual brake turns and matching physical maneuver timing.
+// 9: more forgiving wind-driven ridge climb before the first thermal transfer.
+// 10: explicit working/deep brake intent and consistent ordinary steering; five-bit recordings.
+export const SIM_VERSION = 10;

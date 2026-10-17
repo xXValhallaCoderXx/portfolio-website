@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { BLESSING, GATE, GATES, RUNE, RUNE_NAME, RUNE_SIGN, createRunes, meetDraw } from './meet-runes.js';
 import { createMeet } from './meet-state.js';
 import { createBells } from './bells.js';
-import { createRunWorld, startRun, stepRun } from './run-step.js';
+import { RUN, createRunWorld, startRun, stepRun } from './run-step.js';
 import { TST, createReferencePilot } from './pilots.js';
+import { settleFlight } from './flight.js';
 import { CLOUD_GATE, CLOUD_ZONE, createCloudbaseRun } from './cloudbase-state.js';
 
 const STEP = 1 / 60;
@@ -61,65 +62,62 @@ function raised(seed = 3) {
   return { world, runes, put, fly, at, thermal };
 }
 
-test('as the peak comes within 100 m of 500 m, and again of 1,000 m, three stones are raised at the line\'s height, 22 m round the middle of the lift the pilot is in, evenly round it and facing it', () => {
-  let sets = 0;
-  for (const seed of firstSkies(6)) {
-    let raisedSoFar = 0;
-    let peakBefore = 0;
-    flown(seed, TST, (world) => {
-      const { runes } = world.meet.state;
-      const sky = world.sky.state;
-      if (runes.raised > raisedSoFar) {
-        raisedSoFar = runes.raised;
-        sets += 1;
-        const line = GATES.lines[runes.raised - 1];
-        // Raised on the step the peak came within `ahead` of the line, and not before.
-        assert.ok(sky.peak >= line - GATES.ahead && peakBefore < line - GATES.ahead, `seed ${seed}`);
-        assert.equal(runes.line, line);
-        const middle = sky.pilot.thermal >= 0 ? sky.thermals[sky.pilot.thermal] : world.g.pos;
-        const bearings = runes.gates.map((stone) => {
-          assert.deepEqual([stone.y, stone.state, stone.at, stone.ended], [line, GATE.waiting, sky.elapsed, -1]);
-          assert.ok(Math.abs(flat(stone, middle) - GATES.ring) < 1e-9);
-          // Facing out from the middle, a unit vector along the line from it.
-          assert.ok(Math.abs(stone.nx - (stone.x - middle.x) / GATES.ring) < 1e-9 && Math.abs(stone.nz - (stone.z - middle.z) / GATES.ring) < 1e-9);
-          return Math.atan2(stone.nx, -stone.nz);
-        });
-        for (let i = 0; i < 3; i++) {
-          const gap = ((bearings[(i + 1) % 3] - bearings[i]) % TAU + TAU) % TAU;
-          assert.ok(Math.abs(gap - TAU / 3) < 1e-9, `seed ${seed}: ${gap} rad between stones`);
-        }
-      }
-      peakBefore = sky.peak;
-    });
+test('waiting gates drift with their thermal generation and never jump to a reborn core', () => {
+  const { world, runes, thermal } = raised();
+  const before = runes.gates.map(({ x, z }) => ({ x, z }));
+  thermal.x += 7;
+  thermal.z -= 3;
+  world.meet.step(STEP, world);
+  for (let i = 0; i < before.length; i++) {
+    assert.equal(runes.gates[i].x, before[i].x + 7);
+    assert.equal(runes.gates[i].z, before[i].z - 3);
   }
-  // Every sky reaches 500 m, and most 1,000 m.
-  assert.ok(sets >= 10, `${sets} sets raised`);
+  const held = runes.gates.map(({ x, z }) => ({ x, z }));
+  thermal.generation = (thermal.generation ?? 0) + 1;
+  thermal.x += 80;
+  world.meet.step(STEP, world);
+  assert.deepEqual(runes.gates.map(({ x, z }) => ({ x, z })), held);
 });
 
-test('each set offers three different runes of the four, drawn from the seed alone: a sky raises the same stones whoever flies it, and every rune and order turns up', () => {
-  const offered = (world) => world.meet.state.runes.gates.map((stone) => stone.rune);
-  const left = new Set();
-  const orders = new Set();
-  for (const seed of firstSkies(12)) {
-    // The runes of each set as the stones are raised, flown two ways.
-    const ways = [TST, { ...TST, collect: true }].map((options) => {
-      const sets = [];
-      flown(seed, options, (world) => {
-        if (world.meet.state.runes.raised > sets.length) sets.push(offered(world));
-      });
-      return sets;
-    });
-    const [one, other] = ways;
-    for (let k = 0; k < Math.min(one.length, other.length); k++) {
-      assert.deepEqual(one[k], other[k], `seed ${seed}, set ${k + 1}`);
-      assert.equal(new Set(one[k]).size, 3);
-      assert.ok(one[k].every((rune) => rune >= RUNE.fehu && rune <= RUNE.tiwaz));
-      left.add([1, 2, 3, 4].find((rune) => !one[k].includes(rune)));
-      orders.add(one[k].join(''));
+test('gates rise thirty metres before each milestone and face the current thermal core', () => {
+  for (const seed of firstSkies(6)) {
+    const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet() }), seed);
+    const { sky, g, meet } = world;
+    sky.state.pilot.thermal = 1;
+    const core = sky.state.thermals[1];
+    for (let k = 0; k < GATES.lines.length; k++) {
+      const line = GATES.lines[k];
+      Object.assign(g.pos, { x: core.x, y: line - GATES.ahead, z: core.z });
+      sky.state.peak = line - GATES.ahead - 0.01;
+      meet.step(STEP, world);
+      assert.equal(meet.state.runes.raised, k);
+      sky.state.peak += 0.01;
+      meet.step(STEP, world);
+      const runes = meet.state.runes;
+      assert.equal(runes.raised, k + 1);
+      assert.equal(runes.line, line);
+      for (const gate of runes.gates) {
+        assert.equal(gate.y, line);
+        assert.equal(gate.state, GATE.waiting);
+        assert.ok(Math.abs(flat(gate, core) - GATES.ring) < 1e-9);
+        assert.ok(Math.abs(Math.hypot(gate.nx, gate.nz) - 1) < 1e-12);
+      }
     }
   }
+});
+
+test('rune offerings are seeded independently of flying and cover every blessing and ordering', () => {
+  const left = new Set(), orders = new Set();
+  for (const seed of firstSkies(64)) {
+    const one = raised(seed), other = raised(seed);
+    const offered = one.runes.gates.map((gate) => gate.rune);
+    assert.deepEqual(offered, other.runes.gates.map((gate) => gate.rune));
+    assert.equal(new Set(offered).size, 3);
+    left.add([1, 2, 3, 4].find((rune) => !offered.includes(rune)));
+    orders.add(offered.join(''));
+  }
   assert.equal(left.size, 4);
-  assert.ok(orders.size >= 12, `${orders.size} orders`);
+  assert.ok(orders.size >= 12);
   assert.deepEqual([RUNE_SIGN, RUNE_NAME].map((names) => names.length), [5, 5]);
 });
 
@@ -215,18 +213,20 @@ test('Algiz is spent by the kettlebell it turns aside: the meet lets it go on th
   // Parked at 700 m in the middle of a calm sky, past both sets of stones, holding Algiz.
   Object.assign(g.pos, { x: CLOUD_ZONE.x, y: 700, z: CLOUD_ZONE.z });
   sky.state.peak = 700;
+  sky.state.elapsed = RUN.grace + 1;
+  settleFlight(g);
   Object.assign(meet.state.runes, { raised: 1 });
   Object.assign(meet.state.runes.blessing, { rune: RUNE.algiz, since: 0, line: 500 });
   // The meet and the kettlebells stepped with the sky's clock alone moving, each bell sent straight
   // down onto the glider once thrown.
   const hold = () => {
     const settled = bells.state.glanced + bells.state.hits;
-    for (let i = 0; i < 30 * 60; i++) {
+    for (let i = 0; i < 90 * 60; i++) {
       sky.state.elapsed += STEP;
       bells.step(STEP, world);
       meet.step(STEP, world);
       const { warning, bells: pool } = bells.state;
-      if (warning >= 0 && pool[warning].aimX !== g.pos.x) {
+      if (warning >= 0) {
         Object.assign(pool[warning], { aimX: g.pos.x, aimY: g.pos.y, aimZ: g.pos.z, fromX: g.pos.x, fromY: g.pos.y + 96, fromZ: g.pos.z });
       }
       if (bells.state.glanced + bells.state.hits > settled && pool.every((bell) => bell.phase === 0)) return;

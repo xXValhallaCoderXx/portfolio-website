@@ -18,6 +18,7 @@ import { createBells } from './bells.js';
 import { summariseRun } from './meet-sheet.js';
 import { SIM_VERSION } from './sim-version.js';
 import { outranks } from './board.js';
+import { isJudgedEnding } from './run-rules.js';
 
 // The bots, in the order they fly: TST first, as the one a run is judged against for the feat and
 // the board. On a typical sky the pilot holding its line on the light brake (and through every
@@ -46,13 +47,13 @@ export const MEDALS = Object.freeze(['bronze', 'silver', 'gold']);
 // for them cost a few milliseconds each (in Node, 0.7 to 1.3 ms and 1.8 to 6.6 ms), so each has a
 // slice of its own, and the first chunk flown takes most of a slice by itself (3.4 to 6.5 ms),
 // however short it is. A bot's run the fog has not caught by `limit` seconds is ended there (none
-// comes near: recorder.js's MAX_STEPS, the longest run a link can hold, is the same 240 s). The
+// comes near: recorder.js's MAX_STEPS, the longest run a link can hold, is the same ten-minute deadline). The
 // visit keeps the bots of the last `keep` skies.
 export const BOT_FLIGHT = Object.freeze({
   slice: 4, // ms of flying at a time
   chunk: 20, // steps between looks at the clock: a third of a second of a bot's run, 0.2 ms warm in Node
   wait: 100, // ms a slice waits at most for the page to be idle
-  limit: 240, // s of a bot's run
+  limit: RUN.seconds, // s: the same deadline as live play
   keep: 16, // skies whose bots the visit keeps
 });
 
@@ -77,7 +78,7 @@ export function medalsOf(scores) {
  * its place with it.
  */
 export function medalFor(run, scores) {
-  if (run.reason !== 'fog' && run.reason !== 'landed') return '';
+  if (!isJudgedEnding(run.reason)) return '';
   let beaten = 0;
   for (const score of scores) if (outranks(run, score)) beaten += 1;
   return beaten > 0 ? MEDALS[beaten - 1] : '';
@@ -91,7 +92,7 @@ export function medalFor(run, scores) {
  */
 export function owing(owed, run) {
   const before = owed?.seed === run.seed ? owed : null;
-  const judged = run.reason === 'fog' || run.reason === 'landed';
+  const judged = isJudgedEnding(run.reason);
   return judged && (!before || outranks(run, before)) ? { seed: run.seed, total: run.total, style: run.style ?? 0, peak: run.peak } : before;
 }
 
@@ -114,7 +115,7 @@ export function landing(run, scores, fresh = []) {
     seed: run.seed,
     medals: medalsOf(scores),
     medal: medalFor(run, scores),
-    beat: (run.reason === 'fog' || run.reason === 'landed') && outranks(run, tst),
+    beat: isJudgedEnding(run.reason) && outranks(run, tst),
     tst: { who: BOTS[0].name, total: tst.total, peak: tst.peak, red: tst.red },
     fresh,
     scores,
@@ -171,13 +172,13 @@ export function createBotFlight() {
       const { state } = world.sky;
       let ending = null;
       // As flyPilot flies one (pilots.js): what it asks for, then the step.
-      while (!ending && left > 0 && state.elapsed < BOT_FLIGHT.limit) {
+      while (!ending && left > 0 && world.steps < RUN.maxSteps) {
         ending = stepRun(world, pilot.decide(world, intent), RUN.step);
         left -= 1;
         steps += 1;
       }
       if (ending) land(ending);
-      else if (state.elapsed >= BOT_FLIGHT.limit) land('quit');
+      else if (world.steps >= RUN.maxSteps) land('time');
     }
     return landed === BOTS.length;
   }

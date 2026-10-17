@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
-// The page's own copy of the key, which its reset clears without loading this module.
+// The page's reset reads the shared key without loading the Good Lift store.
 import { GAME_STORE as RESET_KEY } from './achievements.js';
 import { addRow, boardKey, emptyBoard, rowsFor } from './board.js';
 import { DAY_MS } from './good-lift-address.js';
@@ -47,8 +47,24 @@ afterEach(() => {
   else delete globalThis.localStorage;
 });
 
+test('v9 starts fresh without reading old competitive progress, and timed completions may rank', () => {
+  const old = { ...emptyStore(), runs: 20, tonnage: 9000, feats: ['opener'], best: { total: 500, peak: 2000, score: 900 } };
+  const storage = memoryStorage({ 'good-lift-v1': JSON.stringify(old), 'good-lift-v5': JSON.stringify(old), 'good-lift-v6': JSON.stringify(old), 'good-lift-v7': JSON.stringify(old), 'good-lift-v8': JSON.stringify(old) });
+  assert.deepEqual(readStore(storage), emptyStore());
+  assert.ok(!storage.keys.includes('good-lift-v1'));
+  assert.ok(!storage.keys.includes('good-lift-v5'));
+  assert.ok(!storage.keys.includes('good-lift-v6'));
+  assert.ok(!storage.keys.includes('good-lift-v7'));
+  assert.ok(!storage.keys.includes('good-lift-v8'));
+  const current = emptyStore();
+  const outcome = recordRun(current, run({ reason: 'time' }), { ...AT, version: 7 });
+  assert.equal(outcome.rank, 1);
+  assert.equal(rowsFor(current.board, boardKey(7, DAY)).length, 1);
+  assert.equal(current.v, 7);
+});
+
 test('a fresh or damaged store reads as empty, and a good one round-trips', () => {
-  assert.deepEqual(emptyStore(), { v: 1, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: { days: {} }, bots: null });
+  assert.deepEqual(emptyStore(), { v: 7, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: { days: {} }, bots: null });
   assert.deepEqual(readStore(memoryStorage()), emptyStore());
   for (const text of ['{broken', 'null', '[]', '"store"', '42', JSON.stringify({ best: 'high' })]) {
     assert.deepEqual(readStore(memoryStorage({ [GAME_STORE]: text })), emptyStore(), text);
@@ -344,9 +360,9 @@ test('every change re-reads the store first, so a run recorded elsewhere is not 
 });
 
 test('the store never touches the fjord\'s own key', () => {
-  // The page's reset clears Good Lift's key by name, from achievements.js's own copy of it, without
-  // loading this module; were the two to part, Reset progress would leave the bests, feats, streak and board.
-  assert.equal(GAME_STORE, 'good-lift-v1');
+  // The page's reset reads the same lightweight key through achievements.js without loading this
+  // module; otherwise Reset progress could leave the bests, feats, streak and board.
+  assert.equal(GAME_STORE, 'good-lift-v10');
   assert.equal(RESET_KEY, GAME_STORE);
   const fjord = JSON.stringify({ unlocked: ['airborne'], cloudbase: { discovered: true, bestAltitude: 1032 } });
   const storage = memoryStorage({ 'fjord-glider-v1': fjord });

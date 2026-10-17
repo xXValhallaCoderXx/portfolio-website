@@ -147,19 +147,13 @@ export function cloudbaseHint(facts) {
   // With the ears in, the bar is not to be had: the turn off the line is what dodges.
   const bell = facts.bell === 1 && facts.ears >= 0.5 ? 2 : facts.bell;
   if (bell === 1) {
-    if (facts.beast) return facts.touch ? 'kettlebell — the Beast: ◀▶ or straighten' : 'kettlebell — the Beast: bar or straighten';
-    return facts.touch ? 'kettlebell — ◀▶ for the bar, or straighten' : 'kettlebell — push the bar or straighten';
+    if (facts.beast) return facts.touch ? 'kettlebell — the Beast: ▲ or straighten' : 'kettlebell — the Beast: bar or straighten';
+    return facts.touch ? 'kettlebell — ▲ for the bar, or straighten' : 'kettlebell — push the bar or straighten';
   }
   if (bell === 2) return facts.beast ? 'kettlebell — the Beast: turn off your line' : 'kettlebell — turn off your line';
   if (facts.load >= 0.6) return 'brake in the red — ease off or it stalls';
   // A front on the tail of a held brake is what tips it over; any front may come round to the tail.
   if (facts.gustAhead < GUST_NEAR && facts.brake > BRAKE.light) return 'gust coming — ease the brake';
-  // Out of lift a deep brake is usually a way down being looked for: the ears are the one that
-  // cannot stall, said until they have been tried.
-  if (facts.deep >= DEEP_WARN) {
-    if (facts.lift < 1 && !facts.earsUsed) return facts.touch ? 'brake going deep — let go; ▼▼ sinks fast' : 'brake going deep — let go; E to sink fast';
-    return 'brake going deep — ease off now';
-  }
   if (facts.cloud > 0.25) return 'in cloud — let go, fly straight out';
   if (facts.outside) return 'the wind turns you back toward the lift';
   // The moment a core passes beside the wing on the flock's side: turned into now, the first circle
@@ -181,7 +175,7 @@ export function cloudbaseHint(facts) {
   if (facts.landed < TRICK_SAID) return `landed — ${facts.trick}, +${facts.points.toLocaleString('en-GB')} style`;
   if (facts.lost < LOST_SAID) return 'trick lost — level out to land the next';
   // Round a loop: its keys, until two sets have landed, and then how to roll out of it.
-  if (facts.looping) return facts.tricksLanded < TRICKS_TAUGHT || !facts.inHand ? LOOP_HINT : `${facts.inHand} — skip a press to roll out`;
+  if (facts.looping) return facts.tricksLanded < TRICKS_TAUGHT || !facts.inHand ? LOOP_HINT : `${facts.inHand} — recover with the swing`;
   if (facts.inHand) return facts.inHandPitch ? `${facts.inHand} — brake the surge to land it` : `${facts.inHand} — level out to land it`;
   if (facts.pitching && facts.tricksLanded < TRICKS_TAUGHT) return pitchHint(facts.touch);
   if (facts.loopable && facts.tricksLanded < TRICKS_TAUGHT) return LOOPABLE_HINT;
@@ -202,8 +196,8 @@ export function cloudbaseHint(facts) {
   if (facts.thunder) return '25 kg under the cloud — grab it and leave';
   // Leaving dying lift the short way round is not a mistake to correct.
   if (facts.thermal > 0 && facts.against > 1 && !facts.dying) return `ravens turn ${facts.flockDir > 0 ? '▶' : '◀'} here — turn with them`;
-  if (facts.trailHigh) return facts.touch ? 'too high for the plates — ▼▼ big ears' : 'too high for the plates — big ears (E)';
-  if (facts.trail) return 'lift dying — follow the plates on the bar';
+  if (facts.trailHigh) return facts.touch ? 'optional plates below — hold ears to reach' : 'optional plates below — ears (E) to reach';
+  if (facts.trail) return 'optional plates — bonus kg to next thermal';
   if (facts.bait) return 'fog bait — be over it as the fog lifts it';
   if (facts.thermal >= 0 && facts.dying) return facts.thermal === 0 ? 'lift dying — fly to the circling ravens' : 'lift dying — leave when the ravens leave';
   // On the way into the first thermals, how to enter one: past its core on the side its ravens turn
@@ -223,7 +217,7 @@ export function cloudbaseHint(facts) {
   // pilot who climbs well hears for the rest of the run.
   if (facts.front && facts.fronts <= FRONTS_TAUGHT) return 'plates on the gust — widen your circle';
   // Then how the brake helps: held light it tightens the circle, and left on it goes deep.
-  if (facts.thermal > 0 && facts.rides <= 4) return facts.touch ? 'ease off ▼ every 2 s or it goes deep' : 'ease the brake every 2 s or it goes deep';
+  if (facts.thermal > 0 && facts.rides <= 4) return 'small turns keep the circle centered';
   if (facts.thermal === 0) return 'circling ravens mark the next lift';
   if (facts.searching > 4) return 'ravens circle where air rises — fly there';
   return '';

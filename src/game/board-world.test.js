@@ -79,3 +79,11 @@ test('a run keeps its id however its keys are written, where the step flies them
   assert.notEqual(await runId(log([0, 2, 2, 0, 4, 4, 1, 9, 12, 13, 0])), plain);
   assert.notEqual(await runId({ ...log([0, 2, 2, 8, 4, 4, 1, 9, 12, 13, 0]), seed: 8 }), plain);
 });
+
+
+test('run identity preserves deep intent but canonicalizes its aliases and ears priority', async () => {
+  const make = (bits) => ({ simVersion: SIM_VERSION, seed: 7, steps: bits.length, bits: Uint8Array.from(bits) });
+  const canonical = await runId(make([0, 20, 21, 22, 20, 12, 13, 0]));
+  assert.equal(await runId(make([0, 16, 17, 18, 23, 28, 29, 0])), canonical);
+  assert.notEqual(await runId(make([0, 4, 5, 6, 4, 12, 13, 0])), canonical);
+});

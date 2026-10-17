@@ -17,15 +17,17 @@
 //
 // Writers re-read before they write. Read, change and write in one go (updateStore does exactly
 // that), never with a store read long before, or a run recorded in another tab is written over.
-import { addRow, boardKey, emptyBoard, normalizeBoard, normalizeBots, pruneBoard } from './board.js';
+import { addRow, boardKey, emptyBoard, normalizeBoard, normalizeBots, pruneBoard, trimBoardLogs } from './board.js';
 import { dayOf } from './good-lift-address.js';
 import { scoreOf, styleOf } from './score.js';
 import { SIM_VERSION } from './sim-version.js';
 import { isBlocked } from './meet-initials.js';
 import { normalizeKit } from './wing-kit.js';
+import { isJudgedEnding } from './run-rules.js';
+import { GAME_STORE } from './good-lift-key.js';
 
 /** The localStorage key Good Lift keeps everything under; the page's reset clears it by name. */
-export const GAME_STORE = 'good-lift-v1';
+export { GAME_STORE };
 
 // Every feat there is, in the order the card shows them and recordRun reports them. They live only
 // here, so they never move the fjord's belt.
@@ -133,7 +135,7 @@ export function kitSheet(store, worn, fresh = []) {
  * null: one day's, as a later day's takes its place.
  */
 export function emptyStore() {
-  return { v: 1, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: emptyBoard(), bots: null };
+  return { v: 7, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: emptyBoard(), bots: null };
 }
 
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -155,7 +157,7 @@ const INITIALS = /^(?:[A-Z]{3})?$/;
  * - the opt-in to the world board is true only with initials to go up under;
  * - the board keeps its whole rows (board.js);
  * - the day's bots are whole (board.js normalizeBots) or none.
- * The result always has `v` 1, whatever version `raw` claims. Never throws, and shares no object
+ * The result always has `v` 7, whatever version `raw` claims. Never throws, and shares no object
  * with `raw`.
  */
 export function normalizeStore(raw) {
@@ -176,7 +178,7 @@ export function normalizeStore(raw) {
     if (isCount(last) && isCount(streak) && (last === 0) === (streak === 0)) store.daily = { last, streak };
     if (typeof raw.initials === 'string' && INITIALS.test(raw.initials) && !isBlocked(raw.initials)) store.initials = raw.initials;
     store.optIn = raw.optIn === true && store.initials !== '';
-    store.board = normalizeBoard(raw.board);
+    store.board = trimBoardLogs(normalizeBoard(raw.board));
     store.bots = normalizeBots(raw.bots);
     return store;
   } catch {
@@ -302,7 +304,7 @@ export function earnFeats(store, ids) {
  *   red      each lift's lights (board.js), the mist last
  *   at       ms since 1970 when the run started
  *   log      the run's log (base64url), or ''
- *   reason   'fog', 'landed' or 'quit'
+ *   reason   'fog', 'landed', 'time' or 'quit'
  *   feats    the feat ids it earned, as the caller judged them
  *   byname   the byname it earned (meet-bynames.js), or '': its board row carries it
  *
@@ -320,7 +322,7 @@ export function earnFeats(store, ids) {
  *   the streak until that day came round, or for good.
  * A streak of TRAINING_BLOCK (seven) days or more earns the training block.
  *
- * Only a Daily Sky that the sky judged (reason 'fog' or 'landed') and that has a log goes on the
+ * Only a Daily Sky that the sky judged (reason 'fog', 'landed' or 'time') and that has a log goes on the
  * day's board, under the store's initials as this device's own run. A run ended with [ end run ]
  * ('quit') forfeits its bar and its place on the board, though what it banked before still counts
  * toward the bests and the tonnage, and it still counts as a run and toward the streak. A run whose
@@ -357,7 +359,7 @@ export function recordRun(store, run, { version = SIM_VERSION, now = Date.now() 
       daily.last = run.day;
     }
     if (daily.streak >= TRAINING_BLOCK) earned.add('training-block');
-    const judged = run.reason === 'fog' || run.reason === 'landed';
+    const judged = isJudgedEnding(run.reason);
     if (judged && typeof run.log === 'string' && run.log !== '') {
       const row = { who: store.initials, via: 'me', total: run.total, style, peak: run.peak, red: run.red, at: run.at, log: run.log, byname: run.byname };
       ({ rank, best } = addRow(store.board, boardKey(version, run.day), row));

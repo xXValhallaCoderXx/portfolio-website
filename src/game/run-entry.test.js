@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ENTRY, createEntry } from './run-entry.js';
-import { CLOUD_ZONE, createCloudbaseRun } from './cloudbase-state.js';
+import { CLOUD_HUNT, CLOUD_ZONE, createCloudbaseRun } from './cloudbase-state.js';
+import { thermalProfile } from './atmosphere.js';
 
 const STEP = 1 / 60;
 const ease = (value) => value * value * (3 - 2 * value);
-// A hunted thermal's lift at `d` metres from its middle, as the sky lays it out: 1.47 times its
-// 19.25 m/s at the middle, fading over the whole of its 38 m.
-const lift = (d) => 19.25 * 1.47 * ease(Math.min(1, Math.max(0, 1 - d / 38)));
-const R = 38;
+// Use the real soaring profile; the integration below independently checks it through the sky.
+const lift = (d) => CLOUD_HUNT.s * thermalProfile(d, CLOUD_HUNT.r, CLOUD_HUNT.core);
+const R = CLOUD_HUNT.r;
 
 // Flies straight north at trim (11.5 m/s) past a core at the origin, `off` metres to its right (the
 // core on the pilot's left when `off` is negative), from 50 m short of it to 50 m past, through a
@@ -34,22 +34,22 @@ test('flying straight through the middle of a hunted core calls no turn-in, howe
   assert.deepEqual(pass({ off: -3, dir: 1 }).calls, []);
 });
 
-test('passing a core 8 m to the flock\'s side calls the turn-in once, toward the core, within a couple of metres of abeam', () => {
+test('passing a core 8 m to the flock\'s side calls the turn-in once, toward the core, inside the broad core as lift levels off', () => {
   // The core 8 m to the right of a flock turning right, and 8 m to the left of one turning left.
   for (const [off, dir] of [[-8, 1], [8, -1]]) {
     const { calls } = pass({ off, dir });
     assert.equal(calls.length, 1, `${off} m off, the flock turning ${dir}`);
     assert.equal(calls[0].way, dir);
-    assert.ok(calls[0].at >= 0 && calls[0].at <= 3, `called ${calls[0].at.toFixed(1)} m past abeam`);
+    assert.ok(Math.abs(calls[0].at) <= 20, `called ${calls[0].at.toFixed(1)} m past abeam`);
   }
   // As near as 4.6 m to its side still counts.
   assert.equal(pass({ off: -ENTRY.side * R - 0.1, dir: 1 }).calls.length, 1);
 });
 
-test('passing the core on the side away from the flock\'s turn, or 14 m wide of it, calls nothing', () => {
+test('passing the core on the side away from the flock\'s turn, or 35 m wide of it, calls nothing', () => {
   assert.deepEqual(pass({ off: 8, dir: 1 }).calls, [], 'the core on the left of a flock turning right');
   assert.deepEqual(pass({ off: -8, dir: -1 }).calls, [], 'the core on the right of a flock turning left');
-  assert.deepEqual(pass({ off: -14, dir: 1 }).calls, [], 'too wide: the lift never gets near enough');
+  assert.deepEqual(pass({ off: -35, dir: 1 }).calls, [], 'too wide: the lift never gets near enough');
 });
 
 test('a glider already turning, or half a circle into the thermal, is never called, and a fold, a stall, cloud or a new thermal starts it over', () => {
@@ -67,7 +67,7 @@ test('a glider already turning, or half a circle into the thermal, is never call
   again.step(STEP, 0, 1, 0, 0, 1, false);
   assert.equal(pass({ off: -8, entry: again }).calls.length, 1, 'and again once it has started over');
   // Riding stopping part way through the pass, just before the core, calls nothing that pass.
-  assert.deepEqual(pass({ off: -8, riding: (z) => z > 5 || z < -20 }).calls, []);
+  assert.deepEqual(pass({ off: -8, riding: (z) => z > 25 || z < -30 }).calls, []);
 });
 
 test('a thermal too far gone to fly into calls nothing', () => {

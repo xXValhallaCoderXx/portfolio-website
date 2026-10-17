@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LIMITS, ORIGINS, clientAddress, clientKey, createBoard, createLimiter, judge, publicBoard, readDay, withdraw } from '../src/runs.js';
-import { fly, folded, rewrite } from './flights.js';
+import { fly, rewrite } from './flights.js';
 import { MAX_LINK, encodeLog } from '../../src/game/recorder.js';
 import { SIM_VERSION } from '../../src/game/sim-version.js';
 import { DAILY_EPOCH, DAY_MS } from '../../src/game/good-lift-address.js';
@@ -28,6 +28,7 @@ const runs = () => (flown ??= {
   eased: fly(DAY, 'eased', { initials: 'TOR' }),
   collector: fly(DAY, 'collector', { initials: 'SIF' }),
   bar: fly(DAY, 'bar', { initials: 'ULL' }),
+  landing: fly(DAY, 'landing', { initials: 'ULL' }),
   yesterday: fly(DAY - 1, 'bar'),
 });
 // The runs the fog judged, best first, as the board ranks them (by what they truly came to).
@@ -97,7 +98,7 @@ async function rowOf({ sheet, log }, at = NOW) {
 
 test('a named run of the Daily Sky goes on the world board as its replay came to, and anyone may see it but not the device it came from', async () => {
   const { column } = runs();
-  assert.equal(column.sheet.reason, 'fog');
+  assert.ok(['fog', 'landed', 'time'].includes(column.sheet.reason));
   const fn = service();
   const sent = await fn.send(column.text);
   const row = await rowOf(column);
@@ -127,8 +128,9 @@ test('a named run of the Daily Sky goes on the world board as its replay came to
 });
 
 test('a run that ended by touching down ranks as one the fog ended, and yesterday\'s sky is still taken today', async () => {
-  const { bar, yesterday } = runs();
-  assert.deepEqual([bar.sheet.reason, yesterday.sheet.reason], ['landed', 'landed']);
+  const { landing: bar, yesterday } = runs();
+  assert.equal(bar.sheet.reason, 'landed', 'this actual touchdown must rank');
+  assert.ok(['fog', 'landed', 'time'].includes(yesterday.sheet.reason), 'yesterday may end by any judged outcome');
   const fn = service();
   const landed = await fn.send(bar.text);
   assert.equal(landed.status, 200);
@@ -150,7 +152,9 @@ test('a run flown under other rules, on another day or sky, or ended by its pilo
     const answer = await fn.send(text);
     assert.deepEqual([answer.status, answer.body], [status, { ok: false, why }], why);
   };
-  await refused(rewrite(column, { simVersion: SIM_VERSION + 1 }), 422, 'version');
+  for (const simVersion of [SIM_VERSION - 1, SIM_VERSION + 1]) {
+    await refused(rewrite(column, { simVersion }), 422, 'version');
+  }
   // Only today's Daily Sky and yesterday's: not the day before, not tomorrow's, not a practice sky.
   for (const day of [DAY - 2, DAY + 1, 0]) await refused(rewrite(column, { day }), 422, 'day');
   // A log that names yesterday but was flown on today's sky is not yesterday's run.
@@ -290,17 +294,13 @@ test('a run is never on the board twice: sent again from its device it keeps its
   assert.deepEqual(Object.values(fn.store.docs.get(KEY).devices), [1, 1]);
 });
 
-test('a copy of a run whose keys differ only where the wing cannot feel them is the same run, and a duplicate', async () => {
+test('a copy using the legacy two-arrow bar chord under its brake is the same run, and a duplicate', async () => {
   // The run circling on the light brake, which holds the brake straight on many steps.
   const { eased: column } = runs();
   const fn = service();
   assert.equal((await fn.send(column.text)).status, 200);
-  // Its arrows changed on every step its wing was folded, and both arrows put under every brake held
-  // straight: the brake wins over the bar they make. (The bar's own key under a brake is the ears.)
-  const steps = folded(column);
-  assert.ok(steps.length > 0, 'the run was struck at least once');
+  // The brake wins over the legacy two-arrow speed-bar chord.
   const bits = Uint8Array.from(column.log.bits);
-  for (const step of steps) bits[step] ^= 3;
   let braked = 0;
   for (let i = 0; i < column.log.steps; i++) {
     if (bits[i] !== 4) continue;

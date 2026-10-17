@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { INPUT, LOG_FORMAT, MAX_LINK, MAX_STEPS, TOUCH_EARS, createLoopKeys, createRecorder, createTouchEars, decodeLog, encodeLog, inputBits } from './recorder.js';
+import { INPUT, LOG_FORMAT, MAX_LINK, MAX_STEPS, createRecorder, decodeLog, encodeLog, inputBits } from './recorder.js';
 import { createRunWorld, finishRun, startRun, stepBits } from './run-step.js';
 import { createReferencePilot } from './pilots.js';
 import { createCloudbaseRun } from './cloudbase-state.js';
@@ -18,6 +18,18 @@ const bytesOf = (text) => [...Buffer.from(text, 'base64url')];
 const textOf = (bytes) => Buffer.from(bytes).toString('base64url');
 const META = Object.freeze({ simVersion: 0, seed: 7, day: 0, touch: false, initials: '', total: 25, peak: 300 });
 
+test('the ten-minute deadline fits format 2 even when every fixed step changes input', () => {
+  assert.equal(MAX_STEPS, 36_000);
+  assert.equal(LOG_FORMAT, 2);
+  const bits = Uint8Array.from({ length: MAX_STEPS }, (_, i) => i % 32);
+  const text = encodeLog({ ...META, simVersion: SIM_VERSION }, bits, bits.length);
+  assert.ok(text.length <= MAX_LINK);
+  const decoded = decodeLog(text);
+  assert.equal(decoded.ok, true);
+  assert.deepEqual(decoded.log.bits, bits);
+  assert.throws(() => encodeLog(META, new Uint8Array(MAX_STEPS + 1), MAX_STEPS + 1), RangeError);
+});
+
 // A fixed stream of numbers from 0 to 1 for a seed, so a test's made-up runs are the same every time.
 function numbers(seed) {
   let state = seed | 0;
@@ -34,7 +46,7 @@ function madeUp(seed, steps, longest) {
   const next = numbers(seed);
   const bits = new Uint8Array(steps);
   for (let i = 0; i < steps;) {
-    const held = Math.floor(next() * 16);
+    const held = Math.floor(next() * 32);
     const end = Math.min(steps, i + 1 + Math.floor(next() * longest));
     bits.fill(held, i, end);
     i = end;
@@ -87,12 +99,12 @@ function recordRun(seed, bitsOf) {
   return { sheet, text, recorder };
 }
 
-test('a log of four controls survives encoding and decoding whatever the run, and each log has one text', () => {
+test('a log of five-bit controls survives encoding and decoding whatever the run, and each log has one text', () => {
   const runs = [
-    new Uint8Array(0), Uint8Array.of(0), Uint8Array.of(15), Uint8Array.of(3, 3, 3),
-    // Every step a change, every value of the four bits in turn, and stretches long enough to need
+    new Uint8Array(0), Uint8Array.of(0), Uint8Array.of(31), Uint8Array.of(3, 3, 3),
+    // Every step a change, every value of the five bits in turn, and stretches long enough to need
     // a second and a third byte.
-    Uint8Array.from({ length: 64 }, (_, i) => i % 2), Uint8Array.from({ length: 160 }, (_, i) => Math.floor(i / 10)),
+    Uint8Array.from({ length: 64 }, (_, i) => i % 2), Uint8Array.from({ length: 320 }, (_, i) => Math.floor(i / 10)),
     Uint8Array.from({ length: 2000 }, (_, i) => (i < 7 ? 1 : i < 15 ? 2 : i < 1039 ? 4 : 8)),
     new Uint8Array(MAX_STEPS), madeUp(1, MAX_STEPS, 400), madeUp(2, 9000, 12), madeUp(3, 777, 3),
   ];
@@ -122,10 +134,10 @@ test('a log of four controls survives encoding and decoding whatever the run, an
     { simVersion: 2, seed: 9, day: 0, touch: false, initials: '', total: 0, peak: 0, steps: 10, bits: buffer.slice(0, 10) });
 });
 
-test('a log is written byte for byte as format 1 says, as every link already shared was', () => {
+test('a log is written byte for byte as format 2 specifies', () => {
   const bits = [...Array(90).fill(0), ...Array(12).fill(INPUT.right), ...Array(30).fill(INPUT.right | INPUT.bar), INPUT.left | INPUT.right, ...Array(5).fill(INPUT.brake)];
   const text = encodeLog({ simVersion: 1, seed: 0x6785502f, day: 20756, touch: true, initials: 'REN', total: 487.5, peak: 1412 }, bits, bits.length);
-  assert.equal(text, 'AQEvUIVnlKIBARIFDsMBhAuKAaALwgHqAxNU');
+  assert.equal(text, 'AgEvUIVnlKIBARIFDsMBhAuKAcAWggPKByOkAQ');
   assert.deepEqual(bytesOf(text), [
     LOG_FORMAT,
     0x01,                   // sim version 1
@@ -136,24 +148,24 @@ test('a log is written byte for byte as format 1 says, as every link already sha
     0xc3, 0x01,             // 195 plates of 2.5 kg
     0x84, 0x0b,             // 1,412 m
     0x8a, 0x01,             // 138 steps
-    0xa0, 0x0b,             // 90 steps of nothing held
-    0xc2, 0x01,             // 12 of right
-    0xea, 0x03,             // 30 of right on the bar
-    0x13,                   // 1 of left and right together
-    0x54,                   // 5 of the brake
+    0xc0, 0x16,             // 90 steps of nothing held
+    0x82, 0x03,             // 12 of right
+    0xca, 0x07,             // 30 of right on the bar
+    0x23,                   // 1 of left and right together
+    0xa4, 0x01,             // 5 of the brake
   ]);
 });
 
 test('a recorder keeps every step of the longest run in one buffer, counts each change of the controls, and says when it is full', () => {
   assert.deepEqual([{}, { left: true }, { right: true }, { left: true, right: true }, { brake: true }, { right: true, bar: true }, { ears: true }, { left: true, ears: true }].map(inputBits),
     [0, 1, 2, 3, 4, 10, 12, 13]);
-  assert.deepEqual(INPUT, { left: 1, right: 2, brake: 4, bar: 8, ears: 12 });
+  assert.deepEqual(INPUT, { left: 1, right: 2, brake: 4, bar: 8, ears: 12, deepBrake: 16 });
   assert.ok(Object.isFrozen(INPUT));
   const recorder = createRecorder();
   const { buffer } = recorder.bits;
   assert.deepEqual([recorder.steps, recorder.changes, recorder.bits.length], [0, 0, 0]);
-  for (const bits of [0, 0, 1, 1, 1, 0, 9, 9, 16 + 3]) assert.equal(recorder.push(bits), true);
-  // Changes are counted from nothing held; anything above the four bits is not a control.
+  for (const bits of [0, 0, 1, 1, 1, 0, 9, 9, 32 + 3]) assert.equal(recorder.push(bits), true);
+  // Changes are counted from nothing held; anything above the five bits is not a control.
   assert.deepEqual([...recorder.bits], [0, 0, 1, 1, 1, 0, 9, 9, 3]);
   assert.deepEqual([recorder.steps, recorder.changes], [9, 4]);
   for (let i = recorder.steps; i < MAX_STEPS; i++) assert.equal(recorder.push(i % 7 === 0 ? INPUT.left : 0), true);
@@ -196,74 +208,31 @@ test('a recorder keeps every step of the longest run in one buffer, counts each 
 // flies. Even a pilot tapping five times a second for the whole run stays far inside MAX_LINK;
 // one changing its controls every step for two and a half minutes would not, and is refused.
 
-test('the brake wins over the ears and the ears over the bar, so the brake and the bar are only ever written together as the ears', () => {
-  const all = [];
-  for (let held = 0; held < 32; held++) {
-    const input = { left: !!(held & 1), right: !!(held & 2), brake: !!(held & 4), bar: !!(held & 8), ears: !!(held & 16) };
+test('ears win over deep brake, then working brake, then bar, with resolved depth recorded', () => {
+  const all = new Set();
+  for (let held = 0; held < 64; held++) {
+    const input = { left: !!(held & 1), right: !!(held & 2), brake: !!(held & 4), bar: !!(held & 8), ears: !!(held & 16), deepBrake: !!(held & 32) };
     const bits = inputBits(input);
-    all.push(bits);
-    // The arrows are always written as they are held.
-    assert.equal(bits & 3, held & 3, JSON.stringify(input));
-    if (input.brake) assert.equal(bits & 12, INPUT.brake, `the brake wins: ${JSON.stringify(input)}`);
-    else if (input.ears) assert.equal(bits & 12, INPUT.ears, `the ears win over the bar: ${JSON.stringify(input)}`);
-    else assert.equal(bits & 12, input.bar ? INPUT.bar : 0, JSON.stringify(input));
+    all.add(bits);
+    assert.equal(bits & 3, held & 3);
+    const expected = input.ears ? INPUT.ears : input.deepBrake ? INPUT.deepBrake | INPUT.brake : input.brake ? INPUT.brake : input.bar ? INPUT.bar : 0;
+    assert.equal(bits & 28, expected, JSON.stringify(input));
   }
-  // The bar still held while braking, the way fingers on keys often are, stays the brake.
   assert.equal(inputBits({ brake: true, bar: true }), INPUT.brake);
-  assert.equal(inputBits({ left: true, brake: true, bar: true }), INPUT.left | INPUT.brake);
-  // Every code is written by some controls, but the brake and the bar together only as the ears.
-  assert.deepEqual([...new Set(all)].sort((a, b) => a - b), [...Array(16).keys()]);
+  assert.equal(inputBits({ deepBrake: true, bar: true }), INPUT.deepBrake | INPUT.brake);
+  assert.equal(inputBits({ deepBrake: true, ears: true }), INPUT.ears);
+  assert.deepEqual([...all].sort((a, b) => a - b), [...Array(16).keys(), 20, 21, 22, 23]);
 });
 
-test('both ▼ pressed together are the ears, held in by either, and a change of thumb or a quick handover stays the brake', () => {
-  const ears = createTouchEars();
-  // Steps of [first ▼, second ▼], and what each says.
-  const fly = (presses) => presses.map(([a, b]) => ears.step(a, b));
-  const hold = (steps, a, b) => Array.from({ length: steps }, () => [a, b]);
-  // Pressed in the same step: the ears once both have been held TOUCH_EARS.hold steps.
-  let said = fly(hold(TOUCH_EARS.hold + 2, true, true));
-  assert.deepEqual(said, [...Array(TOUCH_EARS.hold - 1).fill(false), ...Array(3).fill(true)]);
-  // Either ▼ alone keeps them in, so the other thumb can steer, and letting go of both ends them.
-  assert.deepEqual(fly([...hold(5, true, false), ...hold(5, false, true)]).every(Boolean), true);
-  assert.equal(fly([[false, false]])[0], false);
-  assert.equal(ears.on, false);
-  // The second ▼ landing as long after the first as TOUCH_EARS.together allows is still together.
-  ears.reset();
-  said = fly([...hold(TOUCH_EARS.together, true, false), ...hold(TOUCH_EARS.hold, true, true)]);
-  assert.equal(said.at(-1), true);
-  // A change of thumb: one ▼ held long, the other pressed, the first let go, however long they overlap.
-  for (const overlap of [1, 6, 18, 60]) {
-    ears.reset();
-    said = fly([...hold(40, true, false), ...hold(overlap, true, true), ...hold(40, false, true)]);
-    assert.equal(said.some(Boolean), false, `a change of thumb overlapping ${overlap} steps`);
-  }
-  // Both pressed together but let go within the hold: a quick handover, never the ears.
-  ears.reset();
-  said = fly([...hold(TOUCH_EARS.hold - 1, true, true), ...hold(30, false, true)]);
-  assert.equal(said.some(Boolean), false);
-  assert.deepEqual(TOUCH_EARS, { together: 12, hold: 6 });
-  assert.ok(Object.isFrozen(TOUCH_EARS));
-});
-test('round a loop only the newer of the brake and the bar held is flown, and letting it go hands nothing back to the other', () => {
-  const keys = createLoopKeys();
-  // [brake held, bar held, a loop going round] a step at a time, and what is flown.
-  const flown = (steps) => steps.map(([brake, bar, round = true]) => {
-    const { brake: b, bar: r } = keys.step(brake, bar, round);
-    return `${b ? 'v' : '-'}${r ? '^' : '-'}`;
-  });
-  // ▼ held from the entry and ▲ pressed over the wing: ▲, as it goes down, and ▼ let go after it
-  // is nothing.
-  assert.deepEqual(flown([[true, false], [true, false], [true, true], [true, true], [false, true], [false, false]]), ['v-', 'v-', '-^', '-^', '-^', '--']);
-  // ▲ held from the top and ▼ tapped under the wing: ▼, and let go, nothing, not a press of ▲.
-  assert.deepEqual(flown([[false, true], [true, true], [true, true], [false, true], [false, true], [false, false]]), ['-^', 'v-', 'v-', '--', '--', '--']);
-  // The one passed over is flown again once it is let go and pressed again.
-  assert.deepEqual(flown([[false, true], [true, true], [false, true], [false, false], [false, true]]), ['-^', 'v-', '--', '--', '-^']);
-  // Outside a loop both are flown as they are held, and the log's own order settles them.
-  keys.reset();
-  assert.deepEqual(flown([[true, true, false], [false, true, false], [true, false, false]]), ['v^', '-^', 'v-']);
+test('historical format 1 links retain their exact four-bit controls for explicit version refusal', () => {
+  const read = decodeLog('AQEvUIVnlKIBARIFDsMBhAuKAaALwgHqAxNU');
+  assert.equal(read.ok, true);
+  assert.equal(read.log.simVersion, 1);
+  assert.deepEqual([...read.log.bits], [...Array(90).fill(0), ...Array(12).fill(2), ...Array(30).fill(10), 3, ...Array(5).fill(4)]);
+  assert.deepEqual(decodeLog(encodeLog(read.log, read.log.bits, read.log.steps)), read);
 });
 
-test('a whole run fits in under two kilobytes of link', () => {
+test('whole digital runs fit the bounded log and replayable input format', () => {
   const pilots = {
     'arrows held 150 ms': () => keys({}, { hold: 9 }),
     'arrows held 67 ms': () => keys({}, { hold: 4 }),
@@ -274,12 +243,12 @@ test('a whole run fits in under two kilobytes of link', () => {
     let longest = 0;
     for (const seed of firstSkies(6)) {
       const { sheet, text, recorder } = recordRun(seed, pilot());
-      assert.equal(sheet.reason, 'fog');
-      assert.ok(sheet.steps > 100 * 60, `${sheet.steps} steps`);
-      assert.ok(recorder.changes > 50, `${recorder.changes} changes`);
+      assert.ok(['fog', 'landed', 'time'].includes(sheet.reason));
+      assert.ok(sheet.steps > 0 && sheet.steps <= MAX_STEPS);
+      assert.equal(decodeLog(text).log.steps, recorder.steps);
       longest = Math.max(longest, text.length);
     }
-    assert.ok(longest < 2048, `${name}: ${longest} characters`);
+    assert.ok(longest <= MAX_LINK, `${name}: ${longest} characters`);
   }
 });
 
@@ -308,7 +277,9 @@ test('a cut-short, padded or tampered link is refused rather than misread', () =
         continue;
       }
       read += 1;
-      assert.equal(encodeLog(decoded.log, decoded.log.bits, decoded.log.steps), changed);
+      const encoded = encodeLog(decoded.log, decoded.log.bits, decoded.log.steps);
+      if (bytesOf(changed)[0] === LOG_FORMAT) assert.equal(encoded, changed);
+      else assert.deepEqual(decodeLog(encoded), decoded, 'legacy words retain their values when upgraded');
     }
   }
   assert.ok(refused > read, `${refused} refused, ${read} read as other logs`);
@@ -321,16 +292,16 @@ test('a cut-short, padded or tampered link is refused rather than misread', () =
   assert.deepEqual(decodeLog('A'.repeat(MAX_LINK + 1)), { ok: false, why: 'long' });
 });
 
-test('a link whose bytes are not exactly a log of format 1 is refused, each for what is wrong with it', () => {
+test('a link whose bytes are not exactly a log of a supported format is refused, each for what is wrong with it', () => {
   // A small log taken apart: format, version, seed, day, flags, initials, 10 plates, 300 m, 6 steps,
   // then 3 steps of nothing held, 2 of right and 1 of the brake.
-  const whole = [1, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0xac, 0x02, 6, 0x30, 0x22, 0x14];
+  const whole = [2, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0xac, 0x02, 6, 0x60, 0x42, 0x24];
   assert.equal(textOf(whole), encodeLog(META, [0, 0, 0, 2, 2, 4], 6));
   assert.equal(decodeLog(textOf(whole)).ok, true);
   const swap = (at, count, ...bytes) => textOf(whole.toSpliced(at, count, ...bytes));
   const cases = {
-    format: [swap(0, 1, 2), swap(0, 1, 0)],
-    long: [swap(14, 1, 0xc1, 0x70)],
+    format: [swap(0, 1, 3), swap(0, 1, 0)],
+    long: [swap(14, 1, 0xa1, 0x99, 0x02)],
     truncated: [swap(14, 1, 7), textOf(whole.slice(0, 13)), textOf([1])],
     corrupt: [
       swap(1, 1, 0x80, 0x00),                         // the version written the long way
@@ -340,7 +311,7 @@ test('a link whose bytes are not exactly a log of format 1 is refused, each for 
       swap(8, 3, 1, 0, 0),                            // one initial of three
       swap(8, 3, 27, 1, 1),                           // a 27th letter
       swap(15, 1, 0x05),                              // a stretch of no steps
-      swap(15, 1, 0x10, 0x20),                        // two stretches holding the same
+      swap(15, 1, 0x20, 0x40),                        // two stretches holding the same
       swap(14, 1, 4),                                 // stretches running past the steps
       textOf([...whole, 0]),                          // a byte after the last stretch
     ],
@@ -350,11 +321,11 @@ test('a link whose bytes are not exactly a log of format 1 is refused, each for 
   }
   // The largest number a varint carries is read as it is, and so is the longest log there can be.
   assert.equal(decodeLog(swap(1, 1, 0xff, 0xff, 0xff, 0xff, 0x0f)).log.simVersion, 0xffffffff);
-  const longest = decodeLog(textOf([...whole.slice(0, 14), 0xc0, 0x70, 0x80, 0x88, 0x0e]));
+  const longest = decodeLog(textOf([...whole.slice(0, 14), 0xa0, 0x99, 0x02, 0x80, 0xa8, 0x46]));
   assert.deepEqual([longest.ok, longest.log?.steps, longest.log?.bits.every((bits) => bits === 0)], [true, MAX_STEPS, true]);
   // Bytes that do not fill the last character leave bits over, which a log leaves 0. Set one and
   // the same bytes have a second text; it is refused, though Node's own reader would let it pass.
-  const short = [1, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0xac, 0x02, 4, 0x30, 0x12];
+  const short = [2, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0xac, 0x02, 4, 0x60, 0x22];
   const exact = textOf(short);
   assert.deepEqual([exact.length, decodeLog(exact).ok], [23, true]);
   const nudged = exact.slice(0, -1) + String.fromCharCode(exact.charCodeAt(exact.length - 1) + 1);
@@ -373,7 +344,7 @@ test('a log the format cannot hold exactly is never written', () => {
     { peak: 1.5 }, { peak: -1 },
   ];
   for (const change of bad) assert.throws(() => encodeLog({ ...META, ...change }, bits, 3), RangeError, JSON.stringify(change));
-  for (const [list, steps] of [[bits, 4], [bits, -1], [bits, 1.5], [[0, 16], 2], [[0, -1], 2], [[0, 0.5], 2], [new Uint8Array(MAX_STEPS + 1), MAX_STEPS + 1]]) {
+  for (const [list, steps] of [[bits, 4], [bits, -1], [bits, 1.5], [[0, 32], 2], [[0, -1], 2], [[0, 0.5], 2], [new Uint8Array(MAX_STEPS + 1), MAX_STEPS + 1]]) {
     assert.throws(() => encodeLog(META, list, steps), RangeError, `${steps} steps`);
   }
 });

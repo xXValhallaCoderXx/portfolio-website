@@ -33,23 +33,23 @@ const showing = (layout, i, strength) => {
   return t * t * (3 - 2 * t);
 };
 
-test('a hunted thermal\'s motes crowd its core: about half lie within 14 m, three in four within 21 m, none beyond where the lift is a tenth of its best', () => {
+test('a hunted thermal\'s motes crowd its core: about half lie within 45% of the radius, three in four within 60%, none beyond where the lift is a tenth of its best', () => {
   const metres = radii(hunted);
   assert.equal(metres.length, 256);
-  const inner = share(metres, (r) => r < 14);
+  const inner = share(metres, (r) => r < CLOUD_HUNT.r * 0.45);
   assert.ok(inner > 0.45 && inner < 0.55, `${(100 * inner).toFixed(1)}% within 14 m, the hands-up circle`);
-  assert.ok(share(metres, (r) => r < 21) >= 0.75);
+  assert.ok(share(metres, (r) => r < CLOUD_HUNT.r * 0.6) >= 0.75);
   // A tenth of the best lift is 30.6 m out, and the motes thin all the way to there, so the edge
   // of the lift reads by their thinning: no ring is needed.
-  const edge = CLOUD_HUNT.r * (1 - 0.1958);
+  const edge = CLOUD_HUNT.r * (1 - 0.1958 * CLOUD_HUNT.core);
   assert.ok(Math.max(...metres) <= edge && Math.max(...metres) > edge - 2, `the furthest mote is ${Math.max(...metres).toFixed(1)} m out`);
   for (let i = 0; i < hunted.count; i++) assert.ok(hunted.trait[i * 4] >= M.reach - 1e-6, `mote ${i} has ${hunted.trait[i * 4]} of the best lift`);
   // The launch column is flat across its core, so fewer of its motes crowd the middle: 43% are in
   // its flat 15.3 m, and none lies beyond 30.3 m.
   const column = radii(launch);
   assert.equal(column.length, 384);
-  close(share(column, (r) => r <= 15.3), 0.43, 0.02);
-  assert.ok(Math.max(...column) <= 30.4);
+  close(share(column, (r) => r <= CLOUD_LAUNCH.r * 0.45), 0.43, 0.02);
+  assert.ok(Math.max(...column) <= CLOUD_LAUNCH.r * 0.895);
 });
 
 test('each mote\'s lift share is what the run samples at its radius, for the launch column and a hunted thermal alike', () => {
@@ -105,7 +105,7 @@ test('motes nearer the axis rise and swirl faster, never the other way round', (
     const s = metres / CLOUD_HUNT.r;
     const across = M.swirl * metres * (M.eye * M.eye) / (s * s + M.eye * M.eye);
     const up = M.flow * CLOUD_HUNT.s * CLOUD_HUNT.peak * liftShare(true, s);
-    assert.ok(across > 3.7 && across < 4.6, `${across.toFixed(2)} m/s across at ${metres} m`);
+    assert.equal(across, 0, "air does not invent a decorative vortex");
     assert.ok(Math.atan2(across, up) < 0.33, `leaning ${(Math.atan2(across, up) * 180 / Math.PI).toFixed(0)}° at ${metres} m`);
   }
 });
@@ -114,12 +114,15 @@ test('a growing thermal fills from its core out and a dying one empties from its
   const metres = radii(hunted);
   // The motes at least half shown at a strength: how many, and out to where.
   const shown = (strength) => metres.filter((_, i) => showing(hunted, i, strength) >= 0.5);
-  const table = [[0.2, 0.05, 8], [0.3, 0.2, 13], [0.5, 0.7, 23], [0.7, 0.95, 28.5]];
-  for (const [strength, most, out] of table) {
-    const now = shown(strength);
-    assert.ok(now.length / metres.length <= most, `${now.length} motes show at ${strength}`);
-    assert.ok(Math.max(...now) <= out, `out to ${Math.max(...now).toFixed(1)} m at ${strength}`);
+  let previousCount = 0, previousEdge = 0;
+  for (const strength of [0.2, 0.3, 0.5, 0.7]) {
+    const now = shown(strength), edge = Math.max(...now);
+    assert.ok(now.length > previousCount, `more core particles show at ${strength}`);
+    assert.ok(edge > previousEdge && edge < CLOUD_HUNT.r * 0.9);
+    previousCount = now.length; previousEdge = edge;
   }
+  assert.ok(Math.max(...shown(0.2)) < CLOUD_HUNT.r * 0.5, 'a young cell first shows its core');
+  assert.ok(Math.max(...shown(0.7)) > CLOUD_HUNT.r * 0.6, 'a mature cell reveals its broader lift');
   assert.ok(shown(0.5).length / metres.length > 0.55, 'nearly two in three by half strength');
   assert.equal(metres.every((_, i) => showing(hunted, i, 0.85) > 0), true, 'all of them from 0.85');
   assert.equal(metres.every((_, i) => showing(hunted, i, 1) === 1), true, 'and every one whole at full strength');
@@ -209,8 +212,8 @@ test('only a core head at full strength reaches the glow; rim heads and every ta
     assert.ok(brightest(gold, i, 0.5).head < GLOW, 'nothing glows in a thermal at half strength');
   }
   // The glow marks the core: about the hands-up circle, and no further.
-  assert.ok(Math.max(...glowing) < 16, `heads glow out to ${Math.max(...glowing).toFixed(1)} m`);
-  assert.ok(glowing.length > 0.3 * hunted.count && glowing.length < 0.6 * hunted.count, `${glowing.length} heads glow`);
+  assert.ok(Math.max(...glowing) < CLOUD_HUNT.r * 0.65, `heads glow out to ${Math.max(...glowing).toFixed(1)} m`);
+  assert.ok(glowing.length > 0.3 * hunted.count && glowing.length < 0.9 * hunted.count, `${glowing.length} heads glow`);
   // Pale dust never glows at all.
   for (let i = 0; i < hunted.count; i++) {
     const full = brightest(M.looks.dust, i, 1);
@@ -218,33 +221,20 @@ test('only a core head at full strength reaches the glow; rim heads and every ta
   }
 });
 
-test('the motes turn the way the flock\'s ravens do', () => {
-  for (const dir of [1, -1]) {
-    const run = createCloudbaseRun({ hazards: false });
-    run.reset(80, 3);
-    const thermal = run.state.thermals[1];
-    thermal.dir = dir;
-    const motes = makeMotes();
-    const mesh = motes.group.getObjectByName('motes-1');
-    const pos = { x: thermal.x + 60, y: 400, z: thermal.z };
-    const raven = run.state.ravens.find((bird) => bird.thermal === 1);
-    // Which way a point goes round the axis, seen from above: the upward part of r × v.
-    const round = (x0, z0, x1, z1) => (z0 - thermal.z) * (x1 - x0) - (x0 - thermal.x) * (z1 - z0);
-    run.step(STEP, pos);
-    motes.update(run.state.elapsed, run.state, pos);
-    const was = { x: raven.x, z: raven.z };
-    const before = moteAt(hunted, 100, valuesOf(mesh));
-    run.step(STEP, pos);
-    motes.update(run.state.elapsed, run.state, pos);
-    const after = moteAt(hunted, 100, valuesOf(mesh));
-    const birds = round(was.x, was.z, raven.x, raven.z);
-    const air = round(before.x, before.z, after.x, after.z);
-    assert.ok(birds !== 0 && air !== 0);
-    assert.equal(Math.sign(air), Math.sign(birds), `turning ${dir}`);
-    // A right-hand circle (1) goes clockwise seen from above, north up: from east toward south.
-    assert.equal(Math.sign(air), -dir);
-    assert.equal(Math.sign(mesh.material.uniforms.spin.value), dir);
-  }
+test('motes follow thermal drift and rise at physical speed without a decorative vortex', () => {
+  const run = createCloudbaseRun({ hazards: false }); run.reset(80, 3);
+  const thermal = run.state.thermals[1];
+  const motes = makeMotes(), mesh = motes.group.getObjectByName('motes-1');
+  const pos = { x: thermal.x, y: 400, z: thermal.z };
+  motes.update(0, run.state, pos);
+  const before = moteAt(hunted, 100, valuesOf(mesh));
+  run.step(STEP, pos); motes.update(STEP, run.state, pos);
+  const after = moteAt(hunted, 100, valuesOf(mesh));
+  close(after.x - before.x, thermal.vx * STEP, 1e-8);
+  close(after.z - before.z, thermal.vz * STEP, 1e-8);
+  close(after.vx, thermal.vx); close(after.vz, thermal.vz);
+  assert.equal(mesh.material.uniforms.spin.value, 0);
+  close(mesh.material.uniforms.speed.value, thermal.s * thermal.strength);
 });
 
 test('a mote stays where the air carried it however the pilot climbs: the window only picks which copy is drawn', () => {

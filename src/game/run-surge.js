@@ -6,10 +6,8 @@
 // only reads, so nothing a run flies depends on it, and it makes nothing as it steps.
 export const SURGE = Object.freeze({
   // m/s each second the lift (at the thermal's full strength) must be climbing by to be a surge.
-  // A circle's lift swings by about 0.8 m/s² for each metre it is off the core, hands up or on
-  // the light brake, so this is a circle some 2.5 m off: what the design study's best pilot
-  // straightened on.
-  rise: 2,
+  // A meaningful change in the 5.5 m/s soaring profile; the broad inner core stays quiet.
+  rise: 0.12,
   // Seconds the felt rate takes to follow the lift: a pilot's own lag in feeling it.
   feel: 0.2,
   // m/s²: a surge is over once the lift stops climbing, and only then may the next one come.

@@ -52,180 +52,135 @@ function calm(seed = 4, y = 700) {
   return world;
 }
 
-test('a gust front due to reach a pilot past 550 m carries three plates on its line, 22 m either side of the lift\'s middle and a third 12 m beyond, at the pilot\'s height, once for each band', () => {
-  let fronts = 0;
+// Advance the meet with an explicit weather observation, keeping hazard placement independent
+// of whether a reference pilot happened to climb above the late-game threshold in one seed.
+function tick(world, seconds = STEP) {
+  world.sky.state.elapsed += seconds;
+  world.meet.step(seconds, world);
+}
+function frontWorld(seed = 4) {
+  const world = calm(seed);
+  const sky = world.sky.state;
+  Object.assign(sky.pilot, { gustSlot: 0, gustAhead: 30, gustIn: 3, thermal: -1 });
+  Object.assign(sky.gusts[0], { ux: 1, uz: 0, at: -30, strength: 1, born: 12 });
+  tick(world);
+  return world;
+}
+function thunderWorld(seed = 4) {
+  const world = calm(seed);
+  const sky = world.sky.state, { pos } = world.g;
+  for (const cloud of sky.clouds) cloud.fade = 0;
+  Object.assign(sky.clouds[0], { x: pos.x + 20, y: pos.y + 60, z: pos.z, rx: 120, ry: 30, rz: 80, cos: 1, sin: 0, fade: 1 });
+  Object.assign(sky.pilot, { cloud: 0, headroom: 30 });
+  tick(world);
+  return world;
+}
+
+test('above700m a due gust front carries three plates on its line, once per band, on either seeded side', () => {
   const sides = new Set();
-  for (const seed of firstSkies(6)) {
-    let seen = 0;
-    flown(seed, TST, (world) => {
-      const { meet, sky, g } = world;
-      const { state } = meet;
-      if (state.fronts === seen) return;
-      assert.equal(state.fronts, seen + 1);
-      seen = state.fronts;
-      fronts += 1;
-      const { pilot, gusts, thermals } = sky.state;
-      assert.ok(sky.state.peak >= MEET.iron && pilot.gustAhead > 0 && pilot.gustIn <= WIND.lead, `seed ${seed}`);
-      const band = gusts[pilot.gustSlot];
-      assert.equal(state.carried[pilot.gustSlot], band.born);
-      const plates = state.loose.filter((plate) => of(PLATE_KIND.wind)(plate) && plate.born === sky.state.elapsed);
-      assert.equal(plates.length, WIND.count);
-      // Across the band through the middle of the lift being ridden, measured as the sky measures a lane.
-      const lift = pilot.thermal >= 0 ? thermals[pilot.thermal] : g.pos;
-      const middle = (lift.z - Z.z) * band.ux - (lift.x - Z.x) * band.uz;
-      const offsets = plates.map((plate) => plate.ox - middle).sort((a, b) => a - b);
-      const way = offsets[2] > 0 && Math.abs(offsets[2] - offsets[1] - WIND.gap) < 1e-9 ? 1 : -1;
-      sides.add(way);
-      assert.deepEqual(offsets.map((offset) => Math.round(offset * 1e6) / 1e6),
-        way > 0 ? [-WIND.aside, WIND.aside, WIND.aside + WIND.gap] : [-(WIND.aside + WIND.gap), -WIND.aside, WIND.aside]);
-      for (const plate of plates) {
-        assert.deepEqual([plate.kg, plate.slot, plate.y, plate.still], [WIND.kg, pilot.gustSlot, g.pos.y, false]);
-        // On the front itself, where the band has got to.
-        assert.ok(Math.abs((plate.x - Z.x) * band.ux + (plate.z - Z.z) * band.uz - band.at) < 1e-9);
-      }
-    });
+  for (let seed = 1; seed <= 24; seed++) {
+    const world = frontWorld(seed), state = world.meet.state;
+    const band = world.sky.state.gusts[0];
+    const plates = state.loose.filter(of(PLATE_KIND.wind));
+    assert.equal(state.fronts, 1);
+    assert.equal(state.carried[0], band.born);
+    assert.equal(plates.length, WIND.count);
+    const offsets = plates.map((plate) => plate.ox).sort((a, b) => a - b);
+    const way = offsets.at(-1) > WIND.aside ? 1 : -1;
+    sides.add(way);
+    assert.deepEqual(offsets, way > 0 ? [-WIND.aside, WIND.aside, WIND.aside + WIND.gap] : [-WIND.aside - WIND.gap, -WIND.aside, WIND.aside]);
+    for (const plate of plates) {
+      assert.deepEqual([plate.kg, plate.slot, plate.y, plate.still], [WIND.kg, 0, world.g.pos.y, false]);
+      assert.ok(Math.abs((plate.x - Z.x) * band.ux + (plate.z - Z.z) * band.uz - band.at) < 1e-9);
+    }
+    tick(world);
+    assert.equal(state.fronts, 1);
+    band.born++;
+    tick(world);
+    assert.equal(state.fronts, 2);
+    assert.equal(state.loose.filter(of(PLATE_KIND.wind)).length, WIND.count, 'the retired band is cleared before replacement');
   }
-  // About four fronts a sky reach the pilot past 550 m, and the third plate goes either way.
-  assert.ok(fronts >= 18 && sides.size === 2, `${fronts} fronts`);
+  assert.equal(sides.size, 2);
 });
 
-test('a front\'s plates ride it at its own speed and keep to the pilot\'s height until it reaches the pilot, then keep theirs, and go once it is 20 m past', () => {
-  let followed = 0;
-  let kept = 0;
-  let gone = 0;
-  for (const seed of firstSkies(4)) {
-    let last = null;
-    flown(seed, TST, (world) => {
-      const { state } = world.meet;
-      const { gusts } = world.sky.state;
-      const { pos } = world.g;
-      for (let i = 0; i < state.loose.length; i++) {
-        const plate = state.loose[i];
-        const was = last?.[i];
-        if (plate.live && plate.kind === PLATE_KIND.wind) {
-          const band = gusts[plate.slot];
-          const ahead = (pos.x - Z.x) * band.ux + (pos.z - Z.z) * band.uz - band.at;
-          if (was?.live && was.born === plate.born) {
-            // A step on: as far along as the band has travelled, at its own speed.
-            const moved = ((plate.x - was.x) * band.ux + (plate.z - was.z) * band.uz) / STEP;
-            assert.ok(Math.abs(moved - CLOUD_GUST.speed) < 1e-6, `${moved} m/s`);
-          }
-          if (!plate.still) {
-            // Not yet reached by its front: at the pilot's height.
-            assert.ok(ahead > 0);
-            assert.equal(plate.y, pos.y);
-            followed += 1;
-          } else {
-            // Reached once, it keeps its height for good, even if the pilot gets ahead again.
-            if (was?.still && was.born === plate.born) assert.equal(plate.y, was.y);
-            assert.ok(ahead >= -WIND.past);
-            kept += 1;
-          }
-        } else if (was?.live && was.kind === PLATE_KIND.wind && !plate.live) {
-          gone += 1;
-        }
-      }
-      last = state.loose.map(({ live, kind, x, y, z, born, still }) => ({ live, kind, x, y, z, born, still }));
-    });
+test('front plates advect at the band speed, follow pilot height until crossing and expire20m behind', () => {
+  const world = frontWorld(), band = world.sky.state.gusts[0];
+  const plates = world.meet.state.loose.filter(of(PLATE_KIND.wind));
+  const before = plates.map((plate) => ({ x: plate.x, z: plate.z }));
+  band.at += CLOUD_GUST.speed * STEP;
+  world.g.pos.y += 3;
+  tick(world);
+  for (let i = 0; i < plates.length; i++) {
+    assert.ok(Math.abs(flat(plates[i], before[i]) - CLOUD_GUST.speed * STEP) < 1e-9);
+    assert.equal(plates[i].y, world.g.pos.y);
+    assert.equal(plates[i].still, false);
   }
-  assert.ok(followed > 600 && kept > 100 && gone > 20, `${followed} steps following, ${kept} keeping, ${gone} gone`);
+  band.at = 1;
+  tick(world);
+  assert.ok(plates.every((plate) => plate.still));
+  const heights = plates.map((plate) => plate.y);
+  world.g.pos.y += 10;
+  band.at += 1;
+  tick(world);
+  assert.deepEqual(plates.map((plate) => plate.y), heights);
+  band.at = WIND.past + 0.01;
+  tick(world);
+  assert.ok(plates.every((plate) => !plate.live));
 });
 
-test('nearing a storm cloud\'s base past 550 m a pilot gets one plate hung 3 m under it, up to 8 m in from them; it rides the cloud for up to 20 s, and no cloud has a second', () => {
-  let laid = 0;
-  let rode = 0;
-  for (const seed of firstSkies(10)) {
-    let wasLive = false;
-    const clouds = new Set();
-    flown(seed, TST, (world) => {
-      const { state } = world.meet;
-      const sky = world.sky.state;
-      const plate = state.loose.find(of(PLATE_KIND.thunder));
-      // One at a time: the thunder's slot is the only place one hangs.
-      assert.equal(state.loose.filter(of(PLATE_KIND.thunder)).length, plate ? 1 : 0);
-      if (plate && !wasLive) {
-        laid += 1;
-        assert.ok(!clouds.has(plate.slot), `seed ${seed}: cloud ${plate.slot} had a second`);
-        clouds.add(plate.slot);
-        assert.ok(state.thundered[plate.slot] && sky.peak >= MEET.iron && sky.pilot.headroom <= THUNDER.range);
-        assert.ok(flat(plate, world.g.pos) <= THUNDER.inward + 1e-9 && plate.y > world.g.pos.y);
-        assert.equal(plate.kg, THUNDER.kg);
-      }
-      if (plate) {
-        const cloud = sky.clouds[plate.slot];
-        // Over its own spot on the cloud, `below` under the cloud's base there.
-        assert.deepEqual([plate.x, plate.z], [cloud.x + plate.ox, cloud.z + plate.oz]);
-        const lx = (plate.ox * cloud.cos - plate.oz * cloud.sin) / (cloud.rx * cloud.fade);
-        const lz = (plate.ox * cloud.sin + plate.oz * cloud.cos) / (cloud.rz * cloud.fade);
-        assert.ok(Math.abs(cloud.y - cloud.ry * cloud.fade * Math.sqrt(1 - lx * lx - lz * lz) - THUNDER.below - plate.y) < 1e-9);
-        assert.ok(sky.elapsed - plate.born <= THUNDER.life);
-        rode += 1;
-      }
-      wasLive = !!plate;
-    });
-  }
-  assert.ok(laid >= 8 && rode > 300, `${laid} laid, ${rode} steps riding`);
+test('near a storm cloud a plate hangs3m beneath its base, drifts with it, and appears only once per cloud', () => {
+  const world = thunderWorld(), sky = world.sky.state, state = world.meet.state;
+  const plate = state.loose.find(of(PLATE_KIND.thunder));
+  assert.ok(plate);
+  assert.ok(flat(plate, world.g.pos) <= THUNDER.inward + 1e-9);
+  assert.ok(plate.y > world.g.pos.y);
+  assert.equal(plate.kg, THUNDER.kg);
+  assert.equal(state.thundered[0], true);
+  const cloud = sky.clouds[0];
+  cloud.x += 2; cloud.z += 1;
+  tick(world);
+  assert.deepEqual([plate.x, plate.z], [cloud.x + plate.ox, cloud.z + plate.oz]);
+  const lx = (plate.ox * cloud.cos - plate.oz * cloud.sin) / (cloud.rx * cloud.fade);
+  const lz = (plate.ox * cloud.sin + plate.oz * cloud.cos) / (cloud.rz * cloud.fade);
+  assert.ok(Math.abs(plate.y - (cloud.y - cloud.ry * cloud.fade * Math.sqrt(1 - lx * lx - lz * lz) - THUNDER.below)) < 1e-9);
+  tick(world, THUNDER.life + STEP);
+  assert.equal(plate.live, false);
+  tick(world);
+  assert.ok(!state.loose.some(of(PLATE_KIND.thunder)));
+  const faded = thunderWorld();
+  faded.sky.state.clouds[0].fade = 0;
+  tick(faded);
+  assert.ok(!faded.meet.state.loose.some(of(PLATE_KIND.thunder)));
 });
 
-test('after the horn, once the fog is within 200 m under the pilot, a plate rides 35 m over the fog 20 m to one side of the pilot and waits level with the wing; the next comes 3 s after one is taken', () => {
-  let laid = 0;
-  let waited = 0;
-  for (const seed of firstSkies(8)) {
-    let wasLive = false;
-    flown(seed, TST, (world) => {
-      const { state } = world.meet;
-      const sky = world.sky.state;
-      const { pos, yaw } = world.g;
-      const plate = state.loose.find(of(PLATE_KIND.bait));
-      if (plate && !wasLive) {
-        laid += 1;
-        assert.ok(state.horn && pos.y - sky.fogHeight <= BAIT.near && sky.peak >= MEET.iron);
-        // Square off the wing's heading, `aside` to one side (or pulled in to stay off the rim).
-        const across = (plate.x - pos.x) * Math.cos(yaw) + (plate.z - pos.z) * Math.sin(yaw);
-        const along = (plate.x - pos.x) * Math.sin(yaw) - (plate.z - pos.z) * Math.cos(yaw);
-        assert.ok(Math.abs(along) < 1e-9 && Math.abs(Math.abs(across) - BAIT.aside) < 1e-9, `seed ${seed}`);
-        assert.equal(plate.kg, BAIT.kg);
-      }
-      if (plate) {
-        assert.equal(plate.y, Math.min(sky.fogHeight + BAIT.above, pos.y));
-        if (plate.y === pos.y) waited += 1;
-      }
-      wasLive = !!plate;
-    });
-  }
-  assert.ok(laid >= 8 && waited > 20, `${laid} laid, ${waited} steps waiting level with the wing`);
-  // Taken by hand: the next comes 3 s on, to the other side or the same as the seed draws it.
-  const world = calm(4, 700);
-  const { meet, sky, g } = world;
-  sky.state.elapsed = MEET.horn + 1;
-  meet.state.horn = true;
+test('after the300s horn bait rides35m above nearby fog, waits at wing height and returns3s after loading', () => {
+  const world = calm(), { meet, sky, g } = world;
+  sky.state.elapsed = MEET.horn - 1;
   sky.state.fogHeight = g.pos.y - BAIT.near;
-  world.fly(STEP);
+  tick(world);
+  assert.ok(!meet.state.loose.some(of(PLATE_KIND.bait)));
+  sky.state.elapsed = MEET.horn;
+  tick(world);
+  tick(world);
   const bait = meet.state.loose.find(of(PLATE_KIND.bait));
-  assert.ok(bait && bait.y === sky.state.fogHeight + BAIT.above);
-  Object.assign(g.pos, { x: bait.x, y: bait.y, z: bait.z });
-  world.fly(STEP);
+  assert.ok(bait);
+  assert.equal(bait.y, sky.state.fogHeight + BAIT.above);
+  assert.ok(Math.abs(flat(bait, g.pos) - BAIT.aside) < 1e-9);
+  sky.state.fogHeight = g.pos.y - 10;
+  tick(world);
+  assert.equal(bait.y, g.pos.y);
+  Object.assign(g.pos, { x: bait.x, z: bait.z });
+  tick(world);
   const taken = sky.state.elapsed;
   assert.deepEqual([meet.state.bait, meet.state.bar, meet.state.baitDue, meet.state.baits], [1, BAIT.kg, taken + BAIT.again, 1]);
   assert.ok(!meet.state.loose.some(of(PLATE_KIND.bait)));
-  // Back up where the fog is still well under the wing: none for 3 s, then the next.
-  const above = () => { g.pos.y = sky.state.fogHeight + BAIT.near - 10; };
-  for (let i = 0; i < Math.round(BAIT.again / STEP) - 1; i++) {
-    above();
-    world.fly(STEP);
-    assert.ok(!meet.state.loose.some(of(PLATE_KIND.bait)), `${i} steps on`);
-  }
-  // The run's clock is a sum of steps: give it two to come round.
-  for (let i = 0; i < 2; i++) {
-    above();
-    world.fly(STEP);
-  }
+  tick(world, BAIT.again - STEP);
+  assert.ok(!meet.state.loose.some(of(PLATE_KIND.bait)));
+  tick(world, 2 * STEP);
   assert.equal(meet.state.baits, 2);
-  // The fog's speed by then, for the record: past 25 m/s two minutes in.
-  assert.ok(cloudFogSpeed(500, 120) > 15);
 });
 
-test('a strike past 550 m splits the bar into standard plates, largest first and eight at most, holds them while the wing is folded and sprays them round the pilot as it reopens, to sink away under it for 5.5 s', () => {
+test('a strike past 700 m splits the bar into standard plates, largest first and eight at most, holds them while the wing is folded and sprays them round the pilot as it reopens, to sink away under it for 5.5 s', () => {
   for (const [bar, plates] of [[152.5, [25, 25, 25, 25, 25, 25, 2.5]], [62.5, [25, 25, 10, 2.5]], [47.5, [25, 20, 2.5]], [300, [25, 25, 25, 25, 25, 25, 25, 25]]]) {
     const world = calm();
     const { meet, sky, g } = world;
@@ -269,7 +224,8 @@ test('a strike past 550 m splits the bar into standard plates, largest first and
   }
 });
 
-test('a scattered plate flown through within reach goes back on the bar; below 550 m a strike leaves the bar alone, and under Tiwaz it loses the whole bar', () => {
+
+test('a scattered plate flown through within reach goes back on the bar; below 700 m a strike leaves the bar alone, and under Tiwaz it loses the whole bar', () => {
   const world = calm();
   const { meet, sky, g } = world;
   meet.state.bar = 60;
@@ -293,7 +249,7 @@ test('a scattered plate flown through within reach goes back on the bar; below 5
   meet.step(STEP, world);
   assert.deepEqual([second.live, meet.state.bar, meet.state.recovered], [true, 25, 1]);
   assert.ok(reach(second, g.pos) > TRAIL.reach);
-  // Under 550 m the bar keeps what it had, as before version 3.
+  // Under 700 m the bar keeps what it had, as before version 3.
   const low = calm(4, 520);
   low.meet.state.bar = 60;
   low.fly(STEP);
@@ -312,6 +268,7 @@ test('a scattered plate flown through within reach goes back on the bar; below 5
     assert.deepEqual([tiwaz.meet.state.bar, tiwaz.meet.state.lost, tiwaz.meet.state.scattered], [0, 90, 0], `${y} m`);
   }
 });
+
 
 test('under Fehu every plate loads from within 12 m, and under Tiwaz everything loaded counts twice', () => {
   // A trail plate 9 m off and a sprayed one 11 m off (at the pilot's height, standing still in the
@@ -339,6 +296,7 @@ test('under Fehu every plate loads from within 12 m, and under Tiwaz everything 
   assert.equal(meet.state.bar % 2.5, 0);
 });
 
+
 test('the Beast\'s close call loads 20 kg, once, and every other close call 10 kg', () => {
   const world = calm();
   const { meet, bells } = world;
@@ -355,7 +313,8 @@ test('the Beast\'s close call loads 20 kg, once, and every other close call 10 k
   assert.deepEqual([MEET.beast, MEET.close], [20, 10]);
 });
 
-test('nothing new happens below 550 m but the 500 m gates: no plate off the trail, no strike costs the bar, and no new counter moves, whoever flies', () => {
+
+test('nothing new happens below 700 m but the 500 m gates: no plate off the trail, no strike costs the bar, and no new counter moves, whoever flies', () => {
   let checked = 0;
   for (const seed of firstSkies(8)) {
     for (const options of [TST, { ...TST, collect: true }, { brake: 'eased' }, { ...TST, gates: true }]) {
@@ -378,29 +337,38 @@ test('nothing new happens below 550 m but the 500 m gates: no plate off the trai
         strikes = sky.pilot.strikes;
         count = state.count;
         bar = state.bar;
-        // The stones are the only thing new, raised at 400 m for the 500 m line.
-        if (state.runes.raised > 0) assert.ok(sky.peak >= 400 && state.runes.line === 500);
+        // The stones are the only thing new, raised at 470 m for the 500 m line.
+        if (state.runes.raised > 0) assert.ok(sky.peak >= 470 && state.runes.line === 500);
       });
     }
   }
-  assert.ok(checked > 32 * 40 * 60 * 0.4, `${checked} steps under 550 m`);
+  assert.ok(checked > 32 * 40 * 60 * 0.4, `${checked} steps under 700 m`);
 });
 
-test('the loose plates keep to their slots: a strike\'s first, then two fronts\', then the thunder\'s and the bait\'s, and every plate on a trail is a trail plate', () => {
+
+test('dedicated loose-plate slots stay bounded across fronts, storm, fog and scatter', () => {
+  const worlds = [frontWorld(), thunderWorld(), calm(), calm()];
+  const fog = worlds[2];
+  fog.sky.state.elapsed = MEET.horn + 1;
+  fog.meet.state.horn = true;
+  fog.sky.state.fogHeight = fog.g.pos.y - 100;
+  tick(fog);
+  const struck = worlds[3];
+  struck.meet.state.bar = 60;
+  struck.sky.state.pilot.strikes++;
+  struck.sky.state.pilot.collapse = 1;
+  tick(struck);
   const kinds = new Set();
-  for (const seed of firstSkies(6)) {
-    flown(seed, { ...TST, collect: true }, (world) => {
-      const { loose, trail } = world.meet.state;
-      assert.ok(trail.plates.every((plate) => plate.kind === PLATE_KIND.trail));
-      assert.equal(loose.length, MEET_POOL.loose);
-      loose.forEach((plate, i) => {
-        if (plate.kind === PLATE_KIND.none) return;
-        kinds.add(plate.kind);
-        const want = i < SCATTER.most ? PLATE_KIND.scatter : i < SCATTER.most + 2 * WIND.count ? PLATE_KIND.wind : i === MEET_POOL.loose - 2 ? PLATE_KIND.thunder : PLATE_KIND.bait;
-        assert.equal(plate.kind, want, `slot ${i}`);
-      });
+  for (const world of worlds) {
+    const { loose, trail } = world.meet.state;
+    assert.equal(loose.length, MEET_POOL.loose);
+    assert.ok(trail.plates.every((plate) => plate.kind === PLATE_KIND.trail));
+    loose.forEach((plate, i) => {
+      if (plate.kind === PLATE_KIND.none) return;
+      kinds.add(plate.kind);
+      const expected = i < SCATTER.most ? PLATE_KIND.scatter : i < SCATTER.most + 2 * WIND.count ? PLATE_KIND.wind : i === MEET_POOL.loose - 2 ? PLATE_KIND.thunder : PLATE_KIND.bait;
+      assert.equal(plate.kind, expected, `slot ${i}`);
     });
   }
   assert.deepEqual([...kinds].sort(), [PLATE_KIND.wind, PLATE_KIND.thunder, PLATE_KIND.bait, PLATE_KIND.scatter].sort());
-  assert.equal(PLATE_KIND.trail, 1);
 });

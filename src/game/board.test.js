@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  BOARD, ROW, addRow, boardDay, boardKey, emptyBoard, normalizeBoard, normalizeBots, normalizeRow, normalizeScore, outranks, pruneBoard, rowsFor, withBot,
+  BOARD, ROW, BOARD_LOG_BUDGET, addRow, boardDay, boardKey, emptyBoard, normalizeBoard, normalizeBots, normalizeRow, normalizeScore, outranks, pruneBoard, rowsFor, trimBoardLogs, withBot,
 } from './board.js';
 import { BYNAMES } from './meet-bynames.js';
 
@@ -12,6 +12,24 @@ const KEY = boardKey(1, DAY);
 // needs its own log.
 const row = (fields = {}) => ({ who: '', via: 'me', total: 100, style: 0, peak: 600, red: [0, 0, 0], at: 1_000, log: 'AQ', byname: '', ...fields });
 const logs = (board, key = KEY) => rowsFor(board, key).map(({ log }) => log);
+
+test('long-run rows accept the parser boundary and persistent log budgets retain the latest best', () => {
+  assert.ok(normalizeRow(row({ log: 'A'.repeat(ROW.log) })));
+  assert.equal(normalizeRow(row({ log: 'A'.repeat(ROW.log + 1) })), null);
+  const board = emptyBoard();
+  for (let d = 0; d < BOARD.days; d++) {
+    for (let r = 0; r < BOARD.keep; r++) {
+      addRow(board, boardKey(5, DAY + d), row({ total: 100 + r, log: `${d}A${r}${'A'.repeat(ROW.log - 10)}` }));
+    }
+  }
+  const newest = boardKey(5, DAY + BOARD.days - 1);
+  const best = rowsFor(board, newest)[0].log;
+  trimBoardLogs(board);
+  const size = Object.values(board.days).flatMap((day) => day.rows).reduce((n, each) => n + each.log.length, 0);
+  assert.ok(size <= BOARD_LOG_BUDGET);
+  assert.equal(rowsFor(board, newest)[0].log, best);
+  assert.ok(!board.days[boardKey(5, DAY)], 'oldest days are evicted before recent runs');
+});
 
 test('the ten best runs of a day are kept, best total first, then peak, then the earliest', () => {
   assert.deepEqual(BOARD, { keep: 10, days: 14 });
@@ -128,7 +146,7 @@ test('a damaged row is dropped rather than repaired', () => {
     'an empty log': { log: '' },
     'a padded log': { log: 'AQ==' },
     'a log with a slash': { log: 'AQ/v' },
-    'a log as long as the limit': { log: 'A'.repeat(ROW.log) },
+    'a log longer than the limit': { log: 'A'.repeat(ROW.log + 1) },
     'no log': { log: undefined },
   };
   for (const [why, fields] of Object.entries(damaged)) assert.equal(normalizeRow({ ...good, ...fields }), null, why);

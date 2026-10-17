@@ -31,21 +31,21 @@ export function fjordHint(facts) {
   if (stalled) return stalled;
   if (facts.auto) return `flying itself to ${facts.auto} · steer to take over`;
   // Over the fjord the wing never stalls; through the arch it can, and the pilot hears it first.
-  if (facts.nearArch) return 'past the arch the brake can stall the wing';
+  if (facts.nearArch) return 'through the arch: soar, lift, link tricks';
   if (facts.arch) return 'Good Lift → hard right through the arch';
   if (facts.outside) return 'the fog turns you back toward the fjord';
   // Near a ring nothing else is said: there is one thing to do, and only if it is still to do.
-  if (facts.nearRing) return facts.unvisited && facts.agl > RING_HIGH ? `hold ${facts.touch ? '▼' : 'space'} to brake down into the ring` : '';
+  if (facts.nearRing) return facts.unvisited && facts.agl > RING_HIGH ? `hold ${facts.touch ? 'ears' : 'E'} to descend into the ring` : '';
   // The wing's swings, which nothing folds over the fjord: a surge caught as it is in a run, and the
   // first trick of a flight told it is safe here, then how to fly it.
   if (facts.surging) return surgeHint(facts.touch);
-  if (facts.safeTricks) return 'safe here — past the arch, tricks can fold';
+  if (facts.safeTricks) return 'same wing — recover level to finish';
   if (facts.looping) return LOOP_HINT;
   if (facts.pitching) return pitchHint(facts.touch);
   if (facts.loopable) return LOOPABLE_HINT;
   if (facts.wingover) return wingoverHint(facts.touch);
   if (facts.agl < LOW && facts.sinking) return 'low — steer for the amber sparks to climb';
   if (facts.airtime < 9) return 'lit pillars are places to land · amber sparks are rising air';
-  if (facts.airtime < 20) return `${facts.touch ? 'tap' : 'click'} a pillar to fly there by itself · hold ${facts.touch ? '»' : 'shift'} to speed up`;
+  if (facts.airtime < 20) return `${facts.touch ? 'tap' : 'click'} a pillar for automatic travel`;
   return '';
 }

@@ -5,20 +5,19 @@
 // building, the first circle goes round it: that wing lifts as the core comes abeam, and real
 // pilots turn into the lifted wing. This calls that moment, once a thermal: flying straight, the
 // lift (at the thermal's full strength, so its waxing and wearing out are taken away) has been
-// building and has stopped, it is strong enough to be within about 12 m of the middle, and the core
+// building and has stopped, it is strong enough to be inside the useful broad core, and the core
 // lies to the flock's side. Measured on the run's own skies, it calls 80% of passes beside a core,
 // about 8 m from it, and never a pass through the middle; turning on it, half the first circles are
 // centred, where flying at the middle centres one in twenty. Like run-surge.js beside it, it only
 // reads, so nothing a run flies depends on it, and it makes nothing as it steps.
 export const ENTRY = Object.freeze({
   // m/s each second the lift (at full strength) must have been building by: flying into the core.
-  rise: 2,
+  rise: 0.5,
   // Seconds the felt rate takes to follow the lift: a pilot's own lag in feeling it, as SURGE.feel.
   feel: 0.2,
-  // m/s (at full strength) the lift must have reached as it stops building: within about 12 m of a
-  // hunted core's middle.
-  near: 21,
-  // The share of the thermal's radius (liftSide) the core must lie to the flock's side: 4.6 m or more.
+  // m/s (at full strength) the lift must have reached as it stops building: inside a hunted core.
+  near: 4.8,
+  // The share of the thermal's radius (liftSide) the core must lie to the flock's side: 7.2 m or more.
   side: 0.12,
   // rad/s: turning harder than this, the glider is circling already, and too late to be told.
   straight: 0.3,
@@ -65,7 +64,7 @@ export function createEntry() {
     if (state.called || state.turned >= ENTRY.settle) return 0;
     if (state.rate > ENTRY.rise) state.building = true;
     // The lift has been building and has stopped: the core is abeam, or as near as this pass comes.
-    if (!state.building || state.rate > 0) return 0;
+    if (!state.building || state.rate > ENTRY.rise * 0.15) return 0;
     state.building = false;
     if (Math.abs(yawRate) >= ENTRY.straight || felt < ENTRY.near || liftSide * dir < ENTRY.side) return 0;
     state.called = true;

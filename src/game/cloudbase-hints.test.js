@@ -25,7 +25,7 @@ test('a collapsed wing outranks every other hint, then a stall, the brake and a 
   assert.match(hint({ ...everything, collapse: 0 }), /^spin/);
   assert.match(hint({ ...everything, collapse: 0, stall: 0 }), /^brake in the red/);
   assert.match(hint({ ...everything, collapse: 0, stall: 0, load: 0 }), /^gust coming/);
-  assert.match(hint({ ...everything, collapse: 0, stall: 0, load: 0, gustAhead: 999 }), /^brake going deep/);
+  assert.match(hint({ ...everything, collapse: 0, stall: 0, load: 0, gustAhead: 999 }), /^in cloud/);
   assert.match(hint({ ...everything, collapse: 0, stall: 0, load: 0, gustAhead: 999, deep: 0 }), /^in cloud/);
   assert.match(hint({ ...everything, collapse: 0, stall: 0, load: 0, gustAhead: 999, deep: 0, cloud: 0 }), /turns you back/);
 });
@@ -43,9 +43,9 @@ test('a stalled wing says to let go, and a spin says why it spun', () => {
   assert.equal(stallHint(1.5, 1), hint({ stall: 1.5, stallSide: 1 }));
 });
 
-test('the brake is called out once it has gone deep for a moment, and again in the red, never on a light brake', () => {
+test('a sustained working brake has no hidden deep-brake warning; low airflow still warns', () => {
   assert.equal(hint({ brake: BRAKE.shelf, deep: DEEP_WARN - 0.01 }), '');
-  assert.equal(hint({ brake: 0.8, deep: DEEP_WARN, lift: 5 }), 'brake going deep — ease off now');
+  assert.equal(hint({ brake: 0.8, deep: DEEP_WARN, lift: 5 }), '');
   assert.equal(hint({ brake: 0.9, deep: 2, load: 0.6 }), 'brake in the red — ease off or it stalls');
   assert.equal(hint({ brake: BRAKE.light, load: 0.59 }), '');
   // Let go with the load still draining, the red is still worth a word.
@@ -60,9 +60,9 @@ test('a gust front coming is called out only to a pilot holding the brake past l
   assert.equal(hint({ gustAhead: 10, brake: 0 }), '');
 });
 
-test('on the third and fourth thermals the hint teaches easing the brake every couple of seconds', () => {
-  assert.equal(hint({ thermal: 1, rides: 3, lift: 14, touch: true }), 'ease off ▼ every 2 s or it goes deep');
-  assert.equal(hint({ thermal: 2, rides: 4, lift: 14 }), 'ease the brake every 2 s or it goes deep');
+test('later thermals teach centering with small steering changes', () => {
+  assert.equal(hint({ thermal: 1, rides: 3, lift: 14, touch: true }), 'small turns keep the circle centered');
+  assert.equal(hint({ thermal: 2, rides: 4, lift: 14 }), 'small turns keep the circle centered');
   assert.equal(hint({ thermal: 2, rides: 5, lift: 14 }), '');
   assert.equal(hint({ thermal: 1, rides: 2, lift: 14 }), 'climb beside the ravens, never through');
   assert.equal(hint({ thermal: 1, rides: 3, dying: true }), 'lift dying — leave when the ravens leave');
@@ -105,10 +105,10 @@ test('searching stays quiet for four seconds, then points at the ravens', () => 
 
 test('every hint fits one line of a narrow phone', () => {
   const moments = [
-    { collapse: 1 }, { stall: 1 }, { stall: 1, stallSide: 1 }, { load: 0.9 }, { gustAhead: 5, brake: 0.6 }, { deep: 1 }, { cloud: 1 },
+    { collapse: 1 }, { stall: 1 }, { stall: 1, stallSide: 1 }, { load: 0.9 }, { gustAhead: 5, brake: 0.6 }, { cloud: 1 },
     { outside: true }, { elapsed: 1 }, { fogClearance: 10, lift: 9 }, { fogClearance: 10 }, { headroom: 10, climbing: true },
     { thermal: 1, against: 2 }, { thermal: 1, against: 2, flockDir: -1 }, { thermal: 0, dying: true }, { thermal: 1, dying: true },
-    { thermal: 1, rides: 1 }, { thermal: 1, rides: 3 }, { thermal: 1, rides: 3, touch: true }, { thermal: 0 }, { searching: 9 },
+    { thermal: 1, rides: 1 }, { thermal: 1, rides: 3 }, { thermal: 0 }, { searching: 9 },
   ];
   const lines = new Set(moments.map(hint));
   assert.equal(lines.size, moments.length, 'each moment has its own line');
@@ -137,8 +137,8 @@ test('a line stays up long enough to read, but a folded wing or a cloud is said 
   assert.equal(holdHint(held, 'fog closing in — keep climbing', 13.3), 'fog closing in — keep climbing');
 });
 
-test('a stall, the brake in the red, a gust coming and a brake gone deep are all said at once', () => {
-  for (const moment of [{ stall: 1 }, { stall: 1, stallSide: -1 }, { load: 0.9 }, { gustAhead: 5, brake: 0.6 }, { deep: 1 }]) {
+test('a stall, low airflow and a gust coming are said at once', () => {
+  for (const moment of [{ stall: 1 }, { stall: 1, stallSide: -1 }, { load: 0.9 }, { gustAhead: 5, brake: 0.6 }]) {
     const held = { line: '', since: 0 };
     holdHint(held, 'climb beside the ravens, never through', 10);
     assert.equal(holdHint(held, hint(moment), 10.1), hint(moment));
@@ -147,7 +147,7 @@ test('a stall, the brake in the red, a gust coming and a brake gone deep are all
 
 test('a kettlebell coming says how to dodge it, leading with the bar while circling, and gives way only to a folded or stalled wing', () => {
   assert.equal(hint({ bell: 1 }), 'kettlebell — push the bar or straighten');
-  assert.equal(hint({ bell: 1, touch: true }), 'kettlebell — ◀▶ for the bar, or straighten');
+  assert.equal(hint({ bell: 1, touch: true }), 'kettlebell — ▲ for the bar, or straighten');
   assert.equal(hint({ bell: 2 }), 'kettlebell — turn off your line');
   assert.equal(hint({ bell: 2, touch: true }), 'kettlebell — turn off your line');
   const everything = { bell: 1, load: 0.8, brake: 0.9, deep: 3, gustAhead: 10, cloud: 1, outside: true, elapsed: 1, fogClearance: 5 };
@@ -169,15 +169,15 @@ test('a close call, the horn and a waiting trail each have a line of their own, 
   assert.equal(hint({ closeCall: 2.5 }), '');
   assert.equal(hint({ horn: 1 }), 'Gjallarhorn — every lift counts double');
   assert.equal(hint({ horn: 3.5 }), '');
-  assert.equal(hint({ trail: true }), 'lift dying — follow the plates on the bar');
-  assert.equal(hint({ trail: true, thermal: 1, dying: true }), 'lift dying — follow the plates on the bar');
+  assert.equal(hint({ trail: true }), 'optional plates — bonus kg to next thermal');
+  assert.equal(hint({ trail: true, thermal: 1, dying: true }), 'optional plates — bonus kg to next thermal');
   // Each is news, not a warning: a cloud still comes first, and leaving the zone.
   assert.match(hint({ closeCall: 0.5, horn: 1, trail: true, cloud: 1 }), /^in cloud/);
   assert.match(hint({ closeCall: 0.5, outside: true }), /turns you back/);
   assert.equal(hint({ closeCall: 0.5, horn: 1 }), 'close call — 10 kg on the bar', 'the close call before the horn');
   // Turning against a flock outranks the trail, which outranks a dying lift's own line.
   assert.match(hint({ trail: true, thermal: 1, against: 2, flockDir: -1 }), /^ravens turn ◀/);
-  assert.equal(hint({ trail: true, thermal: 0, dying: true }), 'lift dying — follow the plates on the bar');
+  assert.equal(hint({ trail: true, thermal: 0, dying: true }), 'optional plates — bonus kg to next thermal');
 });
 
 test('every line the meet adds fits one line of a narrow phone, and a kettlebell is said at once', () => {
@@ -203,13 +203,13 @@ test('from the second thermal on, a circle that missed the core is taught to cen
   // Not on the first thermal, which teaches where to circle, nor once circles are centred, nor for ever.
   assert.equal(hint({ thermal: 1, rides: 1, shallow: true }), 'climb beside the ravens, never through');
   assert.equal(hint({ thermal: 1, rides: 2, shallow: false }), 'climb beside the ravens, never through');
-  assert.equal(hint({ thermal: 2, rides: 3, shallow: false }), 'ease the brake every 2 s or it goes deep');
+  assert.equal(hint({ thermal: 2, rides: 3, shallow: false }), 'small turns keep the circle centered');
   assert.equal(hint({ thermal: 1, rides: CENTRE_RIDES + 1, shallow: true }), '');
   // The launch column has no core to find.
   assert.equal(hint({ thermal: 0, rides: 3, shallow: true }), 'circling ravens mark the next lift');
   // Turning against the flock, a trail to follow and a dying thermal all come first.
   assert.match(hint({ thermal: 1, rides: 3, shallow: true, against: 2 }), /^ravens turn/);
-  assert.match(hint({ thermal: 1, rides: 3, shallow: true, trail: true }), /^lift dying — follow/);
+  assert.match(hint({ thermal: 1, rides: 3, shallow: true, trail: true }), /^optional plates/);
   assert.match(hint({ thermal: 1, rides: 3, shallow: true, dying: true }), /^lift dying — leave/);
 });
 
@@ -228,7 +228,7 @@ test('the meet\'s news names the weights the meet itself loads', () => {
 
 test('the Beast coming says how to dodge it as any kettlebell does, on keys and on a phone, and starts with the word that has it said at once', () => {
   assert.equal(hint({ bell: 1, beast: true }), 'kettlebell — the Beast: bar or straighten');
-  assert.equal(hint({ bell: 1, beast: true, touch: true }), 'kettlebell — the Beast: ◀▶ or straighten');
+  assert.equal(hint({ bell: 1, beast: true, touch: true }), 'kettlebell — the Beast: ▲ or straighten');
   assert.equal(hint({ bell: 2, beast: true }), 'kettlebell — the Beast: turn off your line');
   assert.equal(hint({ bell: 2, beast: true, touch: true }), 'kettlebell — the Beast: turn off your line');
   assert.equal(hint({ bell: 0, beast: true }), '', 'only while it is coming');
@@ -319,7 +319,7 @@ test('the iron loose in the sky is pointed out while it is there to be had: a st
   assert.match(hint({ sprayed: true, headroom: 30, climbing: true }), /^storm cloud above/);
   assert.match(hint({ bait: true, horn: 1 }), /^Gjallarhorn/);
   assert.match(hint({ bait: true, thermal: 1, against: 2 }), /^ravens turn/);
-  assert.match(hint({ bait: true, trail: true }), /^lift dying — follow/);
+  assert.match(hint({ bait: true, trail: true }), /^optional plates/);
   assert.match(hint({ bait: true, thermal: 1, dying: true }), /^fog bait/);
 });
 
@@ -333,7 +333,7 @@ test('a front\'s plates wait for the first lesson of the climb, which has only t
   // From the third thermal, and in the launch column, the plates are pointed out while they come.
   for (const rides of [3, 4, 5]) assert.equal(hint({ ...front, thermal: 1, rides, lift: 14 }), 'plates on the gust — widen your circle');
   assert.equal(hint({ ...front, thermal: 0, rides: 1, lift: 14 }), 'plates on the gust — widen your circle');
-  assert.equal(hint({ thermal: 1, rides: 3, lift: 14 }), 'ease the brake every 2 s or it goes deep', 'and the brake\'s lesson has it back');
+  assert.equal(hint({ thermal: 1, rides: 3, lift: 14 }), 'small turns keep the circle centered', 'and the brake\'s lesson has it back');
 });
 
 test('the teaching lines are not crowded out: level with the stones, the centring and the brake lessons have the hint back once the moment to dash has passed', () => {
@@ -344,10 +344,10 @@ test('the teaching lines are not crowded out: level with the stones, the centrin
   const ravens = { thermal: 1, rides: 2, lift: 14 };
   for (const lesson of [centring, brake, ravens]) assert.equal(hint({ ...lesson, ...level }), 'fly through a glowing rune for its blessing');
   assert.equal(hint({ ...centring, ...passed }), 'straighten in the surge, turn as it fades');
-  assert.equal(hint({ ...brake, ...passed }), 'ease the brake every 2 s or it goes deep');
+  assert.equal(hint({ ...brake, ...passed }), 'small turns keep the circle centered');
   assert.equal(hint({ ...ravens, ...passed }), 'climb beside the ravens, never through');
   // Climbing on past them, with the stones still waiting, the lessons keep it.
-  assert.equal(hint({ ...brake, ...level, stonesLevel: 25 }), 'ease the brake every 2 s or it goes deep');
+  assert.equal(hint({ ...brake, ...level, stonesLevel: 25 }), 'small turns keep the circle centered');
   // A strong climb, level some 3 s after they were raised, has its lesson back as their news ends.
   assert.equal(hint({ ...ravens, stones: 500, stonesNew: STONES_NEWS, stonesLevel: 1 }), 'climb beside the ravens, never through');
   // So too once the stones' news is old and before the climb has come level with them.
@@ -415,11 +415,11 @@ test('with the ears in, a kettlebell is dodged by turning off the line, never by
   assert.equal(hint({ bell: 1, ears: 0.2 }), 'kettlebell — push the bar or straighten');
 });
 
-test('the brake going deep out of lift names the ears as the way down, on keys and on a phone, until they have been used, and in lift still says ease off', () => {
-  assert.equal(hint({ deep: 1, lift: 0 }), 'brake going deep — let go; E to sink fast');
-  assert.equal(hint({ deep: 1, lift: 0, touch: true }), 'brake going deep — let go; ▼▼ sinks fast');
-  assert.equal(hint({ deep: 1, lift: 0, earsUsed: true }), 'brake going deep — ease off now');
-  assert.equal(hint({ deep: 1, lift: 5 }), 'brake going deep — ease off now');
+test('held brake duration no longer triggers an escalating brake lesson', () => {
+  assert.equal(hint({ deep: 1, lift: 0 }), '');
+  assert.equal(hint({ deep: 1, lift: 0, touch: true }), '');
+  assert.equal(hint({ deep: 1, lift: 0, earsUsed: true }), '');
+  assert.equal(hint({ deep: 1, lift: 5 }), '');
 });
 
 test('the ears held in climbing air say they will not beat it, and to fly out of the lift as well', () => {
@@ -428,9 +428,9 @@ test('the ears held in climbing air say they will not beat it, and to fly out of
 });
 
 test('too high over the next plate of a trail for the bar to reach it, the hint names the ears, before the trail\'s own line', () => {
-  assert.equal(hint({ trailHigh: true, trail: true }), 'too high for the plates — big ears (E)');
-  assert.equal(hint({ trailHigh: true, trail: true, touch: true }), 'too high for the plates — ▼▼ big ears');
-  assert.equal(hint({ trail: true }), 'lift dying — follow the plates on the bar');
+  assert.equal(hint({ trailHigh: true, trail: true }), 'optional plates below — ears (E) to reach');
+  assert.equal(hint({ trailHigh: true, trail: true, touch: true }), 'optional plates below — hold ears to reach');
+  assert.equal(hint({ trail: true }), 'optional plates — bonus kg to next thermal');
 });
 
 test('on the way into the first thermals the hint teaches the entry, and the moment to turn in is said at once, the way the ravens turn', () => {
@@ -452,7 +452,7 @@ test('every line the wing\'s new moments add fits one line of a narrow phone, an
   const moments = [
     { collapse: 1, touch: true }, { collapse: 1, bellHit: true, touch: true }, { stall: 1, harsh: true }, { stall: 1, stallSide: 1, harsh: true },
     { surging: 1 }, { surging: 1, touch: true }, { tucked: 0.4 }, { tucked: 0.4, touch: true },
-    { deep: 1, lift: 0 }, { deep: 1, lift: 0, touch: true }, { earsClimb: 9 }, { trailHigh: true }, { trailHigh: true, touch: true }, { approach: true, approachDir: 1, rides: 0 }, { approach: true, approachDir: -1, rides: 0 },
+    { earsClimb: 9 }, { trailHigh: true }, { trailHigh: true, touch: true }, { approach: true, approachDir: 1, rides: 0 }, { approach: true, approachDir: -1, rides: 0 },
     { turnIn: 0, turnSide: 1 }, { turnIn: 0, turnSide: -1 },
     { tipped: 0.5 }, { nearTuck: true }, { nearTuck: true, touch: true }, { nearTip: true },
     { landed: 0.5, trick: 'wingover ×12', points: 12_345 }, { lost: 0.5 }, { inHand: 'wingover ×10' }, { inHand: 'pitch ×4', inHandPitch: true }, { looping: true }, { loopable: true, tricksLanded: 0 }, { looping: true, inHand: 'tricks ×12', tricksLanded: 2 },
@@ -499,10 +499,10 @@ test('a set of tricks landed or lost is said, then how to land one in hand, and 
   assert.equal(hint({ wingover: true, pitching: true, tricksLanded: TRICKS_TAUGHT }), '', 'taught until two have landed');
   // A wingover steep enough to loop from says so over how to fly it, and a loop going round says its
   // keys, and once two sets have landed, how to roll out of it.
-  assert.equal(hint({ wingover: true, loopable: true, tricksLanded: 0 }), 'big wingover — ▼ at its top to loop over');
-  assert.equal(hint({ looping: true, inHand: 'tricks ×4', tricksLanded: 0 }), 'loop — ▲ over the wing, ▼ under it');
-  assert.equal(hint({ looping: true, inHand: 'loop ×3', tricksLanded: TRICKS_TAUGHT }), 'loop ×3 — skip a press to roll out');
-  assert.equal(hint({ looping: true, tricksLanded: TRICKS_TAUGHT }), 'loop — ▲ over the wing, ▼ under it');
+  assert.equal(hint({ wingover: true, loopable: true, tricksLanded: 0 }), 'big wingover — carry the swing over');
+  assert.equal(hint({ looping: true, inHand: 'tricks ×4', tricksLanded: 0 }), 'inversion — follow the swing, recover level');
+  assert.equal(hint({ looping: true, inHand: 'loop ×3', tricksLanded: TRICKS_TAUGHT }), 'loop ×3 — recover with the swing');
+  assert.equal(hint({ looping: true, tricksLanded: TRICKS_TAUGHT }), 'inversion — follow the swing, recover level');
   // A set in hand is said over how to fly it; the meet's news, a kettlebell and the depth come first.
   assert.match(hint({ inHand: 'wingover ×3', wingover: true, tricksLanded: 0 }), /level out to land it$/);
   assert.match(hint({ depth: 1, landed: 1, trick: 'pitch ×3', points: 115 }), /^depth/);

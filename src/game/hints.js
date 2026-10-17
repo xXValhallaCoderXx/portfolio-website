@@ -24,8 +24,8 @@ export const surgeHint = (touch) => (touch ? 'wing surging — hold ▼ till it 
 export const pitchHint = (touch) => (touch ? 'pitch: ▼ when ahead, let go when behind' : 'pitch: brake when ahead, let go when behind');
 export const wingoverHint = (touch) => (touch ? 'wingover — ◀ ▶ in turn as each swing peaks' : 'wingover — swap turns as each swing peaks');
 // A wingover steep enough to loop from, and a loop going round: the same keys on every device.
-export const LOOPABLE_HINT = 'big wingover — ▼ at its top to loop over';
-export const LOOP_HINT = 'loop — ▲ over the wing, ▼ under it';
+export const LOOPABLE_HINT = 'big wingover — carry the swing over';
+export const LOOP_HINT = 'inversion — follow the swing, recover level';
 
 // The wing has folded, stalled, surged or tucked, is about to stall, a kettlebell is coming or the
 // pilot is in cloud: these cannot wait their turn. Nor can Gjallarhorn, said with its call for its
@@ -35,7 +35,7 @@ export const URGENT = Object.freeze([
   'gust coming', 'brake going deep',
   'in cloud', 'Gjallarhorn', 'turn ▶ now', 'turn ◀ now',
 ]);
-const urgent = (line) => URGENT.some((start) => line.startsWith(start));
+export const urgentHint = (line = '') => URGENT.some((start) => line.startsWith(start));
 
 /**
  * Decides which line is on screen. `held` is `{ line, since }`, the line showing and the time it
@@ -46,7 +46,7 @@ const urgent = (line) => URGENT.some((start) => line.startsWith(start));
  * to read.
  */
 export function holdHint(held, line, now) {
-  if (line !== held.line && (held.line === '' || urgent(line) || now - held.since >= HINT_HOLD)) {
+  if (line !== held.line && (held.line === '' || urgentHint(line) || now - held.since >= HINT_HOLD)) {
     held.line = line;
     held.since = now;
   }

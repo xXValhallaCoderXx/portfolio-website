@@ -30,7 +30,7 @@ function stormy() {
   sky.reset(80, 1);
   for (const cloud of sky.state.clouds) cloud.fade = 0;
   sky.state.fogHeight = 300;
-  park(sky, 0, { x: CLOUD_ZONE.x, y: 1000, z: 0 });
+  park(sky, 0, { x: CLOUD_ZONE.x, y: 1000, z: CLOUD_ZONE.z - 238 });
   const pos = new THREE.Vector3(CLOUD_ZONE.x, 900, CLOUD_ZONE.z);
   const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.5, 5000);
   aim(camera, pos);

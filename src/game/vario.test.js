@@ -1,32 +1,37 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { varioTone } from './vario.js';
+import { createVario, varioTone } from './vario.js';
 
-test('over the fjord the vario beeps as it always has, at its fastest by 6 m/s', () => {
-  for (const vy of [0.5, 2, 4, 6.2, 10]) {
-    const tone = varioTone(vy, false);
-    assert.equal(tone.pitch, 620 + 85 * vy);
-    assert.equal(tone.gap, Math.max(0.11, 0.42 - vy * 0.05));
-  }
-  assert.equal(varioTone(6.2, false).gap, varioTone(12, false).gap, 'no faster above 6.2 m/s');
-});
-
-test('in a run the beep keeps quickening and rising all the way up a thermal\'s core', () => {
+test('the shared soaring beep clearly separates a weak climb from a strong0–5m/s climb', () => {
   let last = varioTone(0.5, true);
-  for (let vy = 1; vy <= 28; vy += 0.5) {
+  for (let vy = 1; vy <= 5; vy += 0.5) {
     const tone = varioTone(vy, true);
-    assert.ok(tone.pitch > last.pitch, `pitch rises at ${vy} m/s`);
-    assert.ok(tone.gap < last.gap, `and the beeps come quicker at ${vy} m/s`);
+    assert.ok(tone.pitch > last.pitch);
+    assert.ok(tone.gap < last.gap);
+    assert.deepEqual(tone, varioTone(vy, false));
     last = tone;
   }
-  // A swing across a circle in the core, 18 to 25 m/s, is heard in both.
-  const off = varioTone(18, true);
-  const on = varioTone(25, true);
-  assert.ok(on.pitch - off.pitch > 300 && off.gap - on.gap > 0.07);
-  assert.ok(varioTone(28, true).pitch < 2200, 'and it stays a beep, not a whistle');
+  const weak = varioTone(0.5, true), strong = varioTone(5, true);
+  assert.ok(strong.pitch - weak.pitch > 300 && weak.gap - strong.gap > 0.25);
+  assert.ok(varioTone(100, true).pitch < 2200);
 });
-
-test('the tone is written into the object it is handed, so a frame makes nothing', () => {
-  const out = { pitch: 0, gap: 0 };
+test('presentation filters a brief swing and settles to the actual net climb at any render rate', () => {
+  const a = createVario(), b = createVario();
+  a.reset(-1.3); b.reset(-1.3);
+  for (let i = 0; i < 30; i++) a.step(3, 1 / 30);
+  for (let i = 0; i < 144; i++) b.step(3, 1 / 144);
+  assert.ok(Math.abs(a.value - b.value) < 1e-12);
+  for (let i = 0; i < 300; i++) a.step(3, 1 / 60);
+  assert.ok(Math.abs(a.value - 3) < 0.001);
+  const before = a.value;
+  a.step(-8, 0);
+  assert.equal(a.value, before);
+  a.reset(-1.3);
+  assert.equal(a.value, -1.3, 'a new flight never inherits the previous climb');
+});
+test('tone output reuses its supplied object and invalid samples stay finite', () => {
+  const out = { pitch: 0, gap: 0 }, filter = createVario();
   assert.equal(varioTone(3, true, out), out);
+  for (const value of [NaN, Infinity]) { filter.step(value, 1 / 60); varioTone(value, true, out); }
+  assert.ok(Number.isFinite(filter.value) && Number.isFinite(out.pitch) && Number.isFinite(out.gap));
 });

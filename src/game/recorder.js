@@ -1,11 +1,11 @@
 // A run's log: the controls held at every fixed step. Given the seed of its sky, that is all a
 // run of Good Lift is made of (run-step.js flies a run from nothing else), so a log replays to the
 // very run it was recorded from (replay.js), travels in a challenge link (#vs=) and is the proof a
-// board row keeps of its total. Pure and free of imports, like the step it feeds.
+// board row keeps of its total. Pure, like the step it feeds.
 //
-// A link, format 1, is these bytes written in base64url without padding:
+// A link, format 2, is these bytes written in base64url without padding:
 //
-//   u8       the format: 1
+//   u8       the format: 2 (legacy format 1 is still readable)
 //   varint   the sim version the run was flown under (sim-version.js)
 //   u32 LE   the sky's seed
 //   varint   the UTC day of a Daily Sky, or 0 for any other sky
@@ -14,7 +14,7 @@
 //   varint   the total claimed, in 2.5 kg plates
 //   varint   the peak claimed, in whole metres
 //   varint   steps
-//   varint   (steps held << 4) | bits, for each stretch of steps the controls were held the same,
+//   varint   (steps held << 5) | bits, for each stretch of steps the controls were held the same,
 //            until the stretches add up to `steps`
 //
 // A varint is LEB128: seven bits a byte, the lowest first, the top bit set on every byte but the
@@ -25,23 +25,19 @@
 // log is refused, never repaired. The total and peak a link claims are only what it says: whoever
 // reads one replays it for the real numbers.
 
-export const LOG_FORMAT = 1;
-// Steps a log can hold: 240 s at 60 steps a second. The fog ends every run well inside that.
-export const MAX_STEPS = 14_400;
-// Characters of a link read at all. A whole run's log comes to a few hundred, or about two thousand
-// for a pilot tapping the arrows five times a second all the way up.
-export const MAX_LINK = 8_192;
+import { RUN_RULES } from './run-rules.js';
+
+export const LOG_FORMAT = 2;
+// Every input through the ten-minute deadline fits, even when it changes every step.
+export const MAX_STEPS = RUN_RULES.maxSteps;
+// The decoder accepts a complete ten-minute trace even when input changes every fixed step.
+export const MAX_LINK = 49_152;
 // The controls, as the bits of one fixed step (run-step.js's stepBits): left and right together are
 // the speed bar, so a phone with only the two arrows can push it, and the brake and the bar
 // together are the big ears. The brake has always won over the bar, so that pair meant nothing of
-// its own until the ears took it, and the links of runs flown before them fly as they always did.
-export const INPUT = Object.freeze({ left: 1, right: 2, brake: 4, bar: 8, ears: 12 });
-
-// Both ▼ on a touch screen pressed together are the big ears: the second within `together` fixed
-// steps of the first, and both held `hold` steps. After that either ▼ keeps them in, so the other
-// thumb can steer. A change of thumb starts from one ▼ held far longer than `together`, and a quick
-// handover lets go within `hold`, so neither is ever the ears, however long the thumbs overlap.
-export const TOUCH_EARS = Object.freeze({ together: 12, hold: 6 });
+// its own until the ears took it. Deep brake has its own bit and also writes the ordinary brake
+// bit, so intent is replayed directly without reconstructing device gesture timing.
+export const INPUT = Object.freeze({ left: 1, right: 2, brake: 4, bar: 8, ears: 12, deepBrake: 16 });
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 // Each character's six bits, by its code; -1 for any character base64url does not use.
@@ -51,7 +47,7 @@ for (let i = 0; i < ALPHABET.length; i++) SEXTET[ALPHABET.charCodeAt(i)] = i;
 const UINT = 0xffffffff;
 const VARINT = 5;
 // The most bytes a log can take before its first stretch: format, version, seed, day, flags,
-// initials, total, peak and steps. A stretch takes at most three (MAX_STEPS << 4 is under 2^21).
+// initials, total, peak and steps. A stretch takes at most three (MAX_STEPS << 5 is under 2^21).
 const HEAD = 1 + VARINT + 4 + VARINT + VARINT + 3 + VARINT + VARINT + VARINT;
 const NAMED = /^(?:[A-Z]{3})?$/;
 const KG = 2.5;
@@ -64,86 +60,14 @@ function need(ok, what, value) {
 }
 
 /**
- * The bits of one step for the controls held as `input` ({ left, right, brake, bar, ears }, as the
- * game keeps them). The brake wins over the ears and the ears over the bar, so the brake and the bar
+ * The bits of one step for the controls held as `input` ({ left, right, brake, deepBrake, bar, ears }, as the
+ * game keeps them). Dedicated ears win over deep brake, then working brake, then the bar, so the brake and the bar
  * are only ever written together as the ears: the bar still held while braking is the brake, as the
  * step always flew it.
  */
 export function inputBits(input) {
   const turn = (input.left ? INPUT.left : 0) | (input.right ? INPUT.right : 0);
-  return turn | (input.brake ? INPUT.brake : input.ears ? INPUT.ears : input.bar ? INPUT.bar : 0);
-}
-
-/**
- * Tells, step by step, whether the two ▼ of a touch screen are holding the big ears (TOUCH_EARS).
- * `step(first, second)` takes whether each ▼ is held this fixed step and says whether the ears are;
- * nothing else is read, so the bits a run records are all its replay needs.
- */
-export function createTouchEars() {
-  // Steps since each ▼ went down (-1 while it is up), how long both have been held, and whether
-  // the ears are in.
-  let first = -1;
-  let second = -1;
-  let both = 0;
-  let on = false;
-
-  function reset() {
-    first = second = -1;
-    both = 0;
-    on = false;
-  }
-
-  function step(a, b) {
-    first = a ? first + 1 : -1;
-    second = b ? second + 1 : -1;
-    if (!a && !b) {
-      on = false;
-      both = 0;
-      return false;
-    }
-    if (on) return true;
-    // Both down, and the later of the two went down within `together` steps of the earlier.
-    both = a && b && Math.abs(first - second) <= TOUCH_EARS.together ? both + 1 : 0;
-    on = both >= TOUCH_EARS.hold;
-    return on;
-  }
-
-  return { reset, step, get on() { return on; } };
-}
-
-/**
- * Round a loop the brake and the bar are its presses, ▼ under the wing and ▲ over it, and a log can
- * only write the two together as the ears, with the brake over the bar (inputBits): ▲ pressed with
- * ▼ still held would never be seen, and ▼ let go with ▲ held would read as a press of ▲. So round
- * one only the newer of the two held is flown, and letting go of it hands nothing back to the other
- * until that is pressed again. `step(brake, bar, round)` takes whether each is held this fixed step
- * and whether a loop is going round, and says which to fly ({ brake, bar }, one object reused);
- * outside a loop both are flown as they are held.
- */
-export function createLoopKeys() {
-  // The newer of the two still held ('brake', 'bar' or null), and each as it was held last step.
-  let newest = null;
-  let brakeWas = false;
-  let barWas = false;
-  const out = { brake: false, bar: false };
-
-  function reset() {
-    newest = null;
-    brakeWas = barWas = false;
-  }
-
-  function step(brake, bar, round) {
-    if (brake && !brakeWas) newest = 'brake';
-    else if (bar && !barWas) newest = 'bar';
-    if ((newest === 'brake' && !brake) || (newest === 'bar' && !bar)) newest = null;
-    brakeWas = brake;
-    barWas = bar;
-    out.brake = round ? newest === 'brake' : brake;
-    out.bar = round ? newest === 'bar' : bar;
-    return out;
-  }
-
-  return { reset, step };
+  return turn | (input.ears ? INPUT.ears : input.deepBrake ? INPUT.deepBrake | INPUT.brake : input.brake ? INPUT.brake : input.bar ? INPUT.bar : 0);
 }
 
 /**
@@ -168,7 +92,7 @@ export function createRecorder() {
     },
     push(bits) {
       if (steps >= MAX_STEPS) return false;
-      const held = bits & 15;
+      const held = bits & 31;
       if (held !== last) changes += 1;
       last = held;
       buffer[steps] = held;
@@ -186,7 +110,7 @@ export function createRecorder() {
  * the sim version and the seed the run was flown under; the Daily Sky's UTC day, or 0 for any other
  * sky; whether it was flown on a touch screen; '' or three letters A to Z; and the total (kg, a
  * multiple of 2.5) and peak (whole metres) it claims. `bits` holds the controls of each of the
- * first `steps` steps, 0 to 15 (a recorder's `bits`). Throws a RangeError for anything the format
+ * first `steps` steps, 0 to 31 (a recorder's `bits`). Throws a RangeError for anything the format
  * cannot hold exactly, rather than write a log that says something else.
  */
 export function encodeLog(meta, bits, steps) {
@@ -218,10 +142,10 @@ export function encodeLog(meta, bits, steps) {
   varint(steps);
   for (let i = 0; i < steps;) {
     const held = bits[i];
-    need(Number.isInteger(held) && held >= 0 && held <= 15, `the controls of step ${i}`, held);
+    need(Number.isInteger(held) && held >= 0 && held <= 31, `the controls of step ${i}`, held);
     let end = i + 1;
     while (end < steps && bits[end] === held) end += 1;
-    varint((end - i) * 16 + held);
+    varint((end - i) * 32 + held);
     i = end;
   }
   let text = '';
@@ -242,7 +166,7 @@ export function encodeLog(meta, bits, steps) {
  * (`bits` a Uint8Array of `steps`); or { ok: false, why } for any text that is not exactly a log:
  *
  *   long       more than MAX_LINK characters, or more than MAX_STEPS steps
- *   format     a log, but not of format 1: from some other build of the game
+ *   format     a log, but not of format 1 or 2: from some other build of the game
  *   truncated  cut short: it ends before its steps do
  *   corrupt    anything else: a character base64url does not use (padding among them), a number
  *              written the long way, flags or initials that cannot be, a stretch of no steps, one
@@ -298,7 +222,9 @@ export function decodeLog(text) {
     return 0;
   };
   if (size === 0) return refused('truncated');
-  if (byte() !== LOG_FORMAT) return refused('format');
+  const format = byte();
+  if (format !== 1 && format !== LOG_FORMAT) return refused('format');
+  const width = format === 1 ? 16 : 32;
   const simVersion = varint();
   // Operands are read left to right, so the first byte is the lowest.
   const seed = (byte() | (byte() << 8) | (byte() << 16) | (byte() << 24)) >>> 0;
@@ -325,8 +251,8 @@ export function decodeLog(text) {
   while (filled < steps) {
     const value = varint();
     if (why) return refused(why);
-    const held = value % 16;
-    const span = (value - held) / 16;
+    const held = value % width;
+    const span = (value - held) / width;
     if (span === 0 || held === last || span > steps - filled) return refused('corrupt');
     bits.fill(held, filled, filled + span);
     filled += span;

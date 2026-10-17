@@ -6,12 +6,12 @@ import { CLOUD_HUNT } from './cloudbase-state.js';
 // blue going sideways is wind, gold going up is lift. The motes are fixed in the world and carried
 // up by the run's own lift at their radius, so a circling pilot sees them stream up on the core's
 // side and hold or sink past on the far one, which is the centring cue. They crowd the core, rise
-// and swirl fastest there, fill out from it as a thermal blooms and thin from the rim as it wears
+// fastest there, drift with the cell, fill out from it as a thermal blooms and thin from the rim as it wears
 // or ages. This module only draws: what each thermal is doing comes from the run's state on every
 // update, and nothing here is read back by the run. Distances are metres, speeds metres/second,
 // sizes CSS pixels, times seconds, and alpha runs from 0 to 1 before the glow, which starts at 0.3.
 export const THERMAL_MOTES = Object.freeze({
-  // Motes per thermal: the launch column's, and each hunted thermal's (3,584 vertices in all).
+  // Motes per thermal, with one fixed geometry shared by all hunted cells.
   count: Object.freeze({ launch: 384, hunted: 256 }),
   // The window each is drawn in: `span` metres tall from `below` metres under the pilot, as the
   // sparks before them. The launch column is tall enough to read as a column from the gate.
@@ -19,18 +19,16 @@ export const THERMAL_MOTES = Object.freeze({
   // Metres from a hunted thermal's axis at which its motes are whole, and gone: from further off it
   // is the ravens that give it away. Ansuz stretches both (BLESSING.sparks in meet-runes.js).
   sight: Object.freeze([46, 85]),
-  // Motes lie out to where the lift is this share of its best (30.6 m out in a hunted thermal, 30.3
-  // m in the launch column), as many to a square metre as the lift to the power `crowd`: in a hunted
-  // thermal 48% of them lie within 14 m and 77% within 20 m.
+  // Motes extend to this share of peak lift. Their density follows the actual lift profile to
+  // the power `crowd`, so the broad core stays easy to read while the edges thin out.
   reach: 0.1, crowd: 1.5,
   // A mote rises `flow` times as fast as the run's lift where it is, the wind streaks' flow: the
   // pilot is carried up by that same air, less the wing's own sink, so at 1 a centred circle would
   // see the core's motes all but hold still.
-  flow: 1.5,
-  // rad/s at the axis, turning the way the flock does; `eye` is the vortex's core as a share of the
-  // thermal's radius, inside which it turns as one and outside which it slows: a full hunted
-  // thermal goes round at 3.8 to 4.6 m/s from 8 m out to 24 m, so its tails lean 6° to 18°.
-  swirl: 0.6, eye: 0.4,
+  flow: 1,
+  // No decorative vortex: a mote follows its cell's drift and the actual vertical lift profile.
+  // `eye` is retained in the layout format for existing instanced geometry.
+  swirl: 0, eye: 0.4,
   // The strength at which the first core motes start to show, and over how much of it each comes in.
   first: 0.08, soft: 0.08,
   // A head is `size` / metres away CSS pixels across (larger under Ansuz), never less than `width[0]`
@@ -65,9 +63,8 @@ export const THERMAL_MOTES = Object.freeze({
   step: 0.1,
   // How much brighter the motes are drawn once the game has dropped its glow.
   unbloomed: 1.4,
-  // Under reduced motion: the motes still rise and swirl, because both say something, but at the
-  // air's own pace, slower round, and without a twinkle.
-  calm: Object.freeze({ flow: 1, swirl: 0.36, twinkle: 0 }),
+  // Reduced motion keeps the physical airspeed and removes shimmer.
+  calm: Object.freeze({ flow: 1, swirl: 0, twinkle: 0 }),
 });
 
 const TAU = Math.PI * 2;
@@ -97,8 +94,8 @@ const R2 = Object.freeze([0.7548776662466927, 0.5698402909980532]);
 
 /**
  * How much of its best lift a thermal has at `share` of its radius out from its axis, 0 to 1: a
- * hunted thermal peaks at its very middle and fades over the whole radius, and the launch column is
- * flat across its core and fades over its outer 55%. A copy of the run's own `profile`.
+ * hunted thermal is flat across its inner 30% and the launch column across its inner 45%.
+ * Both fade smoothly to their edge, matching the run's own `profile`.
  */
 export function liftShare(hunted, share) {
   return ease(clamp((1 - share) / (hunted ? CLOUD_HUNT.core : LAUNCH_FADE), 0, 1));
@@ -182,9 +179,9 @@ export function moteAt(layout, i, u, out = {}) {
   out.y = u.foot + up;
   out.z = (u.z ?? 0) + Math.sin(a) * r;
   out.up = up;
-  out.vx = -Math.sin(a) * round;
+  out.vx = (u.windX ?? 0) - Math.sin(a) * round;
   out.vy = u.speed * trait[j];
-  out.vz = Math.cos(a) * round;
+  out.vz = (u.windZ ?? 0) + Math.cos(a) * round;
   out.alpha = u.near * smoothstep(seed[j + 3], seed[j + 3] + M.soft, u.strength)
     * smoothstep(0, M.edge[0], up) * (1 - smoothstep(u.span - M.edge[1], u.span, up))
     * (1 - u.twinkle * (0.5 + 0.5 * Math.sin(u.clock * trait[j + 3] + trait[j + 2])))
@@ -239,6 +236,7 @@ export function createThermalMotes({ sites, order = 0, calm = false, flare = 3, 
   // head forward and its tail trailing back, so a head always leads and the tail says how fast the
   // air rises there. `ndc` is two over the size of what is drawn into, in device pixels.
   const vertexShader = `uniform float rise; uniform float turn; uniform float speed; uniform float spin;
+    uniform float windX; uniform float windZ;
     uniform float radius; uniform float foot; uniform float span; uniform float strength; uniform float near;
     uniform float sight; uniform float flare; uniform float clock; uniform float twinkle; uniform float dpr;
     uniform vec3 pilot; uniform vec2 ndc;
@@ -251,7 +249,7 @@ export function createThermalMotes({ sites, order = 0, calm = false, flare = 3, 
       float up = mod(seed.z * span + rise * trait.x - foot, span);
       vec3 at = vec3(cos(a) * r, up, sin(a) * r);
       vec4 view = modelViewMatrix * vec4(at, 1.0);
-      vec3 drift = mat3(modelViewMatrix) * vec3(-sin(a) * r * spin * trait.y, speed * trait.x, cos(a) * r * spin * trait.y);
+      vec3 drift = mat3(modelViewMatrix) * vec3(windX - sin(a) * r * spin * trait.y, speed * trait.x, windZ + cos(a) * r * spin * trait.y);
       float w = max(0.5, -view.z);
       vec2 pace = vec2(projectionMatrix[0][0], projectionMatrix[1][1]) * (drift.xy * w + view.xy * drift.z) / (w * w) / ndc;
       float fast = length(pace);
@@ -319,7 +317,7 @@ export function createThermalMotes({ sites, order = 0, calm = false, flare = 3, 
     const column = isHunted ? M.hunted : M.launch;
     const uniforms = {
       ...shared,
-      rise: { value: 0 }, turn: { value: 0 }, speed: { value: 0 }, spin: { value: 0 },
+      rise: { value: 0 }, turn: { value: 0 }, speed: { value: 0 }, spin: { value: 0 }, windX: { value: 0 }, windZ: { value: 0 },
       radius: { value: 1 }, foot: { value: 0 }, span: { value: column.span },
       strength: { value: 0 }, near: { value: 0 }, sight: { value: 1 }, flare: { value: 0 },
     };
@@ -380,6 +378,7 @@ export function createThermalMotes({ sites, order = 0, calm = false, flare = 3, 
       u.turn.value = view.turn;
       u.speed.value = speed;
       u.spin.value = spin;
+      u.windX.value = thermal.vx ?? 0; u.windZ.value = thermal.vz ?? 0;
       u.radius.value = thermal.r;
       u.strength.value = strength;
       u.near.value = near;

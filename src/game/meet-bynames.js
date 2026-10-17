@@ -8,7 +8,7 @@
 // very same byname.
 
 // How much of a thing a run must have met before a byname about it can be earned, so that none is
-// earned by default: no kettlebell is thrown under 550 m, and no storm cloud drifts under 580 m.
+// earned by default: no kettlebell is thrown under 700 m, and no storm cloud drifts under 580 m.
 export const BYNAME = Object.freeze({
   lines: 4, // lines judged, the mist's not counted, for the Unbroken: the clean meet's four
   thrown: 3, // kettlebells thrown, for the Unstruck and Bell-dodger: Giant-dodger's three
@@ -68,8 +68,10 @@ export const BYNAMES = Object.freeze([
  * The byname a run earns its pilot, from its sheet (summariseRun's): the id of the first of BYNAMES
  * whose rule it meets, or '' for none. A run the sky did not judge earns none.
  */
+import { isJudgedEnding } from './run-rules.js';
+
 export function bynameFor(sheet) {
-  if (sheet?.reason !== 'fog' && sheet?.reason !== 'landed') return '';
+  if (!isJudgedEnding(sheet?.reason)) return '';
   for (const byname of BYNAMES) if (byname.earns(sheet)) return byname.id;
   return '';
 }

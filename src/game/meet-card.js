@@ -5,6 +5,7 @@
 // and its verse are worked out in meet-bynames.js and meet-verse.js.
 import { WORLD_BOARD } from './board-world.js';
 import { scoreOf } from './score.js';
+import { RUN_RULES } from './run-rules.js';
 
 // The judges, in the order their lights stand: bit 0 of a lift's `red` is the first.
 export const JUDGES = Object.freeze(['contact', 'control', 'airspace']);
@@ -86,6 +87,7 @@ export function medalsSaid({ medals, medal, fresh = [] }) {
 // gave (functions/src/runs.js); any other reason is said as a plain no. A board whose store or code
 // failed never judged the run at all, so it is not said to have turned it down.
 const NOT_RANKED = Object.freeze({
+  version: 'the world board is updating its flight rules; this run stays on this device',
   'not-best': 'your better run is already on it',
   duplicate: 'this run is already on it',
   mismatch: 'its replay of this run came to another sheet, so it stays here',
@@ -134,7 +136,7 @@ export function shareText(result, { label, link = '' }) {
  * `trace` is run-step.js's: a sample every second, `n` of them. The frame reaches over the highest
  * of the samples, the run's `peak` (which can fall between two samples) and every line judged.
  */
-export function barogram(trace, lifts, { width = 320, height = 96, horn = 110, peak = 0 } = {}) {
+export function barogram(trace, lifts, { width = 320, height = 96, horn = RUN_RULES.horn, peak = 0 } = {}) {
   const n = Math.max(2, trace.n);
   let top = Math.max(1, peak);
   for (let i = 0; i < trace.n; i++) top = Math.max(top, trace.alt[i]);

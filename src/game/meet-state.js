@@ -4,10 +4,10 @@
 // it that reads it is a kettlebell, which glances off a pilot holding Algiz). Plates come from full
 // circles turned the flock's way in lift (reps), from a line of them laid on the bar's glide from
 // a dying lift toward the next flock (a trail), and from a kettlebell that only just missed (a
-// close call). Every 250 m of height is a line where three lights judge the lift since the last:
+// close call). Every 150 m of height is a line where three lights judge the lift since the last:
 // fewer than two red and the bar is banked into the total, twice over once the horn has sounded.
 //
-// From 550 m, where Hrungnir starts throwing, there is more iron in the sky: plates riding each gust
+// From 700 m, where Hrungnir starts throwing, there is more iron in the sky: plates riding each gust
 // front that reaches the pilot, a plate in the clear air under a storm cloud's base, and after the
 // horn one riding up 35 m over the fog. A strike there no longer leaves the bar alone: its plates
 // spray off as the wing reopens and sink away for a few seconds, and any flown through goes back
@@ -19,9 +19,10 @@ import { FLIGHT } from './flight.js';
 import { CLOUD_POOL, CLOUD_STRIKE, CLOUD_ZONE } from './cloudbase-state.js';
 import { BELL_RESULT } from './bells.js';
 import { BLESSING, RUNE, createRunes, meetDraw } from './meet-runes.js';
+import { RUN_RULES, isJudgedEnding } from './run-rules.js';
 
 // The meet's rules. Every lift starts from the empty `bar` (kg, collars included) and is judged
-// at a line every `every` metres of peak height, the first of them (the opener) at 250 m. From
+// at a line every `every` metres of peak height, the first of them (the opener) at 150 m. From
 // `horn` seconds into a run, where cloudFogSpeed's surge begins and the fog starts to race,
 // Gjallarhorn has sounded and a good lift banks `double` times its weight. A full circle turned
 // the flock's way in lift loads `rep` kg and a close call `close` kg (`beast` kg for the Beast's,
@@ -33,8 +34,8 @@ import { BLESSING, RUNE, createRunes, meetDraw } from './meet-runes.js';
 // always was: no plate comes off the trail and a strike leaves the bar alone (but under Tiwaz,
 // which the 500 m gates can give).
 export const MEET = Object.freeze({
-  bar: 25, every: 250, horn: 110, double: 2, rep: 2.5, close: 10, beast: 20, cloud: 1.5, alive: 0.3, against: 0.2,
-  depth: 7, deep: 5, iron: 550,
+  bar: 25, every: 150, horn: RUN_RULES.horn, double: 2, rep: 2.5, close: 10, beast: 20, cloud: 1.5, alive: 0.3, against: 0.2,
+  depth: 7, deep: 5, iron: 700,
 });
 
 // Trails. When the lift being ridden (the launch column or a hunted thermal) relocates, or its
@@ -125,7 +126,7 @@ export const PLATE_KIND = Object.freeze({ none: 0, trail: 1, wind: 2, thunder: 3
 // climb at the launch column's 17 m/s by 3,090 m, which is twelve lines and the mist). The loose
 // plates are laid out by kind: a strike's `SCATTER.most` first, then two gust fronts' at once, then
 // the one under the thunder and the fog's bait (LOOSE).
-export const MEET_POOL = Object.freeze({ plates: 6, lifts: 16, loose: 16 });
+export const MEET_POOL = Object.freeze({ plates: 6, lifts: 96, loose: 16 });
 const LOOSE = Object.freeze({ scatter: 0, wind: SCATTER.most, thunder: SCATTER.most + 2 * WIND.count, bait: SCATTER.most + 2 * WIND.count + 1 });
 
 const TAU = Math.PI * 2;
@@ -140,7 +141,7 @@ const BAR_SINK = FLIGHT.sink.least + CURVE * (FLIGHT.speed.bar - FLIGHT.speed.li
  * The meet, made once and reset for every run. `step(dt, world)` follows a run world (run-step.js)
  * one fixed step at a time, reading its sky, wing, stall count and kettlebells and writing only its
  * own state; `finish(reason, world)` judges what is left on the bar when the run ends ('fog' or
- * 'landed' judge it at ×1, anything else forfeits it). Everything in `state` is a plain number,
+ * 'landed' and 'time' judge it at ×1, anything else forfeits it). Everything in `state` is a plain number,
  * boolean or string in pools that never change, so the view can keep them and a meet can be copied
  * and compared:
  *
@@ -159,7 +160,7 @@ const BAR_SINK = FLIGHT.sink.least + CURVE * (FLIGHT.speed.bar - FLIGHT.speed.li
  *   beastClose                    whether the Beast's close call has been paid (MEET.beast kg)
  *   since                         strikes, stalls and seconds in cloud at the last line
  *   turned                        rad turned the flock's way toward the next rep
- *   lap                           where that circle has gone: the glider's `x, z` summed over the
+ *   lap                           where that circle has gone: the glider's core-relative `x, z` summed over the
  *                                 `n` steps it has turned the flock's way, whose mean judges depth
  *   ride                          the lift last ridden: `n` rides so far, thermal `slot` (-1 for
  *                                 none yet), the site `x, z` it was ridden at, `seen`, when the
@@ -194,7 +195,7 @@ const BAR_SINK = FLIGHT.sink.least + CURVE * (FLIGHT.speed.bar - FLIGHT.speed.li
  *                                 into, or the whole bar under Tiwaz (plates sprayed and not caught
  *                                 are not counted here)
  *   runes                         the rune gates and the blessing held (meet-runes.js)
- *   ended                         '' while the run goes on, then 'fog', 'landed' or 'quit'
+ *   ended                         '' while the run goes on, then 'fog', 'landed', 'time' or 'quit'
  */
 export function createMeet() {
   const runes = createRunes();
@@ -214,7 +215,7 @@ export function createMeet() {
     turned: 0,
     deep: 0,
     lap: { x: 0, z: 0, n: 0 },
-    ride: { n: 0, slot: -1, x: 0, z: 0, seen: 0, strong: false },
+    ride: { n: 0, slot: -1, generation: -1, x: 0, z: 0, seen: 0, strong: false },
     trail: {
       live: false, ride: 0, target: 0, x: 0, z: 0, ux: 0, uz: 0, gap: 0, slope: 0, born: 0, boarded: -1,
       plates: Array.from({ length: MEET_POOL.plates }, () => ({ kind: TRAIL_PLATE, x: 0, y: 0, z: 0, kg: 0, live: false })),
@@ -282,6 +283,7 @@ export function createMeet() {
     const { ride, trail, spray } = state;
     ride.n = ride.x = ride.z = ride.seen = 0;
     ride.slot = -1;
+    ride.generation = -1;
     ride.strong = false;
     clearTrail();
     trail.ride = trail.target = trail.x = trail.z = trail.ux = trail.uz = trail.gap = trail.slope = trail.born = 0;
@@ -506,6 +508,11 @@ export function createMeet() {
     if (slot < 0 || pilot.gustAhead <= 0 || pilot.gustIn > WIND.lead) return;
     const band = gusts[slot];
     if (band.strength === 0 || state.carried[slot] === band.born) return;
+    // A reused weather slot is a new front. Its predecessor's plates must not jump onto it.
+    for (let i = LOOSE.wind; i < LOOSE.thunder; i++) {
+      const plate = state.loose[i];
+      if (plate.live && plate.slot === slot) clearPlate(plate);
+    }
     state.carried[slot] = band.born;
     const { pos } = world.g;
     // The line across the band through the middle of the lift, measured as the sky measures a
@@ -717,14 +724,15 @@ export function createMeet() {
     const slot = pilot.thermal;
     if (slot >= 0) {
       const thermal = thermals[slot];
-      if (slot !== ride.slot || thermal.x !== ride.x || thermal.z !== ride.z) {
+      if (slot !== ride.slot || (thermal.generation ?? 0) !== ride.generation) {
         ride.n += 1;
         ride.slot = slot;
-        ride.x = thermal.x;
-        ride.z = thermal.z;
+        ride.generation = thermal.generation ?? 0;
         ride.strong = false;
         state.turned = state.lap.x = state.lap.z = state.lap.n = 0;
       }
+      ride.x = thermal.x;
+      ride.z = thermal.z;
       if (thermal.strength >= TRAIL.dying) ride.strong = true;
       ride.seen = elapsed;
     }
@@ -744,13 +752,14 @@ export function createMeet() {
         state.turned = lap.x = lap.z = lap.n = 0;
       } else if (way > 0) {
         state.turned += way * dt;
-        lap.x += g.pos.x;
-        lap.z += g.pos.z;
+        // Measure the circle in the moving air mass rather than against a fixed map point.
+        lap.x += g.pos.x - thermal.x;
+        lap.z += g.pos.z - thermal.z;
         lap.n += 1;
         if (state.turned >= TAU) {
           state.turned -= TAU;
-          const dx = lap.x / lap.n - thermal.x;
-          const dz = lap.z / lap.n - thermal.z;
+          const dx = lap.x / lap.n;
+          const dz = lap.z / lap.n;
           const deep = dx * dx + dz * dz <= MEET.depth * MEET.depth;
           state.reps += 1;
           if (deep) state.deep += 1;
@@ -765,7 +774,7 @@ export function createMeet() {
     // flown back into. None is laid once the sky has ended.
     if (sky.active && ride.n > 0 && trail.ride !== ride.n && elapsed - ride.seen <= TRAIL.recent) {
       const thermal = thermals[ride.slot];
-      const moved = thermal.x !== ride.x || thermal.z !== ride.z;
+      const moved = (thermal.generation ?? 0) !== ride.generation;
       if (moved || (ride.strong && thermal.strength < TRAIL.dying)) lay(world);
     }
     if (trail.live) tend(world, reach);
@@ -811,7 +820,7 @@ export function createMeet() {
    */
   function finish(reason, world) {
     if (state.ended !== '') return;
-    const judged = reason === 'fog' || reason === 'landed';
+    const judged = isJudgedEnding(reason);
     state.ended = judged ? reason : 'quit';
     if (judged) judge(world, 0, false);
     clearTrail();

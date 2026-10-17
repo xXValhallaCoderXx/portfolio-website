@@ -1,17 +1,26 @@
-// The variometer's beep for a climb of `vy` m/s: its pitch (Hz) and the seconds from one beep to
-// the next. Over the fjord the lift tops out at a few metres a second, and the beep is at its
-// fastest by 6 m/s. In a run a thermal's core lifts at up to about 28 m/s, and centring on it is
-// done by ear: the beep has to keep rising, in rate and in pitch, all the way up, or a surge on one
-// side of the circle sounds the same as the core.
-export const VARIO = Object.freeze({
-  fjord: Object.freeze({ pitch: 620, rise: 85, gap: 0.42, quicken: 0.05, fastest: 0.11 }),
-  run: Object.freeze({ pitch: 520, rise: 55, gap: 0.42, quicken: 0.0118, fastest: 0.09 }),
-});
+// One climb scale for the shared wing: useful soaring climbs occupy roughly0–5m/s. This is
+// presentation only; neither filtering nor audio changes a force, score or weather sample.
+const SCALE = Object.freeze({ pitch: 620, rise: 85, gap: 0.44, quicken: 0.065, fastest: 0.11 });
+export const VARIO = Object.freeze({ fjord: SCALE, run: SCALE, feel: 0.6 });
 
-/** The beep for `vy` m/s of climb, written into `out` ({ pitch, gap }); `run` picks the run's scale. */
+/** The beep follows the glider's net climb, with useful separation across the soaring range. */
 export function varioTone(vy, run, out = { pitch: 0, gap: 0 }) {
   const scale = run ? VARIO.run : VARIO.fjord;
-  out.pitch = scale.pitch + vy * scale.rise;
-  out.gap = Math.max(scale.fastest, scale.gap - vy * scale.quicken);
+  const climb = Math.max(0, Math.min(12, Number.isFinite(vy) ? vy : 0));
+  out.pitch = scale.pitch + climb * scale.rise;
+  out.gap = Math.max(scale.fastest, scale.gap - climb * scale.quicken);
   return out;
+}
+
+/** Frame-rate independent filtering for both the readout and beep; paused frames keep it still. */
+export function createVario() {
+  let value = 0;
+  return {
+    reset(vy = 0) { value = Number.isFinite(vy) ? vy : 0; },
+    step(vy, dt) {
+      if (Number.isFinite(vy) && Number.isFinite(dt) && dt > 0) value += (vy - value) * (1 - Math.exp(-dt / VARIO.feel));
+      return value;
+    },
+    get value() { return value; },
+  };
 }

@@ -41,12 +41,12 @@ export const GATE = Object.freeze({ idle: 0, waiting: 1, taken: 2, crumbled: 3 }
 // up, by up to 140 kg (Tiwaz's doubling): 1.3 kg a run over the 800, on the rival a player races.
 export const GATES = Object.freeze({
   lines: Object.freeze([500, 1000]), // m: the heights the gates are raised at, the lines' own
-  ahead: 100,                       // m of peak under a line at which its gates are raised
+  ahead: 30,                        // m of peak under a line at which its gates are raised
   count: 3,                         // stones a line
   ring: 22,                         // m from the lift's middle: past its ravens and a circle blown downwind
   wide: 6,                          // m of opening to either side of a stone's middle
   tall: 20,                         // m of opening above and below it: two seconds of a 20 m/s climb
-  wait: 30,                         // s from being raised before the stones crumble
+  wait: 60,                         // s from being raised before the stones crumble
   past: 30,                         // m of peak over the stones at which they crumble
 });
 
@@ -112,12 +112,15 @@ export function createRunes() {
     runes: 0,
     spent: 0,
     was: { x: CLOUD_GATE.x, y: CLOUD_GATE.y, z: CLOUD_GATE.z },
+    anchor: { slot: -1, generation: -1, x: 0, z: 0 },
   };
   // The crossing test's own pieces, filled in for each stone: the path in the stone's frame (its
   // facing as x, its width as z) and the opening as the arch's corridor at x = 0.
   const from = { x: 0, y: 0, z: 0 };
   const to = { x: 0, y: 0, z: 0 };
   const opening = { x: 0, corridor: { minY: 0, maxY: 0, minZ: -G.wide, maxZ: G.wide } };
+  let shiftX = 0;
+  let shiftZ = 0;
 
   function reset() {
     state.raised = state.line = 0;
@@ -135,17 +138,21 @@ export function createRunes() {
     state.was.x = CLOUD_GATE.x;
     state.was.y = CLOUD_GATE.y;
     state.was.z = CLOUD_GATE.z;
+    state.anchor.slot = state.anchor.generation = -1;
+    state.anchor.x = state.anchor.z = shiftX = shiftZ = 0;
   }
 
   // Raises the stones for the next line round the lift the pilot is in, three of the four runes
   // in a seeded order from a seeded bearing.
   function raise(world) {
+    shiftX = shiftZ = 0;
     const sky = world.sky.state;
     const { pos } = world.g;
     const k = state.raised;
     const slot = sky.pilot.thermal;
     const cx = slot >= 0 ? sky.thermals[slot].x : pos.x;
     const cz = slot >= 0 ? sky.thermals[slot].z : pos.z;
+    Object.assign(state.anchor, { slot, generation: slot >= 0 ? sky.thermals[slot].generation ?? 0 : -1, x: cx, z: cz });
     const out = 1 + Math.floor(meetDraw(sky.seed, 1 + 4 * k) * 4);
     const order = ORDERS[Math.floor(meetDraw(sky.seed, 2 + 4 * k) * ORDERS.length)];
     const bearing = meetDraw(sky.seed, 3 + 4 * k) * TAU;
@@ -173,8 +180,8 @@ export function createRunes() {
   function through(gate, pos) {
     const tx = -gate.nz;
     const tz = gate.nx;
-    const ax = state.was.x - gate.x;
-    const az = state.was.z - gate.z;
+    const ax = state.was.x - (gate.x - shiftX);
+    const az = state.was.z - (gate.z - shiftZ);
     const bx = pos.x - gate.x;
     const bz = pos.z - gate.z;
     from.x = ax * gate.nx + az * gate.nz;
@@ -202,6 +209,19 @@ export function createRunes() {
     const { pos } = world.g;
     const now = sky.elapsed;
     const { blessing } = state;
+    shiftX = shiftZ = 0;
+    const anchor = state.anchor;
+    const thermal = anchor.slot >= 0 ? sky.thermals[anchor.slot] : null;
+    if (thermal && (thermal.generation ?? 0) === anchor.generation) {
+      shiftX = thermal.x - anchor.x;
+      shiftZ = thermal.z - anchor.z;
+      for (const gate of state.gates) if (gate.state === WAITING) {
+        gate.x += shiftX;
+        gate.z += shiftZ;
+      }
+      anchor.x = thermal.x;
+      anchor.z = thermal.z;
+    } else if (thermal) anchor.slot = -1;
     // Algiz is spent by the bell it turned aside, which the kettlebells count as they settle it.
     const bells = world.bells;
     if (bells && bells.state.glanced > state.spent) {

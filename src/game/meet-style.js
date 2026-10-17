@@ -4,21 +4,10 @@
 // only reads the wing, and it writes nothing back to the world, so a run flies and lifts the same
 // with it or without it, and a replay scores the same style as the run it replays.
 //
-// A trick is a set of elements: the forward peaks of a swing being pitched bigger, the tops of
-// linked wingovers, or loops, each time round. A swing counts as pitched once `pitched` forward peaks in a row have held or
-// grown (the watch's `building`), and wingovers once `linked` tops have come on alternate sides
-// (its `chain`); the peaks that made it one then count too. Ordinary flying hardly ever does either:
-// a brake let go, a dodge or a fall of the air swings the wing once, and then it dies away. Each
-// element scores by the band it reaches (BANDS), more the more are linked in a row (`chain`, in
-// halves: link n scores x1, x1, x1.5, x2, x2.5, then x3 for every one after). Pitching and wingovers
-// link into one set. The set lands, and its points count, once the wing has flown level and calm
-// for `settle` seconds with at least `least` elements in it: for a pitched swing the catch is the
-// landing. A lone element is no set in hand yet (a dodge turned back can make one): a set is from
-// `inHand` elements. A tuck, a tip, a stall or a strike loses the set in hand, and nothing counts
-// again until the wing has flown level and calm; the ears drop it unscored; a run that ends mid-set
-// lands none of it. Style counts anywhere in a run, as a trick can go wrong anywhere in one: the
-// wing folds itself at any height there.
-import { BANDS, bandOf } from './swing-watch.js';
+// Only completed physical maneuvers from swing-watch enter a pending set. One wingover cycle,
+// shaped pitch-and-catch or inversion can bank on its own after stable recovery. Linking increases
+// the multiplier without recounting runup peaks. A failure loses pending points; banked points
+// survive. Ears, assistance and an unfinished end cannot bank a move.
 
 export const STYLE = Object.freeze({
   // Points for each element by the band it reached, 1 to 4, and for each loop round.
@@ -27,8 +16,8 @@ export const STYLE = Object.freeze({
   // Halves of the multiplier for the n-th element linked in a row, the last for every one after.
   chain: Object.freeze([2, 2, 3, 4, 5, 6]),
   // Elements a set needs to land, and to be a set in hand at all: shown, and lost if broken off.
-  least: 3,
-  inHand: 2,
+  least: 1,
+  inHand: 1,
   // Seconds level and calm that land a set.
   settle: 1,
   // Forward peaks in a row that make a swing a pitched one, and tops on alternate sides that make
@@ -57,11 +46,11 @@ const DEG = Math.PI / 180;
 export function createStyle() {
   const state = {
     total: 0, pending: 0, elements: 0, links: 0, rolls: 0, loops: 0, deepest: 0, last: 0, landed: 0, lost: 0, said: 0, wingovers: 0,
-    mostLoops: 0, pitch: 0, armed: true,
+    mostLoops: 0, pitch: 0, armed: true, bankedAt: -Infinity, lostAt: -Infinity,
   };
   // The watch's counts last step, the forward peaks of the swing being built before the last (to
   // count them once it is a pitched one), and the top before the last, to tell what is new.
-  const seen = { fronts: 0, tops: 0, loops: 0, breaks: 0, front: 0, before: 0, top: 0 };
+  const seen = { moves: 0, breaks: 0 };
 
   function clear() {
     state.pending = state.elements = state.links = state.rolls = state.loops = state.deepest = state.last = 0;
@@ -71,7 +60,8 @@ export function createStyle() {
     clear();
     state.total = state.landed = state.lost = state.said = state.wingovers = state.mostLoops = state.pitch = 0;
     state.armed = true;
-    seen.fronts = seen.tops = seen.loops = seen.breaks = seen.front = seen.before = seen.top = 0;
+    state.bankedAt = state.lostAt = -Infinity;
+    seen.moves = seen.breaks = 0;
   }
 
   // An element reaching `band` (0 for none): it scores, linked to the ones before it, or, short of
@@ -95,48 +85,38 @@ export function createStyle() {
   /** One step of `dt` seconds of the run in `world` (run-step.js), after its watch has stepped. */
   function step(dt, world) {
     const watch = world.watch.state;
+    if (world.controls?.steered) {
+      clear();
+      state.armed = false;
+      seen.moves = watch.moves;
+      seen.breaks = watch.breaks;
+      return;
+    }
     // Something broke the trick off: the set in hand is lost, or, for the ears, dropped unscored,
     // and nothing counts again until the wing is level and calm. A lone element is only dropped.
     if (watch.breaks > seen.breaks) {
       seen.breaks = watch.breaks;
-      if (state.elements >= STYLE.inHand && watch.broke !== 5) {
+      if (state.elements >= STYLE.inHand && watch.broke !== 5 && watch.broke !== 6) {
         state.lost += 1;
+        state.lostAt = watch.clock;
         state.said = state.pending;
       }
       clear();
       state.armed = false;
     }
     if (!state.armed && watch.calm >= STYLE.settle) state.armed = true;
-    // A forward peak of a swing being pitched bigger. The peaks that made it a pitched one count
-    // too, as the one that does comes.
-    if (watch.fronts > seen.fronts) {
-      seen.fronts = watch.fronts;
-      if (watch.building === STYLE.pitched) {
-        element(bandOf(BANDS.pitch, seen.before), 1, seen.before);
-        element(bandOf(BANDS.pitch, seen.front), 1, seen.front);
-      }
-      if (watch.building >= STYLE.pitched) element(bandOf(BANDS.pitch, watch.front), 1, watch.front);
-      seen.before = seen.front;
-      seen.front = watch.front;
-    }
-    // The top of a wingover linked to the one before. The top that began the chain counts too, as
-    // the one that links it comes.
-    if (watch.tops > seen.tops) {
-      seen.tops = watch.tops;
-      if (watch.chain === STYLE.linked) element(bandOf(BANDS.roll, seen.top), 2, seen.top);
-      if (watch.chain >= STYLE.linked) element(bandOf(BANDS.roll, watch.top), 2, watch.top);
-      seen.top = watch.top;
-    }
-    // A loop gone all the way round, linked on from the wingovers it was flown out of.
-    if (watch.loops > seen.loops) {
-      for (let n = seen.loops; n < watch.loops; n++) element(0, 3, 0);
-      seen.loops = watch.loops;
+    // The observer emits complete physical maneuvers. A standalone move is worth recovering;
+    // peaks and correctly timed inputs alone never score, and the first top is never added twice.
+    if (watch.moves > seen.moves) {
+      if (!world.controls?.steered) element(watch.moveBand, watch.moveKind, watch.moveSize);
+      seen.moves = watch.moves;
     }
     // Level and calm: the set lands, if it has enough in it.
     if (state.elements > 0 && watch.calm >= STYLE.settle) {
       if (state.elements >= STYLE.least) {
         state.total += state.pending;
         state.landed += 1;
+        state.bankedAt = watch.clock;
         state.said = state.pending;
         state.wingovers = Math.max(state.wingovers, state.rolls);
         state.mostLoops = Math.max(state.mostLoops, state.loops);
