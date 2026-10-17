@@ -605,8 +605,8 @@ test('nothing is drawn at a hunted site while its flock is still flying there, a
   view.begin();
   const run = createCloudbaseRun();
   run.reset(80, 3);
-  const thermal = run.state.thermals[1];
-  const motes = named(view, 'motes-1');
+  const thermal = run.state.thermals[2];
+  const motes = named(view, 'motes-2');
   const rise = () => motes.material.uniforms.rise.value;
   const old = { x: thermal.x, z: thermal.z };
 
@@ -695,8 +695,8 @@ test('a weakening thermal slows its motes without a jump: rise only grows, by on
   view.begin();
   const run = createCloudbaseRun();
   run.reset(80, 3);
-  const thermal = run.state.thermals[1];
-  const motes = named(view, 'motes-1');
+  const thermal = run.state.thermals[2];
+  const motes = named(view, 'motes-2');
   const rise = () => motes.material.uniforms.rise.value;
   // Sit in its core, drawing every frame, until it wears out and its flock moves on.
   const pos = pilotAt(thermal, 300);
@@ -1146,11 +1146,13 @@ test('a raven about to cross the pilot gets a strike-sized ring under it at ches
 
   // A real threat after the calm opening: a settled raven 12 m above the canopy.
   run.state.elapsed = CLOUD_RAVENS.quiet + 1;
-  let pos = pilotAt(run.state.thermals[1], 400);
+  let pos = pilotAt(run.state.thermals[1], 700);
   run.step(STEP, pos);
   view.update(run.state.elapsed, pos, run);
   assert.equal(rings[0].visible || rings[1].visible, false);
-  const index = run.state.ravens.findIndex((raven) => raven.hot);
+  const index = run.state.ravens.findIndex((raven) => raven.fade >= 1);
+  run.state.ravenAttack = index; run.state.ravenAt = run.state.elapsed - 1.1;
+  run.state.ravenDue = run.state.elapsed + 60;
   const raven = run.state.ravens[index];
   pos = { x: raven.x, y: raven.y - CLOUD_STRIKE.rise - 12, z: raven.z };
   run.step(STEP, pos);
@@ -1432,13 +1434,13 @@ test('the marks of a flock stay bright from take-off until its new lift is full,
   const run = createCloudbaseRun();
   run.reset(80, 3);
   const { state } = run;
-  const thermal = state.thermals[1];
+  const thermal = state.thermals[2];
   const { glow } = named(view, 'glints').geometry.attributes;
   // How bright this flock's marks are apart from each bird's own fade: the same for all of them.
   const shine = () => {
     let found = NaN;
     state.ravens.forEach((raven, i) => {
-      if (raven.thermal !== 1 || raven.fade < 0.5) return;
+      if (raven.thermal !== 2 || raven.fade < 0.5) return;
       const mine = glow.getX(i) / raven.fade;
       if (!Number.isNaN(found)) close(mine, found, 1e-5);
       found = mine;

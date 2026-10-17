@@ -25,6 +25,7 @@ import { isBlocked } from './meet-initials.js';
 import { normalizeKit } from './wing-kit.js';
 import { isJudgedEnding } from './run-rules.js';
 import { GAME_STORE } from './good-lift-key.js';
+import { normalizeLearnedLessons } from './trick-learning.js';
 
 /** The localStorage key Good Lift keeps everything under; the page's reset clears it by name. */
 export { GAME_STORE };
@@ -135,7 +136,7 @@ export function kitSheet(store, worn, fresh = []) {
  * null: one day's, as a later day's takes its place.
  */
 export function emptyStore() {
-  return { v: 7, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: emptyBoard(), bots: null };
+  return { v: 7, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], learnedLessons: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: emptyBoard(), bots: null };
 }
 
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -174,6 +175,7 @@ export function normalizeStore(raw) {
     if (isAmount(raw.tonnage)) store.tonnage = raw.tonnage;
     if (isCount(raw.runs)) store.runs = raw.runs;
     if (Array.isArray(raw.feats)) store.feats = [...new Set(raw.feats.filter((id) => FEAT_IDS.includes(id)))];
+    store.learnedLessons = normalizeLearnedLessons(raw.learnedLessons);
     const { last, streak } = isRecord(raw.daily) ? raw.daily : {};
     if (isCount(last) && isCount(streak) && (last === 0) === (streak === 0)) store.daily = { last, streak };
     if (typeof raw.initials === 'string' && INITIALS.test(raw.initials) && !isBlocked(raw.initials)) store.initials = raw.initials;
@@ -270,6 +272,19 @@ export function updateStore(change, storage = deviceStorage()) {
   const result = change(store);
   writeStore(store, storage);
   return result;
+}
+
+/** Save learning as soon as style banks, even if this visit cannot write device storage. */
+export function learnTrickLesson(id, storage = deviceStorage()) {
+  return updateStore(store => {
+    const before = store.learnedLessons.length;
+    store.learnedLessons = normalizeLearnedLessons([...store.learnedLessons, id]);
+    return store.learnedLessons.length > before;
+  }, storage);
+}
+
+export function repeatTrickLessons(storage = deviceStorage()) {
+  updateStore(store => { store.learnedLessons = []; }, storage);
 }
 
 /**

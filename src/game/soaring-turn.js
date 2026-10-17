@@ -14,7 +14,7 @@ const vertical = air => air.windY ?? ((air.lift || 0) - (air.sink || 0));
 const sideName = side => side < 0 ? 'left' : 'right';
 
 export function createSoaringTurn(adapter) {
-  let clock = -Infinity, started = 0, searchAt = -Infinity, dir = 0, progress = 0, previousYaw = 0;
+  let clock = -Infinity, started = 0, searchAt = -Infinity, dir = 0, progress = 0, previousTrack = 0;
   let blocked = false, rollingAt = null, supported = false, forecast = null, state = null;
   const projected = createFlight(), air = {}, wingPoint = {};
   function publish(message = null) {
@@ -24,7 +24,7 @@ export function createSoaringTurn(adapter) {
     return state;
   }
   function reset() {
-    clock = searchAt = -Infinity; started = progress = previousYaw = 0;
+    clock = searchAt = -Infinity; started = progress = previousTrack = 0;
     dir = 0; rollingAt = null; blocked = supported = false; forecast = null;
     return publish();
   }
@@ -53,16 +53,16 @@ export function createSoaringTurn(adapter) {
     copyFlight(projected, g);
     const fog = adapter.fog?.();
     let fogY = fog?.height ?? -Infinity;
-    let arc = progress, lastYaw = projected.yaw, releasedAt = null;
+    let arc = progress, lastTrack = projected.track, releasedAt = null;
     let minimum = g.pos.y, rising = 0, ticks = 0;
     for (let n = 1; n <= Math.ceil(C.horizon / C.step); n++) {
       const t = n * C.step;
-      if (releasedAt === null && arc >= Math.PI - Math.abs(projected.yawRate || 0) * C.rolloutLead) releasedAt = t;
+      if (releasedAt === null && arc >= Math.PI - Math.abs(projected.trackRate || 0) * C.rolloutLead) releasedAt = t;
       Object.assign(air, currentAir);
       adapter.sampleAir(projected.pos, air);
       const controls = { turn: releasedAt === null ? dir : 0, brake: releasedAt === null, deepBrake: false, bar: false, ears: false };
       stepFlight(projected, controls, air, C.step);
-      arc += wrap(projected.yaw - lastYaw) * dir; lastYaw = projected.yaw;
+      arc += wrap(projected.track - lastTrack) * dir; lastTrack = projected.track;
       minimum = Math.min(minimum, projected.pos.y);
       rising += vertical(air) >= C.useful ? 1 : 0; ticks++;
       if (fog) fogY += (fog.speedAt?.(projected.pos.y, (fog.elapsed ?? clock) + t) ?? 0) * C.step;
@@ -94,14 +94,14 @@ export function createSoaringTurn(adapter) {
     if (!safe(g, fog?.height)) { clear(chord); return publish(); }
     if (!dir) {
       if (!chord || blocked || clock < searchAt || vertical(currentAir) < C.useful) return publish();
-      dir = turn; started = now; previousYaw = g.yaw; progress = 0; searchAt = -Infinity;
+      dir = turn; started = now; previousTrack = g.track; progress = 0; searchAt = -Infinity;
     }
-    progress += wrap(g.yaw - previousYaw) * dir; previousYaw = g.yaw;
+    progress += wrap(g.track - previousTrack) * dir; previousTrack = g.track;
     if (now - started > C.duration) { clear(chord); return publish(); }
     if (chord && turn !== dir) { clear(false); searchAt = -Infinity; return publish(); }
     if (!chord && rollingAt === null) rollingAt = now;
     if (rollingAt !== null) {
-      if (now - rollingAt > C.rollout || (Math.abs(g.bank || 0) < C.levelBank && Math.abs(g.yawRate || 0) < C.levelRate)) {
+      if (now - rollingAt > C.rollout || (Math.abs(g.bank || 0) < C.levelBank && Math.abs(g.trackRate || 0) < C.levelRate)) {
         clear(false); return publish();
       }
       const message = actionMessage({ state: 'soaring', context: 'soaring turn', activity: 'soaring-turn', brakeDepth: 'working', phase: 'level',
@@ -114,7 +114,7 @@ export function createSoaringTurn(adapter) {
       searchAt = clock + C.searchEvery;
     }
     if (!supported) { const unsafe = !forecast?.safe; clear(unsafe); return publish(); }
-    const arcComplete = progress >= Math.PI - Math.abs(g.yawRate || 0) * C.rolloutLead;
+    const arcComplete = progress >= Math.PI - Math.abs(g.trackRate || 0) * C.rolloutLead;
     const message = actionMessage({ state: 'soaring', context: 'soaring turn', activity: 'soaring-turn', brakeDepth: 'working',
       phase: arcComplete ? 'level' : progress < 0.3 ? 'entry' : 'turn',
       action: arcComplete ? 'straight' : sideName(dir),

@@ -35,7 +35,7 @@ function trimmed() {
 }
 
 export function createFlight(pos = { x: 0, y: 0, z: 0 }) {
-  const g = { ...makePhysics(pos), pos, yaw: 0, yawRate: 0, bank: 0, speed: FLIGHT.speed.trim, sink: FLIGHT.sink.trim,
+  const g = { ...makePhysics(pos), pos, yaw: 0, yawRate: 0, track: 0, trackRate: 0, bank: 0, speed: FLIGHT.speed.trim, sink: FLIGHT.sink.trim,
     vy: 0, turn: 0, lift: 0, liftSide: 0, brake: 0, manualBrake: 0, deepBrake: false, brakeTarget: 0, acro: false, bar: 0, ears: 0,
     coordination: 0, coordinatedLean: 0, pilotLean: 0, bankTarget: 0, pitch: 0, pitchRate: 0, pitchPush: 0,
     lean: 0, roll: 0, rollRate: 0, rollRest: 0, rollSpeed: 0, stallLoad: 0, stall: 0, stallSide: 0,
@@ -95,7 +95,7 @@ export function settleFlight(g, speed) {
   g.physical.referenceLineY = ry / referenceLength;
   g.physical.referenceLineZ = rz / referenceLength;
   telemetry(g, {}, {}, 0);
-  g.yawRate = g.rollRate = g.pitchRate = 0;
+  g.yawRate = g.trackRate = g.rollRate = g.pitchRate = 0;
   return g;
 }
 
@@ -109,12 +109,13 @@ export function copyFlight(out, source) {
 function telemetry(g, controls, air, dt) {
   const s = g.physical, p = g.pilot, c = g.canopy;
   const T = PHYSICS.telemetry, O = PHYSICS.orbit;
-  const previousBank = g.bank, previousPitch = g.pitch;
+  const previousBank = g.bank, previousPitch = g.pitch, previousTrack = g.track;
   const wx = air.windX || 0, wz = air.windZ || 0;
   const wy = air.windY ?? ((air.lift || 0) - (air.sink || 0));
   const vx = p.vel.x - wx, vz = p.vel.z - wz;
   const horizontal = Math.hypot(vx, vz);
   g.track = horizontal > T.headingSpeed ? Math.atan2(vx, -vz) : g.yaw;
+  g.trackRate = dt > 0 ? Math.atan2(Math.sin(g.track - previousTrack), Math.cos(g.track - previousTrack)) / dt : 0;
   const nose = s.work[7];
   rotate(nose, c.q, 0, 0, -1);
   const heading = Math.hypot(nose.x, nose.z) > T.headingSpeed ? Math.atan2(nose.x, -nose.z) : g.yaw;

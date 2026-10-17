@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CLOUD_GATE, CLOUD_HUNT, CLOUD_LAUNCH, CLOUD_POOL, CLOUD_RAVENS, CLOUD_STORM, CLOUD_STRIKE, CLOUD_WEAR, CLOUD_WEATHER, CLOUD_ZONE, cloudFogSpeed, cloudThermalRemaining, createCloudbaseRun } from './cloudbase-state.js';
+import { CLOUD_GATE, CLOUD_OPENING, CLOUD_HUNT, CLOUD_LAUNCH, CLOUD_POOL, CLOUD_RAVENS, CLOUD_STORM, CLOUD_STRIKE, CLOUD_WEAR, CLOUD_WEATHER, CLOUD_ZONE, cloudFogSpeed, cloudThermalRemaining, createCloudbaseRun } from './cloudbase-state.js';
 import { surfaceAt } from './ground.js';
 import { createRunWorld, startRun, stepRun } from './run-step.js';
 const STEP = 1 / 60;
@@ -24,7 +24,7 @@ test('a seeded sky has four hunted thermals, anchored launch, stable pools and a
   assert.equal(CLOUD_GATE.yaw, 0); assert.equal(run.state.thermals.length, 5); assert.equal(run.state.ravens.length, 20);
   assert.equal(run.state.thermals[0].x, CLOUD_LAUNCH.x);
   assert.equal(run.state.thermals[0].vx, 0);
-  for (const t of run.state.thermals.slice(1)) { assert.equal(t.generation, 1); assert.equal(t.r, 60); assert.ok(t.s <= 5.5); }
+  for (const t of run.state.thermals.slice(1)) { assert.equal(t.generation, 1); assert.equal(t.r, t === run.state.thermals[1] ? CLOUD_OPENING.r : 60); assert.ok(t.s <= 5.5); }
   const refs = [...run.state.thermals, ...run.state.ravens]; run.reset(80, 99);
   assert.deepEqual([...run.state.thermals, ...run.state.ravens].map((t, i) => t === refs[i]), refs.map(() => true));
 });
@@ -44,7 +44,7 @@ test('hundreds of skies preserve full cell lifetimes and leave room for a comple
 });
 test('cell drift preserves generation until rebirth and launch remains anchored', () => {
   const run = createCloudbaseRun({ hazards: false }); run.reset(80, 7);
-  const t = run.state.thermals[1], x = t.x, z = t.z, id = t.generation;
+  const t = run.state.thermals[2], x = t.x, z = t.z, id = t.generation;
   advance(run, 10, point(CLOUD_ZONE, 10000));
   assert.ok(Math.hypot(t.x - x, t.z - z) > 10); assert.equal(t.generation, id);
   assert.equal(run.state.thermals[0].x, CLOUD_LAUNCH.x); assert.equal(run.state.thermals[0].z, CLOUD_LAUNCH.z);
@@ -88,7 +88,7 @@ test('clouds wrap in both dimensions only at invisible seams without changing th
 });
 test('a cell boundary exit fades for twelve seconds and relocates only after strength reaches zero', () => {
   const run = createCloudbaseRun({ hazards: false, fixedWind: { x: 4, z: 0 } }); run.reset();
-  const t = run.state.thermals[1], generation = t.generation, safe = CLOUD_ZONE.r - CLOUD_HUNT.margin;
+  const t = run.state.thermals[2], generation = t.generation, safe = CLOUD_ZONE.r - CLOUD_HUNT.margin;
   t.life = 120; t.age = 5; t.wear = 0; t.move = 0; t.live = true; t.strength = 1; t.edgeFade = -1;
   t.x = safe - CLOUD_HUNT.drift / t.life * CLOUD_HUNT.fade - 0.5; t.z = CLOUD_ZONE.z;
   let began = -1, ended = -1, previous = 1;
@@ -171,29 +171,31 @@ test('launch departure clears real terrain at trim and slow flight with adverse 
     assert.ok(min > 20, `clearance ${min} at ${speed}m/s wind ${wind}`);
   }
 });
-test('ravens are visible but cannot strike before both sixty seconds and 260m', () => {
+test('ravens mark thermals below 500 m without attack opportunities', () => {
   const run = createCloudbaseRun(); run.reset(80, 21);
-  advance(run, 59, point(CLOUD_ZONE, 700));
-  assert.ok(run.state.ravens.some((r) => r.fade > 0)); assert.ok(run.state.ravens.every((r) => !r.hot));
-  advance(run, 2, point(CLOUD_ZONE, 200)); assert.ok(run.state.ravens.every((r) => !r.hot));
-  run.step(STEP, point(CLOUD_ZONE, 700)); assert.ok(run.state.ravens.some((r) => r.hot));
+  advance(run, 120, point(CLOUD_ZONE, 499));
+  assert.ok(run.state.ravens.some(r => r.fade > 0));
+  assert.ok(run.state.ravens.every(r => !r.hot && !r.threat));
+  assert.equal(run.state.ravenDue, -1);
 });
-test('a raven in the canopy causes one collapse and its shield prevents repeated strikes', () => {
-  const run = createCloudbaseRun(); run.reset(); advance(run, 62, point(CLOUD_ZONE, 700));
-  const t = run.state.thermals[1]; t.live = true; t.move = 0; t.scatter = 0; t.age = 10; t.strength = 1;
-  run.state.clouds.forEach((c) => { c.y = 10000; });
-  run.step(STEP, point(t, 700));
-  const r = run.state.ravens.find((bird) => bird.hot);
-  assert.ok(r);
-  const p = { x: r.x, y: r.y - CLOUD_STRIKE.rise, z: r.z };
-  run.step(STEP, p); assert.equal(run.state.pilot.strikes, 1); assert.ok(run.state.pilot.collapse > 0);
+test('a warned raven in its collision window folds the canopy once and the shield prevents repeats', () => {
+  const run = createCloudbaseRun({ wind: false }); run.reset();
+  run.state.clouds.forEach(c => { c.y = 10000; });
+  run.step(STEP, point(CLOUD_ZONE, 700));
+  const index = run.state.ravens.findIndex(bird => bird.fade >= 1);
+  const r = run.state.ravens[index]; assert.ok(r);
+  run.state.ravenAttack = index; run.state.ravenAt = run.state.elapsed - 1.1;
+  run.state.ravenDue = run.state.elapsed + 60;
+  run.step(STEP, { x: r.x, y: r.y - CLOUD_STRIKE.rise, z: r.z });
+  assert.equal(run.state.pilot.strikes, 1); assert.ok(run.state.pilot.collapse > 0);
   run.strike(); assert.equal(run.state.pilot.strikes, 1);
   assert.ok(run.reopen(0.4)); assert.ok(run.state.pilot.collapse < CLOUD_STRIKE.collapse);
 });
 test('spent launch never regenerates and a hunted cell rebirth changes generation', () => {
   const run = createCloudbaseRun({ hazards: false }); run.reset();
-  const t = run.state.thermals[1], gen = t.generation; t.wear = CLOUD_WEAR.dead;
+  const t = run.state.thermals[2], gen = t.generation; t.wear = CLOUD_WEAR.dead;
   run.step(STEP, point(CLOUD_ZONE, 10000)); assert.ok(t.generation > gen || t.waiting);
+  advance(run, 46, point(CLOUD_ZONE, 10000));
   const launch = run.state.thermals[0]; launch.wear = CLOUD_WEAR.dead;
   run.step(STEP, point(CLOUD_ZONE, 10000)); assert.equal(launch.live, false);
   advance(run, 120, point(CLOUD_ZONE, 10000)); assert.equal(launch.live, false);

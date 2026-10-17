@@ -10,11 +10,11 @@ export const PHYSICS = Object.freeze({
   pilotDrag: 0.2, pilotSideDrag: 0.45, pilotNormalDrag: 0.6,
   suspensionStiffness: 1400, suspensionDamping: 100,
   angularDamping: Object.freeze({ x: 420, y: 150, z: 40 }),
-  brake: 0.4, deepBrake: 0.6, brakeTake: 0.14, brakeRelease: 0.10, steerTime: 0.22,
-  controls: Object.freeze({ bank: 0.66, gain: 1.2, damping: 0.08, differential: 0.55,
+  brake: 0.4, deepBrake: 0.6, brakeTake: 0.14, brakeRelease: 0.10, steerTime: 0.22, steerRelease: 2,
+  controls: Object.freeze({ bank: 0.66, gain: 1.2, damping: 0.08, relativeDamping: 0.3, relativeRelease: 1.575, differential: 0.55,
     reversal: 3, swingRate: 0.3, swingRateRange: 0.6, swingAngle: 0.7, swingAngleRange: 0.6,
     relativeBank: 0.75, relativeBankRange: 0.35, earsTake: 0.35, earsOpen: 0.7, earsBrake: 0.15, barTime: 0.3 }),
-  coordination: Object.freeze({ bank: 0.56, gain: 1.6, damping: 0.12, steerTime: 0.15,
+  coordination: Object.freeze({ bank: 0.52, gain: 1.6, damping: 0.12, steerTime: 0.15,
     take: 0.15, release: 0.25, turn: 0.2, rolloutBank: 0.08726646259971647,
     pressureTrim: 0.30, lean: 0.22 }),
   acro: Object.freeze({ steadyBank: 0.175, steadyPitch: 0.175, steadyRate: 0.3, steady: 1 }),
@@ -119,8 +119,13 @@ function forces(g, air) {
   const error = Math.atan2(Math.sin(s.bankTarget - bank), Math.cos(s.bankTarget - bank));
   const gain = H.gain + (K.gain - H.gain) * s.coordinated;
   const rollDamping = H.damping + (K.damping - H.damping) * s.coordinated;
+  // The line rate comes from the pilot's velocity relative to the canopy attachment. Resist
+  // that swing during ordinary flight, with a little more damping as the steering eases out.
+  // Deep/acro flight keeps its existing momentum and maneuver authority.
+  const relativeDamping = s.acro ? 0 : H.relativeDamping * s.swingRate *
+    (1 + (H.relativeRelease - 1) * (1 - Math.abs(s.steer)));
   s.differential = clamp(gain * (error * (1 - energetic) + s.steer * H.bank * energetic) -
-    rollDamping * rate * (1 - energetic), -H.differential, H.differential);
+    rollDamping * rate * (1 - energetic) - relativeDamping, -H.differential, H.differential);
   const lineLength = Math.sqrt(dx * dx + dy * dy + dz * dz);
   const relativeBank = Math.atan2(((-dy * up.z + dz * up.y) * forward.x +
     (-dz * up.x + dx * up.z) * forward.y + (-dx * up.y + dy * up.x) * forward.z) / lineLength,
@@ -291,7 +296,8 @@ export function stepPhysics(g, controls, air, dt) {
   const rollingOut = available && s.coordination > 0 && Math.abs(steerWant) <= K.turn && Math.abs(g.bank || 0) > K.rolloutBank;
   const coordinationWant = requested || rollingOut ? 1 : 0;
   s.coordination += (coordinationWant - s.coordination) * Math.min(1, dt / (coordinationWant ? K.take : K.release));
-  const steerTime = C.steerTime + (K.steerTime - C.steerTime) * s.coordination;
+  const steerTime = (C.steerTime + (K.steerTime - C.steerTime) * s.coordination) *
+    (steerWant === 0 ? C.steerRelease : 1);
   s.steer += (steerWant - s.steer) * Math.min(1, dt / steerTime);
   const brakeWant = controls.locked ? 0 : s.deepBrake ? C.deepBrake : manual ? C.brake : 0;
   s.brakeTarget = brakeWant;

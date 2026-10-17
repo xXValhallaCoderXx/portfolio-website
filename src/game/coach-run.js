@@ -9,6 +9,8 @@ export const thermalRideIdentity = (index, thermal) => thermal && index > 0 ? `$
 
 export function createRunCoachEnvironment(sky) {
   return {
+    navigation: true,
+    recoveryPoint: () => ({ x: CLOUD_ZONE.x, z: CLOUD_ZONE.z }),
     sampleAir: (pos, out) => sky.sample(pos, 0, out),
     heightAt: surfaceAt,
     sources: () => sky.state.thermals.map((t, id) => ({ ...t, id, remaining: cloudThermalRemaining(t) })),

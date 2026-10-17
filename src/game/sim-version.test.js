@@ -19,7 +19,7 @@ import { ZONES, surfaceAt } from './terrain.js';
 // flown under one version is replayed under it for ever after, by every link and board row that
 // carries it, so the tables of a shipped version never change: a retune is a new version. Pinned
 // on the day a version ships; version 0 is the provisional one Good Lift is built under, and has none.
-const FINGERPRINT = Object.freeze({ 1: '145b525a', 2: 'ba74e01c', 3: '06097c0b', 4: 'd5990922', 5: '98529478', 6: '5ffd0e4b', 7: 'ce25122b', 8: '6fa07dfd', 9: 'd1c1b692', 10: '633ab50d' });
+const FINGERPRINT = Object.freeze({ 1: '145b525a', 2: 'ba74e01c', 3: '06097c0b', 4: 'd5990922', 5: '98529478', 6: '5ffd0e4b', 7: 'ce25122b', 8: '6fa07dfd', 9: 'd1c1b692', 10: '633ab50d', 11: '0d037d63', 12: 'f9c419a4' });
 
 // Everything a run is flown by that is a number rather than code: the wing's tables, every one of
 // the sky's, the step's, the meet's (its plates off the trail and its rune gates and blessings with

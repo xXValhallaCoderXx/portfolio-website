@@ -177,9 +177,9 @@ export function cloudbaseHint(facts) {
   // Round a loop: its keys, until two sets have landed, and then how to roll out of it.
   if (facts.looping) return facts.tricksLanded < TRICKS_TAUGHT || !facts.inHand ? LOOP_HINT : `${facts.inHand} — recover with the swing`;
   if (facts.inHand) return facts.inHandPitch ? `${facts.inHand} — brake the surge to land it` : `${facts.inHand} — level out to land it`;
-  if (facts.pitching && facts.tricksLanded < TRICKS_TAUGHT) return pitchHint(facts.touch);
-  if (facts.loopable && facts.tricksLanded < TRICKS_TAUGHT) return LOOPABLE_HINT;
-  if (facts.wingover && facts.tricksLanded < TRICKS_TAUGHT) return wingoverHint(facts.touch);
+  if (facts.maneuverPolicy !== 'off' && facts.pitching && facts.tricksLanded < TRICKS_TAUGHT) return pitchHint(facts.touch);
+  if (facts.maneuverPolicy !== 'off' && facts.loopable && facts.tricksLanded < TRICKS_TAUGHT) return LOOPABLE_HINT;
+  if (facts.maneuverPolicy !== 'off' && facts.wingover && facts.tricksLanded < TRICKS_TAUGHT) return wingoverHint(facts.touch);
   if (facts.elapsed < 8) return 'circle in the amber column to climb';
   if (facts.fogClearance < FOG_NEAR) return facts.lift > 3 ? 'fog closing in — keep climbing' : 'fog closing in — fly to the ravens';
   if (facts.headroom < 70 && facts.climbing) return 'storm cloud above — lift ends at its base';
@@ -216,7 +216,7 @@ export function cloudbaseHint(facts) {
   // meets its plates. Said for the few seconds they are coming, before the brake's lesson, which a
   // pilot who climbs well hears for the rest of the run.
   if (facts.front && facts.fronts <= FRONTS_TAUGHT) return 'plates on the gust — widen your circle';
-  // Then how the brake helps: held light it tightens the circle, and left on it goes deep.
+  // Working brake tightens the circle by slowing the wing; only explicit deep input goes deeper.
   if (facts.thermal > 0 && facts.rides <= 4) return 'small turns keep the circle centered';
   if (facts.thermal === 0) return 'circling ravens mark the next lift';
   if (facts.searching > 4) return 'ravens circle where air rises — fly there';

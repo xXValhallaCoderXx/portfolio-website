@@ -17,6 +17,7 @@ export function createCoachView({ element, touch, touchMode = () => false, input
   const progressLabel = progress.querySelector('span');
   const progressFill = progress.querySelector('i > b');
   const announce = element.querySelector('[data-coach="announce"]');
+  const cancel = element.querySelector('[data-coach="cancel"]');
   const buttons = new Map();
   for (const button of touch?.querySelectorAll('[data-input]') ?? []) buttons.set(button.dataset.input, button);
   const chips = [];
@@ -93,6 +94,7 @@ export function createCoachView({ element, touch, touchMode = () => false, input
   function update(message) {
     if (disposed) return;
     syncInputs(message, input() ?? {});
+    if (cancel) hide(cancel, !message?.canCancelLesson);
     if (!message) {
       if (visible) element.hidden = true;
       visible = false; semantic = pending = '';
@@ -103,7 +105,7 @@ export function createCoachView({ element, touch, touchMode = () => false, input
     const activity = message.activity === 'ridge-soaring' ? 'RIDGE SOARING'
       : message.activity === 'thermalling' ? 'THERMALLING'
         : message.activity === 'soaring-turn' ? 'SOARING TURN' : '';
-    const context = activity || message.context || 'Flight coach', phase = message.phase || '';
+    const context = activity || message.heading || message.context || 'Flight coach', phase = message.phase || '';
     const title = message.title || '', detail = message.detail || '';
     const warningLabel = message.warning ? message.warningLabel || '' : '';
     const secondary = [warningLabel, message.feedback || ''].filter(Boolean).join(' · ');
@@ -145,6 +147,7 @@ export function createCoachView({ element, touch, touchMode = () => false, input
   }
 
   function reset() {
+    if (cancel) hide(cancel, true);
     element.hidden = true; visible = false; semantic = pending = ''; announcedAt = -Infinity;
     element.dataset.state = element.dataset.action = element.dataset.warning = '';
     for (const node of [kicker, action, reason, feedback, progressLabel, announce]) write(node, '');

@@ -4,14 +4,14 @@
 // order, so a run flown in a browser can be flown again anywhere else and come out the same. Kept
 // free of 3D and page code: the ground it touches down on is ground.js's, not terrain.js's.
 import { FLIGHT, createFlight, settleFlight, stepFlight } from './flight.js';
-import { CLOUD_GATE, CLOUD_RAVENS, CLOUD_STRIKE, CLOUD_ZONE } from './cloudbase-state.js';
+import { CLOUD_GATE, CLOUD_STRIKE, CLOUD_ZONE } from './cloudbase-state.js';
 import { surfaceAt } from './ground.js';
 import { createSwingWatch } from './swing-watch.js';
 import { RUN_RULES } from './run-rules.js';
 
 // Seconds a run is stepped by, everywhere. Touching down within `ground` metres of the surface
 // ends a run, ring or not.
-export const RUN = Object.freeze({ ...RUN_RULES, ground: 1.4 });
+export const RUN = Object.freeze({ ...RUN_RULES, ground: 1.4, harsh: 260 });
 
 // The barogram the meet sheet draws: the glider's height, the fog's and the total, sampled as the
 // run starts and then every `every` fixed steps (once a run second), so sample i is second i. There
@@ -152,7 +152,8 @@ export function stepRun(world, intent, dt = RUN.step) {
   controls.locked = collapsed;
   // Keep the shared controller's compatibility flags, while the same physical wing flies here
   // and in the portfolio. Assisted boundary recovery cannot earn a maneuver.
-  controls.harsh = g.pos.y >= CLOUD_RAVENS.grace;
+  // Wing handling keeps its v11 height boundary independently of the later raven attacks.
+  controls.harsh = g.pos.y >= RUN.harsh;
   controls.swing = true;
   controls.folds = !outside;
   controls.steered = outside;

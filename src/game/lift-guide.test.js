@@ -17,7 +17,7 @@ function navigationGuide(adapter) {
     get message() { return guide.route; } };
 }
 function wing({ x = 0, y = 150, z = 0, yaw = 0, rate = 0 } = {}) {
-  return { pos: { x, y, z }, yaw, track: yaw, yawRate: rate, speed: FLIGHT.speed.trim,
+  return { pos: { x, y, z }, yaw, track: yaw, yawRate: rate, trackRate: rate, speed: FLIGHT.speed.trim,
     vy: -FLIGHT.sink.trim, bank: 0, pitch: 0, stall: 0, tuck: 0, ears: 0,
     pilot: { vel: { x: Math.sin(yaw) * FLIGHT.speed.trim, y: -FLIGHT.sink.trim, z: -Math.cos(yaw) * FLIGHT.speed.trim } } };
 }
@@ -84,7 +84,7 @@ test('alignment releases a held turn and anticipates a safe opposite check befor
   let message = ticks(guide, g, adapter, 1, 0, { right: true });
   assert.equal(message.action, 'straight'); assert.equal(message.title, 'RELEASE THE TURN');
   assert.deepEqual(message.release, ['left', 'right', 'brake', 'bar']);
-  g.yawRate = 0.3;
+  g.trackRate = 0.3;
   message = ticks(guide, g, adapter, 1, 1, { right: true });
   assert.equal(message.action, 'left'); assert.equal(message.phase, 'align');
   assert.deepEqual(message.hold, ['left']); assert.ok(message.release.includes('right'));
@@ -223,6 +223,56 @@ test('ordinary direction cues hold through small heading noise, while target los
   guide.reset(); assert.equal(guide.message, null);
 });
 
+for (const dir of [-1, 1]) test(`thermal correction hysteresis, bounded ease and minimum circle hold, side ${dir}`, () => {
+  const source = { id: 'core', generation: 2, x: 0, z: 0, r: 60, dir, remaining: 90 };
+  const adapter = field([source]), guide = navigationGuide(adapter), g = wing({ z: -21 });
+  const direction = dir < 0 ? 'left' : 'right';
+  let clock = 0;
+  function advance(seconds, ahead, input = {}) {
+    // On a 21m circle the chord to the point 0.8rad ahead leads the tangent by 0.4rad.
+    // Set air-course telemetry independently of an arbitrarily rotating canopy nose.
+    g.trackRate = dir * 0.45; g.yawRate = -dir * 2;
+    g.track = dir * (Math.PI / 2 + 0.4 + ahead * Math.PI / 180) - g.trackRate * 0.8;
+    let message;
+    for (let tick = 0; tick < Math.round(seconds / STEP); tick++) {
+      message = guide.step(STEP, facts(g, adapter, clock, input)); clock += STEP;
+    }
+    return message;
+  }
+  let message = advance(2, 11.9);
+  assert.equal(message.action, direction, 'less than 12 degrees ahead never requests easing');
+  assert.equal(message.title, `CIRCLE ${direction.toUpperCase()} + NORMAL BRAKE`);
+  assert.equal(advance(0.4, 13).action, direction, 'a short excursion is insufficient');
+  assert.equal(advance(0.1, 11.9).action, direction, 'returning inside the threshold clears the dwell');
+  assert.equal(advance(0.5, 13).action, direction);
+  message = advance(STEP, 13, { [direction]: true, brake: true, bar: true });
+  assert.equal(message.action, 'straight'); assert.equal(message.phase, 'ease');
+  assert.equal(message.title, `EASE ${direction.toUpperCase()} · KEEP BRAKE`);
+  assert.equal(message.accepted, false); assert.deepEqual(message.hold, ['brake']);
+  message = advance(0.7, 2, { brake: true });
+  assert.equal(message.action, 'straight', 'an accepted ease remains visible for at least 0.75s');
+  assert.equal(message.accepted, true); assert.equal(message.title, `EASE ${direction.toUpperCase()} · KEEP BRAKE`);
+  message = advance(0.1, 2, { brake: true });
+  assert.equal(message.action, direction, 'back within 3 degrees resumes the established direction');
+  assert.equal(advance(1, 30).action, direction, 'the turn is maintained for at least 1.25s');
+  message = advance(0.4, 30);
+  assert.equal(message.action, 'straight');
+  assert.equal(advance(0.5, 30).action, 'straight');
+  assert.equal(advance(0.6, 30).action, direction, 'easing cannot last more than one second');
+  source.live = false;
+  assert.equal(advance(STEP, 30).action, 'none', 'source loss overrides circle timing immediately');
+});
+
+test('canopy nose rotation alone cannot anticipate a course overshoot', () => {
+  const adapter = field([{ id: 'next', x: 48, z: -48, r: 40, remaining: 90 }]);
+  const g = wing({ yaw: Math.PI / 4 }), guide = navigationGuide(adapter);
+  g.yawRate = 3; g.trackRate = 0;
+  assert.equal(guide.step(STEP, facts(g, adapter, 0)).action, 'straight');
+  g.yawRate = 0; g.trackRate = 0.3;
+  const message = ticks(guide, g, adapter, 1);
+  assert.equal(message.action, 'left'); assert.equal(message.phase, 'align');
+});
+
 function runAdapter(sky, includeSources = true) {
   return {
     sampleAir: (pos, out) => sky.sample(pos, 0, out), heightAt: surfaceAt,
@@ -292,7 +342,7 @@ test('actual manual ridge departures hand off only to visible confirmed ridge gu
   for (const seed of [1, 2]) {
     const sky = createCloudbaseRun(), world = createRunWorld({ sky }); startRun(world, seed);
     const adapter = runAdapter(sky), guide = createQualifiedLiftGuide(adapter), side = seed === 1 ? -1 : 1;
-    const held = side < 0 ? 3.5 : 1.5, reversed = side < 0 ? 2 : 1, aligned = held + reversed;
+    const held = side < 0 ? 4 : 1.5, reversed = side < 0 ? 2 : 1, aligned = held + reversed;
     const pending = Array.from({ length: 12 }, () => ({ turn: 0, brake: false }));
     let clearance = Infinity, ridgeClimb = 0, ridgeGuidance = 0;
     for (let n = 0; n < 1800; n++) {
@@ -338,7 +388,7 @@ test('actual fixed-step wing and sky remain identical with coaching and arbitrar
 function orbit(g, source, seconds, dir = 1) {
   const angle = seconds * 0.4 * dir;
   g.pos.x = source.x + Math.sin(angle) * 25; g.pos.z = source.z - Math.cos(angle) * 25;
-  g.yaw = g.track = angle + dir * Math.PI / 2; g.yawRate = dir * 0.4;
+  g.yaw = g.track = angle + dir * Math.PI / 2; g.yawRate = g.trackRate = dir * 0.4;
   g.bank = dir * 0.4; g.vy = 2;
   g.pilot.vel.x = Math.cos(angle) * 10 * dir; g.pilot.vel.z = Math.sin(angle) * 10 * dir;
 }

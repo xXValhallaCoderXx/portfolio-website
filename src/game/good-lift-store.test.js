@@ -64,7 +64,7 @@ test('v9 starts fresh without reading old competitive progress, and timed comple
 });
 
 test('a fresh or damaged store reads as empty, and a good one round-trips', () => {
-  assert.deepEqual(emptyStore(), { v: 7, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: { days: {} }, bots: null });
+  assert.deepEqual(emptyStore(), { v: 7, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], learnedLessons: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: { days: {} }, bots: null });
   assert.deepEqual(readStore(memoryStorage()), emptyStore());
   for (const text of ['{broken', 'null', '[]', '"store"', '42', JSON.stringify({ best: 'high' })]) {
     assert.deepEqual(readStore(memoryStorage({ [GAME_STORE]: text })), emptyStore(), text);
@@ -362,7 +362,7 @@ test('every change re-reads the store first, so a run recorded elsewhere is not 
 test('the store never touches the fjord\'s own key', () => {
   // The page's reset reads the same lightweight key through achievements.js without loading this
   // module; otherwise Reset progress could leave the bests, feats, streak and board.
-  assert.equal(GAME_STORE, 'good-lift-v10');
+  assert.equal(GAME_STORE, 'good-lift-v12');
   assert.equal(RESET_KEY, GAME_STORE);
   const fjord = JSON.stringify({ unlocked: ['airborne'], cloudbase: { discovered: true, bestAltitude: 1032 } });
   const storage = memoryStorage({ 'fjord-glider-v1': fjord });
@@ -376,6 +376,15 @@ test('the store never touches the fjord\'s own key', () => {
   assert.deepEqual([...new Set(storage.keys)], [GAME_STORE]);
   assert.equal(storage.items.get('fjord-glider-v1'), fjord);
   assert.deepEqual([...storage.items.keys()], ['fjord-glider-v1']);
+});
+
+test('v12 competitive progress starts fresh and leaves v11 progress available to its own version', () => {
+  const previous = JSON.stringify(recordRun(emptyStore(), run({ total: 300 }), AT).store);
+  const storage = memoryStorage({ 'good-lift-v11': previous });
+  assert.deepEqual(readStore(storage), emptyStore());
+  updateStore(store => recordRun(store, run({ total: 200 }), AT), storage);
+  assert.equal(readStore(storage).runs, 1);
+  assert.equal(storage.items.get('good-lift-v11'), previous);
 });
 
 test('initials the board will not show are refused as they are typed, and read as none if a store still holds them', () => {

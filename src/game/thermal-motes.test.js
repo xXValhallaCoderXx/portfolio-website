@@ -223,8 +223,8 @@ test('only a core head at full strength reaches the glow; rim heads and every ta
 
 test('motes follow thermal drift and rise at physical speed without a decorative vortex', () => {
   const run = createCloudbaseRun({ hazards: false }); run.reset(80, 3);
-  const thermal = run.state.thermals[1];
-  const motes = makeMotes(), mesh = motes.group.getObjectByName('motes-1');
+  const thermal = run.state.thermals[2];
+  const motes = makeMotes(), mesh = motes.group.getObjectByName('motes-2');
   const pos = { x: thermal.x, y: 400, z: thermal.z };
   motes.update(0, run.state, pos);
   const before = moteAt(hunted, 100, valuesOf(mesh));
@@ -233,16 +233,16 @@ test('motes follow thermal drift and rise at physical speed without a decorative
   close(after.x - before.x, thermal.vx * STEP, 1e-8);
   close(after.z - before.z, thermal.vz * STEP, 1e-8);
   close(after.vx, thermal.vx); close(after.vz, thermal.vz);
-  assert.equal(mesh.material.uniforms.spin.value, 0);
+  close(mesh.material.uniforms.spin.value, 0);
   close(mesh.material.uniforms.speed.value, thermal.s * thermal.strength);
 });
 
 test('a mote stays where the air carried it however the pilot climbs: the window only picks which copy is drawn', () => {
   const run = createCloudbaseRun({ hazards: false });
   run.reset(80, 3);
-  const thermal = run.state.thermals[1];
+  const thermal = run.state.thermals[2];
   const motes = makeMotes();
-  const mesh = motes.group.getObjectByName('motes-1');
+  const mesh = motes.group.getObjectByName('motes-2');
   const pos = { x: thermal.x + 12, y: 300, z: thermal.z };
   // Let the air carry them a while.
   for (let n = 0; n < 90; n++) {

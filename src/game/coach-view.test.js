@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCoachView } from './coach-view.js';
+import { actionMessage } from './coach-actions.js';
 
 // A small DOM boundary records writes; real layout and native input handling are browser QA.
 class Node {
@@ -24,7 +25,7 @@ class Node {
 function fixture() {
   const document = { createElement: () => new Node(document) };
   const element = new Node(document), touch = new Node(document), parts = {};
-  for (const name of ['action', 'reason', 'controls', 'feedback', 'progress', 'announce']) {
+  for (const name of ['action', 'reason', 'controls', 'feedback', 'progress', 'announce', 'cancel']) {
     parts[name] = new Node(document); element.selectors.set(`[data-coach="${name}"]`, parts[name]);
   }
   parts.kicker = new Node(document); element.selectors.set('.fj-coach-kicker', parts.kicker);
@@ -119,6 +120,31 @@ test('the same brake button presents normal and deep input with explicit text an
   f.raw({}); f.view.update(null);
   assert.equal(f.button('brake').dataset.brakeDepth, '');
   assert.equal(f.button('brake').querySelector('small').textContent, 'brake');
+});
+
+test('accepting thermal circle and ease cues highlights the existing controls without changing either title', () => {
+  const f = fixture();
+  for (const direction of ['left', 'right']) {
+    const opposite = direction === 'left' ? 'right' : 'left';
+    const fields = { state: 'lift', context: 'thermal', activity: 'thermalling', phase: 'circle',
+      action: direction, stableTitle: true, brakeDepth: 'working',
+      title: `CIRCLE ${direction.toUpperCase()} + NORMAL BRAKE`, hold: [direction, 'brake'], release: [opposite, 'bar'] };
+    f.raw({}); f.view.update(actionMessage(fields));
+    assert.equal(f.parts.action.textContent, fields.title);
+    const raw = { [direction]: true, brake: true };
+    f.raw(raw); f.view.update(actionMessage(fields, raw));
+    assert.equal(f.parts.action.textContent, fields.title);
+    assert.equal(f.chip(direction).dataset.held, 'true'); assert.equal(f.chip('brake').dataset.held, 'true');
+    assert.equal(f.chip('brake').children[0].textContent, 'Holding brake');
+    const ease = { ...fields, phase: 'ease', action: 'straight',
+      title: `EASE ${direction.toUpperCase()} · KEEP BRAKE`, hold: ['brake'], release: ['left', 'right', 'bar'] };
+    f.view.update(actionMessage(ease, raw));
+    assert.equal(f.button(direction).dataset.coachAction, 'release');
+    f.raw({ brake: true }); f.view.update(actionMessage(ease, { brake: true }));
+    assert.equal(f.parts.action.textContent, ease.title);
+    assert.equal(f.button(direction).classList.contains('held'), false);
+    assert.equal(f.button('brake').classList.contains('held'), true);
+  }
 });
 test('progress is shown only with an explicit meaning and remains finite and accessible', () => {
   const f = fixture(); f.view.update({ ...reverse, progress: 0.8 });
@@ -223,4 +249,17 @@ test('quiet transit clears recommended highlights while preserving held keys and
   f.view.update(reverse);
   assert.equal(f.button('left').dataset.coachAction, 'hold', 'a newly active coach can recommend again');
   assert.deepEqual(raw, { left: true, right: true });
+});
+
+test('lesson escape is shown on the active card and disappears for banked, cancelled and absent instruction', () => {
+  const f = fixture();
+  const raw = Object.freeze({ right: true, brake: true }); f.raw(raw);
+  f.view.update({ ...reverse, canCancelLesson: true, lessonId: 'wingover' });
+  assert.equal(f.parts.cancel.hidden, false);
+  assert.equal(raw.right, true); assert.equal(raw.brake, true);
+  f.view.update({ ...reverse, state: 'banked' }); assert.equal(f.parts.cancel.hidden, true);
+  f.view.update({ ...reverse, canCancelLesson: true }); f.view.update(null);
+  assert.equal(f.parts.cancel.hidden, true);
+  f.view.update({ ...reverse, canCancelLesson: true }); f.view.reset();
+  assert.equal(f.parts.cancel.hidden, true);
 });

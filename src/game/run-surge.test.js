@@ -95,7 +95,7 @@ test('on a hunted thermal of the sky itself, a centred circle is quiet and one 6
   const sky = createCloudbaseRun({ hazards: false, wind: false });
   sky.reset(80, 1);
   for (const thermal of sky.state.thermals) thermal.live = false;
-  const core = Object.assign(sky.state.thermals[1], { live: true, strength: 1, move: 0, x: CLOUD_ZONE.x, z: CLOUD_ZONE.z });
+  const core = Object.assign(sky.state.thermals[2], { live: true, strength: 1, move: 0, x: CLOUD_ZONE.x, z: CLOUD_ZONE.z });
   const air = {};
   const pos = { x: 0, y: 300, z: 0 };
   const surges = (off, radius, rate) => {

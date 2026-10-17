@@ -100,6 +100,7 @@ const MARKUP = /* html */ `
       <aside class="fj-keys" hidden>
         <button data-do="cloudbase" hidden>[ Good Lift ]</button>
         <button data-do="quit-cloudbase" hidden>[ end run ]</button>
+        <button data-do="repeat-lessons" hidden>[ Repeat trick lessons ]</button>
         <div class="fj-keys-more">
           <button data-do="sound">[ sound: on ]</button>
           <button data-do="fullscreen">[ fullscreen ]</button>
@@ -112,6 +113,7 @@ const MARKUP = /* html */ `
           <dt>double tap</dt><dd>tap, release, then hold brake for deep acro input <span>or hold X</span></dd>
           <dt>↑</dt><dd>speed bar: hands up, faster and sinking more <span>or W</span></dd>
           <dt>e</dt><dd>big ears: hold to descend; release, then brake to reopen faster</dd>
+          <dt>thermals</dt><dd>hold one direction + normal brake to circle; briefly ease the direction to widen. Brake slows the wing; rising air provides lift. Deep brake is unnecessary.</dd>
           <dt>tricks</dt><dd>use deep brake to set up an energetic swing; release and reverse with the swing for wingovers, or shape a pitch, release and catch with normal brake. A large, energetic swing can carry you over the canopy into an inversion. Recover level to bank the move.</dd>
           <dt class="fj-keys-fjord">enter</dt><dd class="fj-keys-fjord">take off again once landed <span>or space</span></dd>
           <dt class="fj-keys-fjord">shift</dt><dd class="fj-keys-fjord">hold to speed time up</dd>
@@ -127,11 +129,12 @@ const MARKUP = /* html */ `
           <li>▼ hold for normal brake · double-tap and hold for deep brake</li>
           <li>▲ speed bar · ears to descend</li>
           <li>hold ears to descend; release, then brake to reopen</li>
+          <li>circle: ◀ or ▶ + normal brake; ease the direction to widen. Rising air provides lift, not the brake.</li>
           <li>deep brake builds energy; then ◀ ▶ with the swing for wingovers</li>
           <li class="fj-keys-fjord">tap a lit pillar or its label to fly there by itself</li>
         </ul>
         <p class="fj-keys-goal fj-keys-fjord">land inside a lit ring to read that part of the page</p>
-        <p class="fj-keys-goal fj-keys-run" hidden>Read the air: streaks rise over windward cliffs, and ravens circle thermals. Center the lift and bank the bar every 150 m. After your opening minute, avoid ravens above 260 m; kettlebells join at 700 m and the Beast at 1,000 m. Storms bring sink. The fog builds after five minutes; a surviving flight completes at ten. Tricks earn style: build a wingover cycle, pitch and catch, or fly an inversion, then recover level. Hold E for big ears to descend. Hold brake normally for soaring and catches; double-tap and hold it, or hold X, to build pitch or an energetic wingover entry. Release to return to normal. Music: B.</p>
+        <p class="fj-keys-goal fj-keys-run" hidden>Read the air: streaks rise over windward cliffs, and ravens circle thermals. Center the lift and bank the bar every 150 m. Raven warnings, gusts and storms begin above 500 m; kettlebells join at 700 m and the Beast at 1,000 m. Storms bring sink. The fog builds after five minutes; a surviving flight completes at ten. Safe lessons introduce pitch and catch at 500 m, then wingovers at 750 m. Tricks spend height and earn style, increasing your final score. Back to lift (T) leaves a lesson. Hold E for big ears to descend. Hold brake normally for soaring and catches; double-tap and hold it, or hold X, to build pitch or an energetic wingover entry. Release to return to normal. Music: B.</p>
       </aside>
     </nav>
   </div>
@@ -152,6 +155,7 @@ const MARKUP = /* html */ `
     <strong data-coach="action"></strong><small data-coach="reason"></small>
     <div data-coach="controls"></div><small data-coach="feedback"></small>
     <div data-coach="progress" hidden><span></span><i><b></b></i></div>
+    <button data-do="back-to-lift" data-coach="cancel" hidden>Back to lift <kbd>T</kbd></button>
     <span data-coach="announce" class="fj-visually-hidden" aria-live="polite" aria-atomic="true"></span>
   </section>
   <div class="fj-touch">
@@ -453,6 +457,7 @@ export function createGame(stage, hooks = {}) {
   function syncCloudbaseEntry() {
     for (const button of stage.querySelectorAll('[data-do="cloudbase"]')) button.hidden = !progress.cloudbase.discovered || mode === 'cloudbase';
     for (const button of stage.querySelectorAll('[data-do="quit-cloudbase"]')) button.hidden = mode !== 'cloudbase';
+    for (const button of stage.querySelectorAll('[data-do="repeat-lessons"]')) button.hidden = mode !== 'cloudbase';
     // In Good Lift the places are out of reach, and the way to them is back to the fjord.
     const running = mode === 'cloudbase' || mode === 'cloudbase-ended';
     for (const button of stage.querySelectorAll('[data-do="fjord"]')) button.hidden = !running;
@@ -1366,6 +1371,8 @@ export function createGame(stage, hooks = {}) {
   const gaugeHands = { brake: false, fold: 0, held: 0, pumps: 0 };
   const flightCoach = createFlightCoach();
   const liftGuide = createLiftGuide({
+    get navigation() { return mode === 'cloudbase'; },
+    recoveryPoint: () => mode === 'cloudbase' ? run.coachEnvironment.recoveryPoint() : null,
     sampleAir: (pos, out) => mode === 'cloudbase'
       ? run.coachEnvironment.sampleAir(pos, out) : sampleFjordAir(pos, airtime, out),
     heightAt: surfaceAt,
@@ -1379,6 +1386,7 @@ export function createGame(stage, hooks = {}) {
   let coachMessage = null;
   function resetCoach() {
     flightCoach.reset(); liftGuide.reset(); windNotice.reset(); plateNotice.reset();
+    run?.resetLessons();
     coachMessage = null;
     coachView.reset();
   }
@@ -1392,15 +1400,18 @@ export function createGame(stage, hooks = {}) {
     swingGauge(g, watch, true, dt, effects.gauge, gaugeHands);
     const clock = world?.sky.state.elapsed ?? airtime;
     const lift = liftGuide.step(dt, { g, air, clock, input,
-      suspended: interruptsLift(flightCoach.message) || gaugeHands.fold > 0 });
+      suspended: interruptsLift(coachMessage) || gaugeHands.fold > 0 });
     const hazard = mode === 'cloudbase' ? run.coachHazard : null;
-    const primary = flightCoach.step(dt, { g, watch, style: run && world ? run.style.state : null,
+    const warning = world ? run.coachWarning : null;
+    const coachFrame = { g, watch, style: run && world ? run.style.state : null,
       gauge: effects.gauge, input, air, clearance: g.pos.y - surfaceAt(g.pos.x, g.pos.z),
       collapse: gaugeHands.fold,
       fogClearance: world ? g.pos.y - world.sky.state.fogHeight : Infinity,
-      hazard, lift, eligible });
+      hazard, warning, lift: world ? lift ?? liftGuide.route : lift, eligible,
+      hazardActive: !!world && (world.sky.state.pilot.danger > 0 || world.sky.state.pilot.cloud > 0 ||
+        world.sky.state.pilot.gustIn < 6 || world.bells.state.warning >= 0) };
+    const primary = world ? run.stepCoach(dt, coachFrame) : flightCoach.step(dt, coachFrame);
     if (interruptsLift(primary)) liftGuide.reset();
-    const warning = world ? run.coachWarning : null;
     const available = !hazard && !warning && !!primary?.activity;
     const wind = windNotice.step(world?.sky.state.weather ?? null, clock, available);
     const plates = plateNotice.step(world ? run.meet.state.trails : 0, clock, available && !wind && !primary?.transfer);
@@ -2066,6 +2077,7 @@ export function createGame(stage, hooks = {}) {
     else if (event.code === 'KeyH') showKeys();
     else if (event.code === 'KeyL') toggleSound();
     else if (event.code === 'KeyF') toggleFullscreen();
+    else if (event.code === 'KeyT' && mode === 'cloudbase') run?.cancelLesson();
     else if (event.code === 'KeyR') respawn();
     else if (event.code === 'Escape') mapOpen ? closeMap() : keysOpen ? showKeys(false) : mode === 'cloudbase' ? finishCloudbase('quit') : exitFlight();
     else if (event.code === 'Enter' && mode === 'landed') takeOff();
@@ -2149,6 +2161,8 @@ export function createGame(stage, hooks = {}) {
     exit: exitFlight,
     cloudbase: retryCloudbase,
     'quit-cloudbase': () => { showKeys(false); finishCloudbase('quit'); },
+    'back-to-lift': () => run?.cancelLesson(),
+    'repeat-lessons': () => { run?.repeatLessons(); showKeys(false); toast('Trick lessons will repeat when safe.'); },
     fjord: () => { closeMap(); leaveGame(); },
     reset: () => {
       run?.cancelReplays();
@@ -2162,6 +2176,7 @@ export function createGame(stage, hooks = {}) {
         // Storage can be blocked; there is then nothing kept to clear.
       }
       clearKit();
+      run?.clearProgress();
       location.reload();
     },
   };
@@ -2370,7 +2385,7 @@ export function createGame(stage, hooks = {}) {
     // fjord.hold() stops the flight where it is, without the map in the way, and fjord.hold(false) resumes.
     seed: (value) => (pinnedSeed = value == null ? null : value >>> 0),
     hold: (on = true) => { held = on; if (on) resetBrakeInput(); return held; },
-    get coach() { return { message: coachMessage, guide: liftGuide.message, activity: liftGuide.activity, turn: liftGuide.turn, transfer: liftGuide.transfer }; },
+    get coach() { return { message: coachMessage, guide: liftGuide.message, lessons: run?.lessons ?? null, activity: liftGuide.activity, turn: liftGuide.turn, transfer: liftGuide.transfer }; },
     // The flight's own clock, and what it was last handed: the pilot's controls and the air.
     get airtime() { return airtime; },
     controls,

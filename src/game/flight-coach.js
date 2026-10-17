@@ -35,7 +35,7 @@ export function createFlightCoach() {
   }
 
   function step(dt, frame) {
-    const { g, watch, style, gauge = empty, input = empty } = frame;
+    const { g, watch, style, gauge = empty, input = empty, maneuverPolicy = 'reactive' } = frame;
     if (frame.eligible === false || !g || !watch) { reset(); return null; }
     const now = Number.isFinite(watch.clock) ? watch.clock : clock + dt;
     if (now < clock) reset();
@@ -122,21 +122,33 @@ export function createFlightCoach() {
     }
     if (g.ears > WATCH.ears) {
       clearIntent(); consumeEvidence();
+      if (maneuverPolicy === 'off') return emit({ state: 'recover', context: 'ears', phase: 'reopening',
+        action: 'brake', brakeDepth: 'working', title: 'NORMAL BRAKE TO REOPEN', hold: ['brake'],
+        release: ['ears', 'left', 'right', 'bar'],
+        detail: 'Keep ears released. Briefly press normal brake to reopen the wing, then follow the lift.' });
       return emit({ state: 'recover', context: 'ears', phase: 'reopening', action: 'none', title: 'WING REOPENING',
         detail: 'Keep ears released while the wing opens.', release: ['ears'] });
     }
 
+    // Callers opt out of spontaneous teaching without disabling any physical safety advice.
+    if (maneuverPolicy !== 'reactive') {
+      if (maneuverPolicy !== 'wingover') wing = false;
+      if (maneuverPolicy !== 'pitch') pitch = pitchShaping = false;
+    }
+    if (frame.forceRecovery) recovering = true;
+
     // A steep angle alone is ordinary flight. Acro help begins after deliberate input and motion.
     const recentTop = now - watch.topAt <= WATCH.gap && watch.top >= WATCH.wing;
     const freshRoll = (rollBelow && Math.abs(g.bank) >= WATCH.wing) || (recentTop && watch.topAt > motionAfter);
-    if (g.acro && (!wing || recovering) && (!recovering || wing) && !inverted && now - reversedAt <= WATCH.gap && freshRoll) {
+    if ((maneuverPolicy === 'reactive' || maneuverPolicy === 'wingover') && g.acro && (!wing || recovering) && (!recovering || wing) && !inverted && now - reversedAt <= WATCH.gap && freshRoll) {
       wing = true; pitch = pitchShaping = recovering = false; target = turn || lastDirection;
       requested = 0; answeredTopAt = motionAfter;
     }
     const deep = !!(input.deepBrake || g.deepBrake);
     const freshPitch = watch.building >= 1 && watch.frontAt > motionAfter &&
       watch.front >= WATCH.pumped && now - watch.frontAt <= WATCH.within;
-    if (!wing && !pitch && !inverted && !recovering && turn === 0 && deep && freshPitch) {
+    const lessonBackswing = maneuverPolicy === 'pitch' && g.pitch > WATCH.half && g.pitchRate > 0;
+    if ((maneuverPolicy === 'reactive' || maneuverPolicy === 'pitch') && !wing && !pitch && !inverted && !recovering && turn === 0 && deep && (freshPitch || lessonBackswing)) {
       pitch = true;
       // Finish the observed backswing, including a fresh attempt recognized just after its
       // forward peak. Subsequent forward surges are caught and recovered.
@@ -150,7 +162,8 @@ export function createFlightCoach() {
 
     const reserve = Math.min(frame.clearance ?? Infinity, frame.fogClearance ?? Infinity);
     if (recovering && (watch.calm ?? 0) >= COACH.steady) { clearIntent(); consumeEvidence(); }
-    if ((wing || pitch || inverted) && reserve < (input.bar && wing ? COACH.inversionClearance : COACH.clearance)) {
+    const uncoachedSwing = maneuverPolicy === 'off' && (g.acro || Math.abs(g.bank) >= WATCH.wing || Math.abs(g.pitch) >= COACH.pitchCatch);
+    if ((wing || pitch || inverted || uncoachedSwing) && reserve < (input.bar && wing ? COACH.inversionClearance : COACH.clearance)) {
       recovering = true; consumeEvidence();
       return recover('Low clearance. Recover before adding more swing.');
     }

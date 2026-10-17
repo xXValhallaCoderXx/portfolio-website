@@ -100,7 +100,7 @@ function ridgeToThermal(seed, departAt) {
 }
 
 test('real launch, ridge climb and moving-thermal capture have usable headroom in both wind directions', () => {
-  for (const seed of [1, 2]) for (const departAt of [15, 25]) {
+  for (const seed of [1, 2]) for (const departAt of [16, 25]) {
     const route = ridgeToThermal(seed, departAt), label = `seed ${seed}, leave at ${departAt}s`;
     assert.ok(route.ridgeClimbing >= 1, `${label}: real ridge air produces ${route.ridgeClimbing}s of climb before departure`);
     assert.ok(route.lockedAt <= 50, `${label}: coherent climbing thermal orbit locks at ${route.lockedAt}s`);

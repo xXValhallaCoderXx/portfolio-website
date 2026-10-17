@@ -208,7 +208,7 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     They stop while a run is flown. The visit keeps what they came to on its last 16 skies, so
     none of those is flown twice, and the store keeps the Daily Sky's for the day. Each slice asks
     some 4 ms of the page, and on a page busy every frame they still land in seconds.
-  - **Replays and challenges.** A run is its seed and its four controls (left, right, brake, bar)
+  - **Replays and challenges.** A run is its seed and its resolved flight controls
     step by step, and nothing else: every run is recorded (`src/game/recorder.js`) and, as it ends,
     replayed in the page (`replay.js`), and only a run that replays to the very same sheet gets a
     link and a place on the board. The share line carries that link, `/good-lift/daily#vs=…`
@@ -222,10 +222,12 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     stones and the Beast, and version 4 the wing flown, not only held: big ears, a brake that goes
     deep within two seconds, the swing over the pilot and its front collapse, wingovers and their
     tip, loops, the stall's second beat, pumping a fold open, and style multiplying the score.
-    The current version 10 keeps the shared wind and ridge climb, and makes ordinary banked turns
-    consistent. Holding brake uses working depth; double-tapping and holding within 300 ms, or
+    The current version 11 keeps the shared wind and ridge climb, damps ordinary swing and smooths
+    steering release. Hold one direction + normal brake for a tight circle; briefly easing the
+    direction widens it. Brake slows the wing; rising air provides lift. Holding brake uses working
+    depth; double-tapping and holding within 300 ms, or
     holding X, requests deep brake for deliberate pitch and wingover setup. Release, then use a
-    normal brake catch to recover. Version 7/8/9 recordings are historical.
+    normal brake catch to recover. Version 7/8/9/10 recordings are historical.
   - **Feats and the board.** Opener, Under the horn, Giant-dodger, Clean meet, the 1,000 lb club,
     Wingover ×5, Pitched 45°, Training block (the Daily Sky seven days in a row) and Beat the bot
     are Good Lift's own feats:
@@ -238,7 +240,7 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     (`public/fonts/`, under the SIL Open Font License beside it) and loads only once a rune is drawn,
     and a short blocklist of offensive three-letter words is refused
     as they are typed, and shown as no initials if a challenge link carries them. Good Lift keeps
-    all of this under its own `good-lift-v10` key (`src/game/good-lift-key.js`,
+    all of this under its own `good-lift-v12` key (`src/game/good-lift-key.js`,
     `good-lift-store.js`, `board.js`), apart from the fjord's progress. The lightweight page reset
     reads the same key, without loading the game store.
   - **The world board.** Where the build names the online board's function (see
@@ -396,18 +398,36 @@ reference pilots (`src/game/pilots.js`) and recorded button inputs that fly actu
 Acceptance covers stable turns, energy loss, shared wind, safe launch, drifting-core scoring,
 five-to-eight-minute skilled sessions and the exact ten-minute deadline. Browser-recorded goldens
 must replay to identical judged sheets in Node. Changing flight rules requires a new `SIM_VERSION`,
-its fingerprint and updated goldens. Version 10 separates working and deep brake intent, removes
-energy-dependent changes from ordinary steering, and retains the physical ridge updrafts.
+its fingerprint and updated goldens. Version 12 protects two opening cores until the first 450 m
+crossing, then blends them into normal depletion and drift over 45 seconds. Raven attacks and
+gusts start at 500 m with seeded, gradually shorter intervals; storm clouds begin at 500 m,
+and kettlebells join at 700 m. Warnings precede the single raven collision window.
+Safe, automatic lessons teach pitch and catch at 500 m, then wingovers at 750 m. They start
+from ordinary circling and bank learning only after a fresh physical move and steady style
+recovery. Back to lift (T) cancels instruction; Repeat trick lessons clears only learning flags.
+Learning persists immediately on this device and never changes a seeded sky or recorded score.
+
+Version 11 added damping from actual pilot/canopy motion,
+slower steering release and a 0.52-radian coordinated bank target. Air-relative track rate now
+matches the heading used by navigation and turn forecasts. Normal/deep brake intent and the
+physical ridge updrafts remain as in version 10. Thermal guidance targets a 21 m circle, eases
+only after a sustained 12° heading lead, and resumes within 3°. Ease cues last 0.75–1 second,
+followed by at least 1.25 seconds of circling in fjord flight. Good Lift forecasts ordinary
+working-brake corrections against the current wind on a private wing, displays NEXT LIFT
+with direction and distance while transferring, and explicitly releases brake between cores.
+Source identity and three-second qualification
+remain physical; accepted controls highlight the existing indicators while cue titles stay stable.
 While ridge soaring, the coach now gives a conservative height budget or says a thermal is within
 reach; the thermal activity still requires actual sustained circling. Connected flow ribbons make wind against the cliff visible. Weak rising air is
 distinguished from usable lift, and plate trails remain optional bonus kg toward the next thermal.
-It uses fresh `good-lift-v10` data and new leaderboard
+It uses fresh `good-lift-v12` data and new leaderboard
 records; old scores and progression are not migrated. Logs use format 2 and five digital bits,
 including resolved deep-brake intent. Historical format 1 links remain readable and are refused
 when their simulation version differs. The 49,152-character maximum and aggregate local log
 budget still bound storage.
 Current local acceptance and pending release gates are recorded in
-[Brake controls v10 QA](docs/good-lift-brake-controls-v10-qa.md); earlier flight and coach receipts
+[Opening and trick lessons v12 QA](docs/good-lift-opening-lessons-v12-qa.md); the
+[turns and thermal circling v11 QA](docs/good-lift-turns-v11-qa.md) and earlier flight and coach receipts
 describe historical candidates.
 `DAILY_EPOCH` in `src/game/good-lift-address.js` is the UTC day of Daily #1:
 on the day Good Lift first ships, set it to that UTC day (and the date `good-lift-address.test.js`
@@ -645,7 +665,7 @@ With the deployment account and production board URL configured, publish both ta
 firebase deploy --only functions:board,hosting --project renate-gouveia-portfolio
 ```
 
-Verify the live board reports simulation version 10, then fly and submit a Daily Sky from the released
+Verify the live board reports simulation version 11, then fly and submit a Daily Sky from the released
 client. During a version mismatch, local results remain available and the world-board status
 explains that its flight rules are updating. This change does not require deleting old Firestore
-boards; v10 records are separate. Repository changes and local QA do not constitute a deployment.
+boards; v12 records are separate from earlier versions. Repository changes and local QA do not constitute a deployment.

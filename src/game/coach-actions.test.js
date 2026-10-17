@@ -47,6 +47,24 @@ test('deep shaping and working catches acknowledge the requested brake depth onl
   assert.ok(ears.release.includes('ears'), 'the higher-priority descent control must be released first');
   assert.deepEqual(raw, { brake: true });
 });
+
+test('thermal titles stay stable on acceptance while conflicting controls still get an explicit remedy', () => {
+  for (const direction of ['left', 'right']) {
+    const opposite = direction === 'left' ? 'right' : 'left';
+    const circle = { action: direction, stableTitle: true, brakeDepth: 'working',
+      title: `CIRCLE ${direction.toUpperCase()} + NORMAL BRAKE`, hold: [direction, 'brake'], release: [opposite, 'bar'] };
+    const accepted = actionMessage(circle, { [direction]: true, brake: true });
+    assert.equal(accepted.title, circle.title); assert.equal(accepted.accepted, true);
+    const ease = { ...circle, action: 'straight', title: `EASE ${direction.toUpperCase()} · KEEP BRAKE`,
+      hold: ['brake'], release: ['left', 'right', 'bar'] };
+    assert.equal(actionMessage(ease, { [direction]: true, brake: true }).title, ease.title);
+    assert.equal(actionMessage(ease, { brake: true }).title, ease.title);
+    assert.equal(actionMessage(ease, { brake: true }).accepted, true);
+    assert.equal(actionMessage(circle, { [opposite]: true }).title,
+      `RELEASE ${opposite.toUpperCase()}, THEN ${direction.toUpperCase()}`);
+    assert.equal(actionMessage(circle, { deepBrake: true }).title, 'RELEASE DEEP BRAKE, THEN BRAKE');
+  }
+});
 test('a drifting thermal keeps one presentation identity until its slot is reborn', () => {
   const thermal = { generation: 2, x: 18, z: 20 };
   const identity = thermalRideIdentity(1, thermal);

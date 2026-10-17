@@ -83,7 +83,7 @@ export function createReferencePilot({
   tricks = null,
 } = {}) {
   // Aim within the new wing's practical turning radius, with wind compensation below.
-  const radius = brake === 'none' ? 25 : 18;
+  const radius = brake === 'none' ? 25 : 21;
   let followed = 0;
   let followedGeneration = -1;
   // Which way it turns off a kettlebell's line: picked once for each warning, when it reacts, and
@@ -381,10 +381,10 @@ export function createReferencePilot({
         // Follow a point ahead on a core-relative circle, allowing the wing time to bank. Rate
         // damping prevents alternating overcorrections as the pilot enters a drifting cell.
         const angle = Math.atan2(g.pos.x - target.x, -(g.pos.z - target.z)) + dir * 0.8;
-        const x = target.x + (target.vx || 0) + Math.sin(angle) * radius - (world.air.windX || 0) * 1.5;
-        const z = target.z + (target.vz || 0) - Math.cos(angle) * radius - (world.air.windZ || 0) * 1.5;
+        const x = target.x + ((target.vx || 0) - (world.air.windX || 0)) * 2 + Math.sin(angle) * radius;
+        const z = target.z + ((target.vz || 0) - (world.air.windZ || 0)) * 2 - Math.cos(angle) * radius;
         const want = Math.atan2(x - g.pos.x, -(z - g.pos.z));
-        turn = clamp(wrapAngle(want - (g.track ?? g.yaw)) * 1.2 - g.yawRate, -1, 1);
+        turn = clamp(wrapAngle(want - (g.track ?? g.yaw)) * 1.2 - g.trackRate, -1, 1);
       }
       intent.turn = turn;
       intent.brake = brake !== 'none' && target !== null &&

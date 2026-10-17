@@ -21,7 +21,8 @@ import { createMeetView } from './meet-view.js';
 import { resolveSky, seedFor, skyId } from './daily.js';
 import { featsFor } from './meet-card.js';
 import { DAY_MS, dailyNumber, dayOf, gameHref } from './good-lift-address.js';
-import { earnFeats, keepEarned, kitAfterRun, kitSheet, readStore, recordRun, setInitials as nameRuns, updateStore } from './good-lift-store.js';
+import { clearStore, earnFeats, keepEarned, kitAfterRun, kitSheet, learnTrickLesson, repeatTrickLessons, readStore, recordRun, setInitials as nameRuns, updateStore } from './good-lift-store.js';
+import { createTrickLessons } from './trick-lessons.js';
 import { readKit, writeKit } from './wing-kit.js';
 import { createChalk } from './meet-chalk.js';
 import { addRow, boardKey, outranks, rowsFor } from './board.js';
@@ -134,20 +135,20 @@ const BRIEF_MARKUP = /* html */ `
   <div class="fj-brief" role="note" aria-label="How Good Lift is flown" hidden>
     <small></small>
     <b>GOOD LIFT</b>
-    <p>Climb in the thermals the ravens circle, and lift at a line every 150 m: three white lights bank the bar. Plates add optional bonus kg from reps, trails and dodges; trails lead toward the next thermal. The fog rises under you.</p>
+    <p>Climb in the thermals the ravens circle: hold one direction + normal brake. Brake slows the wing and tightens the circle; rising air provides lift. Deep brake is unnecessary here. Three white lights bank the bar at each 150 m line. Plates add optional bonus kg; the fog rises under you.</p>
     <dl class="fj-brief-keys">
       <dt>← →</dt><dd>turn</dd>
-      <dt>space</dt><dd>brake: hold to slow and tighten a turn; double-tap and hold for deep brake</dd>
+      <dt>space</dt><dd>brake: hold to slow and tighten a turn; double-tap and hold, or hold X, for deep brake</dd>
       <dt>↑</dt><dd>speed bar</dd>
       <dt>e</dt><dd>big ears: sink fast</dd>
-      <dt>tricks</dt><dd>use deep brake (double-tap and hold, or hold X) to set up pitch or wingovers. Release, then reverse turns with the suspension swing. Recover steadily to bank style</dd>
+      <dt>tricks</dt><dd>safe lessons begin at 500 m for pitch and catch, then 750 m for wingovers. Tricks spend height and earn style for your final score. Back to lift: T</dd>
     </dl>
     <dl class="fj-brief-touch">
       <dt>◀ ▶</dt><dd>turn</dd>
       <dt>▼</dt><dd>brake: hold to slow and tighten a turn; double-tap and hold for deep brake</dd>
       <dt>▲</dt><dd>speed bar: faster glide</dd>
       <dt>ears</dt><dd>sink fast; release to reopen</dd>
-      <dt>tricks</dt><dd>use deep brake (double-tap and hold ▼) to set up pitch or wingovers. Release, then reverse ◀ ▶ with the suspension swing. Recover steadily to bank style</dd>
+      <dt>tricks</dt><dd>safe lessons begin at 500 m, then 750 m. Tricks spend height and earn style for your final score. Tap Back to lift to leave a lesson</dd>
     </dl>
     <em><span class="fj-brief-keys">any key to fly</span><span class="fj-brief-touch">tap to fly</span></em>
   </div>`;
@@ -199,6 +200,8 @@ export function createGoodLift(host) {
   const panned = (ctx, pan) => sound.panned(ctx, pan);
   const sky = createCloudbaseRun();
   const coachEnvironment = createRunCoachEnvironment(sky);
+  const lessons = createTrickLessons({ learned: () => readStore().learnedLessons,
+    onLearned: id => learnTrickLesson(id) });
   const meet = createMeet();
   const style = createStyle();
   const bells = createBells();
@@ -973,6 +976,7 @@ export function createGoodLift(host) {
     moment.inHand = style.state.elements >= STYLE.inHand ? styled.inHand : '';
     moment.inHandPitch = style.state.last === 1;
     moment.pitching = world.watch.state.pumping === 1;
+    moment.maneuverPolicy = lessons.state.active ?? 'off';
     moment.looping = g.loop !== 0 && !g.loopOut;
     moment.loopable = effects.gauge.loopable;
     moment.wingover = world.watch.state.linking === 1 || world.watch.state.chain >= 2;
@@ -2309,6 +2313,15 @@ export function createGoodLift(host) {
     get streaks() { return streaks; },
     get world() { return world; },
     get coachEnvironment() { return coachEnvironment; },
+    stepCoach: (dt, frame) => lessons.step(dt, frame),
+    resetLessons: () => lessons.reset(),
+    cancelLesson: () => lessons.cancel(),
+    repeatLessons: () => {
+      repeatTrickLessons();
+      lessons.repeat();
+    },
+    clearProgress: () => clearStore(),
+    get lessons() { return lessons.state; },
     get coachEntry() { return { side: seen.turnSide, age: sky.state.elapsed - seen.turnAt }; },
     get coachHazard() { return runCoachHazard(world); },
     get coachWarning() { return runCoachWarning(world); },

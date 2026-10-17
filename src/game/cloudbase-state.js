@@ -18,6 +18,18 @@ export const CLOUD_POOL = Object.freeze({ thermals: 5, ravens: 20, clouds: 33, g
 
 // The anchored launch source stands over the safe northward valley departure. `s` is m/s across the core.
 export const CLOUD_LAUNCH = Object.freeze({ x: 100, z: 285, r: 60, s: 5.5 });
+export const CLOUD_OPENING = Object.freeze({ height: 450, blend: 45, r: 80, second: Object.freeze({ x: 60, z: 170 }) });
+// Draw an interval once, when an opportunity is scheduled. Learning progress never enters the sky.
+export const CLOUD_ENCOUNTERS = Object.freeze({
+  raven: Object.freeze({ from: 500, first: Object.freeze([45, 60]), every: Object.freeze([60, 90]), high: Object.freeze([25, 40]), warning: 1, window: 3 }),
+  gust: Object.freeze({ from: 500, first: Object.freeze([30, 45]), every: Object.freeze([90, 120]), high: Object.freeze([40, 60]) }),
+});
+export function encounterInterval(schedule, peak, draw) {
+  const amount = Math.max(0, Math.min(1, (peak - schedule.from) / (1000 - schedule.from)));
+  const lo = schedule.every[0] + (schedule.high[0] - schedule.every[0]) * amount;
+  const hi = schedule.every[1] + (schedule.high[1] - schedule.every[1]) * amount;
+  return lo + (hi - lo) * draw;
+}
 // Seconds flown inside a thermal: full strength until `full`, gone at `dead`.
 export const CLOUD_WEAR = Object.freeze({ full: 75, dead: 110 });
 
@@ -35,7 +47,7 @@ export const CLOUD_HUNT = Object.freeze({
 // can strike below `grace`. Orbits are `orbit` metres wide at `speed`; a flock moves on at `cruise`,
 // each bird leaving `lag` seconds after the one before and tucking in by `tuck` on the way.
 export const CLOUD_RAVENS = Object.freeze({
-  flock: 5, stack: 120, below: 40, floor: 200, edge: 14, grace: 260, quiet: 60,
+  flock: 5, stack: 120, below: 40, floor: 200, edge: 14, grace: 500, quiet: 60,
   orbit: [9, 21], speed: 9.5, climb: 0.5, bank: 0.5, cruise: 13, lag: 0.35, tuck: 0.75, settle: 2,
 });
 
@@ -62,9 +74,9 @@ export const CLOUD_STRIKE = Object.freeze({
 // over the last `seam`. Depth inside a cloud builds over the outer `edge` of its hazard; lift is
 // gone by a depth of 1 / `cap`, and `sink` is added at the heart. No hazard dips below `floor`.
 export const CLOUD_STORM = Object.freeze({
-  layers: Object.freeze([380, 470, 580, 690, 810, 930, 1060, 1190, 1320, 1460]),
-  counts: Object.freeze([2, 2, 3, 3, 3, 4, 4, 4, 4, 4]),
-  floor: 320, jitter: 24, long: [66, 107], tall: [0.85, 1.2], deep: [0.85, 1.2],
+  layers: Object.freeze([560, 680, 800, 930, 1060, 1190, 1320, 1460, 1580, 1700]),
+  counts: Object.freeze([1, 2, 3, 3, 4, 4, 4, 4, 4, 4]),
+  floor: 500, jitter: 24, long: [66, 107], tall: [0.85, 1.2], deep: [0.85, 1.2],
   shape: Object.freeze({ y: 0.563, z: 0.741 }), edge: 0.3, cap: 2.5, sink: 3, wind: CLOUD_WEATHER.speed, lane: 240, span: 840, seam: 30,
 });
 
@@ -80,7 +92,7 @@ export const CLOUD_WIND = Object.freeze({ walk: 0.15, lee: Object.freeze([0, 1])
 // its first `rise` and dying away over its last `fall` of `depth`, and is `half` wide to each
 // side, softening over the outer `soft`.
 export const CLOUD_GUST = Object.freeze({
-  first: Object.freeze([75, 95]), every: Object.freeze([40, 60]), start: 410, speed: 10, strength: Object.freeze([0.8, 1.8]),
+  first: CLOUD_ENCOUNTERS.gust.first, every: CLOUD_ENCOUNTERS.gust.every, start: 410, speed: 10, strength: Object.freeze([0.8, 1.8]),
   spread: 0.35, depth: 55, rise: 12, fall: 30, half: 100, soft: 30, lane: 160,
 });
 
@@ -126,6 +138,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     elapsed: 0,
     fogHeight: 0,
     peak: 0,
+    openingAt: -1,
     active: false,
     windEnabled: wind,
     ambientX: 0, ambientZ: 0,
@@ -158,6 +171,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     gusts: Array.from({ length: CLOUD_POOL.gusts }, () => ({ strength: 0, ux: 0, uz: -1, born: 0, lane: 0, at: 0 })),
     gustDue: 0,
     gustCount: 0,
+    ravenDue: -1, ravenCount: 0, ravenAttack: -1, ravenAt: -Infinity,
     // `x, y, z` is where the pilot was at the last step. `collapse` and `shield` count down in
     // seconds. `cloud` is depth inside a cloud from 0 to 1, `thermal` the slot the pilot is in (or
     // -1), `danger` 1 while a raven is about to cross, and `headroom` the clear air up to a cloud
@@ -237,7 +251,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     weather.thermals = state.active && inside(point) ? state.thermals : EMPTY_THERMALS;
     let front = 0, gustRough = 0;
     const dx = x - Z.x, dz = z - Z.z;
-    if (wind && state.active) for (let i = 0; i < state.gusts.length; i++) {
+    if (wind && state.active && y >= CLOUD_ENCOUNTERS.gust.from) for (let i = 0; i < state.gusts.length; i++) {
       const band = state.gusts[i];
       if (band.strength === 0) continue;
       const ahead = dx * band.ux + dz * band.uz - band.at;
@@ -254,7 +268,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     out.ambientX = ambientX; out.ambientZ = ambientZ;
     out.front = front; out.rough = Math.max(out.rough, gustRough);
     if (!state.active) out.windX = out.windY = out.windZ = out.lift = out.sink = out.rough = 0;
-    const depth = state.active ? depthAt(x, y + K.rise, z) : 0;
+    const depth = state.active && y >= S.floor ? depthAt(x, y + K.rise, z) : 0;
     out.windY = Math.min(0, out.windY) + Math.max(0, out.windY) * (1 - Math.min(1, depth * S.cap)) - S.sink * depth;
     out.lift = Math.max(0, out.windY); out.sink = Math.max(0, -out.windY);
     out.x = out.windX; out.y = out.windY; out.z = out.windZ;
@@ -302,16 +316,20 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     }
     // Set off by the clock, not by the step that happens to notice: a long step launches every
     // band it has passed, each already as far along as it should be.
-    while (state.elapsed >= state.gustDue) {
+    if (state.gustDue < 0 && state.peak >= CLOUD_ENCOUNTERS.gust.from)
+      state.gustDue = state.elapsed + mix(G.first[0], G.first[1], pick(4));
+    while (state.gustDue >= 0 && state.elapsed >= state.gustDue) {
       const count = state.gustCount;
       layerWind(Number.isFinite(pos.y) ? pos.y : CLOUD_GATE.y, felt);
       const heading = Math.atan2(felt.x, -felt.z) + (pick(100 + 4 * count) * 2 - 1) * G.spread;
-      launch(state.gustDue, heading, (pick(102 + 4 * count) * 2 - 1) * G.lane, mix(G.strength[0], G.strength[1], pick(101 + 4 * count)));
-      state.gustDue += mix(G.every[0], G.every[1], pick(103 + 4 * count));
+      if (pos.y >= CLOUD_ENCOUNTERS.gust.from)
+        launch(state.gustDue, heading, (pick(102 + 4 * count) * 2 - 1) * G.lane, mix(G.strength[0], G.strength[1], pick(101 + 4 * count)));
+      state.gustDue += encounterInterval(CLOUD_ENCOUNTERS.gust, state.peak, pick(103 + 4 * count));
       state.gustCount = count + 1;
     }
     const dx = pos.x - Z.x;
     const dz = pos.z - Z.z;
+    if (pos.y < CLOUD_ENCOUNTERS.gust.from) return;
     for (let i = 0; i < state.gusts.length; i++) {
       const band = state.gusts[i];
       if (band.strength === 0 || Math.abs(dz * band.ux - dx * band.uz - band.lane) >= G.half) continue;
@@ -453,7 +471,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
   // How deep a point is inside cloud, from 0 at a hazard's surface to 1 well inside it.
   function depthAt(x, y, z) {
     let deepest = 0;
-    if (!hazards) return deepest;
+    if (!hazards || y < S.floor) return deepest;
     for (let i = 0; i < state.clouds.length; i++) {
       const cloud = state.clouds[i];
       if (cloud.fade < 0.05) continue;
@@ -511,7 +529,9 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
       // which copy is here. Birds shrink away toward either end, so the join is never seen.
       raven.y = low + wrap(thermal.rise + (raven.rung * R.stack) / R.flock - low, R.stack);
       raven.fade = ease(clamp(Math.min(raven.y - low, low + R.stack - raven.y) / R.edge, 0, 1));
-      raven.hot = hazards && !moving && thermal.live && thermal.age >= R.settle && thermal.scatter === 0 && raven.fade >= 1 && altitude >= R.grace && state.elapsed >= R.quiet;
+      raven.hot = hazards && i === state.ravenAttack && state.elapsed - state.ravenAt >= CLOUD_ENCOUNTERS.raven.warning &&
+        state.elapsed - state.ravenAt < CLOUD_ENCOUNTERS.raven.warning + CLOUD_ENCOUNTERS.raven.window &&
+        !moving && thermal.live && thermal.scatter === 0 && raven.fade >= 1 && altitude >= R.grace;
       raven.bank = thermal.dir * R.bank * (1 - 0.8 * hump);
       // Effort follows what the bird is doing a moment late, so a flock never changes its wingbeat
       // all at once as it leaves or lands.
@@ -524,6 +544,8 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     state.seed = seed >>> 0;
     state.rng = state.seed | 0;
     state.elapsed = state.fogHeight = 0;
+    state.openingAt = -1;
+    state.ravenDue = -1; state.ravenCount = 0; state.ravenAttack = -1; state.ravenAt = -Infinity;
     updateWeather();
     state.peak = Number.isFinite(startAltitude) ? Math.max(0, startAltitude) : CLOUD_GATE.y;
     state.active = true;
@@ -541,7 +563,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
       band.uz = -1;
     }
     state.gustCount = 0;
-    state.gustDue = mix(G.first[0], G.first[1], pick(4));
+    state.gustDue = -1;
     const column = state.thermals[0];
     column.x = column.fromX = L.x;
     column.z = column.fromZ = L.z;
@@ -551,6 +573,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     column.live = true;
     column.dir = 1;
     column.generation = 1; column.vx = column.vz = 0; column.edgeFade = -1;
+    column.r = CLOUD_OPENING.r;
     for (const thermal of state.thermals.slice(1)) { thermal.generation = 0; thermal.live = false; }
     layoutClouds();
     state.ambientX = state.wind[0].x; state.ambientZ = state.wind[0].z;
@@ -561,7 +584,15 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
       for (let i = 1; i < state.thermals.length; i++) {
         const thermal = state.thermals[i];
         thermal.generation = 0; thermal.live = false;
-        if (!prepareCell(i, true)) { placed = false; break; }
+        if (i === 1) {
+          thermal.life = mix(H.life[0], H.life[1], rand());
+          thermal.x = CLOUD_OPENING.second.x; thermal.z = CLOUD_OPENING.second.z;
+          thermal.r = CLOUD_OPENING.r; thermal.generation = 1;
+          thermal.vx = thermal.vz = 0; thermal.edgeFade = -1;
+        } else {
+          thermal.r = H.r;
+          if (!prepareCell(i, true)) { placed = false; break; }
+        }
         thermal.fromX = thermal.x; thermal.fromZ = thermal.z;
         thermal.age = H.bloom;
         thermal.wear = thermal.move = thermal.moveTime = thermal.scatter = 0;
@@ -570,6 +601,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
         thermal.dir = rand() < 0.5 ? 1 : -1;
         thermal.rise = rand() * R.stack;
         thermal.strength = strengthOf(thermal, true);
+        if (i === 1) { thermal.age = 0; thermal.strength = 1; }
       }
     }
     if (!placed) throw new Error('This seeded sky has no safe thermal layout');
@@ -627,6 +659,14 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     updateWeather();
     // Movement is stepped by the caller before this clock, so the final climb counts as well.
     if (Number.isFinite(pos.y)) state.peak = Math.max(state.peak, pos.y);
+    if (state.openingAt < 0 && state.peak >= CLOUD_OPENING.height) {
+      state.openingAt = state.elapsed;
+      for (let i = 0; i < 2; i++) {
+        const t = state.thermals[i];
+        t.age = t.wear = 0; t.edgeFade = -1;
+      }
+    }
+    const opening = state.openingAt < 0 ? 0 : ease(clamp((state.elapsed - state.openingAt) / CLOUD_OPENING.blend, 0, 1));
     state.fogHeight += cloudFogSpeed(state.fogHeight, state.elapsed) * dt;
     const pilot = state.pilot;
     // How fast the pilot is moving, from where they were a step ago; a leap is not a speed.
@@ -642,7 +682,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     blowGusts(pos, vx, vz);
     driftClouds(dt);
     const chest = pos.y + K.rise;
-    pilot.cloud = depthAt(pos.x, chest, pos.z);
+    pilot.cloud = pos.y >= S.floor ? depthAt(pos.x, chest, pos.z) : 0;
     pilot.headroom = headroomAt(pos.x, chest, pos.z);
     if (pilot.cloud > 0) pilot.cloudTime += dt;
 
@@ -650,6 +690,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     pilot.thermal = -1;
     for (let i = 0; i < state.thermals.length; i++) {
       const thermal = state.thermals[i];
+      if (i < 2) thermal.r = mix(CLOUD_OPENING.r, i ? H.r : L.r, opening);
       if (thermal.move > 0) {
         thermal.move = Math.max(0, thermal.move - dt);
         thermal.scatter = Math.max(0, thermal.scatter - dt);
@@ -665,8 +706,15 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
       if (!thermal.live) continue;
       const here = within && Math.hypot(pos.x - thermal.x, pos.z - thermal.z) < thermal.r;
       if (here) pilot.thermal = i;
+      if (i < 2 && state.openingAt < 0) {
+        thermal.vx = thermal.vz = thermal.wear = thermal.age = 0;
+        thermal.strength = 1;
+        if (i) thermal.rise += R.climb * thermal.s * dt;
+        continue;
+      }
       if (i > 0) {
         cellVelocity(thermal);
+        if (i === 1) { thermal.vx *= opening; thermal.vz *= opening; }
         const maximumSpeed = H.drift / thermal.life;
         if (thermal.edgeFade < 0 && Math.hypot(thermal.x - Z.x, thermal.z - Z.z) + maximumSpeed * dt >=
           Z.r - H.margin - maximumSpeed * H.fade) thermal.edgeFade = H.fade;
@@ -677,7 +725,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
       // Lift is used up by flying in it, though not while a cloud is holding the pilot down. A
       // hunted thermal that has begun to weaken burns out by itself, so none is left as a decoy.
       if ((here && pilot.cloud === 0) || (i > 0 && thermal.wear >= CLOUD_WEAR.full)) thermal.wear = Math.min(CLOUD_WEAR.dead, thermal.wear + dt);
-      thermal.strength = strengthOf(thermal, i > 0);
+      thermal.strength = i < 2 ? mix(1, strengthOf(thermal, i > 0), opening) : strengthOf(thermal, true);
       if (i > 0) {
         thermal.rise += R.climb * thermal.s * thermal.strength * dt;
         thermal.scatter = Math.max(0, thermal.scatter - dt);
@@ -689,6 +737,25 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
       } else if (thermal.strength === 0) thermal.live = false;
     }
 
+    const encounter = CLOUD_ENCOUNTERS.raven;
+    if (hazards && state.ravenDue < 0 && state.peak >= encounter.from)
+      state.ravenDue = state.elapsed + mix(encounter.first[0], encounter.first[1], pick(7000));
+    if (state.elapsed - state.ravenAt >= encounter.warning + encounter.window || pos.y < encounter.from || pilot.shield > 0)
+      state.ravenAttack = -1;
+    if (state.ravenDue >= 0 && state.elapsed >= state.ravenDue) {
+      // A missed or unsafe opportunity is spent too; never retry it on every frame.
+      state.ravenAttack = -1;
+      if (pos.y >= encounter.from && pilot.shield === 0 && pilot.cloud < K.cover) {
+        let nearest = Infinity;
+        for (let i = 0; i < state.ravens.length; i++) {
+          const bird = state.ravens[i], t = state.thermals[bird.thermal];
+          const reach = Math.hypot(bird.x - pos.x, bird.z - pos.z);
+          if (t.live && !t.move && !t.scatter && reach < nearest) { nearest = reach; state.ravenAttack = i; }
+        }
+        state.ravenAt = state.elapsed;
+      }
+      state.ravenDue = state.elapsed + encounterInterval(encounter, state.peak, pick(7001 + state.ravenCount++));
+    }
     flyRavens(dt, pos.y);
     const exposed = pilot.shield === 0 && pilot.cloud < K.cover;
     let striker = -1;
@@ -698,7 +765,8 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
       const above = raven.y - chest;
       const flat = Math.hypot(raven.x - pos.x, raven.z - pos.z);
       // Marked from well above until it is below the reach of a strike, not just until it is level.
-      raven.threat = exposed && raven.hot && above >= -K.half && above <= K.warn.above && flat < K.warn.reach;
+      raven.threat = exposed && i === state.ravenAttack && pos.y >= encounter.from &&
+        state.elapsed - state.ravenAt < encounter.warning + encounter.window;
       if (raven.threat) pilot.danger = 1;
       if (striker < 0 && exposed && raven.hot && Math.abs(above) < K.half && flat < K.radius) striker = i;
     }

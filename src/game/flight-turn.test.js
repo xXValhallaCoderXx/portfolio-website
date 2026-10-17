@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createFlight, copyFlight, settleFlight, stepFlight, physicsEnergy } from './flight.js';
+import { createFlight, copyFlight, settleFlight, stepFlight, physicsEnergy, PHYSICS } from './flight.js';
 
 const STEP = 1 / 60, DEG = Math.PI / 180;
 const wrap = angle => Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -39,7 +39,7 @@ test('the manual brake-turn chord carves faster and spends less height than an o
     assert.ok(carve.g.coordinatedLean * side > 0.9);
     assert.ok(carve.g.pilotLean * side > 0.18);
     assert.equal(carve.g.manualBrake, carve.g.brake);
-    assert.ok(carve.g.bankTarget * side > 0.53 && carve.g.bankTarget * side < 0.60);
+    assert.ok(Math.abs(carve.g.bankTarget * side - 0.52) < 1e-6);
   }
 });
 
@@ -63,6 +63,88 @@ test('coordinated rollout keeps momentum, eases the lean and returns to ordinary
   for (let tick = 0; tick < 300; tick++) stepFlight(g, {}, {}, STEP);
   assert.ok(g.coordination < 0.001 && Math.abs(g.pilotLean) < 0.001);
   assert.ok(Math.abs(g.bank) < 5 * DEG);
+});
+
+for (const side of [-1, 1]) test(`working-brake circle and held-brake rollout meet v11 limits, side ${side}`, t => {
+  const { seconds } = halfTurn(side, true);
+  assert.ok(seconds <= 8.6, `${seconds}s for the first 180 degrees from settled trim`);
+  const g = aloft();
+  let radius = 0, sink = 0, energy = physicsEnergy(g);
+  for (let tick = 0; tick < 2400; tick++) {
+    stepFlight(g, { turn: side, brake: true }, {}, STEP);
+    const next = physicsEnergy(g);
+    assert.ok(next <= energy + 0.001); energy = next;
+    assert.equal(g.stall, 0); assert.equal(g.acro, false);
+    if (tick >= 1800) {
+      radius += Math.hypot(g.pilot.vel.x, g.pilot.vel.z) / Math.abs(g.trackRate) / 600;
+      sink -= g.vy / 600;
+    }
+  }
+  assert.ok(radius >= 18 && radius <= 23, `${radius}m working radius`);
+  assert.ok(sink <= 2.3, `${sink}m/s steady still-air sink`);
+  let heading = 0, peak = 0, rebound = 0, pitchMin = g.pitch, pitchMax = g.pitch;
+  let levelAt = Infinity;
+  for (let tick = 0; tick < 600; tick++) {
+    stepFlight(g, { brake: true }, {}, STEP);
+    heading += g.trackRate * STEP * side;
+    peak = Math.max(peak, heading); rebound = Math.max(rebound, peak - heading);
+    pitchMin = Math.min(pitchMin, g.pitch); pitchMax = Math.max(pitchMax, g.pitch);
+    if (Math.abs(g.bank) < 10 * DEG) levelAt = Math.min(levelAt, (tick + 1) * STEP);
+    if (tick >= 89) assert.ok(Math.abs(g.bank) < 10 * DEG, `level within 1.5s and remains level: ${tick}`);
+    assert.equal(g.brakeTarget, PHYSICS.brake);
+    assert.equal(g.acro, false); assert.equal(g.stall, 0); assert.equal(g.loops, 0);
+  }
+  assert.ok(levelAt <= 1.5, `${levelAt}s to bank below 10 degrees`);
+  assert.ok(rebound <= 5 * DEG, `${rebound / DEG} degrees of track rebound`);
+  assert.ok(pitchMax - pitchMin <= 15 * DEG, `${(pitchMax - pitchMin) / DEG} degrees peak-to-peak pitch`);
+  t.diagnostic(JSON.stringify({ side, seconds, radius, sink, levelAt, rebound: rebound / DEG, pitchExcursion: (pitchMax - pitchMin) / DEG }));
+});
+
+test('easing and reapplying either direction for 0.25–2s preserves normal brake and prompt steering take', () => {
+  for (const side of [-1, 1]) for (const gap of [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2]) {
+    const g = aloft();
+    for (let tick = 0; tick < 2400; tick++) stepFlight(g, { turn: side, brake: true }, {}, STEP);
+    let heading = 0, peak = 0, pitchMin = g.pitch, pitchMax = g.pitch;
+    for (let tick = 0; tick < (gap + 10) / STEP; tick++) {
+      const turn = tick < Math.round(gap / STEP) ? 0 : side;
+      const previous = g.turn;
+      stepFlight(g, { turn, brake: true }, {}, STEP);
+      if (turn) {
+        const time = PHYSICS.steerTime + (PHYSICS.coordination.steerTime - PHYSICS.steerTime) * g.physical.coordination;
+        assert.ok(Math.abs(g.turn - (previous + (side - previous) * STEP / time)) < 1e-12,
+          're-pressing uses the original take response immediately');
+      }
+      heading += g.trackRate * STEP * side; peak = Math.max(peak, heading);
+      assert.ok(peak - heading <= 5 * DEG, `gap ${gap}: no large opposite heading correction`);
+      pitchMin = Math.min(pitchMin, g.pitch); pitchMax = Math.max(pitchMax, g.pitch);
+      assert.ok(Math.abs(g.bank) <= 40 * DEG);
+      assert.equal(g.brakeTarget, PHYSICS.brake); assert.equal(g.deepBrake, false); assert.equal(g.acro, false);
+      assert.equal(g.stall, 0); assert.equal(g.loops, 0);
+    }
+    assert.ok(pitchMax - pitchMin <= 15 * DEG, `gap ${gap}: ${(pitchMax - pitchMin) / DEG} degrees pitch`);
+    assert.ok(g.trackRate * side > 0.3, 'the original circle resumes');
+  }
+});
+
+test('air-track rate wraps correctly and copying or settling preserves its meaning independently of the canopy nose', () => {
+  const g = aloft(), copied = aloft();
+  let crossed = false, distinct = false;
+  let previous = g.track;
+  for (let tick = 0; tick < 1200; tick++) {
+    stepFlight(g, { turn: 1, brake: true }, {}, STEP);
+    assert.ok(Math.abs(g.trackRate - wrap(g.track - previous) / STEP) < 1e-12);
+    if (g.track < previous - Math.PI) crossed = true;
+    distinct ||= Math.abs(g.yawRate - g.trackRate) > 0.1;
+    previous = g.track;
+  }
+  assert.ok(crossed && distinct);
+  copyFlight(copied, g); assert.equal(copied.trackRate, g.trackRate);
+  for (let tick = 0; tick < 120; tick++) {
+    stepFlight(g, { brake: true }, {}, STEP); stepFlight(copied, { brake: true }, {}, STEP);
+    assert.equal(copied.trackRate, g.trackRate); assert.deepEqual(copied.pilot, g.pilot);
+  }
+  settleFlight(g); assert.equal(g.trackRate, 0);
+  assert.ok(Math.abs(wrap(g.track - g.yaw)) < 1e-12);
 });
 
 test('coordination cannot become an automatic control or survive a canonical reset', () => {

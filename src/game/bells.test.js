@@ -42,7 +42,7 @@ function wait(world, seconds, hold = null) {
 }
 
 // Seconds of a held sky until the next throw, or Infinity if none comes within `limit`.
-function untilThrown(world, limit = 10, hold = null) {
+function untilThrown(world, limit = 20, hold = null) {
   const before = world.bells.state.thrown;
   for (let i = 1; i <= Math.round(limit / STEP); i++) {
     wait(world, STEP, hold);
@@ -92,11 +92,11 @@ const numbers = (state) => [
   ...state.bells.flatMap((bell, i) => Object.entries(bell).filter(([, value]) => typeof value === 'number').map(([key, value]) => [`bells[${i}].${key}`, value])),
 ];
 
-test('the opening minute and the first700 metres are free of throws, then a seeded3–6 second warning begins', () => {
+test('the opening minute and the first700 metres are free of throws, then a seeded10–15 second warning begins', () => {
   const short = aloft(7, { y: BELLS.from - 1 });
   wait(short, 120);
   assert.deepEqual([short.bells.state.thrown, short.bells.state.due], [0, -1]);
-  short.sky.state.peak = BELLS.from;
+  short.sky.state.peak = short.g.pos.y = BELLS.from;
   const waited = untilThrown(short);
   assert.ok(waited >= BELLS.first[0] && waited <= BELLS.first[1] + STEP);
   const delays = [];
@@ -108,19 +108,19 @@ test('the opening minute and the first700 metres are free of throws, then a seed
   assert.ok(Math.max(...delays) - Math.min(...delays) > 1);
 });
 
-test('ordinary throws are45–60 seconds apart, then35–45 seconds after reaching1000 metres', () => {
+test('ordinary throws are75–90 seconds apart, then35–45 seconds after reaching1000 metres', () => {
   const gaps = [];
   for (const y of [BELLS.from, BEAST.from]) {
     for (let seed = 1; seed <= 8; seed++) {
       const world = aloft(seed, { y });
-      assert.ok(untilThrown(world) < 10);
+      assert.ok(untilThrown(world) < 20);
       for (let k = 0; k < 3; k++) {
         const bell = world.bells.state.bells[world.bells.state.warning];
         const at = bell.at;
         const range = y >= BELLS.often ? BELLS.oftener : BELLS.every;
         const drawn = world.bells.state.due - at;
         assert.ok(drawn >= range[0] && drawn <= range[1]);
-        assert.ok(untilThrown(world, 65) < 65);
+        assert.ok(untilThrown(world, 95) < 95);
         const gap = world.bells.state.bells[world.bells.state.warning].at - at;
         assert.ok(gap >= range[0] - STEP && gap <= range[1] + STEP);
         gaps.push(gap);
@@ -136,28 +136,28 @@ test('prediction uses an independent physical wing and the complete sampled wind
     Object.assign(world.controls, controls);
     world.sky.sample = (pos, yaw, out) => Object.assign(out, { lift: 3, sink: 0, liftSide: 0.1, windX: 2, windY: 3, windZ: -1, hazardSink: 0, rough: 0.1 });
     const before = structuredClone(world.g);
-    assert.ok(untilThrown(world) < 10);
+    assert.ok(untilThrown(world) < 20);
     for (let n = 0; n < 2; n++) {
       const bell = world.bells.state.bells[world.bells.state.warning];
       const ahead = flyAhead(world, bell.lead);
       assert.deepEqual([bell.aimX, bell.aimY, bell.aimZ], [ahead.x, ahead.y, ahead.z]);
       assert.deepEqual(world.g, before);
-      if (n === 0) assert.ok(untilThrown(world, 65) < 65);
+      if (n === 0) assert.ok(untilThrown(world, 95) < 95);
     }
   }
 });
 
 test('the Beast follows an ordinary introduction, is warned3.2 seconds ahead and appears only once', () => {
   const world = aloft(19, { y: BEAST.from });
-  assert.ok(untilThrown(world) < 10);
+  assert.ok(untilThrown(world) < 20);
   assert.equal(world.bells.state.bells[world.bells.state.warning].beast, false);
-  assert.ok(untilThrown(world, 65) < 65);
+  assert.ok(untilThrown(world, 95) < 95);
   const bell = world.bells.state.bells[world.bells.state.warning];
   assert.deepEqual([bell.beast, bell.kg, bell.lead, world.bells.state.beast.n], [true, BEAST.kg, BEAST.lead, 1]);
   assert.equal(sendDown(world, BELLS.close - 1).result, BELL_RESULT.close);
   assert.equal(world.bells.state.beast.result, BELL_RESULT.close);
   for (let k = 0; k < 3; k++) {
-    assert.ok(untilThrown(world, 65) < 65);
+    assert.ok(untilThrown(world, 95) < 95);
     assert.equal(world.bells.state.bells[world.bells.state.warning].beast, false);
   }
 });
@@ -165,7 +165,7 @@ test('the Beast follows an ordinary introduction, is warned3.2 seconds ahead and
 test('ordinary and Beast trajectories reach the aim after the complete warning and fall for1.5 seconds more', () => {
   for (let seed = 1; seed <= 12; seed++) {
     const world = aloft(seed, { y: BEAST.from });
-    assert.ok(untilThrown(world) < 10);
+    assert.ok(untilThrown(world) < 20);
     for (let n = 0; n < 2; n++) {
       const bell = world.bells.state.bells[world.bells.state.warning];
       const scale = bell.lead / BELLS.lead;
@@ -177,7 +177,7 @@ test('ordinary and Beast trajectories reach the aim after the complete warning a
       assert.notEqual(bell.phase, BELL_PHASE.idle);
       wait(world, STEP * 3);
       assert.equal(bell.phase, BELL_PHASE.idle);
-      if (n === 0) assert.ok(untilThrown(world, 65) < 65);
+      if (n === 0) assert.ok(untilThrown(world, 95) < 95);
     }
   }
 });
@@ -185,7 +185,7 @@ test('ordinary and Beast trajectories reach the aim after the complete warning a
 test('a bell hit calls the same strike as a raven, once, and grants the same fold and shield', () => {
   const world = aloft(21);
   const twin = aloft(21);
-  assert.ok(untilThrown(world) < 10);
+  assert.ok(untilThrown(world) < 20);
   const before = world.sky.state.pilot.strikes;
   assert.equal(sendDown(world, 0).result, BELL_RESULT.hit);
   assert.equal(twin.sky.strike(-1), true);
@@ -199,7 +199,7 @@ test('a bell hit calls the same strike as a raven, once, and grants the same fol
 test('cloud hides the wing and an existing shield prevents a second strike', () => {
   for (const [cloud, shield, result] of [[CLOUD_STRIKE.cover, 0, BELL_RESULT.hidden], [CLOUD_STRIKE.cover - 0.01, 0, BELL_RESULT.hit], [0, 1, BELL_RESULT.shielded]]) {
     const world = aloft(13);
-    assert.ok(untilThrown(world) < 10);
+    assert.ok(untilThrown(world) < 20);
     const bell = sendDown(world, 0, () => Object.assign(world.sky.state.pilot, { cloud, shield }));
     assert.equal(bell.result, result);
     assert.equal(world.bells.state.hits, +(result === BELL_RESULT.hit));
@@ -214,7 +214,7 @@ test('one warning and a bounded finite pool remain deterministic across seeded t
     const pool = [bells.state.bells, ...bells.state.bells];
     const throws = [];
     for (let n = 0; n < 12; n++) {
-      assert.ok(untilThrown(world, 65) < 65);
+      assert.ok(untilThrown(world, 95) < 95);
       assert.equal(bells.state.bells.filter((bell) => bell.phase !== BELL_PHASE.idle).length, 1);
       throws.push(structuredClone(bells.state.bells[bells.state.warning]));
       for (const [key, value] of numbers(bells.state)) assert.ok(Number.isFinite(value), key);
@@ -233,7 +233,7 @@ test('one warning and a bounded finite pool remain deterministic across seeded t
 
 test('finished skies and invalid time steps leave all kettlebells unchanged', () => {
   const world = aloft(6);
-  assert.ok(untilThrown(world) < 10);
+  assert.ok(untilThrown(world) < 20);
   const before = structuredClone(world.bells.state);
   for (const dt of [0, -1, NaN, Infinity]) world.bells.step(dt, world);
   assert.deepEqual(world.bells.state, before);
@@ -247,7 +247,7 @@ test('the warning says whether the pilot was circling off the bar when the bell 
   for (const [yawRate, bar, circling] of [[0.6, 0, true], [-0.6, 0, true], [0.6, 0.4, true], [BELLS.turning - 0.05, 0, false], [0.6, 1, false], [0, 0, false]]) {
     const world = aloft(9);
     Object.assign(world.g, { yawRate, bar });
-    assert.ok(untilThrown(world) < 10);
+    assert.ok(untilThrown(world) < 20);
     assert.equal(world.bells.state.bells[world.bells.state.warning].circling, circling, `${yawRate} rad/s, bar ${bar}`);
   }
 });
@@ -259,7 +259,7 @@ test('the first minute is free of throws, and a fast climb still meets an ordina
   wait(world, RUN.grace - STEP);
   assert.equal(world.bells.state.thrown, 0);
   assert.equal(world.bells.state.due, -1);
-  assert.ok(untilThrown(world, 10) < 10);
+  assert.ok(untilThrown(world, 20) < 20);
   const first = world.bells.state.bells[world.bells.state.warning];
   assert.equal(first.beast, false);
   assert.ok(first.at >= RUN.grace + BELLS.first[0]);
@@ -276,7 +276,7 @@ test('a bell that would hit a pilot holding Algiz glances off instead: nothing s
   };
   const glance = warded(aloft(23));
   const before = structuredClone(glance.sky.state);
-  assert.ok(untilThrown(glance) < 10);
+  assert.ok(untilThrown(glance) < 20);
   const bell = sendDown(glance, 0);
   assert.equal(bell.result, BELL_RESULT.glanced);
   const { thrown, hits, close, dodged, glanced } = glance.bells.state;
@@ -287,19 +287,19 @@ test('a bell that would hit a pilot holding Algiz glances off instead: nothing s
   // A near miss is a close call as ever, a shielded wing is shielded and a hidden one hidden: none of
   // them would have hit, so none glances.
   const near = warded(aloft(23));
-  assert.ok(untilThrown(near) < 10);
+  assert.ok(untilThrown(near) < 20);
   assert.equal(sendDown(near, BELLS.close - 1).result, BELL_RESULT.close);
   const shielded = warded(aloft(23));
-  assert.ok(untilThrown(shielded) < 10);
+  assert.ok(untilThrown(shielded) < 20);
   assert.equal(shielded.sky.strike(), true);
   assert.equal(sendDown(shielded, 0).result, BELL_RESULT.shielded);
   const hidden = warded(aloft(23));
-  assert.ok(untilThrown(hidden) < 10);
+  assert.ok(untilThrown(hidden) < 20);
   assert.equal(sendDown(hidden, 0, (world) => { world.sky.state.pilot.cloud = CLOUD_STRIKE.cover; }).result, BELL_RESULT.hidden);
   assert.deepEqual([near.bells.state.glanced, shielded.bells.state.glanced, hidden.bells.state.glanced], [0, 0, 0]);
   // Without the blessing the very same bell hits.
   const bare = aloft(23);
-  assert.ok(untilThrown(bare) < 10);
+  assert.ok(untilThrown(bare) < 20);
   assert.equal(sendDown(bare, 0).result, BELL_RESULT.hit);
 });
 
@@ -309,7 +309,7 @@ test('a kettlebell that misses by under 9 m is a close call, a wider one is a do
   for (const [offset, result] of [[0, 'hit'], [CLOUD_STRIKE.radius - 0.05, 'hit'], [CLOUD_STRIKE.radius + 0.05, 'close'], [BELLS.close - 0.05, 'close'], [BELLS.close + 0.05, 'dodged'], [30, 'dodged']]) {
     const world = aloft(11);
     const before = structuredClone(world.sky.state);
-    assert.ok(untilThrown(world) < 10);
+    assert.ok(untilThrown(world) < 20);
     const bell = sendDown(world, offset);
     assert.equal(bell.result, BELL_RESULT[result], `${offset} m off`);
     assert.ok(Math.abs(bell.near - offset) < 1e-9);
@@ -338,7 +338,7 @@ test('a miss is judged by the nearest the kettlebell came across while level wit
   for (const [comes, leaves, result] of [[7, 12, 'close'], [12, 7, 'close'], [10, 15, 'dodged']]) {
     const world = aloft(11);
     const before = structuredClone(world.sky.state);
-    assert.ok(untilThrown(world) < 10);
+    assert.ok(untilThrown(world) < 20);
     const { state } = world.bells;
     const bell = state.bells[state.warning];
     const { pos } = world.g;
@@ -392,7 +392,7 @@ test('no kettlebell is thrown while anything blocks it, and one comes once every
   for (const [what, on, off] of blocks) {
     const world = aloft(5);
     // Long past the time the first throw was due.
-    wait(world, 8, on);
+    wait(world, 20, on);
     const { state } = world.bells;
     assert.equal(state.thrown, 0, what);
     assert.ok(state.due > 0 && state.due < world.sky.state.elapsed - 1, `${what}: a throw was due`);
@@ -406,7 +406,7 @@ test('no kettlebell is thrown while anything blocks it, and one comes once every
   assert.equal(flicker.bells.state.thrown, 0);
   // A kettlebell still in the air holds the next back until it has fallen out of the picture.
   const second = aloft(5);
-  assert.ok(untilThrown(second) < 10);
+  assert.ok(untilThrown(second) < 20);
   second.bells.state.due = second.sky.state.elapsed;
   const waited = untilThrown(second);
   const gone = BELLS.lead + BELLS.fall + BELLS.quiet;
@@ -427,7 +427,7 @@ test('an aim by the rim, in cloud or by a raven that can strike is refused, and 
   };
   // A throw put off and put off again, every quarter of a second, until the way is clear.
   const putOff = (world, what) => {
-    const retries = refusals(world, 10);
+    const retries = refusals(world, 20);
     assert.equal(world.bells.state.thrown, 0, what);
     assert.ok(retries.length >= 12, `${what}: ${retries.length} refusals`);
     for (let i = 1; i < retries.length; i++) {
@@ -466,7 +466,7 @@ test('an aim by the rim, in cloud or by a raven that can strike is refused, and 
   for (const [dx, dy] of [[8, -CLOUD_STRIKE.half - 1], [BELLS.raven + 1, 10]]) {
     const clear = aloft(5, { hazards: true });
     Object.assign(clear.sky.state.ravens[0], { x: target.x + dx, y: chest + dy, z: target.z, hot: true });
-    assert.equal(refusals(clear, 8).length, 0);
+    assert.equal(refusals(clear, 16).length, 0);
     assert.equal(clear.bells.state.thrown, 1);
   }
 });

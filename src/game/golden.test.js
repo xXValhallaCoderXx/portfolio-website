@@ -7,12 +7,13 @@ import { createFlight, stepFlight } from './flight.js';
 import { createSwingWatch } from './swing-watch.js';
 import { createStyle } from './meet-style.js';
 import { SIM_VERSION } from './sim-version.js';
+import { sampleAtmosphere } from './atmosphere.js';
 
 // These inputs AND sheets were computed in Chromium, then replayed in Node. Their source receipt
 // records the engine, timestamp and a source digest checked before/after recording. The ignored
-// .artifacts/brake-controls-v10/browser-goldens.mjs reproduces the capture from the Vite source
+// .artifacts/lessons-v12/browser-goldens.mjs reproduces the capture from the Vite source
 // server, on an empty page without HMR or rendering clocks. No Node-generated expected sheets.
-const receipt = JSON.parse(readFileSync(new URL('./fixtures/good-lift-v10-chromium.json', import.meta.url), 'utf8'));
+const receipt = JSON.parse(readFileSync(new URL('./fixtures/good-lift-v12-chromium.json', import.meta.url), 'utf8'));
 
 test('actual Chromium keyboard runs replay to exactly the same complete Node sheets and barograms', () => {
   assert.match(receipt.engine, /^Chromium /);
@@ -73,5 +74,34 @@ test('Chromium maneuvers and stable recoveries have identical physical and obser
     // bodies, velocities, quaternion, energy and observers above retain exact equality.
     // The receipt's JSON format writes both signed zeros as 0. Preserve every other number exactly.
     assert.deepEqual(JSON.parse(JSON.stringify(snapshot)), record.snapshot, record.name);
+  }
+});
+
+
+test('sixteen Chromium lessons replay real circling, setup, matching maneuvers and style banks in Node', () => {
+  const lessons = JSON.parse(readFileSync(new URL('./fixtures/good-lift-v12-lessons-chromium.json', import.meta.url), 'utf8'));
+  assert.match(lessons.engine, /^Chromium /); assert.equal(lessons.records.length, 16);
+  const telemetry = new Set(['bank', 'pitch', 'rollRate', 'pitchRate', 'trackRate', 'yawRate', 'rollAcceleration']);
+  const normalize = value => JSON.parse(JSON.stringify(value, (key, item) => telemetry.has(key) && typeof item === 'number'
+    ? Math.round(item * 1e11) / 1e11 : item));
+  for (const record of lessons.records) {
+    assert.equal(record.simVersion, SIM_VERSION);
+    const read = decodeLog(record.link); assert.ok(read.ok); assert.equal(read.log.steps, record.steps);
+    const g = createFlight({ ...record.origin }), watch = createSwingWatch(), style = createStyle();
+    const controls = {}, world = { g, watch, controls }, air = {};
+    for (const bits of read.log.bits) {
+      const ears = (bits & 12) === 12;
+      Object.assign(controls, { turn: Number(!!(bits & 2)) - Number(!!(bits & 1)), ears,
+        deepBrake: !ears && !!(bits & 16), brake: !ears && !!(bits & 20), bar: !ears && !!(bits & 8) });
+      sampleAtmosphere(g.pos, { windX: 0, windZ: 0, thermals: [record.source] }, air);
+      stepFlight(g, controls, air, 1 / 60); watch.step(1 / 60, g, false, controls); style.step(1 / 60, world);
+    }
+    assert.deepEqual(normalize({ g, watch: watch.state, style: style.state }), normalize(record.snapshot));
+    assert.equal(watch.state.moves, 1); assert.equal(watch.state.moveKind, record.kind === 'pitch' ? 1 : 2);
+    assert.equal(watch.state.breaks, 0); assert.equal(style.state.lost, 0); assert.equal(style.state.landed, 1);
+    assert.ok(watch.state.calm >= 1 && style.state.total > 0);
+    assert.ok(record.learned.includes(record.kind), 'the browser saved completion immediately at banking');
+    assert.equal(record.keptBest.score, 123, 'learning does not replace competitive progress');
+    assert.match(record.feedback, new RegExp(`\\+${style.state.said} STYLE`));
   }
 });

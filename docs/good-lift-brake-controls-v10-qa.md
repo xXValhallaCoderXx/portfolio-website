@@ -1,5 +1,8 @@
 # Working and deep brake controls — v10 local acceptance
 
+Historical v10 receipt. Current turn, thermal guidance and replay acceptance is recorded in
+[the v11 QA receipt](good-lift-turns-v11-qa.md). Working/deep input gestures remain unchanged.
+
 Candidate: local changes on `feature/finalize-game`, based on
 `0c816d548fa152cd10dd477ee264b465a6ba09aa`. Fetching `origin/main` on
 2026-10-17 confirmed that base matches main. This receipt describes local source and browser

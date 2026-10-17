@@ -42,9 +42,9 @@ export function actionMessage(fields, input = {}) {
   else if ((action === 'left' || action === 'right') && releasing.includes(action === 'left' ? 'right' : 'left')) {
     const opposite = action === 'left' ? 'right' : 'left';
     title = `RELEASE ${opposite.toUpperCase()}, THEN ${action.toUpperCase()}`;
-  } else if ((action === 'left' || action === 'right') && input[action]) {
+  } else if (!fields.stableTitle && (action === 'left' || action === 'right') && input[action]) {
     title = `HOLD ${action.toUpperCase()}`;
-  } else if (action === 'straight' && releasing.length) title = 'RELEASE THE TURN';
+  } else if (!fields.stableTitle && action === 'straight' && releasing.length) title = 'RELEASE THE TURN';
   return { ...fields, action, title, detail, hold, release, ...(brakeDepth ? { brakeDepth } : {}),
     accepted: releasing.length === 0 && hold.every(name => controlHeld(input, name)) &&
       (brakeDepth !== 'deep' || !!input.deepBrake) && (brakeDepth !== 'working' || !input.deepBrake),

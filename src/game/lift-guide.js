@@ -1,5 +1,6 @@
 // Directional advice only. The guide owns its memory, never the wing, its controls or a sky.
 import { FLIGHT } from './flight.js';
+import { createThermalCentering } from './thermal-centering.js';
 import { actionMessage } from './coach-actions.js';
 import { glideDuration, glidePathClear, movingLiftIntercept } from './glide-math.js';
 import { createLiftActivity, ridgeTangent } from './lift-activity.js';
@@ -11,8 +12,10 @@ export const LIFT_GUIDE = Object.freeze({
   angles: Object.freeze([0, -Math.PI / 6, Math.PI / 6, -Math.PI / 3, Math.PI / 3, -Math.PI / 2, Math.PI / 2]),
   useful: FLIGHT.sink.trim + 0.25, clearance: 15, footprint: 6, boundary: 20,
   horizon: 6, pathStep: 0.25, lag: 0.8, turnRate: FLIGHT.turn.trim, turnAcceleration: 0.8,
-  bankSink: 0.5, circle: 25, lock: 2, improvement: 0.4, improveFor: 1,
+  bankSink: 0.5, circle: 21, lock: 2, improvement: 0.4, improveFor: 1,
   enter: Math.PI / 12, exit: Math.PI / 30, cueHold: 0.75, anticipate: 0.8,
+  easeEnter: Math.PI / 15, easeExit: Math.PI / 60, easeFor: 0.5,
+  easeMin: 0.75, easeMax: 1, circleHold: 1.25,
   sourceStrength: 0.35, sourceReserve: 12, sourceLife: 20,
 });
 const clamp = (x, low, high) => Math.max(low, Math.min(high, x));
@@ -42,10 +45,32 @@ export function createLiftGuide(adapter) {
   let clock = -Infinity, searchAt = -Infinity, lockedAt = -Infinity;
   let locked = null, challenger = '', challengeAt = -Infinity;
   let cue = null, cueAt = -Infinity, message = null, route = null, turnSide = 0;
+  let circleState = null;
+  const centering = createThermalCentering(adapter, validPoint);
+  let currentInput = {};
+
+  function circleTurn(state, ahead, now) {
+    if (state.easing) {
+      const elapsed = now - state.since;
+      if (elapsed + 1e-9 >= (state.easeMax ?? C.easeMax) || elapsed + 1e-9 >= C.easeMin && ahead <= C.easeExit) {
+        state.easing = false; state.since = now; state.aheadSince = null;
+      }
+    } else {
+      if (ahead > C.easeEnter) state.aheadSince ??= now;
+      else state.aheadSince = null;
+      if (state.aheadSince !== null && now - state.aheadSince + 1e-9 >= C.easeFor &&
+          now - state.since + 1e-9 >= (state.circleHold ?? C.circleHold)) {
+        state.easing = true; state.since = now; state.aheadSince = null;
+      }
+    }
+    return !state.easing;
+  }
 
   function reset() {
     clock = searchAt = lockedAt = challengeAt = cueAt = -Infinity;
     locked = cue = message = route = null; challenger = ''; turnSide = 0;
+    circleState = null; currentInput = {};
+    centering.reset();
     activity.reset();
     soaringTurn.reset();
     ridgeTransfer.reset();
@@ -57,7 +82,7 @@ export function createLiftGuide(adapter) {
     sampled.lift = sampled.sink = 0;
     return adapter.sampleAir(pos, sampled) ?? sampled;
   }
-  function validPoint(pos, fog, clearance = C.clearance) {
+  function validPoint(pos, fog, clearance = adapter.navigation ? 30 : C.clearance) {
     if (adapter.inside && !adapter.inside(pos, C.boundary)) return false;
     if (adapter.cloudDepth && adapter.cloudDepth(pos) > 0.1) return false;
     if (fog && pos.y <= fog.height + C.clearance) return false;
@@ -72,10 +97,21 @@ export function createLiftGuide(adapter) {
     });
   }
   function pathSafe(g, air, target, fog, forcedSide = 0) {
+    if (adapter.navigation && target?.circleSource) {
+      return centering.choose(g, target.circleSource, target.dir, currentInput, fog, clock) !== null;
+    }
+    if (adapter.navigation && target?.context === 'thermal') {
+      const error = wrap(bearing(g.pos, target) - (g.track ?? g.yaw ?? 0) - (g.trackRate || 0) * C.anticipate);
+      const side = forcedSide || (Math.abs(error) > C.exit ? Math.sign(error) : 0);
+      return centering.choose(g, { ...target, vx: 0, vz: 0 }, side || 1, currentInput, fog, clock,
+        { brake: false, onlySide: side }) !== null;
+    }
     if (fogLimit(g, fog) < C.horizon) return false;
     const ground = g.pilot?.vel;
     const speed = flightSpeed(g);
-    let heading = g.track ?? g.yaw ?? 0, rate = clamp(g.yawRate || 0, -0.8, 0.8);
+    let heading = g.track ?? g.yaw ?? 0, rate = clamp(g.trackRate || 0, -0.8, 0.8);
+    const predictedCircle = circleState?.key === target?.key ? { ...circleState } :
+      { easing: false, since: clock, aheadSince: null };
     let x = g.pos.x, z = g.pos.z;
     const sink = Math.max(FLIGHT.sink.trim, -(g.vy || 0)) + C.bankSink;
     const vx = ground?.x ?? Math.sin(heading) * speed + (air.windX || 0);
@@ -94,7 +130,8 @@ export function createLiftGuide(adapter) {
           want = bearing({ x, z }, goal);
         }
         const error = wrap(want - heading - rate * C.anticipate);
-        const circleRate = target?.circleSource ? error * target.dir > C.exit ? target.dir * C.turnRate : 0 : null;
+        const circleRate = target?.circleSource ?
+          circleTurn(predictedCircle, -error * target.dir, clock + t) ? target.dir * C.turnRate : 0 : null;
         const desired = forcedSide && t <= C.lag + 1 ? forcedSide * C.turnRate :
           circleRate ?? (Math.abs(error) > C.exit ? Math.sign(error) * C.turnRate : 0);
         rate += clamp(desired - rate, -C.turnAcceleration * C.pathStep, C.turnAcceleration * C.pathStep);
@@ -140,7 +177,7 @@ export function createLiftGuide(adapter) {
   }
   function scorePoint(g, air, target, context, fog) {
     const seconds = distance(g.pos, target) / flightSpeed(g);
-    if (!approachSafe(g, target, seconds, fog) || !pathSafe(g, air, target, fog)) return null;
+    if (!approachSafe(g, target, seconds, fog) || !pathSafe(g, air, { ...target, context }, fog)) return null;
     let total = 0, end = 0, ridge = 0;
     for (const share of [0.5, 0.75, 1]) {
       point.x = g.pos.x + (target.x - g.pos.x) * share;
@@ -154,8 +191,10 @@ export function createLiftGuide(adapter) {
   }
   function circle(source, g, dir, air) {
     const angle = bearing(source, g.pos) + dir * 0.8;
-    return { x: source.x + source.vx * 2 + Math.sin(angle) * C.circle - (air.windX || 0) * 1.5,
-      z: source.z + source.vz * 2 - Math.cos(angle) * C.circle - (air.windZ || 0) * 1.5 };
+    // Centre motion and air advection share one lookahead. A core moving with the air must
+    // produce the same circle as still air, rather than a persistent downwind correction.
+    return { x: source.x + (source.vx - (air.windX || 0)) * 2 + Math.sin(angle) * C.circle,
+      z: source.z + (source.vz - (air.windZ || 0)) * 2 - Math.cos(angle) * C.circle };
   }
   function refresh(target, live, g, air, fog) {
     if (!target) return null;
@@ -192,7 +231,7 @@ export function createLiftGuide(adapter) {
       const reach = movingLiftIntercept(g.pos, source, { x: air.windX || 0, z: air.windZ || 0 }, intercept, flightSpeed(g));
       if (!alive(source, reach.seconds)) continue;
       const occupied = distance(g.pos, source) < source.r * 0.9 && vertical(air) >= C.useful;
-      const dir = locked?.key === source.key ? locked.dir : Math.abs(g.bank || 0) > 0.2 && Math.abs(g.yawRate || 0) > 0.12 ? Math.sign(g.yawRate) : Math.sign(source.dir || 1);
+      const dir = locked?.key === source.key ? locked.dir : Math.abs(g.bank || 0) > 0.2 && Math.abs(g.trackRate || 0) > 0.12 ? Math.sign(g.trackRate) : (adapter.navigation && source.id === 0 ? -(Math.sign(air.windX) || -1) : Math.sign(source.dir || 1));
       const candidate = refresh({ context: 'thermal', key: source.key, dir }, live, g, air, fog);
       if (!candidate) continue;
       if (occupied) return candidate;
@@ -213,6 +252,19 @@ export function createLiftGuide(adapter) {
   }
   function select(g, air, live, fog) {
     const confirmed = activity.state;
+    if (adapter.navigation && confirmed.activity !== 'thermal') {
+      const current = locked?.context === 'thermal' ? refresh(locked, live, g, air, fog) : null;
+      if (current?.occupied || current?.circling) return current;
+      // A useful core takes precedence over an earlier ridge acquisition. Its name still waits
+      // for the activity observer's full three seconds of coherent climbing flight.
+      for (const source of live) {
+        if (distance(g.pos, source) >= source.r * 0.9 || !alive(source) || vertical(air) < C.useful) continue;
+        const dir = locked?.key === source.key ? locked.dir : Math.abs(g.bank) > 0.2 ? Math.sign(g.bank)
+          : source.id === 0 ? -(Math.sign(air.windX) || -1) : Math.sign(source.dir || 1);
+        const candidate = refresh({ context: 'thermal', key: source.key, dir }, live, g, air, fog);
+        if (candidate) return candidate;
+      }
+    }
     if (confirmed.activity === 'thermal') {
       const source = live.find(item => item.id === confirmed.sourceId && item.generation === confirmed.sourceGeneration);
       return source ? refresh({ context: 'thermal', key: source.key, circling: true,
@@ -256,38 +308,63 @@ export function createLiftGuide(adapter) {
     return occupied ? { ...target, x: g.pos.x + Math.sin(target.angle) * target.length,
       z: g.pos.z - Math.cos(target.angle) * target.length, occupied } : { ...target, occupied };
   }
-  function instruction(g, air, fog) {
-    if (!locked) return { state: 'lift', context: 'search', phase: 'blocked', action: 'none',
-      title: 'NO CLEAR LIFT ROUTE', detail: 'Keep the wing steady and look for rising streaks.' };
+  function instruction(g, air, fog, input) {
+    if (!locked) {
+      circleState = null;
+      const refuge = adapter.recoveryPoint?.();
+      const escape = refuge ? centering.choose(g, { ...refuge, key: 'recovery', vx: 0, vz: 0 },
+        Math.sign(g.bank) || 1, input, fog, clock) : null;
+      return { state: 'lift', context: 'search', phase: 'blocked', action: adapter.navigation ? 'release-all' : 'none',
+        title: 'NO CLEAR LIFT ROUTE', stableTitle: true,
+        ...(escape !== null ? { action: escape < 0 ? 'left' : escape > 0 ? 'right' : 'straight',
+          brakeDepth: 'working', hold: escape ? [escape < 0 ? 'left' : 'right', 'brake'] : ['brake'],
+          release: escape ? [escape < 0 ? 'right' : 'left', 'bar'] : ['left', 'right', 'bar'] } : {}),
+        detail: escape !== null ? `${escape < 0 ? 'Turn left' : escape > 0 ? 'Turn right' : 'Level the wing'} with normal brake to keep clear of terrain. Look for rising streaks.` :
+          'Release brake and level the wing. Keep clear of terrain and look for rising streaks.' };
+    }
+    if (!locked.circling) circleState = null;
     const worldBearing = bearing(g.pos, locked);
     const want = locked.context === 'ridge' ? windHeading(worldBearing, air, flightSpeed(g)) : worldBearing;
     const raw = wrap(want - (g.track ?? g.yaw ?? 0));
-    const anticipated = wrap(raw - (g.yawRate || 0) * C.anticipate);
+    const rate = g.trackRate || 0;
+    const anticipated = wrap(raw - rate * C.anticipate);
     let side = Math.abs(anticipated) > (turnSide ? C.exit : C.enter) ? Math.sign(anticipated) : 0;
     let counter = false;
     if (locked.circling && locked.context === 'thermal') {
-      // Centre by easing or tightening the established circle, never by swapping its direction.
-      side = anticipated * locked.dir > C.exit ? locked.dir : 0;
-    } else if (Math.abs(raw) < C.enter && Math.abs(g.yawRate || 0) > 0.18 &&
-        Math.abs(anticipated) > C.exit && Math.sign(anticipated) !== Math.sign(g.yawRate)) {
-      const opposite = -Math.sign(g.yawRate);
+      // The fjord keeps its established turn. Good Lift also forecasts a normal counterturn
+      // when wind has carried the circle away; every displayed side matches the requested side.
+      if (circleState?.key !== locked.key || circleState.dir !== locked.dir)
+        circleState = { key: locked.key, dir: locked.dir, easing: false, since: clock, aheadSince: null };
+      side = adapter.navigation && locked.circleSource ? centering.choose(g, locked.circleSource, locked.dir, input, fog, clock) : circleTurn(circleState, -anticipated * locked.dir, clock) ? locked.dir : 0;
+    } else if (Math.abs(raw) < C.enter && Math.abs(rate) > 0.18 &&
+        Math.abs(anticipated) > C.exit && Math.sign(anticipated) !== Math.sign(rate)) {
+      const opposite = -Math.sign(rate);
       if (opposite < 0 ? locked.leftSafe : locked.rightSafe) { side = opposite; counter = true; }
       else side = 0;
     }
     turnSide = side;
     const action = side < 0 ? 'left' : side > 0 ? 'right' : 'straight';
     const along = locked.context === 'ridge' && locked.occupied;
-    const phase = counter ? 'align' : locked.circling ? 'centre' : locked.occupied ? 'hold' : side ? 'approach' : 'align';
-    return { state: 'lift', context: locked.context, phase, action,
+    const phase = counter ? 'align' : locked.circling ? side ? 'circle' : 'ease' : locked.occupied ? 'hold' : side ? 'approach' : 'align';
+    const transfer = !!adapter.navigation && !locked.circling && !locked.occupied;
+    const direction = side < 0 ? 'LEFT' : side > 0 ? 'RIGHT' : 'AHEAD';
+    const metres = Math.round(distance(g.pos, locked));
+    return { state: 'lift', context: locked.context, ...(transfer ? { heading: 'NEXT LIFT' } : {}), phase, action,
       ...(locked.circling ? { brakeDepth: 'working', hold: side ? [side < 0 ? 'left' : 'right', 'brake'] : ['brake'],
         release: side ? [side < 0 ? 'right' : 'left', 'bar'] : ['left', 'right', 'bar'] } : {
         release: side ? [side < 0 ? 'right' : 'left', 'brake', 'bar'] : ['left', 'right', 'brake', 'bar'],
       }),
       ...(counter ? { title: `CHECK ${side < 0 ? 'LEFT' : 'RIGHT'} — LEVEL THE TURN` } : {}),
+      ...(locked.circling ? { title: side ? `CIRCLE ${(adapter.navigation ? side : locked.dir) < 0 ? 'LEFT' : 'RIGHT'} + NORMAL BRAKE` :
+        `EASE ${locked.dir < 0 ? 'LEFT' : 'RIGHT'} · KEEP BRAKE`, stableTitle: true } : {}),
+      ...(transfer ? { title: `${direction} · ${metres} m`, stableTitle: true, distance: metres } : {}),
       detail: counter ? 'A brief opposite input checks the turn; then release.' :
-        locked.circling && locked.context === 'thermal' ? side ? 'Hold brake with the turn to stay around the rising core.' : 'Keep the brake; ease the turn for a beat to centre the circle.' :
+        locked.circling && locked.context === 'thermal' ? side ?
+          'Normal brake slows the wing and tightens the circle. Rising air provides the lift; deep brake is unnecessary.' :
+          'Release the direction briefly to widen the circle, then resume the same turn. Keep normal brake.' :
           along ? side ? 'Follow the rising air along the cliff.' : 'Fly along the cliff; keep room between the wing and the face.' :
-            locked.context === 'thermal' ? 'Aim beside the circling ravens, then settle into a gentle circle.' : 'Rising air is ahead along this cliff; turn toward the clear approach.',
+            transfer ? 'Release brake for the transfer. Follow this direction to lift, then use direction + normal brake to circle.' :
+              locked.context === 'thermal' ? 'Aim beside the circling ravens, then settle into a gentle circle.' : 'Rising air is ahead along this cliff; turn toward the clear approach.',
       targetId: locked.id, targetGeneration: locked.generation,
     };
   }
@@ -298,6 +375,7 @@ export function createLiftGuide(adapter) {
     if (now === clock) return message;
     clock = now;
     const { g, input = {} } = facts;
+    currentInput = input;
     const air = facts.air ?? { ...sample(g.pos) };
     // Active flight/recovery coaching has precedence. Do not advertise a route through a swing.
     if (facts.suspended || facts.eligible === false || input.deepBrake || g.deepBrake || g.acro ||
@@ -310,8 +388,8 @@ export function createLiftGuide(adapter) {
     const confirmed = activity.step(dt, { g, air, clock, unsafe: !validPoint(g.pos, fog), turnSupported: turn.supported });
     const activityChanged = before.activity !== confirmed.activity || before.sourceId !== confirmed.sourceId ||
       before.sourceGeneration !== confirmed.sourceGeneration;
-    if (activityChanged) { locked = cue = null; searchAt = -Infinity; turnSide = 0; }
-    if (turn.message && confirmed.activity !== 'thermal') {
+    if (activityChanged) { locked = cue = null; circleState = null; searchAt = -Infinity; turnSide = 0; }
+    if (turn.message && confirmed.activity !== 'thermal' && !adapter.navigation) {
       message = confirmed.activity === 'ridge' ? { ...turn.message, activity: 'ridge-soaring' } : turn.message;
       route = message;
       return message;
@@ -327,7 +405,7 @@ export function createLiftGuide(adapter) {
       if (!locked && confirmed.activity !== 'navigating') activity.reset();
       searchAt = clock + C.searchEvery;
     } else if (current) locked = current;
-    const next = instruction(g, air, fog);
+    const next = instruction(g, air, fog, input);
     if (confirmed.activity === 'ridge' && next.context === 'ridge' && locked?.occupied) {
       const transfer = ridgeTransfer.step(dt, { g, air, clock });
       next.transfer = transfer;
@@ -347,12 +425,13 @@ export function createLiftGuide(adapter) {
       cue.targetId !== next.targetId || cue.targetGeneration !== next.targetGeneration;
     const heldSide = cue?.action === 'left' ? -1 : cue?.action === 'right' ? 1 : 0;
     const heldUnsafe = changed && heldSide && locked && !(heldSide < 0 ? locked.leftSafe : locked.rightSafe);
-    if (!cue || cue.action === 'none' || unsafe || heldUnsafe || !locked || !changed || clock - cueAt >= C.cueHold) {
+    if (!cue || cue.action === 'none' || unsafe || heldUnsafe || !locked || !changed ||
+        locked.circling || clock - cueAt >= C.cueHold) {
       if (changed) cueAt = clock;
       cue = next;
     }
     route = actionMessage(cue, input);
-    message = confirmed.activity === 'navigating' || !locked ? null : { ...route,
+    message = confirmed.activity === 'navigating' || !locked || confirmed.activity === 'ridge' && locked.context === 'thermal' ? null : { ...route,
       activity: confirmed.activity === 'ridge' ? 'ridge-soaring' : 'thermalling' };
     return message;
   }

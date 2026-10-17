@@ -30,4 +30,6 @@
 // 8: sharper pitch response, coordinated manual brake turns and matching physical maneuver timing.
 // 9: more forgiving wind-driven ridge climb before the first thermal transfer.
 // 10: explicit working/deep brake intent and consistent ordinary steering; five-bit recordings.
-export const SIM_VERSION = 10;
+// 11: damped ordinary turns, smoother steering release and air-track thermal guidance.
+// 12: protected opening thermals, altitude-paced encounters and automatic optional trick lessons.
+export const SIM_VERSION = 12;

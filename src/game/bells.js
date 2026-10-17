@@ -18,7 +18,7 @@
 // It is stepped only through run-step.js, after the sky, and the only thing it ever changes
 // outside itself is the strike a hit calls. It reads the meet only for the blessing it holds.
 import { copyFlight, createFlight, stepFlight } from './flight.js';
-import { CLOUD_DEFAULT_SEED, CLOUD_STRIKE, CLOUD_ZONE } from './cloudbase-state.js';
+import { CLOUD_DEFAULT_SEED, CLOUD_STRIKE, CLOUD_ZONE, encounterInterval } from './cloudbase-state.js';
 import { RUN } from './run-step.js';
 import { surfaceAt } from './ground.js';
 import { RUNE } from './meet-runes.js';
@@ -26,8 +26,8 @@ import { RUN_RULES } from './run-rules.js';
 
 export const BELLS = Object.freeze({
   from: 700,                        // m of peak before the first throw
-  first: Object.freeze([3, 6]),     // s after first reaching `from` until the first throw
-  every: Object.freeze([45, 60]),   // s from one throw to the next
+  first: Object.freeze([10, 15]),   // s after first reaching `from` until the first throw
+  every: Object.freeze([75, 90]),   // s from one throw to the next at the opening height
   often: 1000,                      // m of peak past which the throws come `oftener`
   oftener: Object.freeze([35, 45]), // s from one throw to the next up there
   lead: 2.4,                        // s from the throw, and its warning, to the bell reaching the aim
@@ -213,6 +213,7 @@ export function createBells() {
   // front about to arrive, or the rim close by. A swinging wing is thrown at as any other: blocking
   // on it would let a pilot pump the swing, or wingover, and never be thrown at.
   function blocked(sky, g) {
+    if (g.pos.y < B.from) return true;
     for (let i = 0; i < state.bells.length; i++) if (state.bells[i].phase !== IDLE) return true;
     const pilot = sky.state.pilot;
     if (pilot.shield > 0 || pilot.cloud > 0 || pilot.danger > 0 || pilot.gustIn < B.gust || g.stall > 0 || g.tuck > 0 || g.tip > 0) return true;
@@ -303,8 +304,7 @@ export function createBells() {
     bell.kg = beast ? BEAST.kg : B.kg[Math.floor(draw(state.seed, 3 + 4 * n) * B.kg.length)];
     bell.near = FAR;
     bell.circling = Math.abs(g.yawRate) > B.turning && g.bar < 0.5;
-    const gap = sky.state.peak >= B.often ? B.oftener : B.every;
-    state.due = now + mix(gap[0], gap[1], draw(state.seed, 2 + 4 * n));
+    state.due = now + encounterInterval({ from: B.from, every: B.every, high: B.oftener }, sky.state.peak, draw(state.seed, 2 + 4 * n));
     state.thrown = n + 1;
     if (beast) {
       state.beast.n = n;
