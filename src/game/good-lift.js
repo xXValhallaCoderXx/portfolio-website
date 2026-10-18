@@ -56,8 +56,8 @@ const sameSheet = (run, again) => !!again && !again.error && again.reason === ru
   run.lifts.every((lift, i) => lift.red === again.lifts[i].red && lift.kg === again.lifts[i].kg && lift.good === again.lifts[i].good) &&
   again.stats.style === run.stats.style;
 
-// Whether two kits (wing-kit.js's, normalised) are the same wing, helmet and chalk.
-const sameKit = (a, b) => a.wing === b.wing && a.helmet === b.helmet && a.chalk === b.chalk;
+// Whether two kits (wing-kit.js's, normalised) wear the same colours and gear.
+const sameKit = (a, b) => a.wing === b.wing && a.harness === b.harness && a.helmet === b.helmet && a.chalk === b.chalk;
 
 // Wall seconds a good lift holds the flight still for: a heartbeat, felt more than seen.
 export const HIT_STOP = 0.07;
@@ -175,7 +175,7 @@ const LIGHTS = /* html */ `
  *   onWorld(world)          the world board has answered for the Daily Sky the meet sheet shows: its
  *                           best runs, where this browser stands and what became of the run sent
  *                           (see shareWorld)
- *   kit(), wear(kit)        what the visitor flies in ({ wing, helmet, chalk }, wing-kit.js), and
+ *   kit(), wear(kit)        what the visitor flies in ({ wing, harness, helmet, chalk }, wing-kit.js), and
  *                           dressing the glider in another; wear returns the kit now worn
  */
 export function createGoodLift(host) {
@@ -1177,7 +1177,7 @@ export function createGoodLift(host) {
   }
 
   /**
-   * The kit tab's choice (any of { wing, helmet, chalk }, over the kit kept so far), kept to what
+   * The kit tab's choice (any of { wing, harness, helmet, chalk }, over the kit kept so far), kept to what
    * this device has earned, written down for every flight after it (wing-kit.js) and worn at once.
    * Returns the kit now worn.
    */

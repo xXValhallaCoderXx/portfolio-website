@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { LIVERIES, LIVERY, liveryPicture, liveryTexture, paintLivery, wingUv } from './livery.js';
-import { WINGS } from './wing-kit.js';
+import { KIT_THEMES } from './wing-kit.js';
 import { buildGlider } from './scenery.js';
 import { loadModel } from './test-models.js';
 import { createSketchpad } from './test-canvas.js';
@@ -32,7 +32,7 @@ function stations(rest, count) {
 const flies = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 test('every wing but the standard one has a livery, named and described, that glows less the paler it is', () => {
-  assert.deepEqual(Object.keys(LIVERIES), WINGS.filter((wing) => wing !== 'standard'));
+  assert.deepEqual(Object.keys(LIVERIES), KIT_THEMES.filter((wing) => wing !== 'standard'));
   for (const [id, livery] of Object.entries(LIVERIES)) {
     assert.ok(livery.name && livery.look, id);
     assert.ok(livery.glow > 0 && livery.glow <= 1, `${id} glows ${livery.glow}`);

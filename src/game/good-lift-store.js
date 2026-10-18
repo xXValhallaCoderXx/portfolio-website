@@ -54,15 +54,15 @@ export const TRAINING_BLOCK = 7;
 // else, and there is no shop: each rung opens at `kg` banked in all. Two pieces are earned by a feat
 // instead. In the order the kit tab lists them:
 //   chalk       a puff of chalk from the hands as a plate or a rep loads (meet-chalk.js)
-//   raven …     wings: liveries painted over the standard wing (livery.js)
+//   raven …     colour themes: each opens both the wing and cocoon harness
 //   gjermundbu  the helmet (helmet.js), for the 1,000 lb club
 export const KIT = Object.freeze([
-  Object.freeze({ id: 'chalk', kind: 'chalk', kg: 1000 }),
-  Object.freeze({ id: 'raven', kind: 'wing', kg: 2500 }),
-  Object.freeze({ id: 'calibrated', kind: 'wing', kg: 5000 }),
-  Object.freeze({ id: 'sheetless', kind: 'wing', kg: 10000 }),
-  Object.freeze({ id: 'flyte', kind: 'wing', kg: 20000 }),
-  Object.freeze({ id: 'hird', kind: 'wing', kg: 40000 }),
+  Object.freeze({ id: 'chalk', kind: 'chalk', kg: 25 }),
+  Object.freeze({ id: 'raven', kind: 'wing', kg: 50 }),
+  Object.freeze({ id: 'calibrated', kind: 'wing', kg: 100 }),
+  Object.freeze({ id: 'sheetless', kind: 'wing', kg: 250 }),
+  Object.freeze({ id: 'flyte', kind: 'wing', kg: 500 }),
+  Object.freeze({ id: 'hird', kind: 'wing', kg: 1000 }),
   Object.freeze({ id: 'valkyrie', kind: 'wing', feat: 'clean-meet' }),
   Object.freeze({ id: 'gjermundbu', kind: 'helmet', feat: 'thousand-pound-club' }),
 ]);
@@ -79,13 +79,14 @@ export function newlyEarned(before, after) {
 }
 
 /**
- * `kit` (wing-kit.js) with everything `store` has not earned taken off: a wing not earned is the
- * standard wing, and the helmet or the chalk not earned is off. This is all Good Lift ever writes.
+ * `kit` (wing-kit.js) with everything `store` has not earned taken off. Wing and harness are
+ * checked independently against the same earned themes. This is all Good Lift ever writes.
  */
 export function keepEarned(kit, store) {
   const kept = normalizeKit(kit);
   const earned = earnedKit(store);
   if (kept.wing !== 'standard' && !earned.includes(kept.wing)) kept.wing = 'standard';
+  if (kept.harness !== 'standard' && !earned.includes(kept.harness)) kept.harness = 'standard';
   kept.helmet &&= earned.includes('gjermundbu');
   kept.chalk &&= earned.includes('chalk');
   return kept;
@@ -96,7 +97,7 @@ export function keepEarned(kit, store) {
  * `kit` is the choice kept so far (wing-kit.js's readKit, never a kit only tried on), and `before`
  * and `after` the store read either side of the run. Whatever `after` has not earned comes off, so
  * a kit kept from before a reset, or written by hand, does. The chalk comes on by itself the first
- * time it is earned, being no look to pick but a touch on every pickup; a wing or the helmet waits
+ * time it is earned, being no look to pick but a touch on every pickup; colours and the helmet wait
  * in the kit tab to be put on.
  */
 export function kitAfterRun(kit, before, after) {

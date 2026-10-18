@@ -2375,7 +2375,7 @@ export function createGame(stage, hooks = {}) {
     get streaks() { return mode === 'cloudbase' && run ? run.streaks : streaks; },
     // Good Lift's music: switched on, playing now, which track, and whether the browser refused it.
     get music() { return run?.musicState ?? null; },
-    // The kit worn now, and fjord.wear({ wing, helmet, chalk }) to try any of it on for a look:
+    // The kit worn now, and fjord.wear({ wing, harness, helmet, chalk }) to try any of it on for a look:
     // earned or not, and never written down (the kit tab is the way to keep a choice), until the
     // next run ends and puts the kit kept back on. The run's chalk puffs, to start one by hand:
     // fjord.chalk.puff(x, y, z).
@@ -2427,7 +2427,7 @@ export function createGame(stage, hooks = {}) {
     /** This browser's run taken off the world board the meet sheet shows: whether it went. */
     removeWorldRun: () => run?.removeWorldRun() ?? Promise.resolve(false),
     /**
-     * The meet sheet's kit tab: `choice` is any of { wing, helmet, chalk } (wing-kit.js). Good Lift
+     * The meet sheet's kit tab: `choice` is any of { wing, harness, helmet, chalk } (wing-kit.js). Good Lift
      * keeps only what has been earned and writes that down, and the glider wears it at once.
      * Returns the kit now worn.
      */

@@ -1304,6 +1304,8 @@
   align-items: center;
   gap: 4px 10px;
   padding: 4px 6px;
+  min-height: 44px;
+  box-sizing: border-box;
   font-size: 12px;
   cursor: pointer;
 }
@@ -1362,6 +1364,10 @@
 
 .good-lift-swatch.standard {
   background: linear-gradient(90deg, #8fa7bd, #c6d6e4 50%, #8fa7bd);
+}
+
+.good-lift-swatch.harness:not(.standard) {
+  background: linear-gradient(165deg, var(--body) 0 68%, var(--trim) 69% 83%, var(--body) 84%);
 }
 
 /* ---- the briefing a device's first runs open with: the game and its keys told over the gate, the

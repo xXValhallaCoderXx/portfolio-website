@@ -1065,11 +1065,12 @@ function landmarks(rest, anchors) {
   };
 }
 
-// Where the glider's kit comes from (see setKit below): the livery and the helmet, each fetched the
-// first time it is worn, a canvas to paint a livery on, and the site's root, under which the
+// Where the glider's kit comes from (see setKit below): wing, cocoon and helmet, each fetched the
+// first time it is worn, a canvas for colour textures, and the site's root, under which the
 // owner's own paintings would be. A test hands in its own.
 const KIT_PARTS = Object.freeze({
   livery: () => import('./livery.js'),
+  harness: () => import('./harness.js'),
   helmet: () => import('./helmet.js'),
   canvas: () => document.createElement('canvas'),
   get base() {
@@ -1119,7 +1120,9 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
       seat.add(pilot);
       group.add(lines);
       // `material` is the wing's own, from its file: the standard wing, which a livery never touches.
-      rig = { wing, pilot, mesh, rest, anchors, joints, lines, marks: landmarks(rest, anchors), material: mesh.material,
+      let body = null;
+      pilot.traverse((part) => { if (part.isSkinnedMesh) body ??= part; });
+      rig = { wing, pilot, body, pilotMaterial: body?.material, mesh, rest, anchors, joints, lines, marks: landmarks(rest, anchors), material: mesh.material,
         base: { pivot: pivot.clone(), wing: wing.position.clone(), pilot: pilot.position.clone() } };
       return true;
     })
@@ -1185,13 +1188,16 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
     return clamp(angle, PILOT.arms[0], PILOT.arms[1]);
   }
 
-  // What the glider wears (wing-kit.js's kit, less the chalk, which is the run's): the wing's livery,
-  // or 'standard', and whether the helmet is on. A part is fetched the first time it is worn, and a
+  // What the glider wears (wing-kit.js's kit, less the chalk, which is the run's): independent wing
+  // and cocoon colours, and whether the helmet is on. A part is fetched the first time it is worn, and a
   // choice made while it was on its way wins over it when it comes. `material` is the wing's dressed
   // copy of its own material, `livery` the livery it is dressed in and `texture` that livery's
   // picture, `helmet` the helmet once it is made and `fetching` the helmet on its way.
-  const worn = { wing: 'standard', helmet: false };
-  const dressing = { material: null, livery: '', texture: null, helmet: null, fetching: null };
+  const worn = { wing: 'standard', harness: 'standard', helmet: false };
+  const dressing = {
+    material: null, livery: '', texture: null, helmet: null, fetching: null,
+    harnessMaterial: null, harness: '', harnessTexture: null, harnessPending: null,
+  };
 
   // The livery taken off is let go, its picture given back by the graphics card, so that however
   // many are tried in the kit tab only the one worn is held there (an owner's picture is a few MB
@@ -1235,6 +1241,53 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
       dressed.needsUpdate = true;
       mesh.material = dressed;
     });
+  }
+
+  function undressHarness() {
+    dressing.harnessTexture?.dispose();
+    dressing.harnessTexture = null;
+    dressing.harness = '';
+    if (dressing.harnessMaterial) dressing.harnessMaterial.map = dressing.harnessMaterial.emissiveMap = null;
+  }
+
+  // The shared pilot material is never tinted: an owned texture recolours only the cocoon's UV
+  // mask. One request per desired theme; a superseded result is released before it can be worn.
+  function dressHarness() {
+    if (!rig?.body) return Promise.resolve();
+    const id = worn.harness;
+    if (id === 'standard') {
+      dressing.harnessPending = null;
+      rig.body.material = rig.pilotMaterial;
+      undressHarness();
+      return Promise.resolve();
+    }
+    if (dressing.harness === id) return Promise.resolve();
+    if (dressing.harnessPending?.id === id) return dressing.harnessPending.promise;
+    const request = { id, promise: null };
+    dressing.harnessPending = request;
+    request.promise = parts.harness().then(async (harness) => {
+      if (dressing.harnessPending !== request || worn.harness !== id) return;
+      if (!harness.HARNESSES[id]) {
+        rig.body.material = rig.pilotMaterial;
+        undressHarness();
+        return;
+      }
+      const texture = await harness.harnessTexture(id, rig.pilotMaterial.map, { canvas: parts.canvas(), base: parts.base });
+      if (dressing.harnessPending !== request || worn.harness !== id) {
+        texture.dispose();
+        return;
+      }
+      const material = (dressing.harnessMaterial ??= rig.pilotMaterial.clone());
+      undressHarness();
+      dressing.harnessTexture = texture;
+      dressing.harness = id;
+      material.map = material.emissiveMap = texture;
+      material.needsUpdate = true;
+      rig.body.material = material;
+    }).finally(() => {
+      if (dressing.harnessPending === request) dressing.harnessPending = null;
+    });
+    return request.promise;
   }
 
   // The helmet is made and fitted to the head once (helmet.js), and after that only shown or hidden.
@@ -1350,20 +1403,21 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
       return reserve.canopy;
     },
     /**
-     * Dresses the glider in `kit` ({ wing, helmet }, wing-kit.js): a wing that is not a livery is
-     * the standard wing. Settles once it is all on, or at once on the stand-in, which wears nothing.
+     * Dresses the glider in `kit` ({ wing, harness, helmet }, wing-kit.js). Unknown themes use the
+     * original material. Settles once it is all on, or at once on the undressed stand-in.
      * A part that will not load leaves the glider as it was, and says so.
      */
     setKit(kit) {
       worn.wing = typeof kit?.wing === 'string' ? kit.wing : 'standard';
+      worn.harness = typeof kit?.harness === 'string' ? kit.harness : 'standard';
       worn.helmet = kit?.helmet === true;
       return ready
-        .then(() => Promise.all([dressWing(), dressHead()]))
+        .then(() => Promise.all([dressWing(), dressHarness(), dressHead()]))
         .then(() => undefined, (error) => {
           console.warn('Part of the kit did not load; the glider keeps what it had.', error);
         });
     },
-    /** What the glider wears now ({ wing, helmet }), and its helmet once one has been made. */
+    /** What the glider wears now ({ wing, harness, helmet }), and its helmet once made. */
     get kit() {
       return { ...worn };
     },

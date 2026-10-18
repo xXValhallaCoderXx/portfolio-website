@@ -1,6 +1,6 @@
 # Good Lift — initial release QA and code review
 
-Local candidate based on `e072513`, reviewed on 18 October 2026. Preview:
+Local candidate based on `189833c`, verified on 18 October 2026. Preview:
 <http://localhost:4176/good-lift?sky=1>. No deployment was performed.
 
 ## Review and cleanup
@@ -59,25 +59,56 @@ seeded intervals gradually shorten with peak height. Raven warning and collision
 windows remain one and three seconds, with one opportunity at a time. Storm damage
 starts at 500 m. Learning progress never changes physics or encounter schedules.
 
+## Kit progression and cocoon colours
+
+Chalk unlocks at **25 kg** lifetime banked. Raven, Calibrated, Sheetless, Flyte and
+Hird unlock at **50, 100, 250, 500 and 1,000 kg**, respectively. Each theme opens
+both the wing and cocoon harness; the Kit tab offers independent selections.
+Valkyrie still requires a clean meet, and the Gjermundbu helmet still requires the
+1,000 lb club. Newly earned colours wait for selection; chalk still switches on
+the first time it is earned.
+
+The current kit shape is `{ wing, harness, helmet, chalk }`, under `good-lift-kit`.
+Selections are checked independently against earned themes and written immediately.
+Blocked storage retains them for the visit. Reset progress clears both selections;
+Repeat trick lessons preserves them. There is no migration or historical reader.
+
+The pilot's existing texture is shared with its clothing, skin, shoes and helmet.
+`public/models/pilot-cocoon-mask.png` is a fixed 512×512 UV mask for this model:
+red marks body fabric, green marks trim, and black preserves the original pixels.
+The mask includes filtering margins around protected islands. Replacing the pilot
+model or its UVs requires authoring and checking a matching mask.
+
+Harness textures and their material are owned by the dressed glider. Standard
+restores the exact original material, superseded textures are released, concurrent
+requests for the same theme share work, and a failed request can retry. Standard
+requires no cocoon mask or generated texture. Geometry, skeleton animation, scoring, simulation version
+and replay format are unchanged.
+
 ## Automated evidence
 
-Final counts, commands, environment and source/build hashes are in
-`.artifacts/initial-release/verification.json`. The required commands are `npm test`,
+Current counts, commands, environment and source/build hashes are in
+`.artifacts/kit/verification.json`. The required commands are `npm test`,
 `npm run build`, `npm run check:split`, `npm run build:functions` and
 `git diff --check`.
 
-All **792 tests pass**, as do the build, split, function bundle and diff checks.
-The suite has 54 fewer cases after retiring compatibility, hidden-hint and unsupported
-state tests; the current physical and scoring acceptance gates remain. The frozen
-game-source SHA-256 is
-`3980d54614e669756547e4b1d08997f376cb39baa6d62644e029b2b0e76dfc7c`.
+All **799 tests pass**, as do the build, split, function bundle and diff checks.
+Seven new cases cover palette completeness, fabric masking, shading, texture
+orientation, isolated material ownership, concurrent choices, disposal and retries.
+Existing kit tests now cover the easier boundaries and independent entitlements.
+The current runtime-source SHA-256 (JavaScript, JSX and CSS, excluding tests and test helpers)
+is `273ee1297e65737ae3fe69cb22f7018e1ed5a3fcfdb3c32c8ad6d39ce8ba44fa`.
 The build index SHA-256 is
-`8dcc35bbf86bd777daf3a18502331a2d333bdf9655c3ca6f81d96e640bf7b7a2`.
+`225d62f99761daf9757d93304d0c723ed3fe075b0ce3b069a37f24faa9ac1e89`.
 
-The same **33 saved input traces** were replayed against the code before and after
-cleanup. Pilot/canopy bodies, energy, maneuver state, style and complete canonical
-judged sheets compare exactly. New browser captures use only the release's format
-and current data shape:
+The retained initial-release evidence is in `.artifacts/initial-release/verification.json`.
+Its **33 saved input traces** were replayed before and after cleanup, comparing
+pilot/canopy bodies, energy, maneuver state, style and canonical judged sheets
+exactly. Their shared flight sources are unchanged, and the full suite rechecks
+their server replays. The broader lesson/recovery capture manifests also include
+client storage and rendering files touched by this kit change; their original
+capture digests are retained rather than relabeling the recordings. The current
+receipt records both digests. The recordings use the current format:
 
 | Fixture | Flights | Evidence |
 | --- | --- | --- |
@@ -112,7 +143,20 @@ separate coverage. Canonical flights reach the failures from a real guided launc
 
 ## Browser evidence and remaining acceptance
 
-Production-preview checks exercise native keyboard/pointer input in Good Lift and
+Current Kit checks cover 960×700, 390×844, 320×740 and 844×390 layouts, locked
+rewards, independent selections, keyboard radio navigation, native emulated touch,
+reload persistence and Repeat/Reset behavior. Rows retain 44 px targets without
+horizontal overflow. Kit UI fixtures pause flight and its render loop; they use
+0.5 device scale to keep software-rendered browser checks responsive.
+
+Separate full WebGL captures show Standard and all six harness palettes from four
+angles (28 images). Browser texture checks verify **zero changed pixels outside
+the mask** and unchanged alpha for every palette, shared-model isolation, unchanged
+bones and exact Standard restoration. The new-kit announcement names both pieces.
+Evidence is in `.artifacts/kit/browser-kit.json`, `browser-materials.json` and the
+screenshots beside them. No browser page errors were reported.
+
+Retained production-preview flight checks exercise native keyboard/pointer input in Good Lift and
 fjord flight, including normal/deep recognition, ten-second normal holds, release,
 catch, ears, simultaneous holders and pause/blur/cancel. Emulated native touch and
 desktop keys complete held stall, real backfly, exit and steady recovery.

@@ -11,7 +11,7 @@ import {
 } from './good-lift-store.js';
 import { BLOCKED } from './meet-initials.js';
 import { LIVERIES } from './livery.js';
-import { WINGS, emptyKit } from './wing-kit.js';
+import { KIT_THEMES, emptyKit } from './wing-kit.js';
 
 const DAY = 20_756;
 const NOON = DAY * DAY_MS + DAY_MS / 2;
@@ -438,88 +438,93 @@ test('a run\'s byname goes onto its row, and one this build does not know goes o
 // A store with `tonnage` kilos banked and `feats` earned, and nothing else flown.
 const banked = (tonnage, feats = [], best = 0) => ({ ...emptyStore(), tonnage, feats, best: { total: best, peak: 0 } });
 
-test('the kit ladder opens at 1, 2.5, 5, 10, 20 and 40 tonnes banked, the Valkyrie wing with a clean meet and the helmet with the 1,000 lb club', () => {
+test('the easier kit ladder unlocks both colour choices, while Valkyrie and the helmet keep their achievement requirements', () => {
   const rungs = KIT.filter((item) => item.kg).map((item) => [item.id, item.kg]);
-  assert.deepEqual(rungs, [['chalk', 1000], ['raven', 2500], ['calibrated', 5000], ['sheetless', 10000], ['flyte', 20000], ['hird', 40000]]);
+  assert.deepEqual(rungs, [['chalk', 25], ['raven', 50], ['calibrated', 100], ['sheetless', 250], ['flyte', 500], ['hird', 1000]]);
   assert.deepEqual(KIT.filter((item) => item.feat).map((item) => [item.id, item.feat]), [['valkyrie', 'clean-meet'], ['gjermundbu', 'thousand-pound-club']]);
   // Its wings are the ones that can be worn and painted, and its feats are the store's own.
-  assert.deepEqual(['standard', ...KIT.filter((item) => item.kind === 'wing').map((item) => item.id)], WINGS);
-  assert.deepEqual(Object.keys(LIVERIES), WINGS.slice(1));
+  assert.deepEqual(['standard', ...KIT.filter((item) => item.kind === 'wing').map((item) => item.id)], KIT_THEMES);
+  assert.deepEqual(Object.keys(LIVERIES), KIT_THEMES.slice(1));
   for (const item of KIT) if (item.feat) assert.ok(FEAT_IDS.includes(item.feat), item.feat);
   // Each rung opens at its tonnage exactly, not a kilo before.
   assert.deepEqual(earnedKit(banked(0)), []);
-  assert.deepEqual(earnedKit(banked(999.5)), []);
-  assert.deepEqual(earnedKit(banked(1000)), ['chalk']);
-  assert.deepEqual(earnedKit(banked(4997.5)), ['chalk', 'raven']);
-  assert.deepEqual(earnedKit(banked(40000)), ['chalk', 'raven', 'calibrated', 'sheetless', 'flyte', 'hird']);
+  for (let i = 0; i < rungs.length; i++) {
+    const [id, kg] = rungs[i];
+    assert.deepEqual(earnedKit(banked(kg - 0.5)), rungs.slice(0, i).map(([key]) => key));
+    assert.deepEqual(earnedKit(banked(kg)), rungs.slice(0, i + 1).map(([key]) => key));
+    if (id !== 'chalk') assert.deepEqual(keepEarned({ wing: id, harness: id }, banked(kg)), { ...emptyKit(), wing: id, harness: id, chalk: false });
+  }
   // A feat earns its piece whatever the tonnage.
   assert.deepEqual(earnedKit(banked(0, ['clean-meet', 'thousand-pound-club'])), ['valkyrie', 'gjermundbu']);
   assert.deepEqual(earnedKit(banked(0, ['opener', 'giant-dodger'])), []);
 });
 
-test('only what has been earned is kept: an unearned wing is the standard one, an unearned helmet or chalk is off', () => {
-  const everything = { wing: 'hird', helmet: true, chalk: true };
+test('wing and harness entitlements are independent, and unearned colours or gear come off', () => {
+  const everything = { wing: 'hird', harness: 'raven', helmet: true, chalk: true };
   assert.deepEqual(keepEarned(everything, banked(0)), emptyKit());
-  assert.deepEqual(keepEarned(everything, banked(40000)), { wing: 'hird', helmet: false, chalk: true });
-  assert.deepEqual(keepEarned(everything, banked(39997.5, ['thousand-pound-club'])), { wing: 'standard', helmet: true, chalk: true });
+  assert.deepEqual(keepEarned(everything, banked(1000)), { wing: 'hird', harness: 'raven', helmet: false, chalk: true });
+  assert.deepEqual(keepEarned(everything, banked(999.5, ['thousand-pound-club'])), { wing: 'standard', harness: 'raven', helmet: true, chalk: true });
+  assert.deepEqual(keepEarned({ wing: 'raven', harness: 'hird' }, banked(50)), { ...emptyKit(), wing: 'raven' });
   assert.deepEqual(keepEarned({ wing: 'valkyrie' }, banked(50000)), emptyKit(), 'tonnage never buys a feat\'s wing');
   assert.deepEqual(keepEarned({ wing: 'valkyrie' }, banked(0, ['clean-meet'])).wing, 'valkyrie');
+  assert.equal(keepEarned({ harness: 'valkyrie' }, banked(50000)).harness, 'standard');
+  assert.equal(keepEarned({ harness: 'valkyrie' }, banked(0, ['clean-meet'])).harness, 'valkyrie');
   // The standard wing is always there, and nonsense is the empty kit.
   assert.deepEqual(keepEarned({ wing: 'standard', helmet: false, chalk: false }, banked(0)), emptyKit());
   assert.deepEqual(keepEarned('raven', banked(99999)), emptyKit());
 });
 
 test('the kit a run earns is what its tonnage or its feats crossed into, as recordRun counts them, and only that', () => {
-  const before = { ...emptyStore(), tonnage: 2400, feats: ['opener'] };
+  const before = { ...emptyStore(), tonnage: 40, feats: ['opener'] };
   const after = normalizeStore(before);
-  recordRun(after, run({ total: 150, feats: ['clean-meet'] }), AT);
-  assert.equal(after.tonnage, 2550);
+  recordRun(after, run({ total: 25, feats: ['clean-meet'] }), AT);
+  assert.equal(after.tonnage, 65);
   assert.deepEqual(newlyEarned(before, after), ['raven', 'valkyrie']);
   // The same run again earns nothing new, and a run that banks nothing earns nothing.
   const again = normalizeStore(after);
-  recordRun(again, run({ total: 150, feats: ['clean-meet'], log: 'AR' }), AT);
+  recordRun(again, run({ total: 25, feats: ['clean-meet'], log: 'AR' }), AT);
   assert.deepEqual(newlyEarned(after, again), []);
   // A run that leaps several rungs earns every one.
-  assert.deepEqual(newlyEarned(banked(0), banked(5000)), ['chalk', 'raven', 'calibrated']);
+  assert.deepEqual(newlyEarned(banked(0), banked(100)), ['chalk', 'raven', 'calibrated']);
 });
 
 test('as a run ends the kit kept is held to what has been earned, and the chalk switches itself on the first time it is earned and never again', () => {
-  // The run that crosses a tonne: the chalk comes on, and the wing kept stays on.
-  assert.deepEqual(kitAfterRun({ wing: 'standard', helmet: false, chalk: false }, banked(990), banked(1010)), {
-    kept: { wing: 'standard', helmet: false, chalk: true },
+  // The first 25 kg: chalk comes on; colours still wait for a choice.
+  assert.deepEqual(kitAfterRun(emptyKit(), banked(20), banked(25)), {
+    kept: { ...emptyKit(), chalk: true },
     fresh: ['chalk'],
   });
   // Switched off in the kit tab after that, it stays off.
-  assert.deepEqual(kitAfterRun({ wing: 'standard', helmet: false, chalk: false }, banked(1010), banked(1200)), { kept: emptyKit(), fresh: [] });
+  assert.deepEqual(kitAfterRun(emptyKit(), banked(25), banked(40)), { kept: emptyKit(), fresh: [] });
   // A wing or the helmet just earned waits to be put on.
-  assert.deepEqual(kitAfterRun(emptyKit(), banked(2400), banked(2600, ['thousand-pound-club'])).kept, emptyKit());
+  assert.deepEqual(kitAfterRun(emptyKit(), banked(40), banked(60, ['thousand-pound-club'])).kept, emptyKit());
   // A kit kept from before a reset, or written by hand, comes off, whether or not the run was recorded.
   assert.deepEqual(kitAfterRun({ wing: 'hird', helmet: true, chalk: true }, banked(0), banked(0)), { kept: emptyKit(), fresh: [] });
-  assert.deepEqual(kitAfterRun({ wing: 'hird', helmet: true, chalk: false }, banked(0), banked(1500)).kept, { wing: 'standard', helmet: false, chalk: true });
+  assert.deepEqual(kitAfterRun({ wing: 'hird', harness: 'valkyrie', helmet: true, chalk: false }, banked(0), banked(30)).kept, { ...emptyKit(), chalk: true });
   // An earned kit is kept as it is, and nonsense is the empty kit.
-  const raven = { wing: 'raven', helmet: true, chalk: false };
+  const raven = { wing: 'raven', harness: 'flyte', helmet: true, chalk: false };
   assert.deepEqual(kitAfterRun(raven, banked(3000, ['thousand-pound-club']), banked(3100, ['thousand-pound-club'])), { kept: raven, fresh: [] });
-  assert.deepEqual(kitAfterRun('raven', banked(990), banked(1000)).kept, { ...emptyKit(), chalk: true });
+  assert.deepEqual(kitAfterRun('raven', banked(20), banked(25)).kept, { ...emptyKit(), chalk: true });
 });
 
 test('the kit tab is told how far each rung is, which comes next, the best total for the 1,000 lb club, and what was just earned', () => {
-  const sheet = kitSheet(banked(3240, ['thousand-pound-club'], 467.5), { wing: 'raven', helmet: true, chalk: true }, ['gjermundbu', 'raven']);
-  assert.equal(sheet.tonnage, 3240);
+  const sheet = kitSheet(banked(65, ['thousand-pound-club'], 467.5), { wing: 'raven', harness: 'standard', helmet: true, chalk: true }, ['gjermundbu', 'raven']);
+  assert.equal(sheet.tonnage, 65);
   assert.equal(sheet.best, 467.5);
-  assert.deepEqual(sheet.worn, { wing: 'raven', helmet: true, chalk: true });
+  assert.deepEqual(sheet.worn, { wing: 'raven', harness: 'standard', helmet: true, chalk: true });
   assert.deepEqual(sheet.fresh, ['raven', 'gjermundbu'], 'in the kit\'s own order');
   const by = Object.fromEntries(sheet.items.map((item) => [item.id, item]));
   assert.deepEqual(sheet.items.map((item) => item.id), KIT.map((item) => item.id));
   assert.deepEqual([by.chalk.earned, by.chalk.left], [true, 0]);
   assert.deepEqual([by.raven.earned, by.raven.left], [true, 0]);
-  assert.deepEqual([by.calibrated.earned, by.calibrated.left], [false, 1760]);
-  assert.deepEqual([by.hird.earned, by.hird.left], [false, 36760]);
+  assert.deepEqual([by.calibrated.earned, by.calibrated.left], [false, 35]);
+  assert.deepEqual([by.hird.earned, by.hird.left], [false, 935]);
   assert.deepEqual([by.valkyrie.earned, by.valkyrie.left], [false, 0]);
   assert.deepEqual([by.gjermundbu.earned, by.gjermundbu.kind], [true, 'helmet']);
   assert.equal(sheet.next.id, 'calibrated');
-  assert.equal(sheet.next.left, 1760);
+  assert.equal(sheet.next.left, 35);
   // Once every rung is open there is none next; the sheet says what is worn as a kit, whatever it is handed.
-  const all = kitSheet(banked(41000), null);
+  const all = kitSheet(banked(1000), null);
   assert.equal(all.next, null);
   assert.deepEqual(all.worn, emptyKit());
   assert.deepEqual(all.fresh, []);
