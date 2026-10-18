@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Fjord from './components/Fjord.jsx';
+import { OpenExperience } from './components/Experience.jsx';
+import ExperiencePage from './components/ExperiencePage.jsx';
+import Topbar from './components/Topbar.jsx';
 import ProjectPage from './components/ProjectPage.jsx';
 import Route from './components/Route.jsx';
 import { OpenProject } from './components/Sections.jsx';
 import Warp from './components/Warp.jsx';
-import { PROFILE, PROJECTS, ROUTE } from './content.js';
-import { ACHIEVEMENTS, beltFor, readProgress } from './game/achievements.js';
+import { EXPERIENCE, PROFILE, PROJECTS } from './content.js';
+import { readProgress } from './game/achievements.js';
 import { gameHref, readGameAddress } from './game/good-lift-address.js';
 import { pauseProjectVideos } from './projectMedia.js';
 
@@ -15,15 +18,18 @@ const isFlyAddress = () => location.pathname.replace(/\/$/, '') === FLY;
 const gameAddress = () => readGameAddress(location);
 // The flight's addresses: the fjord's and the game's.
 const isFlightAddress = () => isFlyAddress() || !!gameAddress();
-// The project whose own page the address names, if it names one.
-const projectAddress = () => {
-  const id = location.pathname.match(/^\/projects\/([^/]+)\/?$/)?.[1];
-  return PROJECTS.find((project) => project.id === id) ?? null;
+// Both reading routes share history and the same way back to the main page.
+const detailAddress = () => {
+  const [, section, id] = location.pathname.match(/^\/(projects|experience)\/([^/]+)\/?$/) ?? [];
+  const item = section === 'projects'
+    ? PROJECTS.find((candidate) => candidate.id === id)
+    : EXPERIENCE.find((candidate) => candidate.hash === id);
+  return item ? { section, item, path: section === 'projects' ? item.path : `experience.log/${id}` } : null;
 };
 // Any other address that is neither the page nor the flight is a missing page. It gets its own flight.
 const missingAddress = () => {
   const path = location.pathname.replace(/\/$/, '');
-  return path === '' || path === FLY || path === '/index.html' || projectAddress() || gameAddress() ? null : location.pathname;
+  return path === '' || path === FLY || path === '/index.html' || detailAddress() || gameAddress() ? null : location.pathname;
 };
 // How many entries back the page itself lies from this one, or 0 when it is not behind it at all
 // (an address opened directly, or reloaded), so leaving must replace the address instead.
@@ -50,8 +56,9 @@ export default function App() {
     lost: missingAddress(),
     game: gameAddress(),
   }));
-  // The project whose page is open in place of the main page, if any.
-  const [project, setProject] = useState(projectAddress);
+  const [detail, setDetail] = useState(detailAddress);
+  const project = detail?.section === 'projects' ? detail.item : null;
+  const experience = detail?.section === 'experience' ? detail.item : null;
   const [progress, setProgress] = useState(readProgress);
   const [crt, setCrt] = useState(readCrt);
   // The warp that covers the swap between the page and the flight: `swap` runs at its midpoint.
@@ -71,8 +78,8 @@ export default function App() {
   const gaming = useRef(!!flight.game);
   gaming.current = !!flight.game;
   const hud = useRef(null);
-  // Where the main page was scrolled to when a project was opened, and the section to show on return.
-  const homeScroll = useRef(null);
+  // The original reading position is carried across successive detail pages and reloads.
+  const homeReturn = useRef(null);
   const wanted = useRef(null);
 
   // Swaps the page and the flight behind a warp. If one is already playing, or the visitor has
@@ -98,24 +105,29 @@ export default function App() {
     (target = null) =>
       transition(() => {
         // A missing page is no page to come back to: leaving puts '/' in place instead.
-        if (!isFlightAddress()) history.pushState({ flight: true, home: missingAddress() ? 0 : backToPage() + 1 }, '', FLY);
-        setProject(null);
+        if (!isFlightAddress()) {
+          history.replaceState({ ...history.state, scroll: scrollY }, '');
+          history.pushState({ flight: true, home: missingAddress() ? 0 : backToPage() + 1 }, '', FLY);
+        }
+        setDetail(null);
         setFlight({ on: true, target, armed: true, lost: null, game: gameAddress() });
       }),
     [transition],
   );
 
-  // Leaving puts the visitor back on the page: at the section for the place they last landed at,
-  // or otherwise wherever they were when they took off.
+  // A landing opens its section on the main page, including when take-off was from a detail
+  // page. Leaving in the air returns to the page the visitor took off from.
   const leaveFlight = useCallback(
     (sectionId) =>
       transition(() => {
         const steps = backToPage();
-        if (steps) history.go(-steps);
+        if (sectionId) {
+          wanted.current = sectionId;
+          history.pushState(null, '', `/#${sectionId}`);
+          setDetail(null);
+        } else if (steps) history.go(-steps);
         else history.replaceState(null, '', '/');
         setFlight({ on: false, target: null, armed: false, lost: null, game: null });
-        // Going back makes the browser restore its own scroll position first; let it finish.
-        if (sectionId) setTimeout(() => document.getElementById(sectionId)?.scrollIntoView(), 80);
       }),
     [transition],
   );
@@ -128,7 +140,7 @@ export default function App() {
         const href = gameHref(address);
         if (gameAddress()) history.replaceState(history.state, '', href);
         else history.pushState({ flight: true, game: true, overFly: isFlyAddress(), home: backToPage() && backToPage() + 1 }, '', href);
-        setProject(null);
+        setDetail(null);
         // A place the flight was asked to fly to is no part of the game, nor of the fjord after it.
         setFlight((current) => ({ ...current, on: true, armed: true, lost: null, target: null, game: gameAddress() }));
       }),
@@ -149,34 +161,68 @@ export default function App() {
     [transition],
   );
 
-  const openProject = useCallback((id) => {
-    if (!projectAddress()) {
-      homeScroll.current = scrollY;
-      history.replaceState({ ...history.state, scroll: scrollY }, '');
+  const openDetail = useCallback((section, id, view) => {
+    const href = `/${section}/${id}`;
+    let returnTo = history.state?.returnTo ?? homeReturn.current;
+    if (!detailAddress()) {
+      returnTo = { scroll: scrollY, focus: href, href: location.pathname + location.hash,
+        experience: section === 'experience' ? id : history.state?.experience,
+        experienceView: section === 'experience' ? view : history.state?.experienceView };
+      history.replaceState({ ...history.state, ...returnTo }, '');
     }
-    history.pushState({ project: id }, '', `/projects/${id}`);
-    setProject(projectAddress());
+    homeReturn.current = returnTo;
+    history.pushState({ detail: section, id, returnTo }, '', href);
+    setDetail(detailAddress());
+  }, []);
+  const openProject = useCallback((id) => openDetail('projects', id), [openDetail]);
+  const openExperience = useCallback((id, view) => openDetail('experience', id, view), [openDetail]);
+
+  const closeDetail = useCallback((sectionId = null) => {
+    const section = detailAddress()?.section ?? 'projects';
+    const returnTo = history.state?.returnTo ?? homeReturn.current;
+    wanted.current = sectionId ?? (returnTo ? null : section);
+    const href = sectionId ? `/#${sectionId}` : returnTo?.href ?? `/#${section}`;
+    history.pushState(returnTo ? { ...returnTo } : null, '', href);
+    setDetail(null);
   }, []);
 
-  // Back to the main page: at `sectionId` if one is asked for, or else where the visitor left it.
-  const closeProject = useCallback((sectionId = null) => {
-    wanted.current = sectionId;
-    history.pushState({ scroll: homeScroll.current }, '', sectionId ? `/#${sectionId}` : '/');
-    setProject(null);
-  }, []);
-
-  // Swapping pages moves the window with them: a project opens at its top, and the main page
-  // comes back where it was left.
-  const shown = useRef(project);
+  const shown = useRef({ detail, flight: flight.on });
   useLayoutEffect(() => {
-    if (shown.current === project) return;
-    shown.current = project;
-    const section = wanted.current ?? (history.state?.scroll == null ? 'projects' : null);
+    const previous = shown.current;
+    if (previous.detail?.path === detail?.path && previous.flight === flight.on) return;
+    shown.current = { detail, flight: flight.on };
+    if (flight.on) return;
+    if (detail) {
+      scrollTo({ top: previous.flight ? history.state?.scroll ?? 0 : 0, behavior: 'instant' });
+      const heading = document.querySelector('main [data-detail-heading], main.project-page h1');
+      heading?.setAttribute('tabindex', '-1');
+      heading?.focus({ preventScroll: true });
+      return;
+    }
+    const requested = wanted.current;
+    const section = requested ?? (history.state?.scroll == null ? previous.detail?.section : null);
     wanted.current = null;
-    if (project) scrollTo({ top: 0, behavior: 'instant' });
-    else if (section) document.getElementById(section)?.scrollIntoView({ behavior: 'instant' });
-    else scrollTo({ top: history.state.scroll, behavior: 'instant' });
-  }, [project]);
+    const restore = () => {
+      if (section) {
+        document.getElementById(section)?.scrollIntoView({ behavior: 'instant' });
+        const heading = document.getElementById(`${section}-title`);
+        heading?.setAttribute('tabindex', '-1');
+        heading?.focus({ preventScroll: true });
+      } else if (history.state?.scroll != null) {
+        scrollTo({ top: history.state.scroll, behavior: 'instant' });
+        if (previous.detail) {
+          const trigger = [...document.querySelectorAll('a[href]')].find((link) =>
+            link.getAttribute('href') === history.state.focus && link.getClientRects().length > 0);
+          trigger?.focus({ preventScroll: true });
+        }
+      }
+    };
+    restore();
+    // On a reloaded detail page the hidden overview has not measured its width yet. Let its
+    // ResizeObserver switch layouts before restoring the final card position and focus.
+    let frame = requestAnimationFrame(() => { frame = requestAnimationFrame(restore); });
+    return () => cancelAnimationFrame(frame);
+  }, [detail, flight.on]);
 
   useEffect(() => {
     // The browser's back and forward buttons move between the page, a project and the flight too.
@@ -189,7 +235,7 @@ export default function App() {
         if (location.pathname.replace(/\/$/, '') !== wanted) history.pushState({ flight: true, home: 0 }, '', wanted);
       }
       const apply = () => {
-        setProject(projectAddress());
+        setDetail(detailAddress());
         setFlight((current) =>
           isFlightAddress()
             ? { ...current, on: true, lost: null, game: gameAddress(), target: !!gameAddress() !== !!current.game ? null : current.target }
@@ -230,7 +276,7 @@ export default function App() {
   useEffect(() => {
     // The home route stays mounted behind project pages and the flight.
     pauseProjectVideos();
-  }, [project, flight.on, building]);
+  }, [detail, flight.on, building]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('warping', building);
@@ -252,50 +298,11 @@ export default function App() {
   return (
     <>
       {!flight.on && (
-        <nav className="topbar">
-          <div className="chrome">
-            <i />
-            <i />
-            <i />
-            <span className="dim">
-              {PROFILE.user}@{PROFILE.host}: ~/portfolio — zsh
-            </span>
-            <span className="spacer" />
-            {project ? <span className="hud">{project.path}</span> : <span className="hud" ref={hud} />}
-            {progress.unlocked.length > 0 && (
-              <span className="belt" title="Earned in flight">
-                belt: {beltFor(progress)} · {progress.unlocked.length}/{ACHIEVEMENTS.length}
-              </span>
-            )}
-            <button className="link" role="switch" aria-checked={crt} onClick={() => setCrt(!crt)}>
-              crt_effects {crt ? 'ON' : 'OFF'}
-            </button>
-          </div>
-          <div className="tabs">
-            {ROUTE.map((waypoint, i) => (
-              <a
-                href={`${project ? '/' : ''}#${waypoint.id}`}
-                aria-current={project && waypoint.id === 'projects' ? 'page' : undefined}
-                onClick={(event) => {
-                  // On the main page the link's own address does the work.
-                  if (!project) return;
-                  event.preventDefault();
-                  closeProject(waypoint.id);
-                }}
-                key={waypoint.id}
-              >
-                <span className="tab-number">{String(i + 1).padStart(2, '0')}_</span>
-                {waypoint.id}
-              </a>
-            ))}
-            <button className="tab-fly" onClick={() => takeFlight()}>
-              fly.sh
-            </button>
-          </div>
-        </nav>
+        <Topbar detail={detail} hud={hud} progress={progress} crt={crt} onCrt={() => setCrt(!crt)}
+          onSection={closeDetail} onFly={takeFlight} />
       )}
 
-      <div hidden={!!project && !flight.on}>
+      <div hidden={!!detail && !flight.on}>
         <header className="hero">
           <Fjord
             flying={flight.on}
@@ -340,17 +347,19 @@ export default function App() {
                   [ ./contact.sh ]
                 </a>
               </p>
-              <p className="dim hero-hint">fly.sh: steer a paraglider over the fjord and land where you want to read</p>
             </div>
           )}
         </header>
 
         <OpenProject.Provider value={openProject}>
-          <Route onFly={takeFlight} hud={hud} />
+          <OpenExperience.Provider value={openExperience}>
+            <Route onFly={takeFlight} hud={hud} />
+          </OpenExperience.Provider>
         </OpenProject.Provider>
       </div>
 
-      {project && !flight.on && <ProjectPage key={project.id} project={project} onBack={() => closeProject()} onOpen={openProject} onFly={takeFlight} />}
+      {project && !flight.on && <ProjectPage key={project.id} project={project} onBack={() => closeDetail()} onOpen={openProject} />}
+      {experience && !flight.on && <ExperiencePage key={experience.hash} entry={experience} onBack={() => closeDetail()} />}
 
       <footer className="footer">
         <span>

@@ -83,9 +83,6 @@
 .project-path {
   overflow-wrap: anywhere;
 }
-.project-fly {
-  margin-left: auto;
-}
 
 .project-head {
   display: grid;
@@ -644,9 +641,6 @@ html.gallery-open {
   }
   .project-path {
     display: none;
-  }
-  .project-fly {
-    font-size: 11px;
   }
   .screen-gallery {
     padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))

@@ -212,8 +212,15 @@ kbd {
 .tabs {
   display: flex;
   height: 37px;
-  overflow-x: auto;
-  scrollbar-width: none;
+}
+
+.section-links {
+  display: flex;
+  min-width: 0;
+}
+
+.tabs .topbar-menu {
+  display: none;
 }
 
 .tabs a,
@@ -322,10 +329,6 @@ kbd {
   display: inline-flex;
   align-items: center;
   padding: 10px 16px;
-}
-
-.hero-hint {
-  font-size: 12px;
 }
 
 /* ---- the fjord: the hero's backdrop while idle, the whole window in flight */
@@ -722,10 +725,8 @@ html.tugging {
     padding: 0 13px;
   }
 
-  /* The tabs scroll sideways under the flight's own tab, which stays put at the right edge. */
+  /* Keep the flight entry at the right edge of the compact header. */
   .tabs .tab-fly {
-    position: sticky;
-    right: 0;
     margin-left: auto;
     border-right: 0;
     border-left: 1px solid var(--rule);
@@ -743,8 +744,7 @@ html.tugging {
     padding: calc(var(--bar) + 14px) 0 20px var(--left);
   }
 
-  .hero-copy > .dim:first-child,
-  .hero-hint {
+  .hero-copy > .dim:first-child {
     display: none;
   }
 
@@ -866,8 +866,7 @@ html.tugging {
   }
 }
 
-/* A phone held upright: the words get its full width, and the two small lines come back where
-   the screen is tall enough to hold them under the scene. */
+/* A phone held upright: the words get its full width. */
 @media (max-width: 760px) and (orientation: portrait), (max-width: 560px) {
   .hero-copy {
     --left: 20px;
@@ -884,13 +883,8 @@ html.tugging {
 }
 
 @media (max-width: 760px) and (orientation: portrait) and (min-height: 701px) {
-  .hero-copy > .dim:first-child,
-  .hero-hint {
+  .hero-copy > .dim:first-child {
     display: block;
-  }
-
-  .hero-hint {
-    margin: 10px 0 0;
   }
 }
 
@@ -955,5 +949,73 @@ html.tugging {
   .footer {
     animation: none;
     transition: none;
+  }
+}
+
+@media (max-width: 760px), (pointer: coarse) and (max-height: 500px) {
+  :root {
+    --bar: 49px;
+  }
+
+  .chrome,
+  .tab-number {
+    display: none;
+  }
+
+  .tabs {
+    height: 48px;
+    overflow: visible;
+  }
+
+  .tabs .topbar-menu {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    min-width: 120px;
+    min-height: 48px;
+    color: var(--text);
+  }
+
+  .section-links {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    display: none;
+    flex-direction: column;
+    max-height: calc(100dvh - var(--bar));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-bottom: 1px solid var(--rule);
+    background: var(--bg);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  .menu-open .section-links {
+    display: flex;
+  }
+
+  .section-links a {
+    min-height: 48px;
+    padding: 0 20px;
+    border-right: 0;
+    border-top: 1px solid var(--rule);
+    font-size: 13px;
+  }
+
+  .tabs .tab-fly {
+    position: static;
+    min-height: 48px;
+    margin-left: auto;
+    padding: 0 20px;
+    border-right: 0;
+    border-left: 1px solid var(--rule);
+    background: var(--bg);
+    box-shadow: none;
+  }
+
+  .tabs :is(a, button):focus-visible {
+    outline: 2px solid var(--cyan);
+    outline-offset: -4px;
   }
 }

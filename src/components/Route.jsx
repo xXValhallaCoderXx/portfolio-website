@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { NOTES, ROUTE, SECTIONS } from '../content.js';
+import { NOTES, ROUTE } from '../content.js';
 import { contourTile } from '../contours.js';
 import { BODIES } from './Sections.jsx';
 
@@ -28,8 +28,7 @@ function pathThrough(points) {
   return d;
 }
 
-function Waypoint({ index, waypoint, onFly }) {
-  const section = SECTIONS.find((candidate) => candidate.id === waypoint.id);
+function Waypoint({ index, waypoint }) {
   const Body = BODIES[waypoint.id];
   const titleId = `${waypoint.id}-title`;
   return (
@@ -42,11 +41,6 @@ function Waypoint({ index, waypoint, onFly }) {
           <p className="sub">{waypoint.sub}</p>
         </div>
         <span className="spacer" />
-        {section && (
-          <button className="link" onClick={() => onFly(waypoint.id)}>
-            ↗ fly to {section.place}
-          </button>
-        )}
       </header>
       <div className="waypoint-body">
         <Body />
@@ -116,7 +110,7 @@ export default function Route({ onFly, hud }) {
       const length = line.current.getTotalLength();
       const samples = [];
       for (let at = 0; at <= length; at += 6) samples.push(line.current.getPointAtLength(at).y);
-      course = { length, samples, top, stops: nodes.slice(1, -1).map((node) => node.y) };
+      course = { length, samples, top, end: nodes.at(-1).y, stops: nodes.slice(1, -1).map((node) => node.y) };
       flown.current.style.strokeDasharray = length;
       // The path has moved, so the glider is set down on it again rather than flown across.
       glider.placed = false;
@@ -142,12 +136,16 @@ export default function Route({ onFly, hud }) {
       frame = 0;
       // Nothing to follow while the page is put away behind a project's own page.
       if (!course || !el.offsetHeight) return;
-      const dt = Math.min(0.1, (now - last) / 1000 || 0.016);
+      // A scroll event can arrive after this frame's timestamp but before its RAF callbacks.
+      const dt = now > last ? Math.min(0.1, (now - last) / 1000) : 1 / 60;
       last = now;
-      // The reader's eye rests a little lower on the window the further down the page they are,
-      // so the glider reaches the last waypoint just as the page runs out.
-      const room = document.documentElement.scrollHeight - innerHeight;
-      const eye = scrollY + innerHeight * (0.36 + 0.44 * (room > 0 ? scrollY / room : 0));
+      // Follow the reader down the viewport, reaching the actual final node at the bottom.
+      // On tall screens that node can sit below the usual 80% tracking position.
+      const room = Math.max(0, document.documentElement.scrollHeight - innerHeight);
+      const progress = room > 0 ? Math.max(0, Math.min(1, scrollY / room)) : 0;
+      const startEye = innerHeight * 0.36;
+      const finalEye = Math.max(innerHeight * 0.8, course.top + course.end - room);
+      const eye = scrollY + startEye + (finalEye - startEye) * progress;
       const along = lengthAt(eye - course.top);
       const target = line.current.getPointAtLength(along);
       const ahead = line.current.getPointAtLength(Math.min(course.length, along + 14));
@@ -259,7 +257,7 @@ export default function Route({ onFly, hud }) {
       </div>
 
       {ROUTE.map((waypoint, i) => (
-        <Waypoint index={i} waypoint={waypoint} onFly={onFly} key={waypoint.id} />
+        <Waypoint index={i} waypoint={waypoint} key={waypoint.id} />
       ))}
 
       <div className="horizon">
