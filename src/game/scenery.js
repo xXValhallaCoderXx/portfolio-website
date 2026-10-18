@@ -7,6 +7,7 @@ import { ZONES, STONES, TREES, BOULDERS, GATEWAY, heightAt } from './terrain.js'
 import { APPROACH_WINDS } from './approach.js';
 import { BRAKE } from './flight.js';
 import { FJORD_THERMALS, fjordWindAt, sampleFjordAir } from './atmosphere.js';
+import { createNordicSky } from './nordic-sky.js';
 
 const FILL = 0x0a1a2c;
 const LINE = 0x4fb8ff;
@@ -619,78 +620,8 @@ export function buildThermals() {
   };
 }
 
-export function buildSky() {
-  const group = new THREE.Group();
-
-  const count = 1400;
-  const points = new Float32Array(count * 3);
-  for (let i = 0; i < count; i++) {
-    const theta = Math.random() * Math.PI * 2;
-    const phi = Math.acos(Math.random() * 0.98 + 0.02);
-    points[i * 3] = 2200 * Math.sin(phi) * Math.cos(theta);
-    points[i * 3 + 1] = 2200 * Math.cos(phi);
-    points[i * 3 + 2] = 2200 * Math.sin(phi) * Math.sin(theta);
-  }
-  const starGeo = new THREE.BufferGeometry();
-  starGeo.setAttribute('position', new THREE.BufferAttribute(points, 3));
-  group.add(
-    new THREE.Points(
-      starGeo,
-      new THREE.PointsMaterial({
-        color: 0xcfe6ff,
-        size: 1.6,
-        sizeAttenuation: false,
-        transparent: true,
-        opacity: 0.85,
-        depthWrite: false,
-        fog: false,
-      }),
-    ),
-  );
-
-  const aurora = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 } },
-    vertexShader: /* glsl */ `
-      uniform float uTime;
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        vec3 p = position;
-        p.z += sin(p.x * 0.006 + uTime * 0.12) * 90.0 + sin(p.x * 0.017 - uTime * 0.2) * 30.0;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-      }`,
-    fragmentShader: /* glsl */ `
-      uniform float uTime;
-      varying vec2 vUv;
-      void main() {
-        float rays = 0.5 + 0.5 * sin(vUv.x * 140.0 + sin(vUv.x * 17.0 + uTime * 0.35) * 5.0);
-        // At a ribbon's edge vUv can land just outside 0..1. Raising a negative number to a power
-        // has no valid result, so keep the base in range.
-        float curtain = smoothstep(0.0, 0.07, vUv.y) * pow(clamp(1.0 - vUv.y, 0.0, 1.0), 1.7);
-        float ends = smoothstep(0.0, 0.18, vUv.x) * (1.0 - smoothstep(0.82, 1.0, vUv.x));
-        float pulse = 0.75 + 0.25 * sin(uTime * 0.5 + vUv.x * 6.0);
-        vec3 col = mix(vec3(0.12, 0.95, 0.72), vec3(0.22, 0.38, 1.0), smoothstep(0.0, 0.7, vUv.y));
-        gl_FragColor = vec4(col, curtain * ends * (0.3 + 0.7 * rays) * pulse * 0.5);
-      }`,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-  });
-  const ribbons = [
-    { x: 0, y: 340, z: -950, turn: 0, width: 1500 },
-    { x: -620, y: 400, z: -700, turn: 0.6, width: 1100 },
-    { x: 700, y: 320, z: -500, turn: -0.9, width: 1000 },
-    { x: 300, y: 380, z: 1000, turn: Math.PI + 0.3, width: 1200 },
-  ];
-  for (const ribbon of ribbons) {
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(ribbon.width, 280, 120, 1), aurora);
-    mesh.position.set(ribbon.x, ribbon.y, ribbon.z);
-    mesh.rotation.y = ribbon.turn;
-    group.add(mesh);
-  }
-
-  return { group, update: (time) => (aurora.uniforms.uTime.value = time) };
+export function buildSky(options = {}) {
+  return createNordicSky({ loadModel, ...options });
 }
 
 // A glider made of boxes, shown until the models arrive (or if they fail to load).

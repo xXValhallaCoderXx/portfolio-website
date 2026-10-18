@@ -26,6 +26,7 @@ import { fjordHint } from './fjord-hints.js';
 import { createLost } from './lost.js';
 import { createWindStreaks } from './wind-streaks.js';
 import { createVario, varioTone } from './vario.js';
+import { createThermalAir, showThermalAir, THERMAL_AIR } from './thermal-air.js';
 import { sameGame } from './good-lift-address.js';
 import { clearKit, normalizeKit, readKit } from './wing-kit.js';
 import './game.css';
@@ -85,7 +86,10 @@ const MARKUP = /* html */ `
   <div class="fj-hud" hidden>
     <dl>
       <dt>alt</dt><dd data-hud="alt"></dd>
-      <dt>vario</dt><dd data-hud="vario"></dd>
+      <dt>vario</dt><dd class="fj-vario-row"><span data-hud="vario"></span><span class="fj-thermal-air" hidden>
+        <span>THERMAL AIR</span><span class="fj-thermal-track" role="meter" aria-label="Thermal air strength" aria-valuemin="0" aria-valuemax="6"><i></i></span>
+        <span data-thermal-trend>STEADY</span>
+      </span></dd>
       <dt>speed</dt><dd data-hud="speed"></dd>
       <dt>wind</dt><dd data-hud="wind"></dd>
       <dt>next</dt><dd data-hud="next"></dd>
@@ -329,6 +333,11 @@ export function createGame(stage, hooks = {}) {
   const fjordWatch = createSwingWatch();
   const air = { lift: 0, sink: 0, windX: 0, windY: 0, windZ: 0, calm: false, rough: 0, clearance: Infinity };
   const vario = createVario();
+  const thermalAir = createThermalAir();
+  const thermalAirEl = $('.fj-thermal-air');
+  const thermalTrack = $('.fj-thermal-track');
+  const thermalFill = thermalTrack.querySelector('i');
+  const thermalTrend = $('[data-thermal-trend]');
   vario.reset(g.vy);
   const windNotice = createWindNotice();
   const plateNotice = createPlateNotice();
@@ -1367,6 +1376,7 @@ export function createGame(stage, hooks = {}) {
   const coachView = createCoachView({ element: $('.fj-coach'), touch: touchEl, touchMode: () => touch, input: () => input });
   let coachMessage = null;
   function resetCoach() {
+    thermalAir.reset();
     flightCoach.reset(); liftGuide.reset(); windNotice.reset(); plateNotice.reset();
     run?.resetLessons();
     coachMessage = null;
@@ -1406,6 +1416,10 @@ export function createGame(stage, hooks = {}) {
     if (eligible) hintEl.hidden = mode === 'cloudbase' || !!coachMessage;
     else hintEl.hidden = false;
     brakeMeter(g.brake, g.stallLoad, g.stall, effects.meter, g.ears, g);
+    // Available on the first turn; thermalling qualification still belongs to lift-activity.js.
+    thermalAirEl.hidden = !showThermalAir({ airborne: isAirborne(), manual: !auto && !controls.steered,
+      circling: input.left || input.right || Math.abs(g.trackRate) > 0.015,
+      lift: Math.max(air.thermal ?? 0, thermalAir.value), map: mapOpen, briefing, portal, instruction: coachMessage });
   }
 
   function updateHud() {
@@ -1415,6 +1429,10 @@ export function createGame(stage, hooks = {}) {
     const bars = Math.min(4, Math.round(Math.abs(climb) / 1.5));
     hud('vario').textContent = `${climb >= 0 ? '+' : '−'}${Math.abs(climb).toFixed(1)} m/s ${(climb >= 0 ? '▲' : '▼').repeat(bars)}`;
     hud('vario').classList.toggle('up', climb > 0.2);
+    thermalFill.style.transform = `scaleX(${thermalAir.fill.toFixed(3)})`;
+    thermalTrend.textContent = thermalAir.trend;
+    thermalTrack.setAttribute('aria-valuenow', Math.min(THERMAL_AIR.scale, thermalAir.value).toFixed(1));
+    thermalTrack.setAttribute('aria-valuetext', `${thermalAir.value.toFixed(1)} metres per second of thermal air, ${thermalAir.trend.toLowerCase()}`);
     if (mode === 'lost') {
       hud('speed').textContent = `${Math.round(Math.abs(g.vy) * 3.6)} km/h down`;
       hud('next').textContent = 'nowhere · 404';
@@ -2263,6 +2281,8 @@ export function createGame(stage, hooks = {}) {
     const airborne = isAirborne();
     if (airborne) vario.step(g.vy, mapOpen || held || portal || briefing ? 0 : elapsed);
     else vario.reset(g.vy);
+    if (airborne) thermalAir.step(air.thermal ?? 0, mapOpen || held || portal || briefing ? 0 : elapsed);
+    else thermalAir.reset();
     const poseDetail = {
       dt: elapsed,
       time,
@@ -2298,7 +2318,9 @@ export function createGame(stage, hooks = {}) {
     updateCamera(elapsed);
 
     terrain.update(time);
-    sky.update(time);
+    sky.update(inRun ? run.sky.state.elapsed : airborne ? airtime : time, { mode, camera, altitude: g.pos.y,
+      seed: run?.sky.state.seed ?? 1, fog: inRun ? run.sky.state.fogHeight : null,
+      reducedMotion: calm, lowDetail: !useBloom, dt: elapsed });
     places.update(time, inRun ? run.sky.windAt : fjordWindAt, calm);
     thermals.update(time);
     gateway.update(time);
@@ -2371,6 +2393,11 @@ export function createGame(stage, hooks = {}) {
     get airtime() { return airtime; },
     controls,
     air,
+    thermalAir,
+    sky,
+    get rendering() { return { bloom: useBloom, geometries: renderer.info.memory.geometries,
+      textures: renderer.info.memory.textures, programs: renderer.info.programs.length }; },
+    bloom: (on = true) => { useBloom = !!on; slowFrames = 0; renderer.setPixelRatio(on ? Math.min(devicePixelRatio, 2) : 1); resize(); },
     // The streaks being drawn: the run's while one is flown, otherwise the fjord's.
     get streaks() { return mode === 'cloudbase' && run ? run.streaks : streaks; },
     // Good Lift's music: switched on, playing now, which track, and whether the browser refused it.
@@ -2471,6 +2498,7 @@ export function createGame(stage, hooks = {}) {
       run?.dispose();
       coachView.dispose?.();
       streaks.dispose();
+      sky.dispose();
       for (const pass of composer.passes) pass.dispose?.();
       composer.dispose();
       renderer.dispose();

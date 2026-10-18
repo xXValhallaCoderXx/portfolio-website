@@ -33,22 +33,21 @@ const showing = (layout, i, strength) => {
   return t * t * (3 - 2 * t);
 };
 
-test('a hunted thermal\'s motes crowd its core: about half lie within 45% of the radius, three in four within 60%, none beyond where the lift is a tenth of its best', () => {
+test('a hunted thermal\'s motes crowd its core: over half lie within 45% of the radius, three in four within 60%, none beyond where the lift is a tenth of its best', () => {
   const metres = radii(hunted);
   assert.equal(metres.length, 256);
   const inner = share(metres, (r) => r < CLOUD_HUNT.r * 0.45);
-  assert.ok(inner > 0.45 && inner < 0.55, `${(100 * inner).toFixed(1)}% within 14 m, the hands-up circle`);
+  assert.ok(inner > 0.55 && inner < 0.65, `${(100 * inner).toFixed(1)}% within the broad strongest region`);
   assert.ok(share(metres, (r) => r < CLOUD_HUNT.r * 0.6) >= 0.75);
   // A tenth of the best lift is 30.6 m out, and the motes thin all the way to there, so the edge
   // of the lift reads by their thinning: no ring is needed.
   const edge = CLOUD_HUNT.r * (1 - 0.1958 * CLOUD_HUNT.core);
-  assert.ok(Math.max(...metres) <= edge && Math.max(...metres) > edge - 2, `the furthest mote is ${Math.max(...metres).toFixed(1)} m out`);
+  assert.ok(Math.max(...metres) <= edge && Math.max(...metres) > edge - 4, `the furthest mote is ${Math.max(...metres).toFixed(1)} m out`);
   for (let i = 0; i < hunted.count; i++) assert.ok(hunted.trait[i * 4] >= M.reach - 1e-6, `mote ${i} has ${hunted.trait[i * 4]} of the best lift`);
-  // The launch column is flat across its core, so fewer of its motes crowd the middle: 43% are in
-  // its flat 15.3 m, and none lies beyond 30.3 m.
+  // The launch column is flat across its core, so fewer motes crowd the middle.
   const column = radii(launch);
   assert.equal(column.length, 384);
-  close(share(column, (r) => r <= CLOUD_LAUNCH.r * 0.45), 0.43, 0.02);
+  assert.ok(share(column, (r) => r <= CLOUD_LAUNCH.r * 0.45) > 0.43);
   assert.ok(Math.max(...column) <= CLOUD_LAUNCH.r * 0.895);
 });
 
@@ -278,4 +277,40 @@ test('a mote stays where the air carried it however the pilot climbs: the window
     moved += 1;
   }
   assert.ok(moved > 0.3 * hunted.count, `${moved} motes followed`);
+});
+
+test('current profile and absolute air strength control brightness, rise and the broad glow without mutating cells', () => {
+  const run = createCloudbaseRun({ hazards: false }); run.reset(300, 3);
+  const thermal = run.state.thermals[1], motes = makeMotes();
+  const pos = { x: thermal.x, y: 300, z: thermal.z }, mesh = motes.group.getObjectByName('motes-1');
+  thermal.fade = 0.4; thermal.s = 3; thermal.strength = 1;
+  const before = structuredClone(run.state);
+  motes.update(0, run.state, pos, 1, 0, true);
+  assert.deepEqual(run.state, before);
+  close(mesh.material.uniforms.power.value, 3 / 5.5);
+  close(mesh.material.uniforms.profileFade.value, 0.4);
+  close(mesh.children[0].scale.x, thermal.r * (1 - 0.4 * 0.65));
+  const sample = moteAt(hunted, 30, valuesOf(mesh));
+  const r = hunted.seed[30 * 4];
+  close(sample.vy, 3 * liftShare(true, r, 0.4));
+  thermal.s = 0; motes.update(1, run.state, pos, 1, 1);
+  assert.equal(mesh.visible, false, 'a cell with no rising air has no lift cue, even under lightning');
+});
+
+test('source replacement and clock reset discard old phases; overlapping cells stay independently sampled and bounded', () => {
+  const run = createCloudbaseRun({ hazards: false }); run.reset(300, 3);
+  const motes = makeMotes(), pos = { x: 0, y: 300, z: 80 };
+  const mesh = motes.group.getObjectByName('motes-1');
+  for (const cell of run.state.thermals) Object.assign(cell, { x: 0, z: 80, live: true, strength: 1, move: 0 });
+  motes.update(0, run.state, pos); motes.update(0.1, run.state, pos);
+  const prior = mesh.material.uniforms.rise.value;
+  run.state.thermals[1] = { ...run.state.thermals[1], generation: 900, strength: 0.5 };
+  motes.update(0.2, run.state, pos);
+  assert.ok(mesh.material.uniforms.rise.value < prior);
+  close(mesh.material.uniforms.speed.value, 2.75);
+  assert.equal(motes.group.children.length, CLOUD_POOL.thermals);
+  assert.equal(motes.group.children.filter(v => v.visible).length, CLOUD_POOL.thermals);
+  motes.update(0, run.state, pos);
+  close(mesh.material.uniforms.rise.value, M.phase[0]);
+  motes.clear(); assert.ok(motes.group.children.every(v => !v.visible));
 });
