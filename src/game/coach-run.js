@@ -11,10 +11,12 @@ export const thermalRideIdentity = (index, thermal) => thermal && index > 0 ? `$
 export function createRunCoachEnvironment(sky) {
   return {
     navigation: true,
+    thermalFlow: () => sky.state.flow,
+    openingProtected: () => sky.state.openingAt < 0,
     recoveryPoint: () => ({ x: CLOUD_ZONE.x, z: CLOUD_ZONE.z }),
     sampleAir: (pos, out) => sky.sample(pos, 0, out),
     heightAt: surfaceAt,
-    sources: () => sky.state.thermals.map((t, id) => ({ ...t, id, remaining: cloudThermalRemaining(t) })),
+    sources: () => sky.state.thermals.map((t, id) => ({ ...t, id, flock: id > 0, remaining: cloudThermalRemaining(t) })),
     inside: (pos, margin = 0) => Math.hypot(pos.x - CLOUD_ZONE.x, pos.z - CLOUD_ZONE.z) <= CLOUD_ZONE.r - margin,
     fog: () => ({ height: sky.state.fogHeight, elapsed: sky.state.elapsed, speedAt: cloudFogSpeed }),
     cloudDepth: (pos) => sky.depthAt(pos.x, pos.y, pos.z),

@@ -1364,6 +1364,8 @@ export function createGame(stage, hooks = {}) {
   const liftGuide = createLiftGuide({
     get navigation() { return mode === 'cloudbase'; },
     recoveryPoint: () => mode === 'cloudbase' ? run.coachEnvironment.recoveryPoint() : null,
+    thermalFlow: () => mode === 'cloudbase' ? run.coachEnvironment.thermalFlow() : null,
+    openingProtected: () => mode === 'cloudbase' && run.coachEnvironment.openingProtected(),
     sampleAir: (pos, out) => mode === 'cloudbase'
       ? run.coachEnvironment.sampleAir(pos, out) : sampleFjordAir(pos, airtime, out),
     heightAt: surfaceAt,

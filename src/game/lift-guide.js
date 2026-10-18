@@ -41,6 +41,7 @@ export function createLiftGuide(adapter) {
   const activity = createLiftActivity(adapter);
   const soaringTurn = createSoaringTurn(adapter);
   const ridgeTransfer = createRidgeTransfer({ ...adapter, sources: () => adapter.sources?.() ?? [] });
+  const directions = new Map();
   const point = { x: 0, y: 0, z: 0 }, sampled = {}, intercept = {};
   let clock = -Infinity, searchAt = -Infinity, lockedAt = -Infinity;
   let locked = null, challenger = '', challengeAt = -Infinity;
@@ -70,6 +71,7 @@ export function createLiftGuide(adapter) {
     clock = searchAt = lockedAt = challengeAt = cueAt = -Infinity;
     locked = cue = message = route = null; challenger = ''; turnSide = 0;
     circleState = null; currentInput = {};
+    directions.clear();
     centering.reset();
     activity.reset();
     soaringTurn.reset();
@@ -98,7 +100,7 @@ export function createLiftGuide(adapter) {
   }
   function pathSafe(g, air, target, fog, forcedSide = 0) {
     if (adapter.navigation && target?.circleSource) {
-      return centering.choose(g, target.circleSource, target.dir, currentInput, fog, clock) !== null;
+      return centering.choose(g, target.circleSource, target.dir, currentInput, fog, clock, { sameWay: true }) !== null;
     }
     if (adapter.navigation && target?.context === 'thermal') {
       const error = wrap(bearing(g.pos, target) - (g.track ?? g.yaw ?? 0) - (g.trackRate || 0) * C.anticipate);
@@ -150,11 +152,21 @@ export function createLiftGuide(adapter) {
     return true;
   }
   function sources() {
-    return (adapter.sources?.() ?? []).map((source, index) => ({
+    const live = (adapter.sources?.() ?? []).map((source, index) => ({
       ...source, id: source.id ?? index, key: sourceKey(source, index), generation: source.generation ?? 0,
       r: source.r ?? 60, strength: source.strength ?? 1, live: source.live !== false,
       remaining: source.remaining ?? Infinity, vx: source.vx ?? 0, vz: source.vz ?? 0,
     }));
+    for (const key of directions.keys()) if (!live.some(source => source.key === key && source.live && !(source.move > 0))) directions.delete(key);
+    return live;
+  }
+  const hasFlock = source => !!adapter.navigation && (source.flock ?? (source.id !== 0 && source.dir != null));
+  function direction(source, g, air, observed = 0) {
+    if (!adapter.navigation) return observed || (locked?.key === source.key ? locked.dir :
+      Math.abs(g.bank || 0) > 0.2 && Math.abs(g.trackRate || 0) > 0.12 ? Math.sign(g.trackRate) : Math.sign(source.dir || 1));
+    if (!directions.has(source.key)) directions.set(source.key, hasFlock(source) ? Math.sign(source.dir || 1) :
+      Math.abs(g.bank || 0) > 0.2 ? Math.sign(g.bank) : source.id === 0 ? -(Math.sign(air.windX) || -1) : Math.sign(source.dir || 1));
+    return directions.get(source.key);
   }
   function alive(source, seconds = 0) {
     if (activity.state.activity === 'thermal' && source.id === activity.state.sourceId &&
@@ -231,7 +243,7 @@ export function createLiftGuide(adapter) {
       const reach = movingLiftIntercept(g.pos, source, { x: air.windX || 0, z: air.windZ || 0 }, intercept, flightSpeed(g));
       if (!alive(source, reach.seconds)) continue;
       const occupied = distance(g.pos, source) < source.r * 0.9 && vertical(air) >= C.useful;
-      const dir = locked?.key === source.key ? locked.dir : Math.abs(g.bank || 0) > 0.2 && Math.abs(g.trackRate || 0) > 0.12 ? Math.sign(g.trackRate) : (adapter.navigation && source.id === 0 ? -(Math.sign(air.windX) || -1) : Math.sign(source.dir || 1));
+      const dir = direction(source, g, air);
       const candidate = refresh({ context: 'thermal', key: source.key, dir }, live, g, air, fog);
       if (!candidate) continue;
       if (occupied) return candidate;
@@ -252,6 +264,14 @@ export function createLiftGuide(adapter) {
   }
   function select(g, air, live, fog) {
     const confirmed = activity.state;
+    const flow = adapter.thermalFlow?.();
+    const ridden = flow && live.find(source => source.id === flow.source && source.generation === flow.generation);
+    // The protected opening keeps its useful circle through overlapping cores. Traffic may
+    // identify stronger air beside it before the pilot has established a circle there.
+    if (!adapter.openingProtected?.() && ridden && alive(ridden) && vertical(air) >= C.useful) {
+      const candidate = refresh({ context: 'thermal', key: ridden.key, dir: direction(ridden, g, air) }, live, g, air, fog);
+      if (candidate?.occupied) return candidate;
+    }
     if (adapter.navigation && confirmed.activity !== 'thermal') {
       const current = locked?.context === 'thermal' ? refresh(locked, live, g, air, fog) : null;
       if (current?.occupied || current?.circling) return current;
@@ -259,8 +279,7 @@ export function createLiftGuide(adapter) {
       // for the activity observer's full three seconds of coherent climbing flight.
       for (const source of live) {
         if (distance(g.pos, source) >= source.r * 0.9 || !alive(source) || vertical(air) < C.useful) continue;
-        const dir = locked?.key === source.key ? locked.dir : Math.abs(g.bank) > 0.2 ? Math.sign(g.bank)
-          : source.id === 0 ? -(Math.sign(air.windX) || -1) : Math.sign(source.dir || 1);
+        const dir = direction(source, g, air);
         const candidate = refresh({ context: 'thermal', key: source.key, dir }, live, g, air, fog);
         if (candidate) return candidate;
       }
@@ -268,7 +287,7 @@ export function createLiftGuide(adapter) {
     if (confirmed.activity === 'thermal') {
       const source = live.find(item => item.id === confirmed.sourceId && item.generation === confirmed.sourceGeneration);
       return source ? refresh({ context: 'thermal', key: source.key, circling: true,
-        dir: confirmed.sourceDir || locked?.dir || 1 }, live, g, air, fog) : null;
+        dir: direction(source, g, air, confirmed.sourceDir) }, live, g, air, fog) : null;
     }
     if (confirmed.activity === 'ridge') {
       const current = locked?.context === 'ridge' ? refresh(locked, live, g, air, fog) : null;
@@ -329,13 +348,16 @@ export function createLiftGuide(adapter) {
     const rate = g.trackRate || 0;
     const anticipated = wrap(raw - rate * C.anticipate);
     let side = Math.abs(anticipated) > (turnSide ? C.exit : C.enter) ? Math.sign(anticipated) : 0;
-    let counter = false;
+    let counter = false, joining = false;
     if (locked.circling && locked.context === 'thermal') {
-      // The fjord keeps its established turn. Good Lift also forecasts a normal counterturn
-      // when wind has carried the circle away; every displayed side matches the requested side.
+      // Widen or tighten the established circle. Joining opposing traffic first levels the
+      // old turn; normal centering never silently asks the pilot to reverse the orbit.
       if (circleState?.key !== locked.key || circleState.dir !== locked.dir)
         circleState = { key: locked.key, dir: locked.dir, easing: false, since: clock, aheadSince: null };
-      side = adapter.navigation && locked.circleSource ? centering.choose(g, locked.circleSource, locked.dir, input, fog, clock) : circleTurn(circleState, -anticipated * locked.dir, clock) ? locked.dir : 0;
+      joining = !!adapter.navigation && (rate * locked.dir < -0.08 || (g.bank || 0) * locked.dir < -0.2);
+      side = joining ? 0 : adapter.navigation && locked.circleSource ?
+        centering.choose(g, locked.circleSource, locked.dir, input, fog, clock, { sameWay: true }) ?? 0 :
+        circleTurn(circleState, -anticipated * locked.dir, clock) ? locked.dir : 0;
     } else if (Math.abs(raw) < C.enter && Math.abs(rate) > 0.18 &&
         Math.abs(anticipated) > C.exit && Math.sign(anticipated) !== Math.sign(rate)) {
       const opposite = -Math.sign(rate);
@@ -345,10 +367,15 @@ export function createLiftGuide(adapter) {
     turnSide = side;
     const action = side < 0 ? 'left' : side > 0 ? 'right' : 'straight';
     const along = locked.context === 'ridge' && locked.occupied;
-    const phase = counter ? 'align' : locked.circling ? side ? 'circle' : 'ease' : locked.occupied ? 'hold' : side ? 'approach' : 'align';
+    const phase = joining || counter ? 'align' : locked.circling ? side ? 'circle' : 'ease' : locked.occupied ? 'hold' : side ? 'approach' : 'align';
     const transfer = !!adapter.navigation && !locked.circling && !locked.occupied;
     const direction = side < 0 ? 'LEFT' : side > 0 ? 'RIGHT' : 'AHEAD';
     const metres = Math.round(distance(g.pos, locked));
+    const flock = locked.circleSource && hasFlock(locked.circleSource);
+    const flowDirection = locked.dir < 0 ? 'left' : 'right';
+    const flowDetail = flock ? `Follow the ravens — circle ${flowDirection}. ` : '';
+    const traffic = adapter.thermalFlow?.();
+    const pressure = traffic?.pressure && traffic.source === locked.id && traffic.generation === locked.generation && g.pos.y >= 500;
     return { state: 'lift', context: locked.context, ...(transfer ? { heading: 'NEXT LIFT' } : {}), phase, action,
       ...(locked.circling ? { brakeDepth: 'working', hold: side ? [side < 0 ? 'left' : 'right', 'brake'] : ['brake'],
         release: side ? [side < 0 ? 'right' : 'left', 'bar'] : ['left', 'right', 'bar'] } : {
@@ -357,11 +384,13 @@ export function createLiftGuide(adapter) {
       ...(counter ? { title: `CHECK ${side < 0 ? 'LEFT' : 'RIGHT'} — LEVEL THE TURN` } : {}),
       ...(locked.circling ? { title: side ? `CIRCLE ${(adapter.navigation ? side : locked.dir) < 0 ? 'LEFT' : 'RIGHT'} + NORMAL BRAKE` :
         `EASE ${locked.dir < 0 ? 'LEFT' : 'RIGHT'} · KEEP BRAKE`, stableTitle: true } : {}),
+      ...(joining ? { title: 'LEVEL THE TURN', preferredDirection: locked.dir } : {}),
       ...(transfer ? { title: `${direction} · ${metres} m`, stableTitle: true, distance: metres } : {}),
-      detail: counter ? 'A brief opposite input checks the turn; then release.' :
+      detail: joining ? `Release the direction and keep normal brake. Then ${flock ? 'follow the ravens and ' : ''}circle ${flowDirection}.${pressure ? ' Opposite circling brings more raven encounters.' : ''}` :
+        counter ? 'A brief opposite input checks the turn; then release.' :
         locked.circling && locked.context === 'thermal' ? side ?
-          'Normal brake slows the wing and tightens the circle. Rising air provides the lift; deep brake is unnecessary.' :
-          'Release the direction briefly to widen the circle, then resume the same turn. Keep normal brake.' :
+          `${flowDetail}Normal brake tightens the circle. Rising air provides the lift.` :
+          `${flowDetail}Release the direction briefly to widen the circle; keep normal brake.` :
           along ? side ? 'Follow the rising air along the cliff.' : 'Fly along the cliff; keep room between the wing and the face.' :
             transfer ? 'Release brake for the transfer. Follow this direction to lift, then use direction + normal brake to circle.' :
               locked.context === 'thermal' ? 'Aim beside the circling ravens, then settle into a gentle circle.' : 'Rising air is ahead along this cliff; turn toward the clear approach.',

@@ -8,6 +8,7 @@ import { controlsOf, followInstruction, createVisiblePilot } from './test-guided
 import { inputBits } from './recorder.js';
 import { finishRun } from './run-step.js';
 import { summariseRun } from './meet-sheet.js';
+import { CLOUD_ZONE } from './cloudbase-state.js';
 
 const dt = 1 / 60;
 const released = () => ({ left: false, right: false, brake: false, deepBrake: false, bar: false, ears: false });
@@ -78,7 +79,13 @@ export function recoveryRun({ scenario = 'stall', seed = 1, delay = 0.3 } = {}) 
   while (world.sky.state.elapsed < 230 && !ended) {
     let input = null;
     const now = world.sky.state.elapsed, g = world.g;
-    if (stage === 'climb' && g.pos.y >= 450) { stage = 'level'; stageAt = now; }
+    // The coach may reach 450 m on either side of a circle. Start the deliberate failure
+    // setup on an inward heading, with room for its unsteered surge and recovery.
+    const inward = Math.atan2(CLOUD_ZONE.x - g.pos.x, -(CLOUD_ZONE.z - g.pos.z));
+    const headingError = Math.atan2(Math.sin(inward - g.track), Math.cos(inward - g.track));
+    if (stage === 'climb' && g.pos.y >= 450 && Math.abs(headingError) < 0.2) {
+      stage = 'level'; stageAt = now;
+    }
     if (stage === 'level') {
       input = released();
       if (world.watch.state.calm >= 1) { stage = 'entry'; stageAt = now; }

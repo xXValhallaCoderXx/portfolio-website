@@ -178,6 +178,49 @@ test('ravens mark thermals below 500 m without attack opportunities', () => {
   assert.ok(run.state.ravens.every(r => !r.hot && !r.threat));
   assert.equal(run.state.ravenDue, -1);
 });
+
+function circleTraffic({ y = 700, turn = -1, eligible = true, due = 120, seconds = 12 } = {}) {
+  const run = createCloudbaseRun({ wind: false }); run.reset(y, 1);
+  for (const cloud of run.state.clouds) cloud.y = 10000;
+  for (const [id, cell] of run.state.thermals.entries()) {
+    cell.live = id === 1; cell.move = 0;
+    if (id === 1) Object.assign(cell, { x: 0, z: 80, fromX: 0, fromZ: 80, dir: 1, life: 1000 });
+  }
+  run.state.ravenDue = due;
+  const warnings = [];
+  for (let i = 0; i < seconds / STEP; i++) {
+    const angle = i * STEP * turn * 0.4, cell = run.state.thermals[1];
+    run.step(STEP, { x: cell.x + Math.sin(angle) * 25, y, z: cell.z - Math.cos(angle) * 25 }, { flowEligible: eligible });
+    if (run.state.ravenAttack >= 0) warnings.push({ time: run.state.elapsed, at: run.state.ravenAt,
+      hot: run.state.ravens.some(bird => bird.hot), strikes: run.state.pilot.strikes });
+  }
+  return { run, warnings };
+}
+
+test('sustained opposing traffic spends encounter time at 1.5x after grace, while correct flow keeps the baseline', () => {
+  const against = circleTraffic().run, matching = circleTraffic({ turn: 1 }).run;
+  assert.equal(matching.state.ravenDue, 120);
+  assert.equal(against.state.flow.pressure, true);
+  assert.ok(against.state.ravenDue > 115.4 && against.state.ravenDue < 115.6);
+  assert.equal(against.state.pilot.strikes, 0, 'extra pressure alone causes no strike');
+  for (const options of [{ y: 499 }, { eligible: false }]) {
+    const { run } = circleTraffic(options);
+    assert.equal(run.state.ravenDue, 120);
+    assert.ok(run.state.ravens.every(bird => !bird.hot && !bird.threat));
+  }
+});
+
+test('accelerated traffic retains the full warning lead and requires the normal contact window', () => {
+  const { run, warnings } = circleTraffic({ due: 12, seconds: 11 });
+  assert.ok(warnings.length > 60);
+  assert.ok(warnings[0].time < 10, 'opposing flow reaches the scheduled opportunity sooner');
+  assert.ok(warnings.filter(w => w.time - w.at < 1 - 1e-9).every(w => !w.hot && !w.strikes));
+  assert.ok(warnings.some(w => w.time - w.at >= 1 && w.hot));
+  const before = structuredClone(run.state.flow);
+  run.step(0, point(CLOUD_ZONE, 700));
+  assert.deepEqual(run.state.flow, before);
+  run.reset(); assert.equal(run.state.flow.source, -1); assert.equal(run.state.flow.pressure, false);
+});
 test('a warned raven in its collision window folds the canopy once and the shield prevents repeats', () => {
   const run = createCloudbaseRun({ wind: false }); run.reset();
   run.state.clouds.forEach(c => { c.y = 10000; });

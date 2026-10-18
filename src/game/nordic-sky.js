@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 // A separate visual seed stream. No sky sample, flight clock or saved record reads this module.
 export const NORDIC_SKY = Object.freeze({ centre: Object.freeze([0, 80]),
-  inner: 680, clouds: 8, heroes: 3, loadAt: Object.freeze([400, 850, 1400]), fadeSeconds: 1.2 });
+  inner: 680, clouds: 8, heroes: 3, loadAt: Object.freeze([0, 150, 250]), fadeSeconds: 1.2 });
 const TAU = Math.PI * 2;
 const clamp = (x) => Math.max(0, Math.min(1, x));
 const blend = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -21,10 +21,10 @@ export function skyBlend(altitude, out = {}) {
   return out;
 }
 
-/** Nine fixed formations, served by three reusable hero views. Every extent is outside the arena. */
+/** Twelve fixed formations, served by three reusable hero views. All stay outside the arena. */
 export function islandFormations(seed = 1) {
   const random = dice((seed >>> 0) ^ 0x6e6f7264);
-  return Array.from({ length: 9 }, (_, i) => {
+  const higher = Array.from({ length: 9 }, (_, i) => {
     const kind = i % 3;
     const angle = i * 2.4 + (random() - 0.5) * 0.5;
     const distance = 920 + random() * 220;
@@ -32,6 +32,16 @@ export function islandFormations(seed = 1) {
     return { kind, id: i, x: Math.cos(angle) * distance, z: 80 + Math.sin(angle) * distance,
       y, size: 270 + random() * 75, turn: random() * TAU, from: y - 370 };
   });
+  // The first shelf is ahead of the gate, near the horizon even on a narrow phone view.
+  // A second stream leaves all established upper-sky placements unchanged.
+  const early = dice((seed >>> 0) ^ 0x6561726c);
+  return higher.concat(Array.from({ length: 3 }, (_, kind) => {
+    const angle = -Math.PI / 2 + kind * TAU / 3 + (early() - 0.5) * 0.12;
+    const distance = 1000 + early() * 100;
+    return { kind, id: 9 + kind, x: Math.cos(angle) * distance, z: 80 + Math.sin(angle) * distance,
+      y: [180, 260, 340][kind], size: 270 + early() * 30, turn: early() * TAU,
+      from: 100 + kind * 100, to: 200 + kind * 100 };
+  }));
 }
 
 /** buildSky's backwards-compatible update(time, context?) and explicit resource ownership. */
@@ -257,25 +267,32 @@ export function createNordicSky({ loadModel = null } = {}) {
       mountain.visible = mountain.material.opacity > 0.01;
     }
     if (altitude >= 400) requestClouds();
+    const visibility = (p) => blend(p.from, p.to ?? p.from + 240, altitude) *
+      (1 - blend(p.y + 650, p.y + 950, altitude)) *
+      (1 - blend(p.y - 80, p.y + p.size, fog));
     for (let kind = 0; kind < heroes.length; kind++) {
       const hero = heroes[kind];
       if (altitude >= NORDIC_SKY.loadAt[kind]) requestHero(hero);
       if (!hero.model) continue;
       let candidate = null, best = Infinity;
       for (const formation of formations) {
-        if (formation.kind !== kind) continue;
+        if (formation.kind !== kind || visibility(formation) <= 0.01) continue;
         const gap = Math.abs(altitude - (formation.y + formation.size * 0.45));
         if (gap < best) { candidate = formation; best = gap; }
       }
-      const visible = blend(candidate.from, candidate.from + 240, altitude) *
-        (1 - blend(candidate.y + 650, candidate.y + 950, altitude)) *
-        (1 - blend(candidate.y - 80, candidate.y + candidate.size, fog));
-      if (hero.id !== candidate.id) { hero.id = candidate.id; hero.opacity = 0; }
-      const target = context.lowDetail && kind === 2 ? 0 : visible;
+      let placement = formations.find(p => p.id === hero.id);
+      if (!placement && candidate) { hero.id = candidate.id; placement = candidate; }
+      const swapping = candidate && hero.id !== candidate.id;
+      const suppressed = context.lowDetail && kind === 2;
+      const target = suppressed || swapping || !candidate ? 0 : visibility(candidate);
       hero.opacity += Math.sign(target - hero.opacity) * Math.min(Math.abs(target - hero.opacity), dt / NORDIC_SKY.fadeSeconds);
-      hero.model.position.set(candidate.x, candidate.y, candidate.z);
-      hero.model.rotation.y = candidate.turn; hero.model.scale.setScalar(candidate.size);
-      hero.model.visible = hero.opacity > 0.01;
+      // Never move a visible island to its next world placement.
+      if (swapping && hero.opacity === 0) { hero.id = candidate.id; placement = candidate; }
+      if (placement) {
+        hero.model.position.set(placement.x, placement.y, placement.z);
+        hero.model.rotation.y = placement.turn; hero.model.scale.setScalar(placement.size);
+      }
+      hero.model.visible = !suppressed && hero.opacity > 0.01;
       for (const fade of hero.fades) fade.value = hero.opacity;
     }
     for (let i = 0; i < banks.length; i++) {

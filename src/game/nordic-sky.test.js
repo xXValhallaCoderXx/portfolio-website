@@ -49,13 +49,19 @@ test('legacy updates retain the original placement; contextual celestial objects
 
 test('models load progressively, fade after arrival and reuse bounded pools through climbs, seed changes and reset', async () => {
   const loader = createTestLoader({ maps: true }), sky = createNordicSky(loader);
-  sky.update(0, context(150)); await sky.ready; assert.equal(loader.calls.length, 0);
-  sky.update(1, context(500)); await sky.ready;
-  assert.deepEqual(loader.calls.map(([name]) => name).sort(), ['clouds', 'island-alpine']);
+  sky.update(0, context(100)); await sky.ready;
+  assert.deepEqual(loader.calls.map(([name]) => name), ['island-alpine']);
   assert.equal(sky.state.visibleHeroes, 0, 'completed loads start transparent');
-  frames(sky, context(1000), 2, 1); await sky.ready; frames(sky, context(1000), 2, 3);
+  frames(sky, context(150), 2, 1); await sky.ready;
+  assert.equal(sky.state.visibleHeroes, 1, 'the shelf is visible during the opening climb');
+  assert.deepEqual(loader.calls.map(([name]) => name), ['island-alpine', 'island-ruins']);
+  sky.update(3, context(250)); await sky.ready;
+  assert.equal(loader.calls.at(-1)[0], 'island-split');
+  frames(sky, context(400), 2, 3); await sky.ready;
+  assert.equal(sky.state.visibleHeroes, 3, 'all designs appear by 400 m');
+  assert.ok(sky.state.islands.every(view => view.opacity === 1));
+  frames(sky, context(1000), 3, 5);
   assert.ok(sky.state.visibleHeroes > 0);
-  sky.update(6, context(1500)); await sky.ready; frames(sky, context(1500), 2, 6);
   assert.equal(loader.calls.length, 4);
   const childCount = sky.group.getObjectByName('altitude scenery').children.length;
   const textures = await loader.owned();
@@ -79,6 +85,26 @@ test('models load progressively, fade after arrival and reuse bounded pools thro
   for (const v of counts.keys()) v.addEventListener('dispose', () => counts.set(v, counts.get(v) + 1));
   sky.dispose(); sky.dispose();
   for (const n of counts.values()) assert.equal(n, 0, 'loader resources remain owned by the cache');
+});
+
+test('the first shelf is ahead of the gate and a reused island never changes position while visible', async () => {
+  const sky = createNordicSky(createTestLoader());
+  frames(sky, context(400)); await sky.ready; frames(sky, context(400), 2, 2);
+  const shelf = sky.group.getObjectByName('island-alpine'), before = shelf.position.clone();
+  assert.ok(Math.abs(before.x) < 70 && before.z < -900);
+  assert.equal(before.y, 180);
+  sky.update(4.05, context(1000));
+  assert.deepEqual(shelf.position, before, 'the old world position remains throughout the fade');
+  let relocated = false;
+  for (let i = 1; i <= 180; i++) {
+    sky.update(4.05 + i / 60, context(1000));
+    if (!shelf.position.equals(before)) {
+      if (!relocated) assert.equal(shelf.visible, false, 'relocation happens only at zero opacity');
+      relocated = true;
+    }
+  }
+  assert.ok(relocated && shelf.visible);
+  sky.dispose();
 });
 
 test('failed and late model loads leave scenery usable and release only resources owned by this view', async () => {

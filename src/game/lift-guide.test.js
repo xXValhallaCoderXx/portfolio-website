@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLiftGuide as createQualifiedLiftGuide, LIFT_GUIDE } from './lift-guide.js';
 import { glideDuration, movingLiftIntercept } from './glide-math.js';
-import { createFlight, FLIGHT } from './flight.js';
+import { createFlight, stepFlight, FLIGHT } from './flight.js';
 import { createTerrainAir, thermalProfile } from './atmosphere.js';
 import { CLOUD_ZONE, cloudFogSpeed, cloudThermalRemaining, createCloudbaseRun } from './cloudbase-state.js';
 import { createRunWorld, startRun, stepRun } from './run-step.js';
@@ -414,6 +414,59 @@ test('visible thermal coaching waits three seconds of actual circling while appr
     assert.equal(guide.step(0.01, facts(g, adapter, 3.01)), null, 'a reborn slot must qualify again');
     assert.equal(guide.activity.activity, 'navigating');
   }
+});
+
+for (const dir of [-1, 1]) test(`real normal-brake circles follow flock ${dir} without reversed centering cues`, () => {
+  const source = { id: 1, flock: true, generation: 1, x: 0, z: 0, r: 100, dir, remaining: 90 };
+  const adapter = field([source], { navigation: true });
+  const guide = createQualifiedLiftGuide(adapter), g = createFlight({ x: -dir * 21, y: 700, z: 0 });
+  const action = dir < 0 ? 'left' : 'right', input = { [action]: true, brake: true };
+  let shown = 0;
+  for (let tick = 0; tick < 600; tick++) {
+    const air = adapter.sampleAir(g.pos, {});
+    stepFlight(g, { turn: dir, brake: true }, air, STEP);
+    const message = guide.step(STEP, { g, air, input, clock: tick * STEP });
+    if (!message) continue;
+    shown++;
+    assert.ok(message.action === action || message.action === 'straight', JSON.stringify(message));
+    assert.match(message.detail, /Follow the ravens/);
+    assert.ok(message.hold.includes('brake'));
+  }
+  assert.ok(shown > 200, 'actual sustained climbing flight qualifies and receives the consistent guide');
+});
+
+test('opposite traffic is asked to level first, and a new source generation can establish the other direction', () => {
+  const source = { id: 1, flock: true, generation: 1, x: 0, z: 0, r: 100, dir: 1, remaining: 90 };
+  const adapter = field([source], { navigation: true });
+  const guide = createQualifiedLiftGuide(adapter), g = createFlight({ x: 21, y: 700, z: 0 });
+  for (let tick = 0; tick < 300; tick++) {
+    const air = adapter.sampleAir(g.pos, {});
+    stepFlight(g, { turn: -1, brake: true }, air, STEP);
+    guide.step(STEP, { g, air, input: { left: true, brake: true }, clock: tick * STEP });
+  }
+  assert.equal(guide.message.title, 'LEVEL THE TURN');
+  assert.deepEqual(guide.message.hold, ['brake']);
+  assert.ok(guide.message.release.includes('left'));
+  assert.match(guide.message.detail, /ravens and circle right/);
+  source.generation++; source.dir = -1;
+  guide.step(STEP, facts(g, adapter, 5.1, { left: true, brake: true }));
+  assert.equal(guide.message, null, 'the new identity needs fresh thermalling qualification');
+  assert.equal(guide.route.targetGeneration, 2);
+  assert.match(guide.route.title, /LEFT/);
+});
+
+test('overlapping opening air keeps its useful circle before traffic can select a different flock', () => {
+  const cells = [{ id: 0, x: 0, z: 0, r: 100, s: 2, remaining: 90 },
+    { id: 1, generation: 1, x: -40, z: 0, r: 100, s: 2.5, dir: -1, remaining: 90 }];
+  let protectedOpening = true;
+  const adapter = field(cells, { navigation: true, openingProtected: () => protectedOpening,
+    thermalFlow: () => ({ source: 1, generation: 1 }) });
+  const guide = createQualifiedLiftGuide(adapter), g = createFlight({ x: -21, y: 150, z: 0 });
+  guide.step(STEP, facts(g, adapter, 0));
+  assert.equal(guide.route.targetId, 0, 'the neighbouring stronger cell does not pull the opening circle away');
+  protectedOpening = false;
+  guide.step(STEP, facts(g, adapter, 1));
+  assert.equal(guide.route.targetId, 1, 'ordinary soaring follows the observed flock after the opening');
 });
 
 test('a selected thermal and straight rising fly-through never activate the specialist coach', () => {

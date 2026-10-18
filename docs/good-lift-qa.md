@@ -1,11 +1,15 @@
 # Good Lift — initial release QA and code review
 
+The later [early-island and raven-direction update](good-lift-raven-flow-qa.md) introduces
+simulation 2 and retains saved progress. Its local preview is <http://localhost:4177/good-lift?sky=1>.
+The initial-release evidence below describes simulation 1.
+
 Local candidate based on `189833c`, verified on 18 October 2026. Preview:
 <http://localhost:4176/good-lift?sky=1>. No deployment was performed.
 
 The subsequent thermal and Nordic sky presentation update, based on `983c50e`, is verified in
-[the focused QA receipt](good-lift-nordic-sky-qa.md). Its current local preview is
-<http://localhost:4177/good-lift?sky=1>; flight rules, recording format and saved data remain unchanged.
+[the focused QA receipt](good-lift-nordic-sky-qa.md). That presentation update retained flight
+rules, recording format and saved data.
 
 ## Review and cleanup
 

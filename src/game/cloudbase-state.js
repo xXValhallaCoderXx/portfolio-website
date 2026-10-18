@@ -4,7 +4,9 @@
 // the same seed and the same flight always give the same sky.
 import { sampleAtmosphere, thermalProfile } from './atmosphere.js';
 import { CLOUD_WEATHER, cloudWeatherAt } from './cloud-weather.js';
+import { THERMAL_FLOW, createThermalFlowState, resetThermalFlow, stepThermalFlow } from './thermal-flow.js';
 export { CLOUD_WEATHER } from './cloud-weather.js';
+export { THERMAL_FLOW as CLOUD_RAVEN_FLOW } from './thermal-flow.js';
 
 export const CLOUD_ZONE = Object.freeze({ x: 0, z: 80, r: 320 });
 // Enter beyond the stone arch with room to cross to either windward cliff.
@@ -171,6 +173,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     gustDue: 0,
     gustCount: 0,
     ravenDue: -1, ravenCount: 0, ravenAttack: -1, ravenAt: -Infinity,
+    flow: createThermalFlowState(CLOUD_POOL.thermals),
     // `x, y, z` is where the pilot was at the last step. `collapse` and `shield` count down in
     // seconds. `cloud` is depth inside a cloud from 0 to 1, `thermal` the slot the pilot is in (or
     // -1), `danger` 1 while a raven is about to cross, and `headroom` the clear air up to a cloud
@@ -545,6 +548,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     state.elapsed = state.fogHeight = 0;
     state.openingAt = -1;
     state.ravenDue = -1; state.ravenCount = 0; state.ravenAttack = -1; state.ravenAt = -Infinity;
+    resetThermalFlow(state.flow);
     updateWeather();
     state.peak = Number.isFinite(startAltitude) ? Math.max(0, startAltitude) : CLOUD_GATE.y;
     state.active = true;
@@ -597,7 +601,10 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
         thermal.wear = thermal.move = thermal.moveTime = thermal.scatter = 0;
         thermal.waiting = false;
         thermal.live = true;
-        thermal.dir = rand() < 0.5 ? 1 : -1;
+        const drawnDir = rand() < 0.5 ? 1 : -1;
+        // Teach one safe direction through the opening transfer. Consume the same seeded
+        // draw so later flocks, cell positions and weather retain their independent layout.
+        thermal.dir = i === 1 ? -(Math.sign(state.ambientX) || -1) : drawnDir;
         thermal.rise = rand() * R.stack;
         thermal.strength = strengthOf(thermal, true);
         if (i === 1) { thermal.age = 0; thermal.strength = 1; }
@@ -652,7 +659,8 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     return true;
   }
 
-  function step(dt, pos) {
+  // Optional physical eligibility comes from the shared run step, never the coach or lessons.
+  function step(dt, pos, context) {
     if (!state.active || !Number.isFinite(dt) || dt <= 0) return null;
     state.elapsed += dt;
     updateWeather();
@@ -736,11 +744,18 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
       } else if (thermal.strength === 0) thermal.live = false;
     }
 
+    stepThermalFlow(state.flow, dt, pos, state.thermals, vx, vz,
+      context?.flowEligible !== false && within && pilot.collapse === 0 && pilot.shield === 0 && pilot.cloud < K.cover);
     const encounter = CLOUD_ENCOUNTERS.raven;
     if (hazards && state.ravenDue < 0 && state.peak >= encounter.from)
       state.ravenDue = state.elapsed + mix(encounter.first[0], encounter.first[1], pick(7000));
     if (state.elapsed - state.ravenAt >= encounter.warning + encounter.window || pos.y < encounter.from || pilot.shield > 0)
       state.ravenAttack = -1;
+    // Spend a seeded interval faster only during sustained opposing traffic. Warning and
+    // collision windows still use real elapsed time, including their full one-second lead.
+    if (hazards && pos.y >= encounter.from && state.ravenDue >= 0 && state.ravenAttack < 0 &&
+        state.flow.pressure && state.flow.sense < 0)
+      state.ravenDue -= dt * (THERMAL_FLOW.pressureRate - 1);
     if (state.ravenDue >= 0 && state.elapsed >= state.ravenDue) {
       // A missed or unsafe opportunity is spent too; never retry it on every frame.
       state.ravenAttack = -1;

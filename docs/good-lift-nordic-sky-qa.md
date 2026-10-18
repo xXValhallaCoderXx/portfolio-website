@@ -1,5 +1,9 @@
 # Readable thermals and Nordic sky — local QA
 
+The follow-up [earlier islands and raven-led thermalling receipt](good-lift-raven-flow-qa.md)
+documents the lower island reveal and simulation 2 traffic rule. This receipt describes the
+original presentation update under simulation 1.
+
 Verified on 18 October 2026, on the local candidate based on `983c50e349aa0158653250a35778835f29db58ab`.
 Production preview: <http://localhost:4177/good-lift?sky=1>.
 No deployment was performed.

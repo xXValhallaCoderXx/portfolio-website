@@ -1,6 +1,6 @@
 {
   "engine": "Chromium 143.0.7499.4",
-  "generated": "2026-10-18T03:24:24.422Z",
+  "generated": "2026-10-18T14:17:59.441Z",
   "sourceFiles": [
     "wing-envelope.js",
     "flight.js",
@@ -18,13 +18,13 @@
     "score.js",
     "sim-version.js"
   ],
-  "sourceDigest": "f40db15dd1d075e323c993525820140d602251e2cd901a240fb40b2995dab0bd",
+  "sourceDigest": "bd3af2fe2dba338232afd76481e2fcf0f38b5782bcfe9c102d19a3a3e91bbda8",
   "records": [
     {
       "kind": "pitch",
       "side": -1,
       "delay": 0,
-      "simVersion": 1,
+      "simVersion": 2,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -36,7 +36,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQEAAAAAAAAAAAAM6AfJCoWlAYA9tBqgIeQigBI",
+      "link": "AQIAAAAAAAAAAAAM6AfJCoWlAYA9tBqgIeQigBI",
       "snapshot": {
         "g": {
           "pilot": {
@@ -346,7 +346,7 @@
       "kind": "pitch",
       "side": -1,
       "delay": 0.1,
-      "simVersion": 1,
+      "simVersion": 2,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -358,7 +358,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQEAAAAAAAAAAAAM6AfhC8WmAaA-1BvgIKQjgDQ",
+      "link": "AQIAAAAAAAAAAAAM6AfhC8WmAaA-1BvgIKQjgDQ",
       "snapshot": {
         "g": {
           "pilot": {
@@ -668,7 +668,7 @@
       "kind": "pitch",
       "side": -1,
       "delay": 0.2,
-      "simVersion": 1,
+      "simVersion": 2,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -680,7 +680,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQEAAAAAAAAAAAAM6AfxC4WoAcA_9BygIIQk4DM",
+      "link": "AQIAAAAAAAAAAAAM6AfxC4WoAcA_9BygIIQk4DM",
       "snapshot": {
         "g": {
           "pilot": {
@@ -990,7 +990,7 @@
       "kind": "pitch",
       "side": -1,
       "delay": 0.3,
-      "simVersion": 1,
+      "simVersion": 2,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -1002,7 +1002,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQEAAAAAAAAAAAAM6Af-C8WpAcBAlB6gIKQkgDM",
+      "link": "AQIAAAAAAAAAAAAM6Af-C8WpAcBAlB6gIKQkgDM",
       "snapshot": {
         "g": {
           "pilot": {
@@ -1312,7 +1312,7 @@
       "kind": "pitch",
       "side": 1,
       "delay": 0,
-      "simVersion": 1,
+      "simVersion": 2,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -1324,7 +1324,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQEAAAAAAAAAAAAM6AfJCoalAYA9tBqgIeQigBI",
+      "link": "AQIAAAAAAAAAAAAM6AfJCoalAYA9tBqgIeQigBI",
       "snapshot": {
         "g": {
           "pilot": {
@@ -1634,7 +1634,7 @@
       "kind": "pitch",
       "side": 1,
       "delay": 0.1,
-      "simVersion": 1,
+      "simVersion": 2,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -1646,7 +1646,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQEAAAAAAAAAAAAM6AfhC8amAaA-1BvgIKQjgDQ",
+      "link": "AQIAAAAAAAAAAAAM6AfhC8amAaA-1BvgIKQjgDQ",
       "snapshot": {
         "g": {
           "pilot": {
@@ -1956,7 +1956,7 @@
       "kind": "pitch",
       "side": 1,
       "delay": 0.2,
-      "simVersion": 1,
+      "simVersion": 2,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -1968,7 +1968,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQEAAAAAAAAAAAAM6AfxC4aoAcA_9BygIIQk4DM",
+      "link": "AQIAAAAAAAAAAAAM6AfxC4aoAcA_9BygIIQk4DM",
       "snapshot": {
         "g": {
           "pilot": {
@@ -2278,7 +2278,7 @@
       "kind": "pitch",
       "side": 1,
       "delay": 0.3,
-      "simVersion": 1,
+      "simVersion": 2,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -2290,7 +2290,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQEAAAAAAAAAAAAM6Af-C8apAcBAlB6gIKQkgDM",
+      "link": "AQIAAAAAAAAAAAAM6Af-C8apAcBAlB6gIKQkgDM",
       "snapshot": {
         "g": {
           "pilot": {
@@ -2600,7 +2600,7 @@
       "kind": "wingover",
       "side": -1,
       "delay": 0,
-      "simVersion": 1,
+      "simVersion": 2,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -2612,7 +2612,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQEAAAAAAAAAAAAE6AfrDYWlAYA99QPhQKI8gSaAFeQJgBMk",
+      "link": "AQIAAAAAAAAAAAAE6AfrDYWlAYA99QPhQKI8gSaAFeQJgBMk",
       "snapshot": {
         "g": {
           "pilot": {
@@ -2923,7 +2923,7 @@
       "kind": "wingover",
       "side": -1,
       "delay": 0.1,
-      "simVersion": 1,
+      "simVersion": 2,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -2935,7 +2935,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQEAAAAAAAAAAAAE6AeVDsWmAaA-tQXhQII_4SfgFoQLgBI",
+      "link": "AQIAAAAAAAAAAAAE6AeVDsWmAaA-tQXhQII_4SfgFoQLgBI",
       "snapshot": {
         "g": {
           "pilot": {
@@ -3246,7 +3246,7 @@
       "kind": "wingover",
       "side": -1,
       "delay": 0.2,
-      "simVersion": 1,
+      "simVersion": 2,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -3258,7 +3258,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQEAAAAAAAAAAAAI6AfWDoWoAcA_9QbhQKJCgSqAGKQMgBY",
+      "link": "AQIAAAAAAAAAAAAI6AfWDoWoAcA_9QbhQKJCgSqAGKQMgBY",
       "snapshot": {
         "g": {
           "pilot": {
@@ -3569,7 +3569,7 @@
       "kind": "wingover",
       "side": -1,
       "delay": 0.3,
-      "simVersion": 1,
+      "simVersion": 2,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -3581,7 +3581,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQEAAAAAAAAAAAAM6AeWD8WpAcBAtQjhQOJFwS3AF4QO4Bk",
+      "link": "AQIAAAAAAAAAAAAM6AeWD8WpAcBAtQjhQOJFwS3AF4QO4Bk",
       "snapshot": {
         "g": {
           "pilot": {
@@ -3892,7 +3892,7 @@
       "kind": "wingover",
       "side": 1,
       "delay": 0,
-      "simVersion": 1,
+      "simVersion": 2,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -3904,7 +3904,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQEAAAAAAAAAAAAE6AfrDYalAYA99gPiQKE8giaAFeQJgBMk",
+      "link": "AQIAAAAAAAAAAAAE6AfrDYalAYA99gPiQKE8giaAFeQJgBMk",
       "snapshot": {
         "g": {
           "pilot": {
@@ -4215,7 +4215,7 @@
       "kind": "wingover",
       "side": 1,
       "delay": 0.1,
-      "simVersion": 1,
+      "simVersion": 2,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -4227,7 +4227,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQEAAAAAAAAAAAAE6AeVDsamAaA-tgXiQIE_4ifgFoQLgBI",
+      "link": "AQIAAAAAAAAAAAAE6AeVDsamAaA-tgXiQIE_4ifgFoQLgBI",
       "snapshot": {
         "g": {
           "pilot": {
@@ -4538,7 +4538,7 @@
       "kind": "wingover",
       "side": 1,
       "delay": 0.2,
-      "simVersion": 1,
+      "simVersion": 2,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -4550,7 +4550,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQEAAAAAAAAAAAAI6AfWDoaoAcA_9gbiQKFCgiqAGKQMgBY",
+      "link": "AQIAAAAAAAAAAAAI6AfWDoaoAcA_9gbiQKFCgiqAGKQMgBY",
       "snapshot": {
         "g": {
           "pilot": {
@@ -4861,7 +4861,7 @@
       "kind": "wingover",
       "side": 1,
       "delay": 0.3,
-      "simVersion": 1,
+      "simVersion": 2,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -4873,7 +4873,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQEAAAAAAAAAAAAM6AeWD8apAcBAtgjiQOFFwi3AF4QO4Bk",
+      "link": "AQIAAAAAAAAAAAAM6AeWD8apAcBAtgjiQOFFwi3AF4QO4Bk",
       "snapshot": {
         "g": {
           "pilot": {

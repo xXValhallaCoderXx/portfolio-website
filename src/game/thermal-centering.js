@@ -3,25 +3,34 @@
 // Forecasts sample the current sky; neither the sky nor the real wing advances here.
 import { createFlight, copyFlight, stepFlight } from './flight.js';
 
-export const THERMAL_CENTERING = Object.freeze({ every: 0.5, horizon: 7, step: 1 / 30,
-  reaction: 1, clearance: 35, distanceCost: 0.0025, keep: 0.5 });
+export const THERMAL_CENTERING = Object.freeze({ every: 0.5, horizon: 8.5, step: 1 / 20,
+  reaction: 1, clearance: 35, distanceCost: 0.0025, keep: 0.5,
+  easeAfter: Object.freeze([0, 1.5, 3]), easeFor: Object.freeze([1.5, 3]) });
 
 export function createThermalCentering(adapter, validPoint) {
   const projected = createFlight(), air = {}, C = THERMAL_CENTERING;
   let due = -Infinity, key = '', chosen = null;
   function reset() { due = -Infinity; key = ''; chosen = null; }
-  function choose(g, source, dir, input, fog, clock, { brake = true, onlySide = null } = {}) {
-    const identity = `${source.key}:${brake}:${onlySide ?? 'any'}`;
+  function choose(g, source, dir, input, fog, clock, { brake = true, onlySide = null, sameWay = false } = {}) {
+    const identity = `${source.key}:${dir}:${brake}:${onlySide ?? 'any'}:${sameWay}`;
     if (clock < due && key === identity) return chosen;
     key = identity; due = clock + C.every;
     let best = -Infinity, next = null;
-    for (const side of onlySide === null ? [dir, 0, -dir] : [onlySide]) {
+    // Anticipate the upwind part of an oval instead of comparing an entire straight glide
+    // against an entire circle. Every plan returns to the flock's original direction.
+    const plans = sameWay && onlySide === null ? [{ side: dir, from: Infinity, duration: 0 },
+      ...C.easeAfter.flatMap(from => C.easeFor.map(duration => ({ side: from === 0 ? 0 : dir, from, duration })))] :
+      (onlySide === null ? [dir, 0, -dir] : [onlySide]).map(side => ({ side }));
+    for (const plan of plans) {
+      const side = plan.side;
       copyFlight(projected, g);
       let score = 0, safe = true;
       for (let t = C.step; t <= C.horizon; t += C.step) {
         adapter.sampleAir(projected.pos, air);
         const controls = t < C.reaction ? { turn: Number(!!input.right) - Number(!!input.left), brake: !!input.brake,
-          bar: !!input.bar, ears: !!input.ears } : { turn: side, brake };
+          bar: !!input.bar, ears: !!input.ears } : {
+          turn: sameWay && onlySide === null ?
+            t >= C.reaction + plan.from && t < C.reaction + plan.from + plan.duration ? 0 : dir : side, brake };
         stepFlight(projected, controls, air, C.step);
         const near = Math.hypot(projected.pos.x - source.x - source.vx * t, projected.pos.z - source.z - source.vz * t);
         score += ((air.thermal || 0) - C.distanceCost * near * near) * C.step;

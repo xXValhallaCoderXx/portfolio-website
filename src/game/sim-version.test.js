@@ -16,7 +16,7 @@ import { BEAST, BELLS, BELL_POOL } from './bells.js';
 import { ZONES, surfaceAt } from './terrain.js';
 
 // Pin the current release's tables. A physical or scoring change requires a new version and pin.
-const FINGERPRINT = 'af831e72';
+const FINGERPRINT = 'a4e8e954';
 
 // Everything a run is flown by that is a number rather than code: the wing's tables, every one of
 // the sky's, the step's, the meet's (its plates off the trail and its rune gates and blessings with

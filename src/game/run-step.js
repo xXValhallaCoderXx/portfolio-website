@@ -3,7 +3,7 @@
 // function (functions/), which checks a run before it ranks it, all step it here, in this one
 // order, so a run flown in a browser can be flown again anywhere else and come out the same. Kept
 // free of 3D and page code: the ground it touches down on is ground.js's, not terrain.js's.
-import { FLIGHT, createFlight, settleFlight, stepFlight } from './flight.js';
+import { FLIGHT, WING, createFlight, settleFlight, stepFlight } from './flight.js';
 import { CLOUD_GATE, CLOUD_STRIKE, CLOUD_ZONE } from './cloudbase-state.js';
 import { surfaceAt } from './ground.js';
 import { createSwingWatch } from './swing-watch.js';
@@ -179,7 +179,9 @@ export function stepRun(world, intent, dt = RUN.step) {
   world.watch.step(dt, g, pilot.collapse > 0, controls);
   if (g.pos.y - surfaceAt(g.pos.x, g.pos.z) <= RUN.ground) return world.ended = 'landed';
 
-  const ended = sky.step(dt, g.pos);
+  const ended = sky.step(dt, g.pos, { flowEligible: !controls.steered && !controls.deepBrake &&
+    !controls.ears && !g.acro && g.wingPhase === WING.flying && !(g.stall > 0 || g.tuck > 0 || g.loop > 0) &&
+    Math.abs(g.bank) <= 0.9 && Math.abs(g.pitch) <= 0.7 });
   if (!ended) world.bells?.step(dt, world);
   // Whatever has struck the wing since it was last answered (a raven, one of the meet's
   // kettlebells, or a strike called between steps) sets which way it hooks: the way the pilot
