@@ -64,7 +64,7 @@ test('a held brake stays at predictable working depth and the bar changes the ph
 test('explicit deep brake requests more real travel and releases back to an ordinary catch', () => {
   const working = aloft(), deep = aloft();
   let workingPitch = 0, deepPitch = 0;
-  for (let tick = 0; tick < 180; tick++) {
+  for (let tick = 0; tick < 120; tick++) {
     stepFlight(working, { brake: true }, {}, STEP);
     stepFlight(deep, { deepBrake: true }, {}, STEP);
     workingPitch = Math.max(workingPitch, working.pitch);

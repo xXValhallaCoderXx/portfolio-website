@@ -2,6 +2,8 @@
 // flight-physics.js. Manual input changes physical brake/bar positions; maneuvers never prescribe
 // a trajectory or grant energy. Both the fjord and Good Lift call this same solver.
 import { PHYSICS, makePhysics, stepPhysics, physicsEnergy, copyPhysics, rotate, computeTrimPhysics } from './flight-physics.js';
+import { resetEnvelope, WING } from './wing-envelope.js';
+export { WING } from './wing-envelope.js';
 export { PHYSICS, physicsEnergy } from './flight-physics.js';
 
 // Nominal performance for navigation estimates, readouts and legacy visual consumers. Actual
@@ -41,6 +43,7 @@ export function createFlight(pos = { x: 0, y: 0, z: 0 }) {
     lean: 0, roll: 0, rollRate: 0, rollRest: 0, rollSpeed: 0, stallLoad: 0, stall: 0, stallSide: 0,
     stallHarsh: false, grip: true, windX: 0, windZ: 0, felt: false, under: 0,
     tuck: 0, tuckHeld: 0, tuckPumps: 0, tip: 0, tipSide: 0, fallRest: 0, fallArmed: true,
+    wingPhase: WING.flying, recoverySource: '', inflation: 1, forwardAirspeed: 0, frontalRisk: 0,
     loop: 0, loopAngle: 0, loopRate: 0, loopNext: 0, loopSince: 0, loopLate: false, loopEarly: false,
     loopOut: false, loopBotched: false, loops: 0, loopTimed: 0, keys: 0, steepLeft: 0, loopAsk: 0, tension: 0, load: 1,
   };
@@ -52,10 +55,12 @@ export function releaseFlight(g) {
   g.physical.coordination = g.physical.coordinated = g.physical.bankTarget = 0;
   g.physical.brakeTarget = g.physical.acroSteady = 0;
   g.physical.deepBrake = g.physical.acro = false;
+  resetEnvelope(g.physical);
   g.brake = g.bar = g.ears = g.stall = g.stallLoad = g.tuck = g.tip = 0;
   g.manualBrake = g.coordination = g.coordinatedLean = g.pilotLean = g.bankTarget = 0;
   g.brakeTarget = 0; g.deepBrake = g.acro = false;
   g.stallSide = g.tipSide = g.pitchPush = g.tuckHeld = g.tuckPumps = 0;
+  g.wingPhase = WING.flying; g.recoverySource = ''; g.inflation = 1; g.frontalRisk = 0;
   g.grip = true;
   return g;
 }
@@ -200,9 +205,14 @@ function telemetry(g, controls, air, dt) {
   g.deepBrake = s.deepBrake; g.brakeTarget = s.brakeTarget; g.acro = s.acro;
   g.tension = s.tension;
   g.load = s.tension / (PHYSICS.pilotMass * PHYSICS.gravity);
-  g.stallLoad = clamp((Math.abs(s.alpha) - T.stallStart) / T.stallRange, 0, 1);
-  g.stall = Math.abs(s.alpha) > T.stallAngle ? g.stallLoad : 0;
-  g.stallSide = g.stall > 0 ? Math.sign(s.differential) : 0;
+  g.wingPhase = s.wingPhase; g.recoverySource = s.recoverySource; g.inflation = s.inflation;
+  g.forwardAirspeed = (c.vel.x - wx) * nose.x + (c.vel.y - wy) * nose.y + (c.vel.z - wz) * nose.z;
+  g.frontalRisk = s.frontalRisk;
+  g.stallLoad = Math.max(clamp((s.alpha - T.stallStart) / T.stallRange, 0, 1), s.stallWarning);
+  const separated = s.wingPhase === WING.entry || s.wingPhase === WING.stalled || s.wingPhase === WING.backfly || s.wingPhase === WING.exit;
+  g.stall = separated && s.recoverySource === 'stall' ? Math.max(s.separation, 0.01) : 0;
+  g.tuck = s.wingPhase === WING.frontal || s.wingPhase === WING.opening ? 1 - s.inflation : 0;
+  g.stallSide = 0; // This reduced envelope models symmetric stalls; steering cannot label a spin.
   g.stallHarsh = false;
   g.windX = wx; g.windZ = wz; g.felt = true;
   g.lift = air.lift ?? Math.max(0, wy);

@@ -57,23 +57,25 @@ test('ending drops unfinished style and reset clears all event bookkeeping', () 
 test('a real standalone wingover and pitch-and-catch bank after physical recovery', async () => {
   const { createFlight, stepFlight } = await import('./flight.js');
   const { createSwingWatch } = await import('./swing-watch.js');
+  const { createReferencePilot } = await import('./pilots.js');
   for (const kind of [1, 2]) {
     const g = createFlight({ x: 0, y: 1000, z: 0 });
     const watch = createSwingWatch();
     const style = createStyle();
     const controls = { turn: 0, brake: false, deepBrake: false, bar: false, ears: false };
-    const world = { g, watch, controls };
+    const sky = { state: { elapsed: 0, pilot: { collapse: 0 }, thermals: [] }, inside: () => true };
+    const world = { g, watch, controls, style, sky, air: {}, steps: 0 };
+    const pilot = createReferencePilot({ tricks: { from: 0, ...(kind === 1 ? { pumps: 2 } : { swaps: 2 }) }, catches: false });
     let completed = false;
     for (let n = 0; n < 2400 && style.state.total === 0; n++) {
       completed ||= watch.state.moves > 0;
-      controls.turn = kind === 2 && !completed ? (Math.floor(n / 270) % 2 ? 1 : -1) : 0;
-      // Ordinary recorded holds from the delayed physical coach receipt: deep shaping pulls,
-      // release, then a working-depth forward catch. No pose or trajectory is prescribed.
-      controls.deepBrake = !completed && (kind === 2 ? n < 12 : n < 180 || n >= 360 && n < 516);
-      controls.brake = controls.deepBrake || (completed ? g.pitch < 0 : kind === 1 && n >= 635 && n < 795);
+      // The reference pilot uses safe shaping pulls and observed coach phases. The obsolete
+      // three-second deep holds would now deliberately enter the new full-stall envelope.
+      pilot.decide(world, controls);
       stepFlight(g, controls, {});
       watch.step(1 / 60, g, false, controls);
       style.step(1 / 60, world);
+      world.steps++; sky.state.elapsed = world.steps / 60;
       assert.equal(watch.state.breaks, 0, 'the maneuver and recovery stay under control');
       if (!completed) assert.equal(style.state.total, 0, 'an unfinished move banks nothing');
     }

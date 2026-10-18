@@ -1,5 +1,8 @@
 # Gentler opening and altitude trick lessons — v12 local acceptance
 
+Historical v12 receipt. Current recovery mechanics and retained opening/lesson acceptance are
+recorded in [the v13 receipt](good-lift-recovery-v13-qa.md).
+
 Local candidate on `feature/finalize-game`, based on `10dd9c7730f27287f2d4ddae5f78a549ca225044`.
 The pre-existing uncommitted v11 work is retained. Preview:
 <http://localhost:4176/good-lift?sky=1>. Nothing has been deployed.

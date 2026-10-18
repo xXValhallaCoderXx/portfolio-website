@@ -41,7 +41,7 @@ test('the cloth starts to flutter as the stall load builds, and flutters hardest
   assert.equal(luff(STALL_EFFECTS.luff[0]), 0);
   assert.ok(luff(0.6) > 0.2 && luff(0.6) < 0.8);
   assert.equal(luff(STALL_EFFECTS.luff[1]), 1);
-  assert.equal(luff(0, 0.2), 1);
+  assert.equal(luff(0, 0.2), 0.2);
   let last = 0;
   for (let load = 0; load <= 1; load += 0.01) {
     assert.ok(luff(load) >= last - 1e-12);
@@ -150,7 +150,7 @@ test('a tuck folds the leading edge and jolts the pilot, less than a stall, and 
   const surging = stallEffects('cloudbase', wing({ pitch: -0.9, pitchRate: -1 }), {});
   assert.deepEqual(surging, NONE);
   const tucked = stallEffects('cloudbase', wing({ tuck: 0.5 }), {});
-  assert.equal(tucked.tuck, 1);
+  assert.equal(tucked.tuck, 0.5);
   assert.ok(tucked.shake > 0 && tucked.shake < STALL_EFFECTS.shake, `${tucked.shake} rad of shake`);
   // A falling stall shakes as hard as ever, tuck or none.
   const both = stallEffects('cloudbase', wing({ tuck: 0.5, stall: 1 }), {});

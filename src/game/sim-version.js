@@ -32,4 +32,5 @@
 // 10: explicit working/deep brake intent and consistent ordinary steering; five-bit recordings.
 // 11: damped ordinary turns, smoother steering release and air-track thermal guidance.
 // 12: protected opening thermals, altitude-paced encounters and automatic optional trick lessons.
-export const SIM_VERSION = 12;
+// 13: separated-flow stalls, physical backfly, frontal inflation and phase-specific recovery.
+export const SIM_VERSION = 13;

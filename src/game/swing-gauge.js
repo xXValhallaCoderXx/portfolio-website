@@ -1,5 +1,6 @@
 // Presentation reads physical angular motion and the maneuver observer; cues never drive flight.
 import { WATCH, BANDS, bandOf } from './swing-watch.js';
+import { WING } from './wing-envelope.js';
 export const SWING_GAUGE = Object.freeze({ pitch: 0.35, bank: Math.PI / 4, linger: 1.5, ahead: 1.2, behind: 0.7, side: Math.PI, near: 0.1, fresh: 3, stalling: 0.65, lead: 0.6 });
 export const CUES = Object.freeze({ none: 0, catch: 1, press: 2, release: 3, left: 4, right: 5, pump: 6, up: 7, down: 8 });
 export const LOOP_STEPS = 72;
@@ -9,7 +10,11 @@ export function swingGauge(g, watch, folds, dt, out, hands = {}) {
   let coming = CUES.none;
   let soon = 1;
   const roll = Math.abs(g.bank) > SWING_GAUGE.bank || watch.linking === 1;
-  if (hands.fold > 0 || g.tuck > 0) {
+  if (g.wingPhase === WING.entry || g.wingPhase === WING.stalled) {
+    cue = coming = CUES.press; soon = 0;
+  } else if (g.wingPhase === WING.backfly || g.wingPhase === WING.exit || g.tuck > 0) {
+    cue = coming = CUES.release; soon = 0;
+  } else if (hands.fold > 0) {
     const held = hands.fold > 0 ? hands.held : g.tuckHeld;
     cue = coming = held >= 0.3 - 1 / 120 ? CUES.release : CUES.pump;
     soon = cue === CUES.pump ? clamp(1 - (held || 0) / 0.3, 0, 1) : 0;

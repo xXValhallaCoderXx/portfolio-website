@@ -24,7 +24,7 @@ import { SIM_VERSION } from './sim-version.js';
 import { isBlocked } from './meet-initials.js';
 import { normalizeKit } from './wing-kit.js';
 import { isJudgedEnding } from './run-rules.js';
-import { GAME_STORE } from './good-lift-key.js';
+import { GAME_STORE, LEARNING_MIGRATION } from './good-lift-key.js';
 import { normalizeLearnedLessons } from './trick-learning.js';
 
 /** The localStorage key Good Lift keeps everything under; the page's reset clears it by name. */
@@ -221,7 +221,24 @@ export function readStore(storage = deviceStorage()) {
     return normalizeStore(memory);
   }
   if (!landed) return normalizeStore(memory);
-  if (text === null || text === undefined) return emptyStore();
+  if (text === null || text === undefined) {
+    // Only learning crosses the v13 physics boundary. A separate tombstone survives removal of
+    // the competitive key, so Reset progress cannot resurrect the previous version's lessons.
+    try {
+      if (storage.getItem(LEARNING_MIGRATION) === '1') return emptyStore();
+      const previous = storage.getItem('good-lift-v12');
+      if (previous === null || previous === undefined) return emptyStore();
+      let raw;
+      try { raw = JSON.parse(previous); } catch { raw = null; }
+      const migrated = emptyStore();
+      migrated.learnedLessons = normalizeLearnedLessons(raw?.learnedLessons);
+      writeStore(migrated, storage);
+      try { storage.setItem(LEARNING_MIGRATION, '1'); } catch { /* The current key also prevents reimport. */ }
+      return normalizeStore(memory);
+    } catch {
+      return normalizeStore(memory);
+    }
+  }
   try {
     return normalizeStore(JSON.parse(text));
   } catch {
@@ -252,6 +269,7 @@ export function clearStore(storage = deviceStorage()) {
   memory = null;
   try {
     storage.removeItem(GAME_STORE);
+    storage.setItem(LEARNING_MIGRATION, '1');
     landed = true;
   } catch {
     // Storage that cannot be reached cannot be cleared. Whatever it still holds is no longer this

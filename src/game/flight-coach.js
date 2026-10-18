@@ -1,7 +1,7 @@
 // A presentation observer: instructions never press controls or change flight/scoring state.
 import { actionMessage } from './coach-actions.js';
 import { WATCH } from './swing-watch.js';
-import { pitchPeak } from './flight.js';
+import { pitchPeak, WING } from './flight.js';
 
 const DEG = Math.PI / 180;
 const names = ['', 'PITCH & CATCH', 'WINGOVER', 'INVERSION'];
@@ -91,8 +91,43 @@ export function createFlightCoach() {
       return emit({ ...fields, action: 'straight', release: ['left', 'right', 'bar'] });
     }
 
-    // Loss of airspeed always overrides a brake instruction, including praise from a prior move.
+    // Fully separated flight has phase-specific recovery. A hands-up instruction appropriate
+    // before the stall can amplify the pendulum if repeated while the stalled wing is behind.
+    const phase = g.wingPhase;
+    if (phase === WING.entry || phase === WING.stalled || phase === WING.backfly || phase === WING.exit ||
+        phase === WING.frontal || phase === WING.opening) {
+      clearIntent(); consumeEvidence(); recovering = true;
+      const base = { state: 'recover', context: phase === WING.frontal || phase === WING.opening || g.recoverySource === 'frontal' ? 'frontal collapse' : 'stall', phase };
+      if (phase === WING.entry) return emit({ ...base, action: 'deep-brake', brakeDepth: 'deep',
+        hold: ['brake'], release: ['left', 'right', 'bar', 'ears'], title: 'HOLD DEEP BRAKE · WAIT UNDER THE WING',
+        detail: 'Full stall. The canopy is behind you; keep the stall held until you swing back underneath.' });
+      if (phase === WING.stalled) return emit({ ...base, action: 'brake', brakeDepth: 'working',
+        hold: ['brake'], release: ['left', 'right', 'bar', 'ears'], title: 'NORMAL BRAKE FOR BACKFLY',
+        detail: 'Release the deep pull, then hold normal brake. Let the descending backward flight settle before exiting.' });
+      if (phase === WING.backfly) return emit({ ...base, action: 'release-all', title: 'BACKFLY STABLE · RELEASE TO EXIT',
+        detail: 'The wing is overhead and moving backward. Release brake to let it fly forward; then catch the surge.' });
+      if (phase === WING.frontal || phase === WING.opening) return emit({ ...base, action: 'release-all',
+        title: phase === WING.frontal ? 'FRONTAL COLLAPSE · HANDS UP' : 'WING REOPENING · KEEP BRAKE RELEASED',
+        detail: 'Release brake and bar. Let the leading edge refill before catching the next forward surge.' });
+      return emit({ ...base, action: 'release-all', title: 'LET THE WING REINFLATE AND ACCELERATE',
+        detail: 'Keep brake released while airflow returns. Wait for forward flight before catching the surge.' });
+    }
+    if (phase === WING.surge) { recovering = true; surge = true; }
+
+    // Approaching separation overrides deliberate maneuver input and score celebrations.
     if (g.stall > 0 || g.stallLoad > 0.65) {
+      if (g.stall === 0 && maneuverPolicy === 'wingover' && !wing && turn !== 0) {
+        return emit({ state: 'timing', context: 'wingover entry', phase: 'release', action: 'release-brake',
+          hold: [sideName(turn)], release: ['brake', sideName(-turn), 'bar', 'ears'],
+          title: 'RELEASE DEEP BRAKE · KEEP THE TURN',
+          detail: 'The swing has enough input. Release brake to keep airflow, and hold the direction until the reverse cue.' });
+      }
+      if (g.stall === 0 && pitch) {
+        pitchShaping = false;
+        return emit({ state: 'timing', context: 'pitch', phase: 'release', action: 'release-brake',
+          release: ['brake', 'left', 'right', 'bar', 'ears'], title: 'RELEASE DEEP BRAKE · KEEP AIRSPEED',
+          detail: 'The backswing is close to separation. Release now, then catch the forward surge with normal brake.' });
+      }
       clearIntent(); consumeEvidence(); recovering = true;
       return emit({ state: 'recover', context: 'stall', phase: 'airspeed', action: 'release-all', detail: 'Release the controls so the wing can regain airspeed.' });
     }

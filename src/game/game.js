@@ -6,7 +6,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { WORLD, ZONES, STONES, THERMALS, START, GATEWAY, centerX, heightAt, surfaceAt, buildTerrain } from './terrain.js';
 import { PROJECT_PROPS, loadModel, prefetchModel, buildSky, buildPlaces, buildScatter, buildThermals, buildGlider, buildGateway } from './scenery.js';
-import { ACHIEVEMENTS, GAME_STORE, beltFor, readProgress, writeProgress, emptyProgress } from './achievements.js';
+import { ACHIEVEMENTS, GAME_STORE, LEARNING_MIGRATION, beltFor, readProgress, writeProgress, emptyProgress } from './achievements.js';
 import { scoreLanding, createLandingLeg } from './landing.js';
 import { FJORD_THERMALS, sampleFjordAir, fjordWindAt } from './atmosphere.js';
 import { createFlightView } from './flight-view.js';
@@ -115,6 +115,7 @@ const MARKUP = /* html */ `
           <dt>e</dt><dd>big ears: hold to descend; release, then brake to reopen faster</dd>
           <dt>thermals</dt><dd>hold one direction + normal brake to circle; briefly ease the direction to widen. Brake slows the wing; rising air provides lift. Deep brake is unnecessary.</dd>
           <dt>tricks</dt><dd>use deep brake to set up an energetic swing; release and reverse with the swing for wingovers, or shape a pitch, release and catch with normal brake. A large, energetic swing can carry you over the canopy into an inversion. Recover level to bank the move.</dd>
+          <dt>recovery</dt><dd>holding deep brake can stall the wing. Follow the coach through backfly and the exit surge. A missed pitch catch can fold the leading edge; release brake and bar to let it reopen.</dd>
           <dt class="fj-keys-fjord">enter</dt><dd class="fj-keys-fjord">take off again once landed <span>or space</span></dd>
           <dt class="fj-keys-fjord">shift</dt><dd class="fj-keys-fjord">hold to speed time up</dd>
           <dt class="fj-keys-fjord">click</dt><dd class="fj-keys-fjord">a lit pillar or its label, to fly there by itself</dd>
@@ -131,6 +132,7 @@ const MARKUP = /* html */ `
           <li>hold ears to descend; release, then brake to reopen</li>
           <li>circle: ◀ or ▶ + normal brake; ease the direction to widen. Rising air provides lift, not the brake.</li>
           <li>deep brake builds energy; then ◀ ▶ with the swing for wingovers</li>
+          <li>deep brake can stall; follow the coach to stabilise backfly, exit and catch. A frontal fold needs released brake and bar to reopen.</li>
           <li class="fj-keys-fjord">tap a lit pillar or its label to fly there by itself</li>
         </ul>
         <p class="fj-keys-goal fj-keys-fjord">land inside a lit ring to read that part of the page</p>
@@ -474,7 +476,7 @@ export function createGame(stage, hooks = {}) {
     effects.want.fold = effects.want.veil = effects.want.shake = effects.want.gaze = 0;
     effects.floor = -Infinity;
     effects.stop = 0;
-    effects.stalled = false;
+    effects.stalled = false; effects.heard.frontal = false;
     releaseFlight(g);
     veilEl.style.opacity = '0';
     strikeEl.classList.remove('on');
@@ -772,8 +774,12 @@ export function createGame(stage, hooks = {}) {
     // whether it is folded still.
     const pumps = (mode === 'cloudbase' ? run?.world.pump.n ?? 0 : 0) + g.tuckPumps;
     const folded = g.tuck > 0 || (mode === 'cloudbase' && (run?.world.sky.state.pilot.collapse ?? 0) > 0);
+    const frontal = g.tuck > 0;
+    if (frontal && !effects.heard.frontal) play('frontal-fold', 0.4, slump, 0, 0.35);
+    if (!frontal && effects.heard.frontal) playRefill(0);
+    effects.heard.frontal = frontal;
     if (watch) {
-      if (watch !== effects.heard.watch) effects.heard = { watch, catches: watch.catches, timed: watch.timed, pitch: g.pitch, roll: g.roll, pumps, folded, pumped: 0 };
+      if (watch !== effects.heard.watch) effects.heard = { watch, catches: watch.catches, timed: watch.timed, pitch: g.pitch, roll: g.roll, pumps, folded, frontal, pumped: 0 };
       // Each pump that counted ticks by the wing, and the wing opening once it has been pumped rings,
       // as it opens.
       if (pumps > effects.heard.pumps) {
@@ -814,7 +820,7 @@ export function createGame(stage, hooks = {}) {
       playStall(g.stallSide, g.stallHarsh);
     } else if (g.stall === 0 && effects.stalled) {
       effects.stalled = false;
-      if (!collapsed) playRefill(effects.stallSide);
+      if (!collapsed && !frontal) playRefill(effects.stallSide);
     }
     effects.deep = deepBrakeReached(g.brake, g) ? effects.deep + dt : 0;
 
@@ -854,7 +860,7 @@ export function createGame(stage, hooks = {}) {
     stage.classList.remove('cloudbase-ended');
     setAuto(null);
     settleFlight(g, 0);
-    effects.stalled = false;
+    effects.stalled = false; effects.heard.frontal = false;
     effects.deep = 0;
     g.pos.y = surfaceAt(g.pos.x, g.pos.z) + 1.4;
     // A key still held from the approach is not a brake, or a turn, on the next flight.
@@ -906,7 +912,7 @@ export function createGame(stage, hooks = {}) {
     // repeats are ignored, so it stays off until it is pressed again.
     effects.fjordHint.line = '';
     effects.fjordHint.since = 0;
-    effects.stalled = false;
+    effects.stalled = false; effects.heard.frontal = false;
     effects.deep = 0;
     holders.brake.clear();
     input.brake = false;
@@ -2172,6 +2178,7 @@ export function createGame(stage, hooks = {}) {
       // Good Lift's own store goes too: its bests, feats, streak and board, and the kit they earned.
       try {
         localStorage.removeItem(GAME_STORE);
+        localStorage.setItem(LEARNING_MIGRATION, '1');
       } catch {
         // Storage can be blocked; there is then nothing kept to clear.
       }

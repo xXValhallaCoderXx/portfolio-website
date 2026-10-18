@@ -305,7 +305,7 @@ export function createReferencePilot({
       if (!trick.following) {
         const turn = kind === 'wingover' ? ticks < 270 ? 1 : -1 : 0;
         h.left = turn < 0; h.right = turn > 0;
-        h.deepBrake = kind === 'wingover' ? ticks < 12 : Math.floor(ticks / 180) % 2 === 0;
+        h.deepBrake = kind === 'wingover' ? ticks < 12 : ticks % 390 < 108;
         h.brake = h.deepBrake; h.bar = false;
       } else if (!trick.pending && message && (message.hold.some(key => !h[key]) ||
           message.release.some(key => h[key]) || message.hold.includes('brake') && h.deepBrake !== (message.brakeDepth === 'deep'))) {

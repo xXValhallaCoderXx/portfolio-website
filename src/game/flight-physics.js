@@ -1,3 +1,5 @@
+import { stepEnvelope, WING } from './wing-envelope.js';
+
 // A reduced rigid canopy and suspended pilot. Metres, seconds, kg, radians.
 // The four aerodynamic samples and the suspension do all of the moving; tricks only observe it.
 // The canopy body's lumped mass/inertia includes entrained air. These are game calibration
@@ -18,6 +20,15 @@ export const PHYSICS = Object.freeze({
     take: 0.15, release: 0.25, turn: 0.2, rolloutBank: 0.08726646259971647,
     pressureTrim: 0.30, lean: 0.22 }),
   acro: Object.freeze({ steadyBank: 0.175, steadyPitch: 0.175, steadyRate: 0.3, steady: 1 }),
+  envelope: Object.freeze({ stallAngle: 0.45, brakeIncidence: 1.38, warningMargin: 0.05, stallHold: 0.32,
+    separateTime: 0.16, stalledInflation: 0.7, stallLift: 0.65, stallDrag: 1, stallPressure: 0.25,
+    entryHold: 0.35, underPitch: 0.18, backflyBrake: Object.freeze([0.30, 0.48]),
+    reverseSpeed: -0.5, backflyPitch: 0.30, backflyRate: 0.40, backflyHold: 0.5,
+    releaseBrake: 0.18, releaseHold: 0.18, attachTime: 0.35, reattached: 0.05,
+    flyingSpeed: 3, inletSpeed: 0.2, attachedAngle: 0.25, inflateTime: 0.45, opened: 0.98, ears: 0.2,
+    frontAngle: -0.025, frontWarning: 0.05, frontBrakeIncidence: 0.7, frontPitch: 0.75, frontLoad: 0.55, frontHold: 0.25,
+    foldInflation: 0.2, foldedMargin: 0.08, foldTime: 0.075, foldDrag: 0.7,
+    catchIncidence: 0.08, catchPressure: 0.5, reattachLift: 0.45 }),
   aero: Object.freeze({ spanSample: 0.24, chordSample: 0.25, rollRelief: 0.8, barIncidence: 0.075,
     brakeLift: 0.6, differentialLift: 0.65, maxLift: 1.25, separation: 0.35, separationLoss: 18,
     earsLift: 0.35, brakeDrag: 0.25, earsDrag: 0.24, separationDrag: 0.8,
@@ -78,12 +89,16 @@ export function makePhysics(pos) {
       orbitPhase: 0, orbitAge: 0, orbitAbove: false, orbitArc: 0, orbitProjection: 1,
       lastOrbitAngle: 0, lastOrbitArc: 0, lastOrbitProjection: 0,
       windX: 0, windY: 0, windZ: 0, tension: 0, alpha: 0, energy: 0,
+      wingPhase: 'flying', recoverySource: '', inflation: 1, separation: 0, stallExposure: 0, frontExposure: 0,
+      releaseExposure: 0, backflyFor: 0, recoveryFor: 0, stallAge: 0, stallWarning: 0, frontalRisk: 0,
+      forwardAirspeed: 0, linePitch: 0, linePitchRate: 0, folded: false,
+      flow: { alpha: 0, forward: 0, pilotForward: 0, pitch: 0, pitchRate: 0, load: 1, under: true, bank: 0 },
       work: Array.from({ length: 12 }, vec), force: vec(), moment: vec(), pilotForce: vec() },
   };
 }
 
 // Kept at the aerodynamic sample's velocity: lift does no work, drag always removes energy.
-function forces(g, air) {
+function forces(g, air, dt = 0) {
   const C = PHYSICS;
   const H = C.controls, A = C.aero, K = C.coordination;
   const { canopy: c, pilot: p, physical: s } = g;
@@ -131,6 +146,20 @@ function forces(g, air) {
     (-dz * up.x + dx * up.z) * forward.y + (-dx * up.y + dy * up.x) * forward.z) / lineLength,
   -(up.x * dx + up.y * dy + up.z * dz) / lineLength);
   if (s.differential * relativeBank > 0) s.differential *= clamp((H.relativeBank - Math.abs(relativeBank)) / H.relativeBankRange, 0, 1);
+  if (dt > 0) {
+    const flow = s.flow;
+    const avx = c.vel.x - wx, avy = c.vel.y - wy, avz = c.vel.z - wz;
+    flow.forward = avx * forward.x + avy * forward.y + avz * forward.z;
+    flow.alpha = Math.atan2(-(avx * up.x + avy * up.y + avz * up.z), flow.forward) - A.barIncidence * s.bar;
+    const headingLength = Math.hypot(forward.x, forward.z);
+    const ahead = headingLength > C.solver.courseSpeed ? (dx * forward.x + dz * forward.z) / headingLength : 0;
+    const relativeAhead = headingLength > C.solver.courseSpeed ? (rvx * forward.x + rvz * forward.z) / headingLength : 0;
+    flow.pilotForward = headingLength > C.solver.courseSpeed ? ((p.vel.x - wx) * forward.x + (p.vel.z - wz) * forward.z) / headingLength : 0;
+    flow.pitch = Math.atan2(ahead, -dy);
+    flow.pitchRate = (-dy * relativeAhead + ahead * rvy) / Math.max(1, ahead * ahead + dy * dy);
+    flow.under = dy < 0; flow.load = g.load ?? 1; flow.bank = bank;
+    stepEnvelope(s, flow, dt, C);
+  }
   set(s.force, 0, -C.canopyMass * C.gravity, 0);
   set(s.moment, 0, 0, 0);
   let alphaSum = 0;
@@ -157,11 +186,32 @@ function forces(g, air) {
       const separated = Math.max(0, Math.abs(incidence) - A.separation);
       cl *= 1 / (1 + A.separationLoss * separated * separated);
       cl *= 1 - A.earsLift * s.ears;
-      const cd = C.dragZero + C.induced * cl * cl + A.brakeDrag * brake * brake + C.steeringDrag * differential + A.earsDrag * s.ears +
+      // Reconstructing cloth retains a broad positive-incidence polar until forward flow
+      // reattaches. Without this transition the reduced rigid wing could get trapped in a
+      // parachutal equilibrium even after all controls were released.
+      if ((s.wingPhase === WING.exit || s.wingPhase === WING.surge || s.wingPhase === WING.opening) &&
+          s.brake < C.envelope.releaseBrake && along > 0 && incidence > C.envelope.attachedAngle)
+        cl = Math.max(cl, C.envelope.reattachLift * (1 - A.earsLift * s.ears));
+      let cd = C.dragZero + C.induced * cl * cl + A.brakeDrag * brake * brake + C.steeringDrag * differential + A.earsDrag * s.ears +
         A.separationDrag * clamp(separated, 0, 1);
       // Shift the pressure center smoothly to give the inflated wing a stable trim incidence.
       const pitchTrim = A.pressureTrim + K.pressureTrim * s.brake * Math.abs(s.steer) * s.coordinated;
-      const cp = -A.pressureStability * (alpha - pitchTrim) - A.pressureBrake * s.brake;
+      let cp = -A.pressureStability * (alpha - pitchTrim) - A.pressureBrake * s.brake;
+      // The separated cloth has a broad drag polar and a different pressure centre. It can
+      // support a descending reverse glide; no backwards velocity or sink rate is prescribed.
+      const E = C.envelope, separatedFlow = s.separation;
+      // Refilled cloth retains a different pressure response until the first steady recovery.
+      // The brake can oppose its low-incidence exit dive; attached ordinary handling is unchanged.
+      if (s.wingPhase === WING.surge) cp += E.catchPressure * s.brake * clamp((E.catchIncidence - incidence) / E.catchIncidence, 0, 1);
+      if (separatedFlow > 0) {
+        cl += (E.stallLift - cl) * separatedFlow;
+        cd += (E.stallDrag - cd) * separatedFlow;
+        cp += (E.stallPressure - cp) * separatedFlow;
+      }
+      if (s.inflation < 1) {
+        cl *= s.inflation * s.inflation;
+        cd += E.foldDrag * (1 - s.inflation);
+      }
       const weight = 1 + fore * clamp(cp / (C.chord * A.chordSample), -A.pressureLimit, A.pressureLimit);
       const pressure = 0.5 * C.density * speed2 * (C.area / 4) * weight;
       const dot = normal / speed;
@@ -312,7 +362,7 @@ export function stepPhysics(g, controls, air, dt) {
   s.tension = 0;
   for (let i = 0; i < C.substeps; i++) {
     const budget = physicsEnergy(g, wx, wy, wz) + (C.pilotMass + C.canopyMass) * C.gravity * wy * h;
-    forces(g, air);
+    forces(g, air, h);
     const { canopy: c, pilot: p } = g;
     const a = s.work[6], b = s.work[7];
     rotateInverse(b, c.q, c.omega.x, c.omega.y, c.omega.z);
@@ -340,6 +390,7 @@ export function stepPhysics(g, controls, air, dt) {
     }
     // Far below a visible millimetre, but above cross-engine transcendental roundoff.
     quantizeVector(p.pos); quantizeVector(c.pos); quantizeVector(p.vel); quantizeVector(c.vel); quantizeVector(c.omega);
+    s.inflation = quantize(s.inflation); s.separation = quantize(s.separation);
     c.q.x = quantize(c.q.x); c.q.y = quantize(c.q.y); c.q.z = quantize(c.q.z); c.q.w = quantize(c.q.w);
   }
   return g;
@@ -367,6 +418,7 @@ export function copyPhysics(out, source) {
   copy(out.canopy.pos, source.canopy.pos); copy(out.canopy.vel, source.canopy.vel);
   copy(out.canopy.omega, source.canopy.omega); Object.assign(out.canopy.q, source.canopy.q);
   for (const key in source.physical) if (typeof source.physical[key] !== 'object') out.physical[key] = source.physical[key];
+  Object.assign(out.physical.flow, source.physical.flow);
   return out;
 }
 

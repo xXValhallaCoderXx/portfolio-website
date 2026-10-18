@@ -41,7 +41,7 @@ function flyFollowingCoach(kind, side, delay, { reenter = false, reentryOnly = f
       const elapsed = tick - attemptAt, direction = attempt ? -side : side;
       const turn = kind === 'wingover' ? elapsed < 270 ? direction : -direction : 0;
       input.left = turn < 0; input.right = turn > 0;
-      input.deepBrake = kind === 'pitch' ? Math.floor(elapsed / 180) % 2 === 0 : elapsed < 12;
+      input.deepBrake = kind === 'pitch' ? elapsed % 390 < 108 : elapsed < 12;
       input.brake = input.deepBrake;
     }
     if (pending && tick >= applyAt) {
@@ -112,7 +112,7 @@ test('abandoned real pitch motion expires and cannot reopen from its old front o
   const input = inputState();
   let engagedAt = -1, quietFrames = 0;
   for (let tick = 0; tick < 1800; tick++) {
-    input.brake = input.deepBrake = engagedAt < 0 && Math.floor(tick / 180) % 2 === 0;
+    input.brake = input.deepBrake = engagedAt < 0 && tick % 390 < 108;
     const controls = { turn: 0, brake: input.brake, deepBrake: input.deepBrake };
     stepFlight(g, controls, {}, STEP); watch.step(STEP, g, false, controls);
     const message = coach.step(STEP, { g, watch: watch.state, input, clearance: 1000, eligible: true });

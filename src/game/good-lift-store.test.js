@@ -7,10 +7,12 @@ import { DAY_MS } from './good-lift-address.js';
 import {
   FEAT_IDS, GAME_STORE, KIT, TRAINING_BLOCK, clearStore, earnFeats, earnedKit, emptyStore, keepEarned, kitAfterRun, kitSheet, newlyEarned,
   normalizeStore, readStore, recordRun, setInitials, updateStore, writeStore,
+  repeatTrickLessons,
 } from './good-lift-store.js';
 import { BLOCKED } from './meet-initials.js';
 import { LIVERIES } from './livery.js';
 import { WINGS, emptyKit } from './wing-kit.js';
+import { LEARNING_MIGRATION } from './good-lift-key.js';
 
 const DAY = 20_756;
 const NOON = DAY * DAY_MS + DAY_MS / 2;
@@ -362,7 +364,7 @@ test('every change re-reads the store first, so a run recorded elsewhere is not 
 test('the store never touches the fjord\'s own key', () => {
   // The page's reset reads the same lightweight key through achievements.js without loading this
   // module; otherwise Reset progress could leave the bests, feats, streak and board.
-  assert.equal(GAME_STORE, 'good-lift-v12');
+  assert.equal(GAME_STORE, 'good-lift-v13');
   assert.equal(RESET_KEY, GAME_STORE);
   const fjord = JSON.stringify({ unlocked: ['airborne'], cloudbase: { discovered: true, bestAltitude: 1032 } });
   const storage = memoryStorage({ 'fjord-glider-v1': fjord });
@@ -373,9 +375,45 @@ test('the store never touches the fjord\'s own key', () => {
   }, storage);
   writeStore(readStore(storage), storage);
   clearStore(storage);
-  assert.deepEqual([...new Set(storage.keys)], [GAME_STORE]);
+  assert.deepEqual([...new Set(storage.keys)], [GAME_STORE, LEARNING_MIGRATION, 'good-lift-v12']);
   assert.equal(storage.items.get('fjord-glider-v1'), fjord);
-  assert.deepEqual([...storage.items.keys()], ['fjord-glider-v1']);
+  assert.deepEqual([...storage.items.keys()], ['fjord-glider-v1', LEARNING_MIGRATION]);
+});
+
+test('v13 imports only normalized v12 learning once and keeps competitive progress fresh', () => {
+  const old = { ...emptyStore(), learnedLessons: ['wingover', 'unknown', 'pitch', 'pitch'],
+    best: { total: 900, peak: 2000, score: 1200 }, tonnage: 5000, runs: 40, feats: ['opener'], initials: 'REN', optIn: true };
+  const storage = memoryStorage({ 'good-lift-v12': JSON.stringify(old) });
+  const migrated = readStore(storage);
+  assert.deepEqual(migrated, { ...emptyStore(), learnedLessons: ['pitch', 'wingover'] });
+  assert.equal(storage.items.get(LEARNING_MIGRATION), '1');
+  storage.items.set('good-lift-v12', JSON.stringify({ learnedLessons: [] }));
+  assert.deepEqual(readStore(storage).learnedLessons, ['pitch', 'wingover']);
+  storage.items.delete(GAME_STORE);
+  assert.deepEqual(readStore(storage), emptyStore(), 'the migration marker survives removal of the current key');
+});
+
+test('reset and repeating lessons cannot reimport cleared v12 flags', () => {
+  for (const clear of [clearStore, repeatTrickLessons]) {
+    const storage = memoryStorage({ 'good-lift-v12': JSON.stringify({ learnedLessons: ['pitch'] }) });
+    assert.deepEqual(readStore(storage).learnedLessons, ['pitch']);
+    clear(storage);
+    assert.deepEqual(readStore(storage).learnedLessons, []);
+    assert.deepEqual(JSON.parse(storage.items.get('good-lift-v12')).learnedLessons, ['pitch']);
+  }
+});
+
+test('learning migration retains the visit fallback if writes fail and ignores malformed legacy data', () => {
+  const storage = memoryStorage({ 'good-lift-v12': JSON.stringify({ learnedLessons: ['pitch'] }) });
+  storage.setItem = () => { throw Error('full'); };
+  assert.deepEqual(readStore(storage).learnedLessons, ['pitch']);
+  repeatTrickLessons(storage); assert.deepEqual(readStore(storage).learnedLessons, []);
+  clearStore(storage); assert.deepEqual(readStore(storage), emptyStore());
+  for (const bad of ['{broken', 'null', '[]', '42']) {
+    const clean = memoryStorage({ 'good-lift-v12': bad });
+    clearStore(memoryStorage());
+    assert.deepEqual(readStore(clean), emptyStore());
+  }
 });
 
 test('v12 competitive progress starts fresh and leaves v11 progress available to its own version', () => {

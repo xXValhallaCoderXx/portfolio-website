@@ -11,9 +11,9 @@ import { sampleAtmosphere } from './atmosphere.js';
 
 // These inputs AND sheets were computed in Chromium, then replayed in Node. Their source receipt
 // records the engine, timestamp and a source digest checked before/after recording. The ignored
-// .artifacts/lessons-v12/browser-goldens.mjs reproduces the capture from the Vite source
+// .artifacts/recovery-v13/browser-goldens.mjs reproduces the capture from the Vite source
 // server, on an empty page without HMR or rendering clocks. No Node-generated expected sheets.
-const receipt = JSON.parse(readFileSync(new URL('./fixtures/good-lift-v12-chromium.json', import.meta.url), 'utf8'));
+const receipt = JSON.parse(readFileSync(new URL('./fixtures/good-lift-v13-chromium.json', import.meta.url), 'utf8'));
 
 test('actual Chromium keyboard runs replay to exactly the same complete Node sheets and barograms', () => {
   assert.match(receipt.engine, /^Chromium /);
@@ -79,7 +79,7 @@ test('Chromium maneuvers and stable recoveries have identical physical and obser
 
 
 test('sixteen Chromium lessons replay real circling, setup, matching maneuvers and style banks in Node', () => {
-  const lessons = JSON.parse(readFileSync(new URL('./fixtures/good-lift-v12-lessons-chromium.json', import.meta.url), 'utf8'));
+  const lessons = JSON.parse(readFileSync(new URL('./fixtures/good-lift-v13-lessons-chromium.json', import.meta.url), 'utf8'));
   assert.match(lessons.engine, /^Chromium /); assert.equal(lessons.records.length, 16);
   const telemetry = new Set(['bank', 'pitch', 'rollRate', 'pitchRate', 'trackRate', 'yawRate', 'rollAcceleration']);
   const normalize = value => JSON.parse(JSON.stringify(value, (key, item) => telemetry.has(key) && typeof item === 'number'

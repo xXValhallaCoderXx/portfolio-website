@@ -3,6 +3,7 @@
 // be tested: none of it reaches the hero backdrop, a landing or the 404 scene, which fly the same
 // wing.
 import { BRAKE, STALL } from './flight.js';
+import { WING } from './wing-envelope.js';
 
 // `fold` is how far each half of the wing folds in a straight stall, and `spin` how far the inside
 // half folds in a spin (the other half stays open). The fold clears below the
@@ -10,7 +11,7 @@ import { BRAKE, STALL } from './flight.js';
 // flutter, all of it by the end. `shake` is radians of camera shake while the wing is falling.
 // `tuck` is radians of camera shake while the wing is tucked or tipped: a jolt, under a stall's.
 // `tip` is how far the half that unloaded folds in a tip collapse, at the top of a wingover too steep.
-export const STALL_EFFECTS = Object.freeze({ fold: 0.45, spin: 0.85, reopen: 0.35, luff: Object.freeze([0.35, 0.95]), shake: 0.012, tuck: 0.006, tip: 0.75 });
+export const STALL_EFFECTS = Object.freeze({ fold: 0.45, backflyFold: 0.18, spin: 0.85, reopen: 0.35, luff: Object.freeze([0.35, 0.95]), shake: 0.012, tuck: 0.006, tip: 0.75 });
 
 // The meter is one track. The take-up of the brake fills its first `takeUp`; the light brake's
 // linger creeps across the next `band` (40% of it, so a light brake can be read at a glance);
@@ -43,19 +44,21 @@ export function stallEffects(mode, flight, out, load = flight?.stallLoad ?? 0) {
   out.left = out.right = out.luff = out.shake = out.tuck = 0;
   if (mode !== 'flying' && mode !== 'cloudbase') return out;
   const E = STALL_EFFECTS;
+  const backfly = flight.wingPhase === WING.backfly;
+  const severity = clamp(flight.stall, 0, 1);
   if (flight.stall > E.reopen) {
     // A straight stall folds a little of both halves; a spin folds the inside one hard.
     if (flight.stallSide > 0) out.right = E.spin;
     else if (flight.stallSide < 0) out.left = E.spin;
-    else out.left = out.right = E.fold;
+    else out.left = out.right = backfly ? E.backflyFold : E.fold * severity;
   }
-  out.luff = flight.stall > 0 ? 1 : smoothstep(E.luff[0], E.luff[1], load);
-  if (flight.stall > STALL.surge) out.shake = E.shake;
+  out.luff = flight.stall > 0 ? backfly ? 0.35 : severity : smoothstep(E.luff[0], E.luff[1], load);
+  if (flight.stall > STALL.surge && !backfly) out.shake = E.shake * severity;
   // A tuck folds the leading edge under and shakes the pilot a little, less than a stall; a tip
   // collapse folds the half that unloaded, with the same jolt.
   if (flight.tuck > 0) {
-    out.tuck = 1;
-    out.shake = Math.max(out.shake, E.tuck);
+    out.tuck = clamp(flight.tuck, 0, 1);
+    out.shake = Math.max(out.shake, E.tuck * out.tuck);
   }
   if (flight.tip > 0) {
     if (flight.tipSide > 0) out.right = Math.max(out.right, E.tip);

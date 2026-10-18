@@ -222,12 +222,12 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     stones and the Beast, and version 4 the wing flown, not only held: big ears, a brake that goes
     deep within two seconds, the swing over the pilot and its front collapse, wingovers and their
     tip, loops, the stall's second beat, pumping a fold open, and style multiplying the score.
-    The current version 11 keeps the shared wind and ridge climb, damps ordinary swing and smooths
-    steering release. Hold one direction + normal brake for a tight circle; briefly easing the
+    Version 13 keeps the shared wind, ridge climb and damped ordinary turns, and adds physical
+    stall, backfly and frontal recovery. Hold one direction + normal brake for a tight circle; briefly easing the
     direction widens it. Brake slows the wing; rising air provides lift. Holding brake uses working
     depth; double-tapping and holding within 300 ms, or
     holding X, requests deep brake for deliberate pitch and wingover setup. Release, then use a
-    normal brake catch to recover. Version 7/8/9/10 recordings are historical.
+    normal brake catch to recover. Recordings from earlier simulation versions are historical.
   - **Feats and the board.** Opener, Under the horn, Giant-dodger, Clean meet, the 1,000 lb club,
     Wingover ×5, Pitched 45°, Training block (the Daily Sky seven days in a row) and Beat the bot
     are Good Lift's own feats:
@@ -240,7 +240,7 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     (`public/fonts/`, under the SIL Open Font License beside it) and loads only once a rune is drawn,
     and a short blocklist of offensive three-letter words is refused
     as they are typed, and shown as no initials if a challenge link carries them. Good Lift keeps
-    all of this under its own `good-lift-v12` key (`src/game/good-lift-key.js`,
+    all of this under its own `good-lift-v13` key (`src/game/good-lift-key.js`,
     `good-lift-store.js`, `board.js`), apart from the fjord's progress. The lightweight page reset
     reads the same key, without loading the game store.
   - **The world board.** Where the build names the online board's function (see
@@ -407,6 +407,14 @@ from ordinary circling and bank learning only after a fresh physical move and st
 recovery. Back to lift (T) cancels instruction; Repeat trick lessons clears only learning flags.
 Learning persists immediately on this device and never changes a seeded sky or recorded score.
 
+Version 13 adds physical full stalls, simplified backfly and frontal collapses from uncaught
+pitch surges at every flight height. Deep brake can separate the flow; normal brake stabilises
+backfly, and release allows reattachment before a normal-brake surge catch. The coach distinguishes
+approaching stall, held stall, backfly, reattachment and frontal reopening. A frontal fold needs
+released brake and bar to refill; it does not use the hazard-strike pump instruction. Recovery
+changes aerodynamic forces on the same canopy and pilot bodies. It never supplies speed, height
+or a prescribed trajectory. The existing five buttons, ordinary handling and style formulas remain.
+
 Version 11 added damping from actual pilot/canopy motion,
 slower steering release and a 0.52-radian coordinated bank target. Air-relative track rate now
 matches the heading used by navigation and turn forecasts. Normal/deep brake intent and the
@@ -420,13 +428,15 @@ remain physical; accepted controls highlight the existing indicators while cue t
 While ridge soaring, the coach now gives a conservative height budget or says a thermal is within
 reach; the thermal activity still requires actual sustained circling. Connected flow ribbons make wind against the cliff visible. Weak rising air is
 distinguished from usable lift, and plate trails remain optional bonus kg toward the next thermal.
-It uses fresh `good-lift-v12` data and new leaderboard
-records; old scores and progression are not migrated. Logs use format 2 and five digital bits,
+It uses fresh `good-lift-v13` data and new leaderboard
+records. Only normalized learned-lesson flags migrate once from v12; Reset progress and Repeat
+trick lessons prevent cleared learning from being reimported. Logs use format 2 and five digital bits,
 including resolved deep-brake intent. Historical format 1 links remain readable and are refused
 when their simulation version differs. The 49,152-character maximum and aggregate local log
 budget still bound storage.
 Current local acceptance and pending release gates are recorded in
-[Opening and trick lessons v12 QA](docs/good-lift-opening-lessons-v12-qa.md); the
+[Stalls, backfly and frontal recovery v13 QA](docs/good-lift-recovery-v13-qa.md); the
+[opening and trick lessons v12 QA](docs/good-lift-opening-lessons-v12-qa.md),
 [turns and thermal circling v11 QA](docs/good-lift-turns-v11-qa.md) and earlier flight and coach receipts
 describe historical candidates.
 `DAILY_EPOCH` in `src/game/good-lift-address.js` is the UTC day of Daily #1:
@@ -665,7 +675,7 @@ With the deployment account and production board URL configured, publish both ta
 firebase deploy --only functions:board,hosting --project renate-gouveia-portfolio
 ```
 
-Verify the live board reports simulation version 11, then fly and submit a Daily Sky from the released
+Verify the live board reports simulation version 13, then fly and submit a Daily Sky from the released
 client. During a version mismatch, local results remain available and the world-board status
 explains that its flight rules are updating. This change does not require deleting old Firestore
-boards; v12 records are separate from earlier versions. Repository changes and local QA do not constitute a deployment.
+boards; v13 records are separate from earlier versions. Repository changes and local QA do not constitute a deployment.

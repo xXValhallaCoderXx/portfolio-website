@@ -2,6 +2,7 @@ import { createFlightCoach } from './flight-coach.js';
 import { actionMessage } from './coach-actions.js';
 import { normalizeLearnedLessons } from './trick-learning.js';
 import { multiplierOf } from './score.js';
+import { WING } from './wing-envelope.js';
 
 export const TRICK_LESSONS = Object.freeze({
   pitch: Object.freeze({ height: 500, entry: 200, abort: 120, kind: 1, label: 'PITCH & CATCH' }),
@@ -77,7 +78,7 @@ export function createTrickLessons({ learned = () => [], onLearned = () => {} } 
     const { g, watch, style, input = {}, air = {} } = frame;
     const reserve = Math.min(frame.clearance ?? Infinity, frame.fogClearance ?? Infinity);
     const interrupted = !!(frame.hazard || frame.warning || frame.collapse > 0 || g.stall > 0 ||
-      g.tuck > 0 || g.tip > 0 || g.loop || input.ears || frame.hazardActive);
+      g.tuck > 0 || g.tip > 0 || g.loop || input.ears || frame.hazardActive || g.wingPhase && g.wingPhase !== WING.flying);
     const stable = !interrupted && !input.deepBrake && !g.acro && Math.abs(g.pitch) < 0.3 &&
       Math.abs(g.pitchRate) < 0.4 && Math.abs(g.bank) < 0.75 &&
       (air.windY ?? air.lift ?? 0) >= 1.85 && g.vy > 0.2;
