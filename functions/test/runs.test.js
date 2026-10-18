@@ -294,12 +294,12 @@ test('a run is never on the board twice: sent again from its device it keeps its
   assert.deepEqual(Object.values(fn.store.docs.get(KEY).devices), [1, 1]);
 });
 
-test('a copy using the legacy two-arrow bar chord under its brake is the same run, and a duplicate', async () => {
+test('a copy using the two-arrow bar chord under its brake is the same run, and a duplicate', async () => {
   // The run circling on the light brake, which holds the brake straight on many steps.
   const { eased: column } = runs();
   const fn = service();
   assert.equal((await fn.send(column.text)).status, 200);
-  // The brake wins over the legacy two-arrow speed-bar chord.
+  // The brake wins over the two-arrow speed-bar chord.
   const bits = Uint8Array.from(column.log.bits);
   let braked = 0;
   for (let i = 0; i < column.log.steps; i++) {

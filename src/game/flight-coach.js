@@ -131,9 +131,9 @@ export function createFlightCoach() {
       clearIntent(); consumeEvidence(); recovering = true;
       return emit({ state: 'recover', context: 'stall', phase: 'airspeed', action: 'release-all', detail: 'Release the controls so the wing can regain airspeed.' });
     }
-    if (g.tuck > 0 || frame.collapse > 0 || gauge.coming === 6) {
+    if (frame.collapse > 0 || gauge.coming === 6) {
       clearIntent(); consumeEvidence(); recovering = true;
-      const released = (g.tuckHeld ?? 0) >= 0.3 || gauge.cue === 3;
+      const released = gauge.cue === 3;
       return emit({ state: 'recover', context: 'collapse', phase: released ? 'release' : 'reopen',
         action: released ? 'release-brake' : 'brake', title: released ? 'RELEASE BRAKE' : input.brake ? 'HOLD BRAKE BRIEFLY' : 'PRESS BRAKE BRIEFLY',
         brakeDepth: 'working',
@@ -251,9 +251,4 @@ export function createFlightCoach() {
     return message;
   }
   return { reset, step, get message() { return message; } };
-}
-
-// Compatibility for callers without a lifetime. The integrated game owns a persistent observer.
-export function flightCoach(g, watch, style, gauge, air = null) {
-  return createFlightCoach().step(0, { g, watch, style, gauge, air, input: {}, eligible: true });
 }

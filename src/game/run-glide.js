@@ -48,7 +48,6 @@ export const GLIDE = Object.freeze({
   // Cyan for go, the site's own; amber for climb first, the colour this game gives lift.
   go: 0x2dd4ee, climb: 0xffb04a,
   // s: how long in all, each visit, the ring's word is said as a line of advice (good-lift.js).
-  teach: 12,
 });
 
 // The ring's word as a line of advice, for a visitor still learning what its colours mean. Each

@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { WING } from './wing-envelope.js';
 import assert from 'node:assert/strict';
 import { createFlight, stepFlight } from './flight.js';
 import { sampleAtmosphere } from './atmosphere.js';
@@ -138,8 +139,8 @@ test('pitch queues before wingover; only a fresh matching move and its recovered
 test('off policy suppresses deliberate maneuver teaching but keeps stall, collapse, surge, inversion and low-clearance recovery', () => {
   for (const danger of ['stall', 'collapse', 'surge', 'inversion', 'clearance', 'ears']) {
     const f = fixture(); const coach = createFlightCoach();
-    if (danger === 'stall') f.g.stall = 1;
-    if (danger === 'collapse') f.g.tuck = 1;
+    if (danger === 'stall') Object.assign(f.g,{stall:1,wingPhase:WING.stalled});
+    if (danger === 'collapse') Object.assign(f.g,{tuck:.8,wingPhase:WING.frontal});
     if (danger === 'inversion') f.g.loop = 1;
     if (danger === 'surge') { f.g.pitch = -1; f.g.pitchRate = -0.8; }
     if (danger === 'clearance') { f.g.acro = true; f.frame.clearance = 60; }

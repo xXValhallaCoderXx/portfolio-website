@@ -6,7 +6,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { WORLD, ZONES, STONES, THERMALS, START, GATEWAY, centerX, heightAt, surfaceAt, buildTerrain } from './terrain.js';
 import { PROJECT_PROPS, loadModel, prefetchModel, buildSky, buildPlaces, buildScatter, buildThermals, buildGlider, buildGateway } from './scenery.js';
-import { ACHIEVEMENTS, GAME_STORE, LEARNING_MIGRATION, beltFor, readProgress, writeProgress, emptyProgress } from './achievements.js';
+import { ACHIEVEMENTS, GAME_STORE, beltFor, readProgress, writeProgress, emptyProgress } from './achievements.js';
 import { scoreLanding, createLandingLeg } from './landing.js';
 import { FJORD_THERMALS, sampleFjordAir, fjordWindAt } from './atmosphere.js';
 import { createFlightView } from './flight-view.js';
@@ -14,12 +14,12 @@ import { createFlightCoach } from './flight-coach.js';
 import { createLiftGuide } from './lift-guide.js';
 import { createCoachView } from './coach-view.js';
 import { createBrakeInput } from './brake-input.js';
-import { interruptsLift, quietFlightHint, resolveCoachMessage } from './coach-routing.js';
+import { interruptsLift, resolveCoachMessage } from './coach-routing.js';
 import { createPlateNotice, createWindNotice, windReadout } from './wind-feedback.js';
 import { crossesGateway } from './gateway.js';
-import { FLIGHT, BRAKE, TUCK, createFlight, pitchPeak, releaseFlight, settleFlight, stepFlight } from './flight.js';
-import { stallEffects, brakeMeter, deepBrakeReached } from './stall-effects.js';
-import { WATCH, createSwingWatch } from './swing-watch.js';
+import { FLIGHT, createFlight, releaseFlight, settleFlight, stepFlight } from './flight.js';
+import { stallEffects, brakeMeter } from './stall-effects.js';
+import { createSwingWatch } from './swing-watch.js';
 import { swingGauge } from './swing-gauge.js';
 import { holdHint } from './hints.js';
 import { fjordHint } from './fjord-hints.js';
@@ -324,7 +324,7 @@ export function createGame(stage, hooks = {}) {
   const flightView = createFlightView(g);
   let renderedFlight = null;
   // What the pilot asks of the wing and the air it is in, filled afresh at every step.
-  const controls = { turn: 0, brake: false, deepBrake: false, bar: false, ears: false, locked: false, harsh: false, linger: false, swing: false, folds: false, steered: false, climb: null };
+  const controls = { turn: 0, brake: false, deepBrake: false, bar: false, ears: false, locked: false, steered: false, climb: null };
   // What the wing's swings are doing over the fjord (swing-watch.js); a run keeps its own.
   const fjordWatch = createSwingWatch();
   const air = { lift: 0, sink: 0, windX: 0, windY: 0, windZ: 0, calm: false, rough: 0, clearance: Infinity };
@@ -389,17 +389,16 @@ export function createGame(stage, hooks = {}) {
   // lifted as the moment to turn in comes (-1 left to 1 right, written by the run and dying away).
   const effects = {
     fold: 0, veil: 0, veilShown: 0, shake: 0, gaze: 0, want: { fold: 0, veil: 0, shake: 0, gaze: 0 }, floor: -Infinity, gazeShown: -1, stop: 0,
-    foldLeft: 0, foldRight: 0, luff: 0, stall: { left: 0, right: 0, luff: 0, shake: 0, tuck: 0 }, stalled: false, stallSide: 0, deep: 0,
+    foldLeft: 0, foldRight: 0, luff: 0, stall: { left: 0, right: 0, luff: 0, shake: 0, tuck: 0 }, stalled: false,
     tuck: 0, heave: 0,
     meter: { fill: 0, red: 0, state: '' }, meterShown: { fill: -1, red: -1, state: null }, fjordHint: { line: '', since: 0 },
     // The swing gauge (swing-gauge.js) and what of it was last written to the page; the catches and
     // the swings through the bottom already heard.
-    gauge: { on: false, left: 0, mode: 'pitch', cue: 0, coming: 0, soon: 1, x: 0, y: 0, band: 0, near: false, safe: true, round: 0, loopable: false },
+    gauge: { on: false, left: 0, mode: 'pitch', cue: 0, coming: 0, soon: 1, x: 0, y: 0, band: 0, near: false, round: 0, loopable: false },
     // The prompt by the wing as last written, and the hands on time: until when it says so, and how.
     cueShown: { coming: -1, live: null, ring: -1, x: NaN, y: NaN, good: null, loopable: false },
     good: { until: -Infinity, word: '' },
     // When on this flight over the fjord a trick was first flown (-1 for not yet).
-    trickAt: -1,
     gaugeShown: { on: null, x: null, y: null, mode: null, cue: null, told: null, band: null, near: null, safe: null, round: null },
     heard: { catches: 0, pitch: 0, roll: 0 },
     // Round a loop: the bank the wing went into it with, which the pilot's pose keeps while it goes
@@ -471,7 +470,7 @@ export function createGame(stage, hooks = {}) {
   // run comes through here, so a strike or a cloud can never follow the glider anywhere else.
   function clearRunEffects() {
     effects.fold = effects.veil = effects.veilShown = effects.shake = 0;
-    effects.foldLeft = effects.foldRight = effects.luff = effects.deep = effects.stallSide = 0;
+    effects.foldLeft = effects.foldRight = effects.luff = 0;
     effects.tuck = effects.heave = 0;
     effects.want.fold = effects.want.veil = effects.want.shake = effects.want.gaze = 0;
     effects.floor = -Infinity;
@@ -714,13 +713,8 @@ export function createGame(stage, hooks = {}) {
     controls.deepBrake = input.deepBrake && !input.ears && !auto;
     controls.bar = (input.bar || (input.left && input.right)) && !auto;
     controls.ears = input.ears && !auto;
-    controls.swing = true;
-    controls.folds = true;
     controls.steered = outOfBounds || !!auto;
     controls.locked = false;
-    controls.harsh = false;
-    controls.linger = false;
-    controls.safe = false;
     controls.climb = null;
     if (auto) {
       // Flying itself, the glider holds a glide path that ends just above the ring, and stays
@@ -772,7 +766,7 @@ export function createGame(stage, hooks = {}) {
     const watch = mode === 'cloudbase' ? run?.world.watch.state : fjordWatch.state;
     // A folded wing's pumps that counted, a strike's (a run's) and a front collapse's alike, and
     // whether it is folded still.
-    const pumps = (mode === 'cloudbase' ? run?.world.pump.n ?? 0 : 0) + g.tuckPumps;
+    const pumps = (mode === 'cloudbase' ? run?.world.pump.n ?? 0 : 0);
     const folded = g.tuck > 0 || (mode === 'cloudbase' && (run?.world.sky.state.pilot.collapse ?? 0) > 0);
     const frontal = g.tuck > 0;
     if (frontal && !effects.heard.frontal) play('frontal-fold', 0.4, slump, 0, 0.35);
@@ -784,7 +778,7 @@ export function createGame(stage, hooks = {}) {
       // as it opens.
       if (pumps > effects.heard.pumps) {
         effects.good.until = time + 0.6;
-        effects.good.word = `${pumps}/${TUCK.pump.most}`;
+        effects.good.word = `${pumps}/${run.pumpLimit}`;
       }
       if (effects.heard.folded && !folded && effects.heard.pumped > 0) {
         effects.good.until = time + 0.6;
@@ -816,13 +810,11 @@ export function createGame(stage, hooks = {}) {
     effects.heard.roll = g.roll;
     if (g.stall > 0 && !effects.stalled) {
       effects.stalled = true;
-      effects.stallSide = g.stallSide;
-      playStall(g.stallSide, g.stallHarsh);
+      playStall();
     } else if (g.stall === 0 && effects.stalled) {
       effects.stalled = false;
-      if (!collapsed && !frontal) playRefill(effects.stallSide);
+      if (!collapsed && !frontal) playRefill(0);
     }
-    effects.deep = deepBrakeReached(g.brake, g) ? effects.deep + dt : 0;
 
     if (g.lift > 1 && g.vy > 0) {
       climbStart ??= g.pos.y;
@@ -861,7 +853,6 @@ export function createGame(stage, hooks = {}) {
     setAuto(null);
     settleFlight(g, 0);
     effects.stalled = false; effects.heard.frontal = false;
-    effects.deep = 0;
     g.pos.y = surfaceAt(g.pos.x, g.pos.z) + 1.4;
     // A key still held from the approach is not a brake, or a turn, on the next flight.
     clearInput();
@@ -904,7 +895,6 @@ export function createGame(stage, hooks = {}) {
     fjordWatch.reset();
     resetCoach();
     effects.heard.catches = 0;
-    effects.trickAt = -1;
     climbStart = null;
     effects.gaze = 0;
     // A new flight starts with nothing said, and nothing of the last stall still showing. Nor is
@@ -913,7 +903,6 @@ export function createGame(stage, hooks = {}) {
     effects.fjordHint.line = '';
     effects.fjordHint.since = 0;
     effects.stalled = false; effects.heard.frontal = false;
-    effects.deep = 0;
     holders.brake.clear();
     input.brake = false;
     resetBrakeInput();
@@ -1346,8 +1335,6 @@ export function createGame(stage, hooks = {}) {
   function hintText() {
     if (!isAirborne() || mapOpen) return '';
     const near = nearestZone(false);
-    fjordMoment.stall = g.stall;
-    fjordMoment.stallSide = g.stallSide;
     fjordMoment.auto = auto ? auto.label : '';
     fjordMoment.arch = !progress.cloudbase.discovered && airtime < 4 && landingLeg.eligible;
     fjordMoment.nearArch = archNear && !auto;
@@ -1355,19 +1342,8 @@ export function createGame(stage, hooks = {}) {
     fjordMoment.nearRing = near.dist < near.zone.r * 2.5;
     fjordMoment.unvisited = !progress.visited.includes(near.zone.id);
     fjordMoment.agl = g.pos.y - surfaceAt(g.pos.x, g.pos.z);
-    fjordMoment.sinking = g.vy < 0;
     fjordMoment.airtime = airtime;
     fjordMoment.touch = touch;
-    // The wing's swings: a surge wanting catching, the first trick of the flight for a few seconds,
-    // and a trick under way.
-    const swung = fjordWatch.state;
-    fjordMoment.pitching = swung.pumping === 1;
-    fjordMoment.looping = g.loop !== 0 && !g.loopOut;
-    fjordMoment.loopable = effects.gauge.loopable;
-    fjordMoment.wingover = swung.linking === 1 || swung.chain >= 2;
-    if ((fjordMoment.pitching || fjordMoment.wingover || fjordMoment.looping) && effects.trickAt < 0) effects.trickAt = airtime;
-    fjordMoment.safeTricks = effects.trickAt >= 0 && airtime - effects.trickAt < 3;
-    fjordMoment.surging = g.tuck === 0 && g.pitchRate < 0 && pitchPeak(g) < -WATCH.surge;
     // Held on the frame clock, not the flight's: under boost the flight's runs three times as fast,
     // and a line has to stay up long enough to read in real time.
     return holdHint(effects.fjordHint, fjordHint(fjordMoment), time);
@@ -1427,7 +1403,7 @@ export function createGame(stage, hooks = {}) {
   function updateCoach() {
     const eligible = isAirborne() && !mapOpen && !auto && !controls.steered && !briefing;
     coachView.update(eligible ? coachMessage : null);
-    if (eligible) hintEl.hidden = !quietFlightHint(hintEl.textContent, { inRun: mode === 'cloudbase', coached: !!coachMessage });
+    if (eligible) hintEl.hidden = mode === 'cloudbase' || !!coachMessage;
     else hintEl.hidden = false;
     brakeMeter(g.brake, g.stallLoad, g.stall, effects.meter, g.ears, g);
   }
@@ -1809,8 +1785,8 @@ export function createGame(stage, hooks = {}) {
     cloth.stop(at + 0.5);
   }
 
-  function playStall(side, harsh) {
-    play('stall', 1.2, slump, side * 0.5, harsh ? 1 : 0.7);
+  function playStall() {
+    play('stall', 1.2, slump, 0, 0.7);
   }
 
   function playRefill(side) {
@@ -2178,7 +2154,6 @@ export function createGame(stage, hooks = {}) {
       // Good Lift's own store goes too: its bests, feats, streak and board, and the kit they earned.
       try {
         localStorage.removeItem(GAME_STORE);
-        localStorage.setItem(LEARNING_MIGRATION, '1');
       } catch {
         // Storage can be blocked; there is then nothing kept to clear.
       }
@@ -2379,12 +2354,11 @@ export function createGame(stage, hooks = {}) {
     endBrief: () => briefing && endBriefing(),
     get entry() { return run?.entry.state ?? null; },
     // What the run's hint was last chosen from: its facts, as the readouts last wrote them.
-    get hintFacts() { return run?.hintFacts ?? null; },
     get effects() {
       return {
         seed: run?.sky.state.seed ?? null, fold: effects.fold, foldLeft: effects.foldLeft, foldRight: effects.foldRight, luff: effects.luff,
         veil: effects.veil, gaze: effects.gaze, hook: run?.world.hook ?? 1, stalls: run?.world.stalls ?? 0, meter: { ...effects.meter }, haste, stop: effects.stop,
-        tucks: run?.world.tucks ?? 0, tips: run?.world.tips ?? 0, pumps: run?.world.pump.n ?? 0, tuck: effects.tuck, heave: effects.heave,
+        tucks: run?.world.tucks ?? 0, pumps: run?.world.pump.n ?? 0, tuck: effects.tuck, heave: effects.heave,
         pitch: g.pitch, pitchRate: g.pitchRate, bank: g.bank, gauge: { ...effects.gauge },
       };
     },

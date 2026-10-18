@@ -19,12 +19,7 @@ export const BYNAME = Object.freeze({
 // Lines judged on the way up: the mist's judging of the bar as the run ends is no line.
 const lines = (sheet) => sheet.lifts.filter((lift) => lift.line > 0).length;
 
-// Every byname, in the order a run is judged for them, the rarer before the more common. Measured
-// on five reference pilots (pilots.js) over 40 skies under SIM_VERSION 2, the share of runs that met
-// each rule, from the pilot that met it least to the one that met it most: the Unbroken 0 to 20%,
-// the Unstruck 0 to 28%, the Centred 43 to 70%, Bell-dodger 0 to 88% (none for the pilot that never
-// dodges), Horn-lifter 40 to 85% and Cloud-shy 33 to 43%. A player centres a circle less surely than
-// a pilot that steers by the core's own position, so the Centred stays above the two after it.
+// A run earns one byname; check the rarer achievements before the more common ones.
 export const BYNAMES = Object.freeze([
   Object.freeze({
     id: 'unbroken',

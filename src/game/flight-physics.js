@@ -36,7 +36,7 @@ export const PHYSICS = Object.freeze({
     rearSlip: 1.4, frontSlip: 0.025 }),
   suspension: Object.freeze({ take: 0.9, takeRange: 0.1, tolerance: 0.0001 }),
   orbit: Object.freeze({ entryY: -0.7, entryRate: 0.4, maxOffPlane: 0.7, maxAge: 12, aboveY: 0.2 }),
-  telemetry: Object.freeze({ headingSpeed: 0.25, stallStart: 0.25, stallRange: 0.25, stallAngle: 0.45, climbRate: 2.5 }),
+  telemetry: Object.freeze({ headingSpeed: 0.25, stallStart: 0.25, stallRange: 0.25, climbRate: 2.5 }),
   solver: Object.freeze({ courseSpeed: 0.01, sampleSpeed: 0.001, length: 1e-6,
     trimSpeed: 11.5, trimClimb: -1.3, trimPitch: -0.015, trimLine: 0.02,
     trimIterations: 30, trimTolerance: 1e-8, trimSpeedDelta: 1e-4, trimAngleDelta: 1e-6,

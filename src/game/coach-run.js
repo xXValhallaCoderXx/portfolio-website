@@ -2,8 +2,9 @@
 import { CLOUD_ZONE, cloudFogSpeed, cloudThermalRemaining } from './cloudbase-state.js';
 import { surfaceAt } from './ground.js';
 import { BELL_RESULT } from './bells.js';
-import { FOG_NEAR, GUST_NEAR } from './cloudbase-hints.js';
 import { BRAKE } from './flight.js';
+
+const FOG_NEAR = 80, GUST_NEAR = 60;
 
 export const thermalRideIdentity = (index, thermal) => thermal && index > 0 ? `${index}:${thermal.generation}` : null;
 

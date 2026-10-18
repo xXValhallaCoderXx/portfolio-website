@@ -8,7 +8,7 @@ import { replayLog } from '../../src/game/replay.js';
 import { SIM_VERSION } from '../../src/game/sim-version.js';
 
 test('Chromium stall/backfly and frontal flights from launch match the server replay and complete sheets', () => {
-  const receipt = JSON.parse(readFileSync(new URL('../../src/game/fixtures/good-lift-v13-recovery-chromium.json', import.meta.url), 'utf8'));
+  const receipt = JSON.parse(readFileSync(new URL('../../src/game/fixtures/good-lift-recovery-chromium.json', import.meta.url), 'utf8'));
   assert.match(receipt.engine, /^Chromium /);
   const records = receipt.records.filter(r => !r.pureFlight);
   assert.equal(records.length, 2);

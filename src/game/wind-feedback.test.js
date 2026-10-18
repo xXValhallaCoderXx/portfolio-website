@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { airCoachMessage, ambientCoach, createPlateNotice, createWindNotice, ridgeFeedback, urgentAirHint, windReadout } from './wind-feedback.js';
+import { createPlateNotice, createWindNotice, ridgeFeedback, windReadout } from './wind-feedback.js';
 import { FLIGHT } from './flight.js';
 
 test('the world wind destination stays fixed when turning the wing; the relative arrow turns', () => {
@@ -23,21 +23,6 @@ test('weak rising air is distinguished from air strong enough to support a gentl
   assert.match(ridgeFeedback(air).detail, /slows your descent/);
   assert.equal(ridgeFeedback({ ...air, windY: usable, vy: -4 }).title, 'RIDGE LIFT', 'the cue classifies air, not pilot momentum');
   assert.equal(ridgeFeedback({ ridge: 0.5, lee: 0, thermal: 4, windY: 4.5 }), null, 'strong thermal air is not called ridge lift');
-});
-test('hazards defer ambient notices while recovery and active maneuver instructions remain available', () => {
-  const notice = { state: 'wind', title: 'WIND SHIFT' };
-  for (const state of ['recover', 'building', 'timing', 'timed', 'complete', 'banked']) {
-    const flight = { state };
-    assert.equal(airCoachMessage(flight, null, true), flight);
-    assert.equal(airCoachMessage(flight, notice, false), flight);
-    assert.equal(ambientCoach(flight), false);
-  }
-  for (const state of ['soaring', 'ridge', 'weak', 'lee']) {
-    assert.equal(airCoachMessage({ state }, notice, true), null);
-    assert.equal(ambientCoach({ state }), true);
-  }
-  assert.equal(airCoachMessage(null, notice, true), null);
-  assert.equal(airCoachMessage({ state: 'ridge' }, notice, false), notice);
 });
 test('the first plate trail explains optional bonus kg once and resets for a fresh run', () => {
   const notice = createPlateNotice();
@@ -97,6 +82,4 @@ test('old deferred shifts expire, restart resets notice identity and urgent hint
   notice.step(null, 0, false);
   assert.equal(notice.step({ transition: 0 }, 0, true), null);
   assert.ok(notice.step({ transition: 1, toHeading: 0 }, 90, true));
-  for (const hint of ['kettlebell — turn', 'raven strike — pump', 'fog closing in', 'gust coming — ease']) assert.equal(urgentAirHint(hint), true);
-  assert.equal(urgentAirHint('small turns keep the circle centered'), false);
 });

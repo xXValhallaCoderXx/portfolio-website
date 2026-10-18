@@ -53,8 +53,8 @@ export function createReferenceKeys(options = TST, { hold = 9, chord = false } =
 
 // How every reference pilot catches its own wing, as the hints tell a player to: once the wing is
 // surging toward a peak more than `surge` rad ahead (pitchPeak), the brake on `react` seconds later
-// and held till the wing swings back; and a fold, a strike's or a front collapse, pumped open twice,
-// each pump held `hold` seconds and let go for `gap` before the next (CLOUD_STRIKE.pump, TUCK.pump).
+// and held till the wing swings back; and an external-strike fold pumped open twice,
+// each pump held `hold` seconds and let go for `gap` before the next (CLOUD_STRIKE.pump).
 // Counted in whole steps, from the step the surge set in or the wing folded.
 export const CATCH = Object.freeze({ react: 0.4, surge: 0.8, hold: 0.35, gap: 0.1 });
 
@@ -70,7 +70,7 @@ export const DASH = Object.freeze({ ahead: 0.8, carry: 1, low: 4, home: 12 });
 export const WORTH_RUNES = Object.freeze([RUNE.fehu, RUNE.tiwaz]);
 
 /**
- * A deterministic soaring pilot. `brake: 'none'` uses hands-up circles; the other legacy labels
+ * A deterministic soaring pilot. `brake: 'none'` uses hands-up circles; the other brake labels
  * all hold the same common brake. `react` is the delay before dodging a kettlebell (null ignores
  * it). `collect`, `gates` and `recover` add plate, rune and scatter detours.
  *
@@ -319,10 +319,15 @@ export function createReferencePilot({
   }
 
   // Catches its own wing: the brake `react` seconds into a surge, held till it swings back, and two
-  // pumps into a fold, a strike's or a front collapse's alike.
+  // pumps into an external-strike fold. Frontal inflation needs released controls.
   function catchWing(world, intent) {
     const { g } = world;
-    if (world.sky.state.pilot.collapse > 0 || g.tuck > 0) {
+    if (g.tuck > 0) {
+      intent.turn = 0; intent.brake = intent.deepBrake = intent.bar = false;
+      folded = surged = 0; catching = false;
+      return;
+    }
+    if (world.sky.state.pilot.collapse > 0) {
       const k = folded - lead;
       folded += 1;
       intent.brake = k >= 0 && k < 2 * (hold + gap) && k % (hold + gap) < hold;

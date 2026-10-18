@@ -385,7 +385,6 @@ test('no kettlebell is thrown while anything blocks it, and one comes once every
     ['a raven about to cross', (world) => { world.sky.state.pilot.danger = 1; }, (world) => { world.sky.state.pilot.danger = 0; }],
     ['a stall', (world) => { world.g.stall = 1; }, (world) => { world.g.stall = 0; }],
     ['a front tuck', (world) => { world.g.tuck = 0.5; }, (world) => { world.g.tuck = 0; }],
-    ['a tip collapse', (world) => { world.g.tip = 0.5; }, (world) => { world.g.tip = 0; }],
     ['a gust front 5.9 s off', (world) => { world.sky.state.pilot.gustIn = BELLS.gust - 0.1; }, (world) => { world.sky.state.pilot.gustIn = BELLS.gust; }],
     ['the rim 14 m away', nearRim(BELLS.edge - 1), nearRim(BELLS.edge + 1)],
   ];

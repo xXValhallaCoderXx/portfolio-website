@@ -597,12 +597,12 @@ test('however far either half folds, the cloth is never turned inside out along 
 test('a stall rocks the wing back well clear of its stops, and a fold on one side rolls the wing toward it', () => {
   // A deep brake into a stall and out again, as flight.js and the game hand it to pose: airspeed
   // falling to the stall's and coming back, the brake let go as the wing goes, the cloth
-  // fluttering as the load builds, and in a spin the inside half folded.
+  // fluttering as the load builds, and in an external strike one half folded.
   const stallFor = 2.9; // a visual severity/fold sequence, independent of flight timing
   const fly = ({ lift = 0, rough = 0, phase = 0, side = 0 }) => {
     const glider = swingOnly();
     const sling = glider.group.children[0];
-    let speed = FLIGHT.speed.deep;
+    let speed = FLIGHT.speed.light;
     let brake = 1;
     let luff = 0;
     let foldLeft = 0;
@@ -611,7 +611,7 @@ test('a stall rocks the wing back well clear of its stops, and a fold on one sid
     for (let n = 0; n < 10 / STEP; n++) {
       const t = n * STEP;
       const stalled = t >= 3 && t < 3 + stallFor;
-      const want = t < 3 ? FLIGHT.speed.deep : stalled ? FLIGHT.speed.stall : FLIGHT.speed.trim;
+      const want = t < 3 ? FLIGHT.speed.light : stalled ? 3 : FLIGHT.speed.trim;
       speed += (want - speed) * Math.min(1, STEP * (stalled ? 4 : 1.6));
       if (t >= 3) brake = Math.max(0, brake - STEP * 10);
       luff = t < 3 ? t / 3 : stalled ? 1 : Math.max(0, luff - STEP * 6);

@@ -20,12 +20,7 @@ import { SIM_VERSION } from './sim-version.js';
 import { outranks } from './board.js';
 import { isJudgedEnding } from './run-rules.js';
 
-// The bots, in the order they fly: TST first, as the one a run is judged against for the feat and
-// the board. On a typical sky the pilot holding its line on the light brake (and through every
-// kettlebell) sets bronze, TST silver and the collector gold: their median totals over 40 skies
-// under SIM_VERSION 2 are 191, 238 and 358 kg (good-lift.test.js). But on 20 of the 40 Daily Skies
-// from 15 October 2026, under the same rules, two of them swapped places (the line-holder over TST
-// on 11), so the medals go by what they lifted on the sky, not by who they are (medalsOf).
+// Reference pilots set each sky's medals from their actual ranked flights, with TST pinned first.
 export const BOTS = Object.freeze([
   Object.freeze({ id: 'tst', name: 'TST', pilot: TST }),
   Object.freeze({ id: 'holder', name: 'the line-holder', pilot: Object.freeze({ brake: 'eased' }) }),
@@ -160,7 +155,7 @@ export function createBotFlight() {
     const world = worlds[landed];
     finishRun(world, ending);
     const sheet = summariseRun(world, ending);
-    scores[landed] = Object.freeze({ total: sheet.total, peak: sheet.peak, red: Object.freeze(sheet.lifts.map((lift) => lift.red)), reason: sheet.reason });
+    scores[landed] = Object.freeze({ total: sheet.total, style: 0, peak: sheet.peak, red: Object.freeze(sheet.lifts.map((lift) => lift.red)), reason: sheet.reason });
     landed += 1;
   }
 

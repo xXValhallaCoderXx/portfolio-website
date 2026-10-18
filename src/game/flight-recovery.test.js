@@ -9,6 +9,7 @@ import { createStyle } from './meet-style.js';
 import { swingGauge, CUES } from './swing-gauge.js';
 import { stallEffects, STALL_EFFECTS } from './stall-effects.js';
 import { createBrakeInput } from './brake-input.js';
+import { createReferencePilot } from './pilots.js';
 import { createCloudbaseRun } from './cloudbase-state.js';
 import { createRunWorld, startRun, stepRun } from './run-step.js';
 
@@ -50,10 +51,17 @@ test('a growing pitch can be caught while the same uncaught flight folds its lea
   }
   const caught = copyFlight(aloft(), g), missed = copyFlight(aloft(), g);
   let catches = 0, folds = 0;
+  const reference = createReferencePilot();
+  const world = createRunWorld({g:missed,sky:createCloudbaseRun()}); world.sky.reset(missed.pos.y,1);
   for (let tick = 0; tick < 360; tick++) {
     stepFlight(caught, { brake: caught.pitch < 0 }, {}, dt);
     stepFlight(missed, {}, {}, dt);
     catches += caught.tuck > 0; folds += missed.tuck > 0;
+    if(missed.tuck>0){
+      const intent={};reference.decide(world,intent);
+      assert.equal(intent.brake,false,'reference pilots release a frontal rather than pump it');
+      assert.equal(intent.bar,false);assert.equal(intent.turn,0);
+    }
   }
   assert.equal(catches, 0); assert.ok(folds > 0);
   assert.notDeepEqual(caught.pilot.vel, missed.pilot.vel, 'the fold changes forces, not just its label');
@@ -121,7 +129,7 @@ test('real failure loses pending style once, preserves banked style and cannot b
 test('recovery state is copied without aliasing, predictions do not mutate it and settle clears it', () => {
   const g = fly(aloft(), 4, { deepBrake: true }), copy = copyFlight(aloft(), g);
   const original = structuredClone(g);
-  pitchPhase(g, {}, undefined, 3); assert.deepEqual(g, original);
+  pitchPhase(g, {}, 3); assert.deepEqual(g, original);
   for (let tick = 0; tick < 300; tick++) { stepFlight(g, { brake: true }, {}, dt); stepFlight(copy, { brake: true }, {}, dt); }
   assert.deepEqual(g, copy); assert.notEqual(g.physical.flow, copy.physical.flow);
   settleFlight(copy); assert.equal(copy.wingPhase, WING.flying); assert.equal(copy.inflation, 1);

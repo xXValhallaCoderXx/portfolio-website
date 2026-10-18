@@ -81,9 +81,8 @@ export const CLOUD_STORM = Object.freeze({
 });
 
 // Modest seeded shear turns the ambient wind between cloud layers. Terrain, rather than an
-// absolute-altitude switch, determines windward lift and shelter. The legacy lee shape remains
-// only as renderer compatibility; no physical wind uses it.
-export const CLOUD_WIND = Object.freeze({ walk: 0.15, lee: Object.freeze([0, 1]), shelter: 0, edge: 30 });
+// absolute-altitude switch, determines windward lift and shelter.
+export const CLOUD_WIND = Object.freeze({ walk: 0.15 });
 
 // Gusts cross the zone as straight bands that can be seen coming. The first sets off between
 // `first` seconds and after that one every `every`. A band starts `start` upwind of the zone
@@ -98,7 +97,7 @@ export const CLOUD_GUST = Object.freeze({
 
 // What the streaks need of this sky to draw its gust bands (wind-streaks.js): the zone they cross,
 // the bands' own shape and the launch hill's lee.
-export const RUN_SKY = Object.freeze({ zone: CLOUD_ZONE, gust: CLOUD_GUST, lee: CLOUD_WIND.lee });
+export const RUN_SKY = Object.freeze({ zone: CLOUD_ZONE, gust: CLOUD_GUST });
 
 const TAU = Math.PI * 2;
 const EMPTY_THERMALS = Object.freeze([]);

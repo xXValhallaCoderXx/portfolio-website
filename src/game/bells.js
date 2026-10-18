@@ -133,7 +133,7 @@ export function createBells() {
   // The look-ahead: a wing of the giant's own, flown in the air the sky has now on what the pilot
   // is holding. Its air and forces are its own as well, so nothing of the run's is touched.
   const ahead = createFlight({ x: 0, y: 0, z: 0 });
-  const held = { turn: 0, brake: false, bar: false, ears: false, locked: false, harsh: false, linger: true, swing: false, folds: false, safe: false, climb: null };
+  const held = { turn: 0, brake: false, bar: false, ears: false, locked: false, climb: null };
   const air = { lift: 0, sink: 0, windX: 0, windY: 0, windZ: 0, hazardSink: 0, calm: false, rough: 0, clearance: Infinity };
   const forces = { lift: 0, sink: 0, liftSide: 0, windX: 0, windY: 0, windZ: 0, hazardSink: 0, rough: 0 };
 
@@ -167,7 +167,6 @@ export function createBells() {
     const pos = ahead.pos;
     copyFlight(ahead, g);
     Object.assign(held, controls);
-    held.folds = false;
     for (let i = 0; i < steps; i++) {
       sky.sample(pos, ahead.yaw, forces);
       air.lift = forces.lift;
@@ -216,7 +215,7 @@ export function createBells() {
     if (g.pos.y < B.from) return true;
     for (let i = 0; i < state.bells.length; i++) if (state.bells[i].phase !== IDLE) return true;
     const pilot = sky.state.pilot;
-    if (pilot.shield > 0 || pilot.cloud > 0 || pilot.danger > 0 || pilot.gustIn < B.gust || g.stall > 0 || g.tuck > 0 || g.tip > 0) return true;
+    if (pilot.shield > 0 || pilot.cloud > 0 || pilot.danger > 0 || pilot.gustIn < B.gust || g.stall > 0 || g.tuck > 0) return true;
     const dx = g.pos.x - Z.x;
     const dz = g.pos.z - Z.z;
     return dx * dx + dz * dz > (Z.r - B.edge) * (Z.r - B.edge);

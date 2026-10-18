@@ -38,7 +38,7 @@ test('the manual brake-turn chord carves faster and spends less height than an o
     assert.ok(carve.g.coordination > 0.9);
     assert.ok(carve.g.coordinatedLean * side > 0.9);
     assert.ok(carve.g.pilotLean * side > 0.18);
-    assert.equal(carve.g.manualBrake, carve.g.brake);
+    assert.ok(Math.abs(carve.g.brake - PHYSICS.brake) < 1e-6);
     assert.ok(Math.abs(carve.g.bankTarget * side - 0.52) < 1e-6);
   }
 });
@@ -65,7 +65,7 @@ test('coordinated rollout keeps momentum, eases the lean and returns to ordinary
   assert.ok(Math.abs(g.bank) < 5 * DEG);
 });
 
-for (const side of [-1, 1]) test(`working-brake circle and held-brake rollout meet v11 limits, side ${side}`, t => {
+for (const side of [-1, 1]) test(`working-brake circle and held-brake rollout meet handling limits, side ${side}`, t => {
   const { seconds } = halfTurn(side, true);
   assert.ok(seconds <= 8.6, `${seconds}s for the first 180 degrees from settled trim`);
   const g = aloft();
@@ -160,7 +160,7 @@ test('coordination cannot become an automatic control or survive a canonical res
   assert.equal(g.pilotLean, ahead.pilotLean);
   Object.assign(g.pos, { x: 0, y: 2000, z: 0 }); g.yaw = 0; settleFlight(g);
   assert.equal(g.coordination, 0); assert.equal(g.coordinatedLean, 0); assert.equal(g.pilotLean, 0);
-  assert.equal(g.brake, 0); assert.equal(g.manualBrake, 0);
+  assert.equal(g.brake, 0);
   for (let tick = 0; tick < 120; tick++) stepFlight(g, { turn: 1, bar: true }, {}, STEP);
   assert.equal(g.coordination, 0, 'the bar leaves the energetic flight model available');
 });

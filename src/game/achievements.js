@@ -26,7 +26,7 @@ const STORE = 'fjord-glider-v1';
 // Good Lift keeps its own store under this key (good-lift-store.js): its best, tonnage, feats, daily
 // streak and board. It never moves the belt, and it stays out of the fjord's progress, which would
 // drop a block it does not know; resetting progress clears both.
-export { GAME_STORE, LEARNING_MIGRATION } from './good-lift-key.js';
+export { GAME_STORE } from './good-lift-key.js';
 const PLACE_IDS = ['about', 'experience', 'projects', 'contact'];
 const ACHIEVEMENT_IDS = new Set(ACHIEVEMENTS.map(({ id }) => id));
 let sessionProgress;

@@ -11,7 +11,7 @@ import { RUN_RULES } from './run-rules.js';
 
 // Seconds a run is stepped by, everywhere. Touching down within `ground` metres of the surface
 // ends a run, ring or not.
-export const RUN = Object.freeze({ ...RUN_RULES, ground: 1.4, harsh: 260 });
+export const RUN = Object.freeze({ ...RUN_RULES, ground: 1.4 });
 
 // The barogram the meet sheet draws: the glider's height, the fog's and the total, sampled as the
 // run starts and then every `every` fixed steps (once a run second), so sample i is second i. There
@@ -32,7 +32,6 @@ const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
  *   struck  strikes already answered with a hook
  *   stalls  stalls begun this run
  *   tucks   front tucks this run: surges left uncaught past the wing's line
- *   tips    tip collapses this run: wingovers swung past the wing's limit
  *   pump    the brake held into the fold so far (s) and the pumps it has had (`held`, `n`)
  *   steps   fixed steps flown this run
  *   intent  what stepBits last asked of the wing ({ turn, brake, deepBrake, bar, ears }): one object, reused
@@ -41,7 +40,7 @@ const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 export function createRunWorld({
   sky,
   g = createFlight({ x: CLOUD_GATE.x, y: CLOUD_GATE.y, z: CLOUD_GATE.z }),
-  controls = { turn: 0, brake: false, deepBrake: false, bar: false, ears: false, locked: false, harsh: false, linger: true, swing: false, folds: false, steered: false, safe: false, climb: null },
+  controls = { turn: 0, brake: false, deepBrake: false, bar: false, ears: false, locked: false, steered: false, climb: null },
   air = { lift: 0, sink: 0, windX: 0, windY: 0, windZ: 0, hazardSink: 0, calm: false, rough: 0, clearance: Infinity,
     ridge: 0, lee: 0, thermal: 0, crestHeight: 0, ambientX: 0, ambientZ: 0 },
   bells = null,
@@ -57,7 +56,6 @@ export function createRunWorld({
     struck: 0,
     stalls: 0,
     tucks: 0,
-    tips: 0,
     pump: { held: 0, n: 0 },
     steps: 0,
     ended: '',
@@ -93,9 +91,9 @@ export function startRun(world, seed) {
     ridge: 0, lee: 0, thermal: 0, crestHeight: 0, ambientX: 0, ambientZ: 0 });
   Object.assign(world.forces, { lift: 0, sink: 0, liftSide: 0, windX: 0, windY: 0, windZ: 0, hazardSink: 0, rough: 0,
     ridge: 0, lee: 0, thermal: 0, crestHeight: 0, ambientX: 0, ambientZ: 0 });
-  Object.assign(world.controls, { turn: 0, brake: false, deepBrake: false, bar: false, ears: false, locked: false, harsh: false, linger: true, swing: false, folds: false, steered: false, safe: false, climb: null });
+  Object.assign(world.controls, { turn: 0, brake: false, deepBrake: false, bar: false, ears: false, locked: false, steered: false, climb: null });
   world.hook = 1;
-  world.struck = world.stalls = world.tucks = world.tips = world.steps = 0;
+  world.struck = world.stalls = world.tucks = world.steps = 0;
   world.ended = '';
   world.pump.held = world.pump.n = 0;
   world.intent.turn = 0;
@@ -150,15 +148,8 @@ export function stepRun(world, intent, dt = RUN.step) {
   // An ineffective held bar cannot change configuration or rollout while the brake wins.
   controls.bar = !controls.brake && !controls.ears && !!intent.bar;
   controls.locked = collapsed;
-  // Keep the shared controller's compatibility flags, while the same physical wing flies here
-  // and in the portfolio. Assisted boundary recovery cannot earn a maneuver.
-  // Wing handling keeps its v11 height boundary independently of the later raven attacks.
-  controls.harsh = g.pos.y >= RUN.harsh;
-  controls.swing = true;
-  controls.folds = !outside;
+  // Assisted boundary recovery cannot earn a maneuver.
   controls.steered = outside;
-  controls.linger = true;
-  controls.safe = false;
   controls.climb = null;
 
   sky.sample(g.pos, g.yaw, forces);
@@ -182,11 +173,9 @@ export function stepRun(world, intent, dt = RUN.step) {
 
   const stalled = g.stall > 0;
   const tucked = g.tuck > 0;
-  const tipped = g.tip > 0;
   stepFlight(g, controls, air, dt);
   if (g.stall > 0 && !stalled) world.stalls += 1;
   if (g.tuck > 0 && !tucked) world.tucks += 1;
-  if (g.tip > 0 && !tipped) world.tips += 1;
   world.watch.step(dt, g, pilot.collapse > 0, controls);
   if (g.pos.y - surfaceAt(g.pos.x, g.pos.z) <= RUN.ground) return world.ended = 'landed';
 
@@ -211,7 +200,7 @@ export function stepRun(world, intent, dt = RUN.step) {
 /**
  * Flies one fixed step with the pilot's controls as `bits`: 1 left, 2 right, 4 brake and 8 the
  * speed bar, 16 deep brake, and the brake and the bar together (12) the big ears (recorder.js's INPUT). Both ways
- * at once retains the keyboard's legacy speed-bar chord, held straight. Touch controls have a
+ * at once retains the keyboard's speed-bar shortcut, held straight. Touch controls have a
  * dedicated bar and ears, and the run a log replays never depends on its device. The
  * ears take the bar's own bit, not that chord: both ways with the brake is still the brake. This is
  * the one way live play and replays fly a run; the reference pilots, which steer by degrees, call

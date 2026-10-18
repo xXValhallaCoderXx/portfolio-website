@@ -5,7 +5,7 @@ const DEG = Math.PI / 180;
 const dt = 1 / 60;
 function fixture() {
   const watch = createSwingWatch();
-  const g = { bank: 0, rollRate: 0, pitch: 0, pitchRate: 0, turn: 0, loop: 0, loops: 0, loopTimed: 0, tuck: 0, tip: 0, stall: 0, ears: 0 };
+  const g = { bank: 0, rollRate: 0, pitch: 0, pitchRate: 0, turn: 0, loop: 0, loops: 0, tuck: 0, stall: 0, ears: 0 };
   const controls = { turn: 0, brake: false, steered: false };
   const step = () => watch.step(dt, g, false, controls);
   function leg(to, frames, turn) {

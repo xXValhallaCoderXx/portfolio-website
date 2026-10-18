@@ -18,7 +18,7 @@ export const PILOTS = Object.freeze({
   column: () => createReferenceKeys({ brake: 'none' }), // hands up, circling every lift it finds
   eased: () => createReferenceKeys(TST), // circling on the light brake
   collector: () => createReferenceKeys({ ...TST, collect: true }, { hold: 7 }), // TST, fetching every trail of plates
-  landing: () => () => INPUT.ears, // explicit descent to actual terrain, independent of Daily Sky heading
+  landing: () => () => INPUT.right | INPUT.bar, // a manual turn onto terrain in the test day's sky
   bar: () => () => INPUT.bar, // straight off the gate on the speed bar, carried by that day's weather
 });
 

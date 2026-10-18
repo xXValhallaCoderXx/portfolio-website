@@ -743,7 +743,7 @@ export function createMeet() {
     // A rep is judged for depth on where the circle went while it turned: centred on the core
     // (its mean position within `depth`), it loads the heavier plate.
     const { lap } = state;
-    if (pilot.collapse > 0 || g.stall > 0 || g.tuck > 0 || g.tip > 0) {
+    if (pilot.collapse > 0 || g.stall > 0 || g.tuck > 0) {
       state.turned = lap.x = lap.z = lap.n = 0;
     } else if (slot > 0 && thermals[slot].strength >= MEET.alive) {
       const thermal = thermals[slot];

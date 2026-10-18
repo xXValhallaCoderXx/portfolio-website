@@ -8,7 +8,7 @@ const NONE = { left: 0, right: 0, luff: 0, shake: 0, tuck: 0 };
 const wing = (fields) => ({ ...createFlight(), ...fields });
 
 test('nothing of a stall reaches the backdrop, a landing, the launch fade, a finished run or the missing page', () => {
-  const stalled = wing({ stall: 2, stallSide: 1, stallLoad: 1 });
+  const stalled = wing({ stall: 2, stallLoad: 1 });
   for (const mode of ['intro', 'landed', 'launching', 'cloudbase-ended', 'lost']) {
     assert.deepEqual(stallEffects(mode, stalled, { left: 9, right: 9, luff: 9, shake: 9, tuck: 9 }), NONE);
     assert.deepEqual(stallEffects(mode, wing({ pitch: -0.8, tuck: 0.5 }), {}), NONE, 'nor of a surge or a tuck');
@@ -18,21 +18,10 @@ test('nothing of a stall reaches the backdrop, a landing, the launch fade, a fin
   assert.deepEqual(stallEffects('cloudbase', wing({}), {}), NONE);
 });
 
-test('a straight stall folds a little of both halves, a spin folds the inside half hard and leaves the other open', () => {
-  const straight = stallEffects('flying', wing({ stall: 1.2, stallSide: 0 }), {});
-  assert.deepEqual([straight.left, straight.right], [STALL_EFFECTS.fold, STALL_EFFECTS.fold]);
-  const right = stallEffects('cloudbase', wing({ stall: 2, stallSide: 1 }), {});
-  assert.deepEqual([right.left, right.right], [0, STALL_EFFECTS.spin]);
-  const left = stallEffects('cloudbase', wing({ stall: 2, stallSide: -1 }), {});
-  assert.deepEqual([left.left, left.right], [STALL_EFFECTS.spin, 0]);
-  // Falling, the camera shakes; in the surge the wing flies again and it stops.
-  assert.equal(right.shake, STALL_EFFECTS.shake);
-  assert.equal(stallEffects('flying', wing({ stall: STALL.surge - 0.01, stallSide: 1 }), {}).shake, 0);
-});
 
 test('the fold eases out as measured stall severity falls', () => {
-  assert.equal(stallEffects('flying', wing({ stall: STALL_EFFECTS.reopen + 0.01, stallSide: 1 }), {}).right, STALL_EFFECTS.spin);
-  assert.equal(stallEffects('flying', wing({ stall: STALL_EFFECTS.reopen, stallSide: 1 }), {}).right, 0);
+  assert.equal(stallEffects('flying', wing({ stall: STALL_EFFECTS.reopen + 0.01 }), {}).right, STALL_EFFECTS.fold * (STALL_EFFECTS.reopen + 0.01));
+  assert.equal(stallEffects('flying', wing({ stall: STALL_EFFECTS.reopen }), {}).right, 0);
   assert.equal(stallEffects('flying', wing({ stall: 0, stallLoad: 0 }), {}).luff, 0);
 });
 
@@ -56,7 +45,7 @@ test('the meter fills from the left with the brake, the light brake taking a goo
   assert.ok(Math.abs(brakeMeter(BRAKE.light, 0, 0, out).fill - BRAKE_METER.takeUp) < 1e-12);
   assert.equal(out.state, 'light');
   assert.ok(Math.abs(brakeMeter(BRAKE.shelf, 0, 0, out).fill - (BRAKE_METER.takeUp + BRAKE_METER.band)) < 1e-12);
-  assert.equal(brakeMeter(1, 0, 0, out).fill, 1);
+  assert.equal(brakeMeter(1, 0, 0, out, 0, {deepBrake:true,brakeTarget:BRAKE.shelf}).fill, 1);
   assert.equal(out.state, 'deep');
   // The light band is 40% of the track, and the fill never steps or goes backwards.
   assert.equal(BRAKE_METER.band, 0.4);
@@ -68,13 +57,13 @@ test('the meter fills from the left with the brake, the light brake taking a goo
   }
 });
 
-test('the light brake warns before it goes deep, and the stall load turns the meter red', () => {
+test('normal intent never escalates by depth alone, and stall load turns the meter red', () => {
   const out = {};
   const band = BRAKE.shelf - BRAKE.light;
   assert.equal(brakeMeter(BRAKE.light + band * 0.7, 0, 0, out).state, 'light');
-  assert.equal(brakeMeter(BRAKE.light + band * 0.8, 0, 0, out).state, 'late');
-  assert.equal(brakeMeter(BRAKE.shelf + 0.01, 0, 0, out).state, 'deep');
-  assert.equal(brakeMeter(0.9, BRAKE_METER.near - 0.01, 0, out).state, 'deep');
+  assert.equal(brakeMeter(BRAKE.light + band * 0.8, 0, 0, out, 0, {deepBrake:false,brakeTarget:BRAKE.light}).state, 'light');
+  assert.equal(brakeMeter(BRAKE.shelf + 0.01, 0, 0, out, 0, {deepBrake:true,brakeTarget:BRAKE.shelf}).state, 'deep');
+  assert.equal(brakeMeter(0.9, BRAKE_METER.near - 0.01, 0, out, 0, {deepBrake:true,brakeTarget:BRAKE.shelf}).state, 'deep');
   assert.equal(brakeMeter(0.9, BRAKE_METER.near, 0, out).state, 'near');
   assert.equal(brakeMeter(0, 0, 1.5, out).state, 'stalled');
   // Let go with load still on the wing: the meter stays up until the load has drained.
@@ -165,14 +154,4 @@ test('the meter shows the ears as their own state, filling as they fold in, and 
   assert.equal(brakeMeter(0.4, 1, 1, out, 1).state, 'stalled');
   // Without them the meter is the brake's, as it always was.
   assert.deepEqual(brakeMeter(0.4, 0.2, 0, {}, 0), brakeMeter(0.4, 0.2, 0, {}));
-});
-
-test('a tip collapse folds the half that unloaded, jolting the pilot as a tuck does', () => {
-  for (const side of [-1, 1]) {
-    const tipped = stallEffects('cloudbase', wing({ tip: 0.5, tipSide: side }), {});
-    assert.deepEqual([tipped.left, tipped.right], side < 0 ? [STALL_EFFECTS.tip, 0] : [0, STALL_EFFECTS.tip]);
-    assert.equal(tipped.shake, STALL_EFFECTS.tuck);
-  }
-  // Over in a moment: nothing of it once the wing has opened.
-  assert.deepEqual(stallEffects('cloudbase', wing({ tip: 0, tipSide: 1 }), {}), NONE);
 });

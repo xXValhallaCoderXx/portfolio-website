@@ -97,7 +97,7 @@ test('deep intent implies common braking, takes precedence over other configurat
 test('physical phase prediction preserves the requested deep depth without mutating the flight', () => {
   const g = fly(aloft(), 0.5, { deepBrake: true }), ahead = copyFlight(aloft(), g);
   const before = structuredClone(g), phase = {};
-  pitchPhase(g, phase, undefined, 3);
+  pitchPhase(g, phase, 3);
   let previous = ahead.pitchRate, peak = null;
   for (let tick = 1; tick <= 180; tick++) {
     stepFlight(ahead, { deepBrake: true }, {}, STEP);
@@ -108,16 +108,6 @@ test('physical phase prediction preserves the requested deep depth without mutat
   assert.deepEqual(g, before, 'forecasting never writes the live bodies or control state');
 });
 
-test('mode forgiveness flags do not alter manual handling or aerodynamic consequences', () => {
-  const a = aloft(), b = aloft();
-  for (let i = 0; i < 1200; i++) {
-    const input = { turn: Math.sin(i / 120), brake: i % 180 < 45, bar: i % 180 > 150 };
-    const air = { windX: 2, windY: 1.5, windZ: -1 };
-    stepFlight(a, { ...input, safe: true, harsh: false, linger: false, folds: false }, air, STEP);
-    stepFlight(b, { ...input, safe: false, harsh: true, linger: true, folds: true }, air, STEP);
-  }
-  assert.deepEqual(body(a), body(b));
-});
 
 test('constant wind advects the same air-relative flight, including real work from rising air', () => {
   const a = aloft(), b = aloft();

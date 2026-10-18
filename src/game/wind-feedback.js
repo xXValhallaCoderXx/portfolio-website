@@ -1,6 +1,5 @@
 // Presentation of the sampled air. These helpers never advance weather or change the wing.
 import { FLIGHT } from './flight.js';
-import { urgentHint } from './hints.js';
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 const DIRECTIONS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
@@ -28,20 +27,6 @@ export function ridgeFeedback(air) {
       : { state: 'weak', title: 'WEAK RISING AIR', detail: 'This slows your descent. Watch the vario to find air strong enough to climb.', progress: clamp(ridge / 4, 0, 1) };
   }
   return null;
-}
-
-/** Flight hazards retain the hint area while the coach handles recovery and active maneuvers. */
-export function urgentAirHint(text = '') {
-  return urgentHint(text) || /^(fog closing|storm cloud above)/.test(text);
-}
-
-/** A hazard keeps its hint and the flight's active instructions; ambient context yields. */
-export function ambientCoach(message) {
-  return !message || message.state === 'soaring' || message.state === 'ridge' || message.state === 'weak' || message.state === 'lee';
-}
-export function airCoachMessage(flight, notice, hazard) {
-  if (!ambientCoach(flight)) return flight;
-  return hazard ? null : notice ?? flight;
 }
 
 /** The first trail is optional news, queued briefly behind more urgent flight instructions. */

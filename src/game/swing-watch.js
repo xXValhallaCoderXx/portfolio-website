@@ -16,7 +16,7 @@ export const BANDS = Object.freeze({ pitch: Object.freeze([20, 30, 40, 50]), rol
 //   grow     a forward peak still builds the swing if it falls short of the last by no more than this
 //   surge    a swing going forward toward a peak this far ahead or further is a surge heading for
 //            the fold (the tuck line less a margin to brake in): braked as it goes, it is caught as
-//            it turns back short of the line, and the brake there loops no wingover (LOOP.surge)
+//            it turns back short of the line, and the brake there loops no wingover (WATCH.surge)
 //   calm     under this much pitch, and `still` rad/s of it, the swing fore and aft is calm
 //   top      a wingover's top counts from this much bank
 //   gap      wingovers' tops on alternate sides this close together are one chain of them
@@ -99,9 +99,8 @@ export function createSwingWatch() {
   let swappedTo = 0;
   let braked = false;
   let topAnswered = true;
-  // The wing's own counts of its loops and of their presses on time, as last seen.
+  // Completed physical orbits already seen.
   let loopsSeen = 0;
-  let loopTimedSeen = 0;
   let previousTop = 0;
   let previousTopAt = -Infinity;
   let completedTop = 0;
@@ -117,7 +116,7 @@ export function createSwingWatch() {
     state.catches = state.caughtPeak = state.tops = state.top = state.topSide = state.chain = state.breaks = state.broke = state.calm = 0;
     state.timed = state.timedKind = state.wingTop = state.linking = state.pumping = state.looping = state.loops = 0;
     state.loopAt = -Infinity;
-    loopsSeen = loopTimedSeen = 0;
+    loopsSeen = 0;
     state.frontAt = state.backAt = state.topAt = state.timedAt = state.swappedAt = state.caughtAt = state.brakeAt = -Infinity;
     pitchRate = bankWas = rolling = way = straightFor = swappedTo = 0;
     broken = braked = surging = false;
@@ -188,7 +187,7 @@ export function createSwingWatch() {
       braked = brake;
     }
     // Anything that takes the wing out of the pilot's hands breaks off the trick in hand.
-    const breaking = controls?.steered ? 6 : g.tuck > 0 ? 1 : g.tip > 0 ? 2 : g.stall > 0 ? 3 : struck ? 4 : g.ears > WATCH.ears ? 5 : 0;
+    const breaking = controls?.steered ? 6 : g.tuck > 0 ? 1 : g.stall > 0 ? 3 : struck ? 4 : g.ears > WATCH.ears ? 5 : 0;
     if (breaking && !broken) {
       state.breaks += 1;
       state.broke = breaking;
@@ -209,14 +208,12 @@ export function createSwingWatch() {
       bankWas = g.bank;
       measuredRollWas = measuredRate;
       loopsSeen = g.loops;
-      loopTimedSeen = g.loopTimed;
       state.calm = state.pumping = state.linking = state.looping = 0;
       return;
     }
     // A surge heading for the fold, braked as it goes, is caught as it turns back short of the line;
     // one that turns back by itself, or tucks, was not.
-    if (broken) surging = false;
-    else if (g.pitchRate < 0 && pitchPeak(g) < -WATCH.surge) surging = true;
+    if (g.pitchRate < 0 && pitchPeak(g) < -WATCH.surge) surging = true;
     else if (surging && g.pitchRate >= 0) {
       if (controls?.brake) {
         state.catches += 1;
@@ -256,16 +253,11 @@ export function createSwingWatch() {
     // wingover's: the watch of the bank starts over once it is back.
     state.looping = g.loop !== 0 ? 1 : 0;
     if (g.loops < loopsSeen) loopsSeen = g.loops;
-    if (g.loopTimed < loopTimedSeen) loopTimedSeen = g.loopTimed;
     if (g.loops > loopsSeen) {
       for (let n = loopsSeen; !controls?.steered && now - drivenAt < WATCH.intent && n < g.loops; n++) complete(3, 4, Math.PI * 2, now);
       state.loops += g.loops - loopsSeen;
       state.loopAt = now;
       loopsSeen = g.loops;
-    }
-    if (g.loopTimed > loopTimedSeen) {
-      onTime(controls?.bar ? 4 : 5, now);
-      loopTimedSeen = g.loopTimed;
     }
     if (state.looping) {
       rolling = 0;

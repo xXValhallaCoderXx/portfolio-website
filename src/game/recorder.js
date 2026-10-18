@@ -3,9 +3,9 @@
 // very run it was recorded from (replay.js), travels in a challenge link (#vs=) and is the proof a
 // board row keeps of its total. Pure, like the step it feeds.
 //
-// A link, format 2, is these bytes written in base64url without padding:
+// A link, format 1, is these bytes written in base64url without padding:
 //
-//   u8       the format: 2 (legacy format 1 is still readable)
+//   u8       the format: 1
 //   varint   the sim version the run was flown under (sim-version.js)
 //   u32 LE   the sky's seed
 //   varint   the UTC day of a Daily Sky, or 0 for any other sky
@@ -27,15 +27,13 @@
 
 import { RUN_RULES } from './run-rules.js';
 
-export const LOG_FORMAT = 2;
+export const LOG_FORMAT = 1;
 // Every input through the ten-minute deadline fits, even when it changes every step.
 export const MAX_STEPS = RUN_RULES.maxSteps;
 // The decoder accepts a complete ten-minute trace even when input changes every fixed step.
 export const MAX_LINK = 49_152;
 // The controls, as the bits of one fixed step (run-step.js's stepBits): left and right together are
-// the speed bar, so a phone with only the two arrows can push it, and the brake and the bar
-// together are the big ears. The brake has always won over the bar, so that pair meant nothing of
-// its own until the ears took it. Deep brake has its own bit and also writes the ordinary brake
+// the keyboard's speed-bar shortcut. The brake and bar bits together encode big ears. Deep brake has its own bit and also writes the ordinary brake
 // bit, so intent is replayed directly without reconstructing device gesture timing.
 export const INPUT = Object.freeze({ left: 1, right: 2, brake: 4, bar: 8, ears: 12, deepBrake: 16 });
 
@@ -223,8 +221,7 @@ export function decodeLog(text) {
   };
   if (size === 0) return refused('truncated');
   const format = byte();
-  if (format !== 1 && format !== LOG_FORMAT) return refused('format');
-  const width = format === 1 ? 16 : 32;
+  if (format !== LOG_FORMAT) return refused('format');
   const simVersion = varint();
   // Operands are read left to right, so the first byte is the lowest.
   const seed = (byte() | (byte() << 8) | (byte() << 16) | (byte() << 24)) >>> 0;
@@ -251,8 +248,8 @@ export function decodeLog(text) {
   while (filled < steps) {
     const value = varint();
     if (why) return refused(why);
-    const held = value % width;
-    const span = (value - held) / width;
+    const held = value % 32;
+    const span = (value - held) / 32;
     if (span === 0 || held === last || span > steps - filled) return refused('corrupt');
     bits.fill(held, filled, filled + span);
     filled += span;

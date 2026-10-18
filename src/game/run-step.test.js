@@ -58,7 +58,7 @@ test('a passive meet never changes the canonical wing or sky', () => {
   assert.deepEqual(met.sky.state, bare.sky.state);
 });
 
-test('all five-bit controls use the same fixed step, including the legacy bar chord and explicit ears', () => {
+test('all five-bit controls use the same fixed step, including the bar shortcut and explicit ears', () => {
   for (let bits = 0; bits < 32; bits++) {
     const logged = fresh(4), direct = fresh(4);
     const both = (bits & 3) === 3, ears = (bits & 12) === 12;
@@ -73,7 +73,7 @@ test('all five-bit controls use the same fixed step, including the legacy bar ch
   }
 });
 
-test('the legacy two-arrow chord under brake preserves the same coordinated rollout and flight', () => {
+test('the two-arrow chord under brake preserves the same coordinated rollout and flight', () => {
   const brake = park(fresh(4)), chord = park(fresh(4)), direct = park(fresh(4));
   for (const world of [brake, chord, direct]) world.sky.sample = (pos, yaw, out) => Object.assign(out,
     { windX: 0, windY: 2, windZ: 0, hazardSink: 0, lift: 2, sink: 0, liftSide: 0, rough: 0 });
@@ -117,7 +117,6 @@ test('a boundary recovery is marked as assisted steering for the maneuver observ
   const w = park(fresh(), CLOUD_ZONE.x + CLOUD_ZONE.r + 20);
   stepBits(w, 0);
   assert.equal(w.controls.steered, true);
-  assert.equal(w.controls.folds, false);
 });
 
 test('a landed step ends before advancing the sky, and repeated calls never fly on', () => {

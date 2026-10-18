@@ -6,26 +6,19 @@ import { resetEnvelope, WING } from './wing-envelope.js';
 export { WING } from './wing-envelope.js';
 export { PHYSICS, physicsEnergy } from './flight-physics.js';
 
-// Nominal performance for navigation estimates, readouts and legacy visual consumers. Actual
+// Nominal performance for navigation estimates, readouts and glide estimates. Actual
 // motion comes entirely from PHYSICS; these summaries do not command speed, yaw or sink.
 export const FLIGHT = Object.freeze({
-  speed: Object.freeze({ trim: 11.50, bar: 15.3, light: 9.1, deep: 9.1, stall: 3 }),
-  sink: Object.freeze({ least: 1.3, trim: 1.31, deep: 1.6, turn: 0 }),
-  turn: Object.freeze({ trim: 0.5, bar: 0.4, light: 0.7, deep: 0.7, hook: 0.6 }),
+  speed: Object.freeze({ trim: 11.50, bar: 15.3, light: 9.1 }),
+  sink: Object.freeze({ least: 1.3, trim: 1.31 }),
+  turn: Object.freeze({ trim: 0.5, hook: 0.6 }),
 });
-// Compatibility guidance for the shared cloth animation, hints and external strike recovery.
+// Brake depths shared with the cloth animation and coach.
 // Ordinary holds remain at working depth. A separate explicit input asks for deeper travel;
 // gesture recognition belongs to the input adapter, never to this physical solver.
-export const BRAKE = Object.freeze({ light: PHYSICS.brake, shelf: PHYSICS.deepBrake, ease: 0.07 });
-export const EARS = Object.freeze({ sink: 5.6, slow: 0, turn: 0.5,
-  fold: PHYSICS.controls.earsTake, open: PHYSICS.controls.earsOpen, dab: PHYSICS.controls.earsBrake });
+export const BRAKE = Object.freeze({ light: PHYSICS.brake, shelf: PHYSICS.deepBrake });
 export const STALL = Object.freeze({ surge: 0.5 });
-export const PITCH = Object.freeze({ period: 3, line: 1, held: 0 });
-export const ROLL = Object.freeze({ limit: Math.PI });
-export const LOOP = Object.freeze({ entry: Math.PI / 2, surge: Math.PI / 4 });
-export const FALL = Object.freeze({});
-export const TIP = Object.freeze({});
-export const TUCK = Object.freeze({ pump: Object.freeze({ hold: 0.3, cut: 0.4, most: 2 }) });
+export const PITCH = Object.freeze({ period: 3 });
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 // Canonical world bodies are authoritative. The familiar flat fields are read-only telemetry.
@@ -38,14 +31,14 @@ function trimmed() {
 
 export function createFlight(pos = { x: 0, y: 0, z: 0 }) {
   const g = { ...makePhysics(pos), pos, yaw: 0, yawRate: 0, track: 0, trackRate: 0, bank: 0, speed: FLIGHT.speed.trim, sink: FLIGHT.sink.trim,
-    vy: 0, turn: 0, lift: 0, liftSide: 0, brake: 0, manualBrake: 0, deepBrake: false, brakeTarget: 0, acro: false, bar: 0, ears: 0,
-    coordination: 0, coordinatedLean: 0, pilotLean: 0, bankTarget: 0, pitch: 0, pitchRate: 0, pitchPush: 0,
-    lean: 0, roll: 0, rollRate: 0, rollRest: 0, rollSpeed: 0, stallLoad: 0, stall: 0, stallSide: 0,
-    stallHarsh: false, grip: true, windX: 0, windZ: 0, felt: false, under: 0,
-    tuck: 0, tuckHeld: 0, tuckPumps: 0, tip: 0, tipSide: 0, fallRest: 0, fallArmed: true,
+    vy: 0, turn: 0, lift: 0, liftSide: 0, brake: 0, deepBrake: false, brakeTarget: 0, acro: false, bar: 0, ears: 0,
+    coordination: 0, coordinatedLean: 0, pilotLean: 0, bankTarget: 0, pitch: 0, pitchRate: 0,
+    lean: 0, roll: 0, rollRate: 0, stallLoad: 0, stall: 0,
+    windX: 0, windZ: 0, felt: false,
+    tuck: 0,
     wingPhase: WING.flying, recoverySource: '', inflation: 1, forwardAirspeed: 0, frontalRisk: 0,
-    loop: 0, loopAngle: 0, loopRate: 0, loopNext: 0, loopSince: 0, loopLate: false, loopEarly: false,
-    loopOut: false, loopBotched: false, loops: 0, loopTimed: 0, keys: 0, steepLeft: 0, loopAsk: 0, tension: 0, load: 1,
+    loop: 0, loopAngle: 0, loopRate: 0,
+    loops: 0, tension: 0, load: 1,
   };
   return settleFlight(g);
 }
@@ -56,12 +49,10 @@ export function releaseFlight(g) {
   g.physical.brakeTarget = g.physical.acroSteady = 0;
   g.physical.deepBrake = g.physical.acro = false;
   resetEnvelope(g.physical);
-  g.brake = g.bar = g.ears = g.stall = g.stallLoad = g.tuck = g.tip = 0;
-  g.manualBrake = g.coordination = g.coordinatedLean = g.pilotLean = g.bankTarget = 0;
+  g.brake = g.bar = g.ears = g.stall = g.stallLoad = g.tuck = 0;
+  g.coordination = g.coordinatedLean = g.pilotLean = g.bankTarget = 0;
   g.brakeTarget = 0; g.deepBrake = g.acro = false;
-  g.stallSide = g.tipSide = g.pitchPush = g.tuckHeld = g.tuckPumps = 0;
   g.wingPhase = WING.flying; g.recoverySource = ''; g.inflation = 1; g.frontalRisk = 0;
-  g.grip = true;
   return g;
 }
 
@@ -88,7 +79,7 @@ export function settleFlight(g, speed) {
   }
   g.yaw = yaw; g.physical.previousYaw = yaw;
   g.physical.orbit = g.physical.angle = 0; g.physical.inverted = false;
-  g.loops = g.loopTimed = 0; g.loop = 0; g.felt = false;
+  g.loops = 0; g.loop = 0; g.felt = false;
   // Keep the actual settled suspension as the orbit's upright reference. Its small trim pitch
   // must not count as angular travel; copying a prediction preserves these immutable numbers.
   rotate(v, g.canopy.q, 0, -PHYSICS.attachment, 0);
@@ -187,7 +178,6 @@ function telemetry(g, controls, air, dt) {
   g.loop = uy > 0 ? Math.sign(s.orbitPhase) || Math.sign(s.swingRate) || 1 : 0;
   g.loopAngle = s.orbitActive ? s.orbitPhase : angle;
   g.loopRate = s.swingRate || 0;
-  g.loopOut = false;
   g.rollRate = dt > 0 ? Math.atan2(Math.sin(g.bank - previousBank), Math.cos(g.bank - previousBank)) / dt : 0;
   g.pitchRate = dt > 0 ? Math.atan2(Math.sin(g.pitch - previousPitch), Math.cos(g.pitch - previousPitch)) / dt : 0;
   g.bankTarget = s.bankTarget;
@@ -196,12 +186,11 @@ function telemetry(g, controls, air, dt) {
   g.pilotLean = PHYSICS.coordination.lean * g.coordinatedLean;
   g.lean = s.bankTarget;
   g.roll = g.bank - g.lean;
-  g.rollRest = g.lean;
   g.speed = Math.sqrt(vx * vx + (p.vel.y - wy) ** 2 + vz * vz);
   g.vy = p.vel.y;
   g.sink = Math.max(0, wy - p.vel.y);
   g.turn = s.steer;
-  g.brake = g.manualBrake = s.brake; g.bar = s.bar; g.ears = s.ears;
+  g.brake = s.brake; g.bar = s.bar; g.ears = s.ears;
   g.deepBrake = s.deepBrake; g.brakeTarget = s.brakeTarget; g.acro = s.acro;
   g.tension = s.tension;
   g.load = s.tension / (PHYSICS.pilotMass * PHYSICS.gravity);
@@ -212,8 +201,6 @@ function telemetry(g, controls, air, dt) {
   const separated = s.wingPhase === WING.entry || s.wingPhase === WING.stalled || s.wingPhase === WING.backfly || s.wingPhase === WING.exit;
   g.stall = separated && s.recoverySource === 'stall' ? Math.max(s.separation, 0.01) : 0;
   g.tuck = s.wingPhase === WING.frontal || s.wingPhase === WING.opening ? 1 - s.inflation : 0;
-  g.stallSide = 0; // This reduced envelope models symmetric stalls; steering cannot label a spin.
-  g.stallHarsh = false;
   g.windX = wx; g.windZ = wz; g.felt = true;
   g.lift = air.lift ?? Math.max(0, wy);
   s.energy = physicsEnergy(g);
@@ -261,5 +248,5 @@ function predict(g, out, pitch, horizon) {
   }
   return out;
 }
-export function pitchPhase(g, out, line = PITCH.line, horizon = 2) { return predict(g, out, true, horizon); }
+export function pitchPhase(g, out, horizon = 2) { return predict(g, out, true, horizon); }
 export function rollPhase(g, out, horizon = 1.5) { return predict(g, out, false, horizon); }

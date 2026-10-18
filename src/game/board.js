@@ -1,5 +1,5 @@
 // Good Lift's local board: the best runs of each Daily Sky flown on this device, kept inside the
-// game's own store (good-lift-store.js, under 'good-lift-v7'). A day's board is the top BOARD.keep
+// game's own store (good-lift-store.js, under 'good-lift'). A day's board is the top BOARD.keep
 // runs flown on one UTC day under one version of the rules (sim-version.js), since a run flown
 // under one version is never judged against another. Runs rank by score (the total lifted by the
 // style its tricks landed, score.js), then by peak, then by which started first, so a board always
@@ -60,13 +60,11 @@ export { outranks };
 
 /**
  * A clean copy of what a run banked, { total, style, peak, red }, held to the rules a row's are (see
- * normalizeRow), or null when any of them is damaged. A style missing, as on a row written before
- * style was carried, is none. Anything else in the object is left behind.
+ * normalizeRow), or null when any of them is damaged. Anything else in the object is left behind.
  */
 export function normalizeScore(score) {
   if (!isRecord(score)) return null;
-  const { total, peak, red } = score;
-  const style = score.style ?? 0;
+  const { total, style, peak, red } = score;
   if (!Number.isInteger(style) || style < 0 || style % 5 !== 0) return null;
   // Twice the total is a whole number of 5 kg exactly when the total is a multiple of 2.5, and
   // doubling is exact in floating point, so no near miss rounds its way onto the board.
@@ -101,13 +99,13 @@ export function normalizeScore(score) {
  * Anything else in the object is left behind. A damaged row is dropped, never repaired: a total
  * rounded to the nearest plate, or a name guessed from lower case, would be a run nobody flew,
  * and its log would not replay to it. A byname is the one exception: it says only how the run was
- * flown, and its log earns it again whenever it is replayed, so one this build does not know (a
- * later build's, or damage) is left off and the run keeps its row.
+ * flown, and its log earns it again whenever it is replayed, so one this build does not know (damage) is left off and the run keeps its row.
  */
 export function normalizeRow(row) {
   if (!isRecord(row)) return null;
   const { who, via, at, log, byname } = row;
   if (typeof who !== 'string' || !WHO.test(who)) return null;
+  if (typeof byname !== 'string') return null;
   if (via !== 'me' && via !== 'link') return null;
   const score = normalizeScore(row);
   if (!score) return null;
@@ -220,8 +218,7 @@ export function withBot(rows, bot) {
   return [...rows.slice(0, place), pinned, ...rows.slice(place)];
 }
 
-// The most bots a day's scores can hold: more than flown, so a build that flies another can still
-// read what this one kept, and a damaged list cannot grow without bound.
+// Bound the number of cached bot scores even when storage is damaged.
 const BOTS_KEPT = 8;
 
 /**

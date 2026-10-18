@@ -11,8 +11,7 @@
 
 export const SCORE = Object.freeze({ per: 1000, cap: 1000 });
 
-// The style a run's score counts: a whole number from 0 to the cap. A row stored before style was
-// carried, or damaged, counts none.
+// The style a run's score counts: a whole number from 0 to the cap.
 export const styleOf = (style) => (Number.isFinite(style) && style > 0 ? Math.min(SCORE.cap, Math.round(style)) : 0);
 
 // What a run ranks by, exactly: twice its total times (per + style counted).

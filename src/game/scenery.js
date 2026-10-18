@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { clone as cloneModel } from 'three/addons/utils/SkeletonUtils.js';
 import { PROJECTS } from '../content.js';
-import { ZONES, STONES, THERMALS, TREES, BOULDERS, GATEWAY, heightAt } from './terrain.js';
+import { ZONES, STONES, TREES, BOULDERS, GATEWAY, heightAt } from './terrain.js';
 import { APPROACH_WINDS } from './approach.js';
 import { BRAKE } from './flight.js';
 import { FJORD_THERMALS, fjordWindAt, sampleFjordAir } from './atmosphere.js';

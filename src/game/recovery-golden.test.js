@@ -7,7 +7,7 @@ import { createStyle } from './meet-style.js';
 import { decodeLog } from './recorder.js';
 import { SIM_VERSION } from './sim-version.js';
 
-const receipt = JSON.parse(readFileSync(new URL('./fixtures/good-lift-v13-recovery-chromium.json', import.meta.url), 'utf8'));
+const receipt = JSON.parse(readFileSync(new URL('./fixtures/good-lift-recovery-chromium.json', import.meta.url), 'utf8'));
 const angles = new Set(['bank', 'pitch', 'rollRate', 'pitchRate', 'trackRate', 'yawRate', 'rollAcceleration']);
 const normalize = value => JSON.parse(JSON.stringify(value, (key, item) => angles.has(key) && typeof item === 'number'
   ? Math.round(item * 1e11) / 1e11 : item));

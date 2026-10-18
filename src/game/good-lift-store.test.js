@@ -12,7 +12,6 @@ import {
 import { BLOCKED } from './meet-initials.js';
 import { LIVERIES } from './livery.js';
 import { WINGS, emptyKit } from './wing-kit.js';
-import { LEARNING_MIGRATION } from './good-lift-key.js';
 
 const DAY = 20_756;
 const NOON = DAY * DAY_MS + DAY_MS / 2;
@@ -49,24 +48,9 @@ afterEach(() => {
   else delete globalThis.localStorage;
 });
 
-test('v9 starts fresh without reading old competitive progress, and timed completions may rank', () => {
-  const old = { ...emptyStore(), runs: 20, tonnage: 9000, feats: ['opener'], best: { total: 500, peak: 2000, score: 900 } };
-  const storage = memoryStorage({ 'good-lift-v1': JSON.stringify(old), 'good-lift-v5': JSON.stringify(old), 'good-lift-v6': JSON.stringify(old), 'good-lift-v7': JSON.stringify(old), 'good-lift-v8': JSON.stringify(old) });
-  assert.deepEqual(readStore(storage), emptyStore());
-  assert.ok(!storage.keys.includes('good-lift-v1'));
-  assert.ok(!storage.keys.includes('good-lift-v5'));
-  assert.ok(!storage.keys.includes('good-lift-v6'));
-  assert.ok(!storage.keys.includes('good-lift-v7'));
-  assert.ok(!storage.keys.includes('good-lift-v8'));
-  const current = emptyStore();
-  const outcome = recordRun(current, run({ reason: 'time' }), { ...AT, version: 7 });
-  assert.equal(outcome.rank, 1);
-  assert.equal(rowsFor(current.board, boardKey(7, DAY)).length, 1);
-  assert.equal(current.v, 7);
-});
 
 test('a fresh or damaged store reads as empty, and a good one round-trips', () => {
-  assert.deepEqual(emptyStore(), { v: 7, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], learnedLessons: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: { days: {} }, bots: null });
+  assert.deepEqual(emptyStore(), { best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], learnedLessons: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: { days: {} }, bots: null });
   assert.deepEqual(readStore(memoryStorage()), emptyStore());
   for (const text of ['{broken', 'null', '[]', '"store"', '42', JSON.stringify({ best: 'high' })]) {
     assert.deepEqual(readStore(memoryStorage({ [GAME_STORE]: text })), emptyStore(), text);
@@ -74,8 +58,8 @@ test('a fresh or damaged store reads as empty, and a good one round-trips', () =
 
   const storage = memoryStorage();
   const store = { ...emptyStore(), best: { total: 512.5, peak: 1412, score: 646 }, tonnage: 1240, runs: 7, feats: ['opener', 'clean-meet'], daily: { last: DAY, streak: 3 }, initials: 'REN' };
-  addRow(store.board, KEY, { who: 'REN', via: 'me', total: 512.5, style: 260, peak: 1412, red: [0, 2, 4], at: NOON, log: 'AQGv-_x9' });
-  addRow(store.board, KEY, { who: 'TOR', via: 'link', total: 487.5, style: 0, peak: 1301, red: [0, 0, 1], at: NOON - 1, log: 'AQGw' });
+  addRow(store.board, KEY, { who: 'REN', via: 'me', total: 512.5, style: 260, peak: 1412, red: [0, 2, 4], at: NOON, log: 'AQGv-_x9', byname: '' });
+  addRow(store.board, KEY, { who: 'TOR', via: 'link', total: 487.5, style: 0, peak: 1301, red: [0, 0, 1], at: NOON - 1, log: 'AQGw', byname: '' });
   assert.equal(writeStore(store, storage), true);
   assert.deepEqual(JSON.parse(storage.items.get(GAME_STORE)), store);
   assert.deepEqual(readStore(storage), store);
@@ -87,17 +71,16 @@ test('a fresh or damaged store reads as empty, and a good one round-trips', () =
 
   // Each damaged part falls back on its own, and only known feats are kept, once each.
   assert.deepEqual(normalizeStore({
-    v: 7, best: { total: -1, peak: 1412 }, tonnage: NaN, runs: 2.5, feats: ['opener', 'opener', 'unknown', 'beat-the-bot', 3],
+    best: { total: -1, peak: 1412 }, tonnage: NaN, runs: 2.5, feats: ['opener', 'opener', 'unknown', 'beat-the-bot', 3],
     daily: { last: DAY, streak: 0 }, initials: 'ren', board: { days: { yesterday: { rows: [] } } }, unlocked: ['airborne'],
   }), { ...emptyStore(), best: { total: 0, peak: 1412, score: 0 }, feats: ['opener', 'beat-the-bot'] });
   // No best or tonnage is negative, and the run count is a whole number small enough to count up from.
-  assert.deepEqual(normalizeStore({ best: { total: 512.5, peak: -1 }, tonnage: -5, runs: 2 ** 53 }), { ...emptyStore(), best: { total: 512.5, peak: 0, score: 513 } });
-  // A best score is read as the bests are, and is never less than the best total's own: a store from
-  // before style multiplied the total, with none kept, starts from that.
+  assert.deepEqual(normalizeStore({ best: { total: 512.5, peak: -1 }, tonnage: -5, runs: 2 ** 53 }), { ...emptyStore(), best: { total: 512.5, peak: 0, score: 0 } });
+  // Damaged scores fall back to zero; no score is inferred from an incomplete record.
   assert.equal(normalizeStore({ best: { total: 512.5, peak: 1412, score: 646 } }).best.score, 646);
-  assert.equal(normalizeStore({ best: { total: 512.5, peak: 1412 } }).best.score, 513);
-  assert.equal(normalizeStore({ best: { total: 512.5, peak: 1412, score: -1 } }).best.score, 513);
-  assert.equal(normalizeStore({ best: { total: 512.5, peak: 1412, score: 400 } }).best.score, 513);
+  assert.equal(normalizeStore({ best: { total: 512.5, peak: 1412 } }).best.score, 0);
+  assert.equal(normalizeStore({ best: { total: 512.5, peak: 1412, score: -1 } }).best.score, 0);
+  assert.equal(normalizeStore({ best: { total: 512.5, peak: 1412, score: 400 } }).best.score, 400);
   assert.equal(normalizeStore({ runs: 2 ** 53 - 1 }).runs, 2 ** 53 - 1);
   // A streak and its day stand or fall together.
   assert.deepEqual(normalizeStore({ daily: { last: 0, streak: 4 } }).daily, { last: 0, streak: 0 });
@@ -364,7 +347,7 @@ test('every change re-reads the store first, so a run recorded elsewhere is not 
 test('the store never touches the fjord\'s own key', () => {
   // The page's reset reads the same lightweight key through achievements.js without loading this
   // module; otherwise Reset progress could leave the bests, feats, streak and board.
-  assert.equal(GAME_STORE, 'good-lift-v13');
+  assert.equal(GAME_STORE, 'good-lift');
   assert.equal(RESET_KEY, GAME_STORE);
   const fjord = JSON.stringify({ unlocked: ['airborne'], cloudbase: { discovered: true, bestAltitude: 1032 } });
   const storage = memoryStorage({ 'fjord-glider-v1': fjord });
@@ -375,55 +358,14 @@ test('the store never touches the fjord\'s own key', () => {
   }, storage);
   writeStore(readStore(storage), storage);
   clearStore(storage);
-  assert.deepEqual([...new Set(storage.keys)], [GAME_STORE, LEARNING_MIGRATION, 'good-lift-v12']);
+  assert.deepEqual([...new Set(storage.keys)], [GAME_STORE]);
   assert.equal(storage.items.get('fjord-glider-v1'), fjord);
-  assert.deepEqual([...storage.items.keys()], ['fjord-glider-v1', LEARNING_MIGRATION]);
+  assert.deepEqual([...storage.items.keys()], ['fjord-glider-v1']);
 });
 
-test('v13 imports only normalized v12 learning once and keeps competitive progress fresh', () => {
-  const old = { ...emptyStore(), learnedLessons: ['wingover', 'unknown', 'pitch', 'pitch'],
-    best: { total: 900, peak: 2000, score: 1200 }, tonnage: 5000, runs: 40, feats: ['opener'], initials: 'REN', optIn: true };
-  const storage = memoryStorage({ 'good-lift-v12': JSON.stringify(old) });
-  const migrated = readStore(storage);
-  assert.deepEqual(migrated, { ...emptyStore(), learnedLessons: ['pitch', 'wingover'] });
-  assert.equal(storage.items.get(LEARNING_MIGRATION), '1');
-  storage.items.set('good-lift-v12', JSON.stringify({ learnedLessons: [] }));
-  assert.deepEqual(readStore(storage).learnedLessons, ['pitch', 'wingover']);
-  storage.items.delete(GAME_STORE);
-  assert.deepEqual(readStore(storage), emptyStore(), 'the migration marker survives removal of the current key');
-});
 
-test('reset and repeating lessons cannot reimport cleared v12 flags', () => {
-  for (const clear of [clearStore, repeatTrickLessons]) {
-    const storage = memoryStorage({ 'good-lift-v12': JSON.stringify({ learnedLessons: ['pitch'] }) });
-    assert.deepEqual(readStore(storage).learnedLessons, ['pitch']);
-    clear(storage);
-    assert.deepEqual(readStore(storage).learnedLessons, []);
-    assert.deepEqual(JSON.parse(storage.items.get('good-lift-v12')).learnedLessons, ['pitch']);
-  }
-});
 
-test('learning migration retains the visit fallback if writes fail and ignores malformed legacy data', () => {
-  const storage = memoryStorage({ 'good-lift-v12': JSON.stringify({ learnedLessons: ['pitch'] }) });
-  storage.setItem = () => { throw Error('full'); };
-  assert.deepEqual(readStore(storage).learnedLessons, ['pitch']);
-  repeatTrickLessons(storage); assert.deepEqual(readStore(storage).learnedLessons, []);
-  clearStore(storage); assert.deepEqual(readStore(storage), emptyStore());
-  for (const bad of ['{broken', 'null', '[]', '42']) {
-    const clean = memoryStorage({ 'good-lift-v12': bad });
-    clearStore(memoryStorage());
-    assert.deepEqual(readStore(clean), emptyStore());
-  }
-});
 
-test('v12 competitive progress starts fresh and leaves v11 progress available to its own version', () => {
-  const previous = JSON.stringify(recordRun(emptyStore(), run({ total: 300 }), AT).store);
-  const storage = memoryStorage({ 'good-lift-v11': previous });
-  assert.deepEqual(readStore(storage), emptyStore());
-  updateStore(store => recordRun(store, run({ total: 200 }), AT), storage);
-  assert.equal(readStore(storage).runs, 1);
-  assert.equal(storage.items.get('good-lift-v11'), previous);
-});
 
 test('initials the board will not show are refused as they are typed, and read as none if a store still holds them', () => {
   const store = emptyStore();

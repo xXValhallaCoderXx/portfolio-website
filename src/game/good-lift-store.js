@@ -12,7 +12,7 @@
 // Where storage is missing, blocked or full, the store lives in this module's memory for the visit
 // (achievements.js does the same for the fjord when storage is blocked). A visitor who blocks site
 // data therefore still has their runs on the board until they leave. Reads always come back
-// normalised: whatever another tab, an older build or a hand edit left there, the game only ever
+// normalised: whatever another tab or a hand edit left there, the game only ever
 // sees a valid store.
 //
 // Writers re-read before they write. Read, change and write in one go (updateStore does exactly
@@ -24,7 +24,7 @@ import { SIM_VERSION } from './sim-version.js';
 import { isBlocked } from './meet-initials.js';
 import { normalizeKit } from './wing-kit.js';
 import { isJudgedEnding } from './run-rules.js';
-import { GAME_STORE, LEARNING_MIGRATION } from './good-lift-key.js';
+import { GAME_STORE } from './good-lift-key.js';
 import { normalizeLearnedLessons } from './trick-learning.js';
 
 /** The localStorage key Good Lift keeps everything under; the page's reset clears it by name. */
@@ -130,13 +130,13 @@ export function kitSheet(store, worn, fresh = []) {
 
 /**
  * A store with nothing flown yet. `optIn` says the initials were set where the sheet said they put
- * this browser's best run of each day on the world board (setInitials). Initials set anywhere else,
- * as all were before there was a world board, keep runs on this browser alone. `bots` is what the
+ * this browser's best run of each day on the world board (setInitials). Initials alone do not
+ * grant that consent. `bots` is what the
  * bots came to on the last Daily Sky they flew (board.js normalizeBots: { key, seed, scores }), or
  * null: one day's, as a later day's takes its place.
  */
 export function emptyStore() {
-  return { v: 7, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], learnedLessons: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: emptyBoard(), bots: null };
+  return { best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], learnedLessons: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: emptyBoard(), bots: null };
 }
 
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -145,7 +145,7 @@ const isCount = (value) => Number.isSafeInteger(value) && value >= 0;
 const INITIALS = /^(?:[A-Z]{3})?$/;
 
 /**
- * A valid store from anything: what storage held, a store from an older build, or nonsense. Each
+ * A valid store from anything storage held. Each
  * part that is missing or damaged falls back to its empty value on its own, so one bad number
  * costs only itself:
  * - the bests and the tonnage are non-negative finite numbers;
@@ -153,13 +153,11 @@ const INITIALS = /^(?:[A-Z]{3})?$/;
  * - the last daily is a whole UTC day, and it and the streak stand or fall together, since a
  *   streak with no day, or a day with no streak, cannot be carried on;
  * - feats are known ids, each once;
- * - initials are none or three capitals the board will show (meet-initials.js), so initials a
- *   build before the blocklist kept, and the blocklist now refuses, read as none;
+ * - initials are none or three capitals the board will show (meet-initials.js);
  * - the opt-in to the world board is true only with initials to go up under;
  * - the board keeps its whole rows (board.js);
  * - the day's bots are whole (board.js normalizeBots) or none.
- * The result always has `v` 7, whatever version `raw` claims. Never throws, and shares no object
- * with `raw`.
+ * Never throws, and shares no object with `raw`.
  */
 export function normalizeStore(raw) {
   try {
@@ -167,11 +165,7 @@ export function normalizeStore(raw) {
     if (!isRecord(raw)) return store;
     if (isAmount(raw.best?.total)) store.best.total = raw.best.total;
     if (isAmount(raw.best?.peak)) store.best.peak = raw.best.peak;
-    // The best score, kept since style came to multiply the total (score.js). It is never less than
-    // the best total's own score, which a run with no style scores: a store from before style
-    // counted, with none kept, starts from that, so its next run is no new best for a total it has
-    // already beaten.
-    store.best.score = Math.max(isAmount(raw.best?.score) ? raw.best.score : 0, scoreOf({ total: store.best.total }));
+    if (isAmount(raw.best?.score)) store.best.score = raw.best.score;
     if (isAmount(raw.tonnage)) store.tonnage = raw.tonnage;
     if (isCount(raw.runs)) store.runs = raw.runs;
     if (Array.isArray(raw.feats)) store.feats = [...new Set(raw.feats.filter((id) => FEAT_IDS.includes(id)))];
@@ -221,24 +215,7 @@ export function readStore(storage = deviceStorage()) {
     return normalizeStore(memory);
   }
   if (!landed) return normalizeStore(memory);
-  if (text === null || text === undefined) {
-    // Only learning crosses the v13 physics boundary. A separate tombstone survives removal of
-    // the competitive key, so Reset progress cannot resurrect the previous version's lessons.
-    try {
-      if (storage.getItem(LEARNING_MIGRATION) === '1') return emptyStore();
-      const previous = storage.getItem('good-lift-v12');
-      if (previous === null || previous === undefined) return emptyStore();
-      let raw;
-      try { raw = JSON.parse(previous); } catch { raw = null; }
-      const migrated = emptyStore();
-      migrated.learnedLessons = normalizeLearnedLessons(raw?.learnedLessons);
-      writeStore(migrated, storage);
-      try { storage.setItem(LEARNING_MIGRATION, '1'); } catch { /* The current key also prevents reimport. */ }
-      return normalizeStore(memory);
-    } catch {
-      return normalizeStore(memory);
-    }
-  }
+  if (text === null || text === undefined) return emptyStore();
   try {
     return normalizeStore(JSON.parse(text));
   } catch {
@@ -269,7 +246,6 @@ export function clearStore(storage = deviceStorage()) {
   memory = null;
   try {
     storage.removeItem(GAME_STORE);
-    storage.setItem(LEARNING_MIGRATION, '1');
     landed = true;
   } catch {
     // Storage that cannot be reached cannot be cleared. Whatever it still holds is no longer this
@@ -394,7 +370,7 @@ export function recordRun(store, run, { version = SIM_VERSION, now = Date.now() 
     if (daily.streak >= TRAINING_BLOCK) earned.add('training-block');
     const judged = isJudgedEnding(run.reason);
     if (judged && typeof run.log === 'string' && run.log !== '') {
-      const row = { who: store.initials, via: 'me', total: run.total, style, peak: run.peak, red: run.red, at: run.at, log: run.log, byname: run.byname };
+      const row = { who: store.initials, via: 'me', total: run.total, style, peak: run.peak, red: run.red, at: run.at, log: run.log, byname: run.byname ?? '' };
       ({ rank, best } = addRow(store.board, boardKey(version, run.day), row));
     }
   }
@@ -410,8 +386,7 @@ export function recordRun(store, run, { version = SIM_VERSION, now = Date.now() 
  *
  * `world` says they were typed where the sheet says initials put this browser's best run of each
  * day on the world board: there, three letters are the pilot's opt-in to it. Anywhere else they
- * leave the opt-in as it was, so initials set before there was a world board never opt in by
- * themselves; and none, wherever they are cleared, opt out.
+ * leave the opt-in as it was; clearing initials always opts out.
  */
 export function setInitials(store, text, { world = false } = {}) {
   const typed = typeof text === 'string' ? text.trim() : null;

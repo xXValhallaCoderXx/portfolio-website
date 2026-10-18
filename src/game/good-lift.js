@@ -4,17 +4,14 @@
 // loaded only when a pilot is about to fly it, so the page's hero never carries it. The engine in
 // game.js hands over what the two share through `host`.
 import { Vector3 } from 'three';
-import { CLOUD_HUNT, CLOUD_MILESTONES, CLOUD_STRIKE, RUN_SKY, createCloudbaseRun } from './cloudbase-state.js';
+import { CLOUD_MILESTONES, CLOUD_STRIKE, RUN_SKY, createCloudbaseRun } from './cloudbase-state.js';
 import { ORDER, createCloudbase } from './cloudbase.js';
 import { runEffects } from './run-effects.js';
-import { STONES_LEAD, cloudbaseHint } from './cloudbase-hints.js';
-import { holdHint } from './hints.js';
-import { BRAKE, PITCH, ROLL, pitchPeak } from './flight.js';
-import { SWING_GAUGE } from './swing-gauge.js';
+import { pitchPeak } from './flight.js';
 import { CATCH } from './pilots.js';
 import { createRunWorld, finishRun, startRun, stepBits } from './run-step.js';
 import { createWindStreaks } from './wind-streaks.js';
-import { MEET, PLATE_KIND, TRAIL, createMeet } from './meet-state.js';
+import { MEET, PLATE_KIND, createMeet } from './meet-state.js';
 import { BELLS, BELL_PHASE, BELL_RESULT, createBells } from './bells.js';
 import { BLESSING, GATE, GATES, RUNE, RUNE_NAME, RUNE_SIGN } from './meet-runes.js';
 import { createMeetView } from './meet-view.js';
@@ -43,7 +40,7 @@ import { createSurge } from './run-surge.js';
 import { createEntry } from './run-entry.js';
 import { createOnlineBoard, placeOf, takenOff } from './board-online.js';
 import { LIGHTNING, createLightning } from './run-lightning.js';
-import { GLIDE, createGlideRing } from './run-glide.js';
+import { createGlideRing } from './run-glide.js';
 import { createRunCoachEnvironment, runCoachHazard, runCoachWarning, thermalRideIdentity } from './coach-run.js';
 import './good-lift.css';
 
@@ -69,12 +66,6 @@ export const JUDGES = Object.freeze(['contact', 'control', 'airspace']);
 // Seconds the lights stay up after a line, and between one pickup and the next for the next to
 // ring a step higher.
 const LIGHTS_FOR = 2.5;
-// When the next plate of a boarded trail is worth the ears: no further off than `ahead` (m), the
-// wing more than `over` metres too high for it on the bar's glide, in lift under `lift` m/s, which
-// the ears' 6 m/s still sinks through.
-const EARS_REACH = Object.freeze({ ahead: 40, over: 2, lift: 6 });
-// A flock worth flying into for the entry's hint: within `range` metres and `ahead` radians of the nose.
-const APPROACH = Object.freeze({ range: 70, ahead: 1 });
 const CHAIN = 2;
 // The pentatonic steps a run of pickups climbs, in semitones.
 const PENTA = [0, 2, 4, 7, 9];
@@ -84,7 +75,7 @@ const kg = (value) => value.toLocaleString('en-GB', { maximumFractionDigits: 1 }
 const metres = (value) => Math.round(value).toLocaleString('en-GB');
 
 // What each rune stone offers, as the label over it says it: its rune and name, and in a few words
-// what its blessing does (by RUNE). The hint says it in full once one is taken (cloudbase-hints.js).
+// what its blessing does (by RUNE).
 export const GATE_LABELS = Object.freeze([
   null,
   Object.freeze(['ᚠ Fehu', 'plates come to you']),
@@ -95,10 +86,6 @@ export const GATE_LABELS = Object.freeze([
 // A stone's label stands `rise` metres over the middle of its opening (clear of its rune), and only
 // while the pilot is within `range` metres of it: the stones round the lift being climbed.
 const LABEL = Object.freeze({ rise: 4.5, range: 160 });
-// How near (m, level) the plate under a storm cloud and the fog's bait must be for the hint to point
-// at them: the cloud's is hung within THUNDER.inward (8 m) of the pilot and the bait BAIT.aside
-// (20 m) off to a side, so a pilot further off than this has flown away from them.
-const NOTICE = Object.freeze({ thunder: 40, bait: 60 });
 // How a kettlebell came out, as the meet sheet names the Beast's (by BELL_RESULT).
 const OUTCOMES = Object.freeze(['falling', 'hit', 'close', 'dodged', 'shielded', 'hidden', 'glanced']);
 
@@ -221,10 +208,6 @@ export function createGoodLift(host) {
   // the run (run-lightning.js, run-glide.js).
   const lightning = createLightning({ scene, calm: host.calm });
   const glide = createGlideRing({ scene });
-  // Seconds the glide ring's word has been said as a line this visit, and the run time the hint was
-  // last chosen at.
-  let taught = 0;
-  let hintAt = 0;
   // The run's own streaks, with its gust fronts, drawn after its fog.
   const streaks = createWindStreaks({ scene, order: ORDER.aboveFog, calm: host.calm, sky: RUN_SKY });
   // The run's controls, step by step: with its seed, all a run is. `whole` says the log holds every
@@ -244,24 +227,13 @@ export function createGoodLift(host) {
   // The result the meet sheet was handed. The map opened over the sheet and closed draws it again
   // from this, so what the pilot changes there (initials, the opt-in, the kit) is kept in it too.
   let shownResult = null;
-  // What the hints and sounds have answered so far this run: strikes, and whether the last was a
-  // kettlebell's; seconds turning against a flock and without lift; the hunted thermals ridden and
-  // the one being ridden now; the meet's and the bells' counts; when the last close call came (and
-  // whether it was the Beast's), the horn and the run's first rep to depth, and whether this
-  // thermal's last rep missed its core; the pickups rung in a row and when the last of them was;
-  // the iron off the trail loaded, the sprays and the kg lost; bells turned aside by Algiz, stones
-  // flown through and crumbled, and when the last blessing was taken, Algiz turned a bell aside and
-  // Tiwaz lost the bar; the line of the last stones the climb came level with, and when; whether the
-  // wing was surging, the tucks, tips and pumps answered and when the last tuck and tip came; whether the ears
-  // have been pulled this run, and how long they have been held in climbing air; and when the moment
-  // came to turn into a core, and which way.
+  // Events already answered with sound, a flare or an animation this run.
   const seen = {
-    strikes: 0, bellHit: false, against: 0, searching: 0, rides: 0, riding: 0,
-    thrown: 0, hits: 0, close: 0, count: 0, plates: 0, reps: 0, deep: 0, trails: 0, horn: false, shallow: false,
-    closeAt: -Infinity, hornAt: -Infinity, deepAt: -Infinity, chain: 0, chainAt: -Infinity, beastClose: false,
+    strikes: 0, bellHit: false, riding: 0,
+    thrown: 0, hits: 0, close: 0, count: 0, plates: 0, reps: 0, deep: 0, trails: 0, horn: false,
+    chain: 0, chainAt: -Infinity,
     wind: 0, bait: 0, sprays: 0, lost: 0, glanced: 0, gates: 0, crumbled: 0,
-    blessedAt: -Infinity, glancedAt: -Infinity, lostAt: -Infinity, levelLine: 0, levelAt: -Infinity,
-    surging: false, tucks: 0, pumps: 0, tuckAt: -Infinity, tips: 0, tipAt: -Infinity, earsUsed: false, earsClimb: 0, turnAt: -Infinity, turnSide: 0,
+    surging: false, tucks: 0, pumps: 0,
   };
   // The run's style as last answered (meet-style.js): sets landed and lost, the elements in the set in
   // hand and its name, the style shown and in which form, and when a set last landed or was lost,
@@ -269,12 +241,10 @@ export function createGoodLift(host) {
   // showed (the stamp, or the points of the set in hand).
   const styled = {
     landed: 0, lost: 0, elements: 0, total: -1, compact: null, inHand: '', trick: '', points: 0,
-    landedAt: -Infinity, lostAt: -Infinity, stamp: '', stampUntil: -Infinity, stamped: null, pending: -1,
+    stamp: '', stampUntil: -Infinity, stamped: null, pending: -1,
   };
   // The blessing the readouts show, by RUNE.
   let shownRune = RUNE.none;
-  const held = { line: '', since: 0 };
-  const moment = {};
   // How the last step left things, for the engine: whether a raven had the wing as it began, and
   // whether the glider is outside the sky.
   const last = { collapsed: false, outside: false };
@@ -353,18 +323,16 @@ export function createGoodLift(host) {
     recorder.reset();
     whole = true;
     startedAt = Date.now();
-    seen.strikes = seen.against = seen.searching = seen.rides = seen.riding = 0;
+    seen.strikes = seen.riding = 0;
     seen.thrown = seen.hits = seen.close = seen.count = seen.plates = seen.reps = seen.deep = seen.trails = seen.chain = 0;
     seen.wind = seen.bait = seen.sprays = seen.lost = seen.glanced = seen.gates = seen.crumbled = 0;
-    seen.levelLine = 0;
-    seen.bellHit = seen.horn = seen.shallow = seen.beastClose = false;
-    seen.closeAt = seen.hornAt = seen.deepAt = seen.chainAt = seen.blessedAt = seen.glancedAt = seen.lostAt = seen.levelAt = -Infinity;
-    seen.tucks = seen.pumps = seen.tips = seen.earsClimb = seen.turnSide = 0;
-    seen.surging = seen.earsUsed = false;
-    seen.tuckAt = seen.tipAt = seen.turnAt = -Infinity;
+    seen.bellHit = seen.horn = false;
+    seen.chainAt = -Infinity;
+    seen.tucks = seen.pumps = 0;
+    seen.surging = false;
     Object.assign(styled, {
       landed: 0, lost: 0, elements: 0, total: -1, compact: null, inHand: '', trick: '', points: 0,
-      landedAt: -Infinity, lostAt: -Infinity, stamp: '', stampUntil: -Infinity, stamped: null, pending: -1,
+      stamp: '', stampUntil: -Infinity, stamped: null, pending: -1,
     });
     styleEl.textContent = '';
     styleEl.className = 'fj-style';
@@ -375,8 +343,6 @@ export function createGoodLift(host) {
     barCell.classList.remove('depth', 'blessed');
     showRune(RUNE.none);
     hideLabels();
-    held.line = '';
-    held.since = 0;
     last.collapsed = last.outside = false;
     view.begin();
     meetView.begin();
@@ -384,7 +350,6 @@ export function createGoodLift(host) {
     chalk.begin();
     lightning.begin();
     glide.begin();
-    hintAt = 0;
     hideLights();
     hornEl.classList.remove('on');
     showChevron(false);
@@ -522,38 +487,22 @@ export function createGoodLift(host) {
       // Only one bell is ever in the air, so it is the last one thrown.
       const bell = thrown.bells[(thrown.thrown - 1) % thrown.bells.length];
       seen.close = thrown.close;
-      seen.closeAt = elapsed;
-      seen.beastClose = bell.beast;
       sound.play('close', 0.3, rush, sideOf(bell));
       pickup(elapsed, 1);
     }
     if (thrown.glanced > seen.glanced) {
       seen.glanced = thrown.glanced;
-      seen.glancedAt = elapsed;
       sound.play('glance', 1, ricochet, sideOf(thrown.bells[(thrown.thrown - 1) % thrown.bells.length]));
     }
     answerMeet(meet.state, elapsed);
     answerRunes(meet.state.runes, elapsed);
-    // What the hints want to know, counted in the run's own time so the map pauses it too.
-    seen.searching = g.lift < 1 ? seen.searching + dt : g.lift > 3 ? 0 : seen.searching;
     const flock = pilot.thermal > 0 ? sky.state.thermals[pilot.thermal] : null;
-    seen.against = flock && Math.abs(g.yawRate) > 0.2 && Math.sign(g.yawRate) !== flock.dir ? seen.against + dt : 0;
     // Drift keeps the same ride; only a different slot or reborn cell resets the lessons.
     const riding = flock ? thermalRideIdentity(pilot.thermal, flock) : seen.riding;
     if (riding !== seen.riding) {
       seen.riding = riding;
-      seen.rides += 1;
-      seen.shallow = false;
       surge.reset();
       entry.reset();
-    }
-    // The moment the climb first comes level with a set of stones still waiting near it (from
-    // STONES_LEAD under their opening's foot to its top): the time to dash for one, said once a set.
-    const { runes } = meet.state;
-    const under = runes.line - g.pos.y;
-    if (runes.line !== seen.levelLine && under <= GATES.tall + STONES_LEAD && under >= -GATES.tall && stonesNear(runes)) {
-      seen.levelLine = runes.line;
-      seen.levelAt = elapsed;
     }
     // The lift surging as a circle closes on the core is heard from the core's side, and flares
     // the vario for whoever has the sound off: the beat to straighten on.
@@ -566,22 +515,18 @@ export function createGoodLift(host) {
     // wing over the core lifting, said by the hint with the way to turn.
     const turnIn = entry.step(dt, g.lift, flock ? flock.strength : 1, g.yawRate, g.liftSide, flock ? flock.dir : 1, flying);
     if (turnIn) {
-      seen.turnAt = elapsed;
-      seen.turnSide = turnIn;
       sound.play('lifted', 1, thump, clamp(turnIn * 0.7, -0.7, 0.7));
       flare(varioCell, 'lifted');
       effects.heave = turnIn;
     }
-    answerWing(dt, elapsed);
+    answerWing();
     answerStyle(elapsed);
     awardMilestones(sky.state.peak);
     return ended;
   }
 
-  // Answers what the wing did this step: a surge toward a fold, a tuck or a tip, a pump of a folded
-  // wing, and the ears, which the hints keep count of. A surge caught is the engine's to hear
-  // (game.js), over the fjord as here.
-  function answerWing(dt, elapsed) {
+  // Answer physical surges, frontal folds and external-strike pumps with sound.
+  function answerWing() {
     const surging = g.tuck === 0 && g.pitchRate < 0 && pitchPeak(g) < -CATCH.surge;
     if (surging && !seen.surging) sound.play('lurch', 0.4, lurch);
     seen.surging = surging;
@@ -591,20 +536,10 @@ export function createGoodLift(host) {
       sound.play('tuck', 0.5, flap);
       host.flash();
     }
-    // Held at the last moment it was collapsed, so the hints count from its opening.
-    if (g.tuck > 0) seen.tuckAt = elapsed;
-    // A tip collapse rattles from the side of the half that unloaded.
-    if (world.tips > seen.tips) {
-      seen.tips = world.tips;
-      seen.tipAt = elapsed;
-      sound.play('tip', 0.5, flap, 0.7 * g.tipSide);
-    }
     // A pump of a folded wing let go in time, a strike's or a front collapse's.
-    const pumps = world.pump.n + g.tuckPumps;
+    const pumps = world.pump.n;
     if (pumps > seen.pumps) sound.play('pump', 0.2, thunk);
     seen.pumps = pumps;
-    if (g.ears > 0) seen.earsUsed = true;
-    seen.earsClimb = g.ears >= 0.9 && g.vy > 1 ? seen.earsClimb + dt : 0;
   }
 
   // What a set of tricks is called: its wingovers, its loops, its pitched swing, or, mixed, its tricks.
@@ -627,7 +562,6 @@ export function createGoodLift(host) {
       if (inHand && s.links > 0) sound.play('swish', 0.08, swish, s.links);
     }
     if (s.landed > styled.landed) {
-      styled.landedAt = elapsed;
       styled.trick = styled.inHand;
       styled.points = s.said;
       styled.stamp = 'landed';
@@ -642,7 +576,6 @@ export function createGoodLift(host) {
       }
     }
     if (s.lost > styled.lost) {
-      styled.lostAt = elapsed;
       styled.points = s.said;
       styled.stamp = 'lost';
       styled.stampUntil = elapsed + STAMP.lost;
@@ -690,16 +623,13 @@ export function createGoodLift(host) {
     // A strike under Tiwaz takes the whole bar; any other loses only what its plates cannot hold.
     if (state.lost > seen.lost) {
       seen.lost = state.lost;
-      if (state.runes.blessing.rune === RUNE.tiwaz) seen.lostAt = elapsed;
     }
     if (state.reps > seen.reps) {
       seen.reps = state.reps;
       // A rep to depth (its circle centred on the core) rings twice and stamps the bar. One off the
       // core is a plain rep, and the hints say how to centre the next.
       const deep = state.deep > seen.deep;
-      seen.shallow = !deep;
       if (deep) {
-        if (seen.deep === 0) seen.deepAt = elapsed;
         seen.deep = state.deep;
         flare(barCell, 'depth');
       }
@@ -721,7 +651,6 @@ export function createGoodLift(host) {
     }
     if (state.horn && !seen.horn) {
       seen.horn = true;
-      seen.hornAt = elapsed;
       sound.play('horn', 10, horn);
       hornEl.classList.add('on');
     }
@@ -732,7 +661,6 @@ export function createGoodLift(host) {
   function answerRunes(runes, elapsed) {
     if (runes.taken > seen.gates) {
       seen.gates = runes.taken;
-      seen.blessedAt = elapsed;
       const gate = runes.gates.find((each) => each.state === GATE.taken && each.ended === elapsed) ?? runes.gates[0];
       sound.play('chime', 1, chime, sideAt(gate.x, gate.z));
     }
@@ -922,7 +850,7 @@ export function createGoodLift(host) {
 
   /** Writes the run's readouts and returns the hint line to show, or '' (`quiet` says show none). */
   function hud(quiet) {
-    const { pilot, elapsed, fogHeight } = sky.state;
+    const { pilot, fogHeight } = sky.state;
     const lift = meet.state;
     // The altitude is the one readout every screen shows, so it carries what has hit the wing, and
     // otherwise the next line to reach.
@@ -954,157 +882,7 @@ export function createGoodLift(host) {
       hideLights();
       return '';
     }
-    const column = pilot.thermal >= 0 ? sky.state.thermals[pilot.thermal] : null;
-    moment.collapse = pilot.collapse;
-    moment.stall = g.stall;
-    moment.stallSide = g.stallSide;
-    moment.harsh = controls.harsh;
-    moment.surging = seen.surging ? 1 : 0;
-    moment.tuck = g.tuck;
-    moment.tucked = elapsed - seen.tuckAt;
-    moment.tipped = elapsed - seen.tipAt;
-    // Near a fold a trick can come to, where the wing can come to one: never round a loop, which banks
-    // it all the way over and neither swings nor tips it.
-    const tuckLine = PITCH.line + PITCH.held * Math.min(1, g.brake / BRAKE.light);
-    moment.nearTuck = controls.folds && g.pitch < 0 && -g.pitch >= tuckLine - SWING_GAUGE.near && g.pitchRate < 0;
-    moment.nearTip = controls.folds && g.loop === 0 && Math.abs(g.bank) >= ROLL.limit - SWING_GAUGE.near;
-    // The tricks: a set landed or lost, the set in hand, and one being flown.
-    moment.landed = elapsed - styled.landedAt;
-    moment.trick = styled.trick;
-    moment.points = styled.points;
-    moment.lost = elapsed - styled.lostAt;
-    moment.inHand = style.state.elements >= STYLE.inHand ? styled.inHand : '';
-    moment.inHandPitch = style.state.last === 1;
-    moment.pitching = world.watch.state.pumping === 1;
-    moment.maneuverPolicy = lessons.state.active ?? 'off';
-    moment.looping = g.loop !== 0 && !g.loopOut;
-    moment.loopable = effects.gauge.loopable;
-    moment.wingover = world.watch.state.linking === 1 || world.watch.state.chain >= 2;
-    moment.tricksLanded = style.state.landed;
-    moment.ears = g.ears;
-    moment.earsUsed = seen.earsUsed;
-    moment.earsClimb = seen.earsClimb;
-    moment.turnIn = elapsed - seen.turnAt;
-    moment.turnSide = seen.turnSide;
-    moment.brake = g.brake;
-    moment.deep = effects.deep;
-    moment.load = g.stallLoad;
-    moment.gustAhead = pilot.gustAhead;
-    // The pilot's own depth: the picture can be grey while only the camera is in the cloud.
-    moment.cloud = pilot.cloud;
-    moment.outside = last.outside;
-    moment.elapsed = elapsed;
-    moment.fogClearance = g.pos.y - fogHeight;
-    moment.lift = g.lift;
-    moment.headroom = pilot.headroom;
-    moment.climbing = g.vy > 2;
-    moment.thermal = pilot.thermal;
-    // A hunted thermal is weak while it starts too; only one past its start is dying.
-    moment.dying = !!column && column.strength < 0.85 && (pilot.thermal === 0 || column.age > CLOUD_HUNT.bloom);
-    moment.flockDir = column ? column.dir : 1;
-    moment.against = seen.against;
-    moment.rides = seen.rides;
-    moment.searching = seen.searching;
-    moment.touch = host.touch;
-    moment.bellHit = seen.bellHit;
-    const coming = bells.state.warning >= 0 ? bells.state.bells[bells.state.warning] : null;
-    moment.bell = coming && coming.result === BELL_RESULT.pending ? (coming.circling ? 1 : 2) : 0;
-    moment.beast = !!coming && coming.result === BELL_RESULT.pending && coming.beast;
-    moment.closeCall = elapsed - seen.closeAt;
-    moment.beastClose = seen.beastClose;
-    moment.glanced = elapsed - seen.glancedAt;
-    moment.barLost = elapsed - seen.lostAt;
-    moment.horn = elapsed - seen.hornAt;
-    const { runes } = lift;
-    moment.blessing = runes.blessing.rune;
-    moment.blessed = elapsed - seen.blessedAt;
-    moment.double = runes.blessing.rune === RUNE.tiwaz;
-    moment.trail = lift.trail.live && lift.trail.boarded < 0;
-    moment.trailHigh = trailHigh(lift, runes);
-    approach(pilot);
-    moment.shallow = seen.shallow;
-    moment.depth = elapsed - seen.deepAt;
-    // The stones still waiting near the pilot, the line they stand at, when they were raised and
-    // when the climb came level with them.
-    moment.stones = stonesNear(runes) ? runes.line : 0;
-    moment.stonesNew = elapsed - runes.gates[0].at;
-    moment.stonesLevel = runes.line === seen.levelLine ? elapsed - seen.levelAt : Infinity;
-    // The iron loose in the sky: a strike's plates flying, a front's plates not yet arrived (worth
-    // a word to a pilot circling in lift, who has a circle to widen), and a plate under a cloud or
-    // on the fog close enough to be worth one.
-    moment.sprayed = moment.front = moment.thunder = moment.bait = false;
-    for (let i = 0; i < lift.loose.length; i++) {
-      const plate = lift.loose[i];
-      if (!plate.live) continue;
-      const level = Math.hypot(plate.x - g.pos.x, plate.z - g.pos.z);
-      if (plate.kind === PLATE_KIND.scatter) moment.sprayed = true;
-      else if (plate.kind === PLATE_KIND.wind && !plate.still && pilot.thermal >= 0) moment.front = true;
-      else if (plate.kind === PLATE_KIND.thunder && level <= NOTICE.thunder) moment.thunder = true;
-      else if (plate.kind === PLATE_KIND.bait && level <= NOTICE.bait) moment.bait = true;
-    }
-    moment.fronts = lift.fronts;
-    // With nothing more pressing to say, the glide ring's word, until the visitor has had it up for
-    // GLIDE.teach seconds this visit: by then its colours speak for themselves.
-    const line = holdHint(held, cloudbaseHint(moment) || (taught < GLIDE.teach ? glide.state.line : ''), elapsed);
-    if (line && line === glide.state.line) taught += Math.max(0, elapsed - hintAt);
-    hintAt = elapsed;
-    return line;
-  }
-
-  // Whether the next plate ahead on a trail already boarded lies further under the wing than the
-  // bar's glide brings it down by the time it gets there, in air the ears can sink through: the
-  // moment to say they would reach it. Worked out by hand, as stonesNear is.
-  function trailHigh(lift, runes) {
-    const { trail } = lift;
-    if (!trail.live || trail.boarded < 0 || g.lift >= EARS_REACH.lift) return false;
-    const reach = runes.blessing.rune === RUNE.fehu ? BLESSING.reach : TRAIL.reach;
-    const here = (g.pos.x - trail.x) * trail.ux + (g.pos.z - trail.z) * trail.uz;
-    for (let i = 0; i < trail.plates.length; i++) {
-      const plate = trail.plates[i];
-      if (!plate.live || (plate.x - trail.x) * trail.ux + (plate.z - trail.z) * trail.uz < here) continue;
-      const dx = plate.x - g.pos.x;
-      const dz = plate.z - g.pos.z;
-      const across = Math.sqrt(dx * dx + dz * dz);
-      if (across > EARS_REACH.ahead) return false;
-      return g.pos.y - across * trail.slope - plate.y - reach > EARS_REACH.over;
-    }
-    return false;
-  }
-
-  // On the way into a thermal: whether a settled flock that still lifts lies ahead, close enough to
-  // fly into, while the glider is in no hunted thermal yet, and which way that flock turns.
-  function approach(pilot) {
-    moment.approach = false;
-    moment.approachDir = 1;
-    if (pilot.thermal > 0) return;
-    let nearest = APPROACH.range * APPROACH.range;
-    const { thermals } = sky.state;
-    for (let i = 1; i < thermals.length; i++) {
-      const thermal = thermals[i];
-      if (!thermal.live || thermal.move !== 0 || thermal.strength < MEET.alive) continue;
-      const dx = thermal.x - g.pos.x;
-      const dz = thermal.z - g.pos.z;
-      const away = dx * dx + dz * dz;
-      if (away >= nearest) continue;
-      const off = Math.atan2(dx, -dz) - g.yaw;
-      if (Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) > APPROACH.ahead) continue;
-      nearest = away;
-      moment.approach = true;
-      moment.approachDir = thermal.dir;
-    }
-  }
-
-  // Whether any of the set of stones raised last still waits near the pilot (as its label would
-  // show it): stones left behind round a lift the pilot has flown away from are not worth a word.
-  // Asked every step, so worked out by hand (Math.hypot boxes the numbers it is handed).
-  function stonesNear(runes) {
-    for (let i = 0; i < runes.gates.length; i++) {
-      const gate = runes.gates[i];
-      const dx = gate.x - g.pos.x;
-      const dz = gate.z - g.pos.z;
-      if (gate.state === GATE.waiting && dx * dx + dz * dz <= LABEL.range * LABEL.range) return true;
-    }
-    return false;
+    return '';
   }
 
   // The rune beside the bar: the blessing held, or none. A new one flares as it is taken.
@@ -2303,8 +2081,6 @@ export function createGoodLift(host) {
     get bells() { return bells; },
     get surge() { return surge; },
     get entry() { return entry; },
-    /** What the hint was last chosen from (cloudbaseHint's facts), as of the last readout. */
-    get hintFacts() { return moment; },
     get view() { return view; },
     get meetView() { return meetView; },
     get chalk() { return chalk; },
@@ -2312,6 +2088,7 @@ export function createGoodLift(host) {
     get glide() { return glide; },
     get streaks() { return streaks; },
     get world() { return world; },
+    get pumpLimit() { return CLOUD_STRIKE.pump.most; },
     get coachEnvironment() { return coachEnvironment; },
     stepCoach: (dt, frame) => lessons.step(dt, frame),
     resetLessons: () => lessons.reset(),
@@ -2322,7 +2099,6 @@ export function createGoodLift(host) {
     },
     clearProgress: () => clearStore(),
     get lessons() { return lessons.state; },
-    get coachEntry() { return { side: seen.turnSide, age: sky.state.elapsed - seen.turnAt }; },
     get coachHazard() { return runCoachHazard(world); },
     get coachWarning() { return runCoachWarning(world); },
     get style() { return style; },

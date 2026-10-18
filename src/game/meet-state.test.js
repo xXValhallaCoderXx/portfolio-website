@@ -106,13 +106,13 @@ test('core-relative circles remain centered while the thermal drifts; rebirth re
   assert.ok(run.state.turned < 0.1);
 });
 
-test('counterrotation and a fold, tip or stall never earn thermal reps', () => {
-  for (const kind of ['opposite', 'stall', 'tuck', 'tip', 'collapse', 'launch']) {
+test('counterrotation and a fold or stall never earn thermal reps', () => {
+  for (const kind of ['opposite', 'stall', 'tuck', 'collapse', 'launch']) {
     const run = standing();
     const thermal = core(run, kind === 'launch' ? 0 : 1);
     for (let i = 0; i < 600; i++) {
       run.world.g.yawRate = kind === 'opposite' ? -1 : 1;
-      if (['stall', 'tuck', 'tip'].includes(kind)) run.world.g[kind] = 1;
+      if (['stall', 'tuck'].includes(kind)) run.world.g[kind] = 1;
       if (kind === 'collapse') run.pilot.collapse = 1;
       Object.assign(run.world.g.pos, { x: thermal.x + 15 * Math.cos(i * STEP), z: thermal.z + 15 * Math.sin(i * STEP) });
       tick(run);

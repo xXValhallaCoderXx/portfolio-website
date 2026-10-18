@@ -15,7 +15,7 @@ export function swingGauge(g, watch, folds, dt, out, hands = {}) {
   } else if (g.wingPhase === WING.backfly || g.wingPhase === WING.exit || g.tuck > 0) {
     cue = coming = CUES.release; soon = 0;
   } else if (hands.fold > 0) {
-    const held = hands.fold > 0 ? hands.held : g.tuckHeld;
+    const held = hands.held ?? 0;
     cue = coming = held >= 0.3 - 1 / 120 ? CUES.release : CUES.pump;
     soon = cue === CUES.pump ? clamp(1 - (held || 0) / 0.3, 0, 1) : 0;
   } else if (g.stall > 0 || g.stallLoad > SWING_GAUGE.stalling) {

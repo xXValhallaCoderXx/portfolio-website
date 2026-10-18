@@ -18,9 +18,9 @@ const bytesOf = (text) => [...Buffer.from(text, 'base64url')];
 const textOf = (bytes) => Buffer.from(bytes).toString('base64url');
 const META = Object.freeze({ simVersion: 0, seed: 7, day: 0, touch: false, initials: '', total: 25, peak: 300 });
 
-test('the ten-minute deadline fits format 2 even when every fixed step changes input', () => {
+test('the ten-minute deadline fits format 1 even when every fixed step changes input', () => {
   assert.equal(MAX_STEPS, 36_000);
-  assert.equal(LOG_FORMAT, 2);
+  assert.equal(LOG_FORMAT, 1);
   const bits = Uint8Array.from({ length: MAX_STEPS }, (_, i) => i % 32);
   const text = encodeLog({ ...META, simVersion: SIM_VERSION }, bits, bits.length);
   assert.ok(text.length <= MAX_LINK);
@@ -134,10 +134,10 @@ test('a log of five-bit controls survives encoding and decoding whatever the run
     { simVersion: 2, seed: 9, day: 0, touch: false, initials: '', total: 0, peak: 0, steps: 10, bits: buffer.slice(0, 10) });
 });
 
-test('a log is written byte for byte as format 2 specifies', () => {
+test('a log is written byte for byte as format 1 specifies', () => {
   const bits = [...Array(90).fill(0), ...Array(12).fill(INPUT.right), ...Array(30).fill(INPUT.right | INPUT.bar), INPUT.left | INPUT.right, ...Array(5).fill(INPUT.brake)];
   const text = encodeLog({ simVersion: 1, seed: 0x6785502f, day: 20756, touch: true, initials: 'REN', total: 487.5, peak: 1412 }, bits, bits.length);
-  assert.equal(text, 'AgEvUIVnlKIBARIFDsMBhAuKAcAWggPKByOkAQ');
+  assert.equal(text, 'AQEvUIVnlKIBARIFDsMBhAuKAcAWggPKByOkAQ');
   assert.deepEqual(bytesOf(text), [
     LOG_FORMAT,
     0x01,                   // sim version 1
@@ -199,15 +199,6 @@ test('a recorder keeps every step of the longest run in one buffer, counts each 
 //                                                          2   697 / 927    1356 / 1819
 //   tapped five times a second, light brake, eased         1  1130 / 1383   1942 / 2355
 //                                                          2  1011 / 1295   1838 / 2350
-// Under version 2 the reference pilot aims inside the tightest circle its wing can turn (pilots.js),
-// so it asks for a full turn more of the time and its keys change less. Version 3 moved each of
-// these medians by 25 characters at most and left every longest link as it was: its plates, gates
-// and Beast change which way a run goes, never how its controls are written.
-// A stretch of steps holding the same controls costs one byte up to seven steps long and two up to
-// 1,023, so a link grows with how often the pilot changes what it holds, not with how long it
-// flies. Even a pilot tapping five times a second for the whole run stays far inside MAX_LINK;
-// one changing its controls every step for two and a half minutes would not, and is refused.
-
 test('ears win over deep brake, then working brake, then bar, with resolved depth recorded', () => {
   const all = new Set();
   for (let held = 0; held < 64; held++) {
@@ -224,13 +215,6 @@ test('ears win over deep brake, then working brake, then bar, with resolved dept
   assert.deepEqual([...all].sort((a, b) => a - b), [...Array(16).keys(), 20, 21, 22, 23]);
 });
 
-test('historical format 1 links retain their exact four-bit controls for explicit version refusal', () => {
-  const read = decodeLog('AQEvUIVnlKIBARIFDsMBhAuKAaALwgHqAxNU');
-  assert.equal(read.ok, true);
-  assert.equal(read.log.simVersion, 1);
-  assert.deepEqual([...read.log.bits], [...Array(90).fill(0), ...Array(12).fill(2), ...Array(30).fill(10), 3, ...Array(5).fill(4)]);
-  assert.deepEqual(decodeLog(encodeLog(read.log, read.log.bits, read.log.steps)), read);
-});
 
 test('whole digital runs fit the bounded log and replayable input format', () => {
   const pilots = {
@@ -278,8 +262,7 @@ test('a cut-short, padded or tampered link is refused rather than misread', () =
       }
       read += 1;
       const encoded = encodeLog(decoded.log, decoded.log.bits, decoded.log.steps);
-      if (bytesOf(changed)[0] === LOG_FORMAT) assert.equal(encoded, changed);
-      else assert.deepEqual(decodeLog(encoded), decoded, 'legacy words retain their values when upgraded');
+      assert.equal(encoded, changed);
     }
   }
   assert.ok(refused > read, `${refused} refused, ${read} read as other logs`);
@@ -295,7 +278,7 @@ test('a cut-short, padded or tampered link is refused rather than misread', () =
 test('a link whose bytes are not exactly a log of a supported format is refused, each for what is wrong with it', () => {
   // A small log taken apart: format, version, seed, day, flags, initials, 10 plates, 300 m, 6 steps,
   // then 3 steps of nothing held, 2 of right and 1 of the brake.
-  const whole = [2, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0xac, 0x02, 6, 0x60, 0x42, 0x24];
+  const whole = [LOG_FORMAT, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0xac, 0x02, 6, 0x60, 0x42, 0x24];
   assert.equal(textOf(whole), encodeLog(META, [0, 0, 0, 2, 2, 4], 6));
   assert.equal(decodeLog(textOf(whole)).ok, true);
   const swap = (at, count, ...bytes) => textOf(whole.toSpliced(at, count, ...bytes));
@@ -325,7 +308,7 @@ test('a link whose bytes are not exactly a log of a supported format is refused,
   assert.deepEqual([longest.ok, longest.log?.steps, longest.log?.bits.every((bits) => bits === 0)], [true, MAX_STEPS, true]);
   // Bytes that do not fill the last character leave bits over, which a log leaves 0. Set one and
   // the same bytes have a second text; it is refused, though Node's own reader would let it pass.
-  const short = [2, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0xac, 0x02, 4, 0x60, 0x22];
+  const short = [LOG_FORMAT, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0xac, 0x02, 4, 0x60, 0x22];
   const exact = textOf(short);
   assert.deepEqual([exact.length, decodeLog(exact).ok], [23, true]);
   const nudged = exact.slice(0, -1) + String.fromCharCode(exact.charCodeAt(exact.length - 1) + 1);

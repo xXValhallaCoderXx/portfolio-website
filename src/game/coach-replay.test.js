@@ -20,13 +20,13 @@ import { createSwingWatch } from './swing-watch.js';
 import { FJORD_THERMALS, sampleFjordAir } from './atmosphere.js';
 import { WORLD } from './terrain.js';
 
-const receipt = JSON.parse(readFileSync(new URL('./fixtures/good-lift-v13-chromium.json', import.meta.url), 'utf8'));
+const receipt = JSON.parse(readFileSync(new URL('./fixtures/good-lift-chromium.json', import.meta.url), 'utf8'));
 const fresh = seed => startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(),
   bells: createBells(), style: createStyle() }), seed);
 const authority = world => ({ g: world.g, sky: world.sky.state, meet: world.meet.state,
   bells: world.bells.state, watch: world.watch.state, style: world.style.state,
   controls: world.controls, air: world.air, forces: world.forces, intent: world.intent, pump: world.pump,
-  hook: world.hook, struck: world.struck, stalls: world.stalls, tucks: world.tucks, tips: world.tips,
+  hook: world.hook, struck: world.struck, stalls: world.stalls, tucks: world.tucks,
   steps: world.steps, ended: world.ended, trace: world.trace });
 const released = () => ({ left: false, right: false, brake: false, deepBrake: false, bar: false, ears: false });
 const heldControls = message => ({ ...Object.fromEntries(Object.keys(released()).map(key => [key, message?.hold.includes(key) ?? false])),
@@ -34,8 +34,8 @@ const heldControls = message => ({ ...Object.fromEntries(Object.keys(released())
 const physicalControls = input => ({ turn: Number(input.right) - Number(input.left),
   brake: input.brake, deepBrake: input.deepBrake, bar: input.bar, ears: input.ears });
 
-test('v13 browser inputs replay identically with real coaching, live-air searches and varied render reads', () => {
-  assert.equal(SIM_VERSION, 13, 'the physics retune has its own replay rules version');
+test('browser inputs replay identically with real coaching, live-air searches and varied render reads', () => {
+  assert.equal(SIM_VERSION, 1, 'the initial release has one rules version');
   assert.match(receipt.engine, /^Chromium /);
   for (const seed of [1, 2]) {
     const record = receipt.records.find(run => run.seed === seed && run.scenario === 'soaring');
