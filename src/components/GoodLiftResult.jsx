@@ -9,6 +9,7 @@ import GoodLiftKit, { KitNews } from './GoodLiftKit.jsx';
 // How a run can end, as the meet sheet says it.
 const ENDINGS = {
   fog: 'The mist judged the bar.',
+  time: 'Ten minutes aloft. Flight complete; the bar and recovered style are banked.',
   landed: 'Back on the ground; the bar was judged where you touched down.',
   quit: 'Run ended; the bar was forfeit.',
 };
@@ -311,7 +312,7 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
   useEffect(() => {
     heading.current?.focus();
     setShared('');
-  }, [result]);
+  }, [result.at, result.seed]);
 
   // R, M and L go on to the game; B switches the music here, so the sheet's switch says what it
   // is; Escape goes back to the fjord; every other key stays here. In a text field they are all
@@ -454,6 +455,10 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
         )}
         <KitNews sheet={result.kit} />
 
+        <p className="dim" role="status">
+          {result.verifying ? 'Flight saved · preparing your challenge link…' : result.verified ? 'Flight saved · challenge ready.' : 'Flight saved on this device.'}
+        </p>
+
         <div className="good-lift-tabs" role="tablist" aria-label="Meet sheet">
           {TABS.map((item, index) => (
             <button
@@ -511,7 +516,7 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
               </tbody>
             </table>
           ) : (
-            <p className="dim">// no line reached: the first is at 250 m.</p>
+            <p className="dim">// no line reached: the first is at 150 m.</p>
           )}
 
           <ul className="good-lift-feats" aria-label="Feats">

@@ -19,9 +19,9 @@ const KIT_TAB = join(SRC, 'components', 'GoodLiftKit.jsx');
 // What only the game beyond the arch may load, by name: everything for the run's sky and its
 // views, the shared step, the reference pilots, the meet and the game's music (which never plays
 // over the fjord). The two leaf modules the page itself reads (the address and the sim version)
-// are the exceptions.
+// and the shared storage-key constant are the exceptions.
 const RUN_ONLY = /^(cloudbase|ravens|run-|good-lift|pilots|meet-|bells|recorder|replay|daily|board|music)/;
-const PAGE_MAY = new Set(['good-lift-address.js', 'sim-version.js']);
+const PAGE_MAY = new Set(['good-lift-address.js', 'good-lift-key.js', 'sim-version.js']);
 const runOnly = (file) => file.startsWith(GAME + '/') && RUN_ONLY.test(file.slice(GAME.length + 1)) && !PAGE_MAY.has(file.slice(GAME.length + 1)) && !file.endsWith('.test.js');
 
 // Every relative import of a file: static (`import … from`, `export … from`, bare `import '…'`)
@@ -84,6 +84,8 @@ test('the page, and everything it can load before the arch, carries none of the 
   assert.ok(page.has(join(GAME, 'game.js')), 'the fjord is part of the page');
   const leaked = [...page].filter(runOnly).map((file) => file.slice(SRC.length + 1));
   assert.deepEqual(leaked, []);
+  assert.deepEqual(importsOf(join(GAME, 'good-lift-key.js')), { statics: [], dynamics: [] },
+    'the reset key is a leaf constant and cannot bring the game into the page');
   assert.deepEqual([CARD, KIT_TAB].filter((file) => page.has(file)), [], 'the meet sheet and its kit tab come only with the game');
 });
 

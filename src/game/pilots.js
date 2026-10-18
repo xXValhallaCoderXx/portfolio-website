@@ -4,10 +4,13 @@
 // reacts to a raven, a cloud or a gust. Reflexes can be added for Good Lift's meet: one for
 // Hrungnir's kettlebells, one for the trail of plates, one for the rune gates and one for the
 // plates a strike sprays off the bar. It bounds what a player can do; it is not a player.
-import { BRAKE, FLIGHT, LOOP, pitchPeak } from './flight.js';
+import { FLIGHT, pitchPeak } from './flight.js';
 import { RUN, finishRun, stepRun } from './run-step.js';
 import { PLATE_KIND } from './meet-state.js';
 import { GATE, GATES, RUNE } from './meet-runes.js';
+import { inputBits } from './recorder.js';
+import { cloudThermalRemaining } from './cloudbase-state.js';
+import { createFlightCoach } from './flight-coach.js';
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -18,17 +21,42 @@ const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 // plate and seeks no gate.
 export const TST = Object.freeze({ withFlock: true, brake: 'eased', react: 0.4 });
 
+/** A canonical keyboard trace: short left/right holds approximate the pilot's continuous ask. */
+export function createReferenceKeys(options = TST, { hold = 9, chord = false } = {}) {
+  if (!Number.isInteger(hold) || hold < 1) throw new RangeError('key hold must be a positive number of fixed steps');
+  const pilot = createReferencePilot(options);
+  const intent = { turn: 0, brake: false, deepBrake: false, bar: false, ears: false };
+  const held = { left: false, right: false, brake: false, deepBrake: false, bar: false, ears: false };
+  let side = 0;
+  let on = 0;
+  return (world) => {
+    pilot.decide(world, intent);
+    const phase = world.steps % hold;
+    if (phase === 0) {
+      side = Math.sign(intent.turn);
+      on = Math.round(Math.abs(intent.turn) * hold);
+    }
+    const turn = phase < on ? side : 0;
+    held.left = turn < 0;
+    held.right = turn > 0;
+    held.brake = !!intent.brake;
+    held.deepBrake = !!intent.deepBrake;
+    held.ears = !!intent.ears;
+    held.bar = !!intent.bar;
+    if (chord && held.bar && turn === 0 && !held.brake && !held.ears) {
+      held.left = held.right = true;
+      held.bar = false;
+    }
+    return inputBits(held);
+  };
+}
+
 // How every reference pilot catches its own wing, as the hints tell a player to: once the wing is
 // surging toward a peak more than `surge` rad ahead (pitchPeak), the brake on `react` seconds later
-// and held till the wing swings back; and a fold, a strike's or a front collapse, pumped open twice,
-// each pump held `hold` seconds and let go for `gap` before the next (CLOUD_STRIKE.pump, TUCK.pump).
+// and held till the wing swings back; and an external-strike fold pumped open twice,
+// each pump held `hold` seconds and let go for `gap` before the next (CLOUD_STRIKE.pump).
 // Counted in whole steps, from the step the surge set in or the wing folded.
 export const CATCH = Object.freeze({ react: 0.4, surge: 0.8, hold: 0.35, gap: 0.1 });
-
-// Seconds an eased brake is let go for: the 70 ms that returns any brake to a light one and starts
-// its linger over (BRAKE.ease), as a player taps it every couple of seconds, and short enough that
-// the wing hardly swings for it. Let go for longer, so often, an ease would pitch the wing as a pump does.
-const EASE = BRAKE.ease;
 
 // How a gate-taker times its dash out of its climb to a rune stone and back.
 //   ahead    rad: how far off its nose a stone may be for it to set off for it
@@ -38,85 +66,26 @@ const EASE = BRAKE.ease;
 //            within `home` metres of the middle the stones stand round
 export const DASH = Object.freeze({ ahead: 0.8, carry: 1, low: 4, home: 12 });
 
-// The runes worth a dash to a pilot that flies as TST does: Fehu and Tiwaz. Algiz turns aside a
-// bell that changing what it does 0.4 s into the warning dodges anyway, and Ansuz's motes are for
-// a player's eyes, worth nothing to a pilot that steers by the thermals' own numbers. Every dash
-// costs about the same climb, a tenth of a pass of 1,000 m for each stone taken (over 800 skies TST
-// dashing for any stone took 597 and passed on 577 skies to TST's 640), so the rune decides whether
-// it pays. Over those skies TST dashing for one rune's stone alone banked a mean 13 ± 3 kg a run
-// more than TST for Fehu's, 4 ± 2 more for Tiwaz's, and 4 ± 2 less for Algiz's or for Ansuz's; for
-// Fehu's or Tiwaz's, 16 ± 3 more. The collector banked 5 ± 3 kg a run more dashing for Fehu's or
-// Tiwaz's than for those and Algiz's, and 28 ± 5 more than for none.
+// A gate-seeking collector prefers the reach and double-loading blessings.
 export const WORTH_RUNES = Object.freeze([RUNE.fehu, RUNE.tiwaz]);
 
-// The plates off the trail are left to chance by the collector, as by TST: to a pilot that climbs
-// as these do, none is worth going out of the way for. Measured for the collector over 800 skies,
-// each reflex against flying through the plates only by chance (a mean TOTAL a run, ± its standard
-// error over the skies): going for any plate it could meet within 0.6 s, flying straight (a gust
-// front's, one under a cloud, or its own sprayed ones), met hardly more of them (1.14 a run off the
-// fronts against 1.12) and banked no more (0 ± 4 kg); going for the fog's bait once the fog would
-// bring it up within 6 s caught it on a third of skies more (0.35 a run against 0.03) and banked
-// 1 ± 2 kg less, the detours that missed it costing more than the catches won; and circling back
-// through its own sprayed plates (`recover`) caught half a plate more a run (1.35 against 0.84) but
-// banked 10 ± 3 kg less, and passed 1,000 m on 55 skies fewer. Circling back only for a heavy bar
-// (25 kg or more sprayed) within 20 m of the lift's middle still cost 1 ± 2 kg.
-
 /**
- * `brake` is what its hands do while it circles: 'none' keeps them up, 'eased' holds the light
- * brake and lets go for 70 ms (EASE) just before it would go deep, 'late' does that a second after
- * it has, and 'held' never lets go.
+ * A deterministic soaring pilot. `brake: 'none'` uses hands-up circles; the other brake labels
+ * all hold the same common brake. `react` is the delay before dodging a kettlebell (null ignores
+ * it). `collect`, `gates` and `recover` add plate, rune and scatter detours.
  *
- * `react` is how many seconds into a kettlebell's warning it changes what it is doing, the way
- * the hint tells a player to (null: it never does). Circling off the bar, it pushes the bar and
- * keeps circling; flying straight or already on the bar, it turns hard, against any turn it was
- * making. The bell says which it was doing when it was thrown, as it does for the hint.
- *
- * `collect`, while the meet has a trail of plates laid from a dying lift, flies it plate by plate
- * on the bar, as the hint says, and goes back to the lift once no plate is left ahead. Any plate
- * off the trail it meets only by chance (above).
- *
- * `gates` flies through a rune stone at each height: any stone (`true`), or only one whose rune is
- * in a list of RUNE numbers, whichever such stone comes first nearly ahead, dashing out of its
- * climb when it will get there over the line and inside the opening, and back. A collector takes
- * Fehu's or Tiwaz's (WORTH_RUNES) unless told otherwise.
- *
- * `recover` circles back through its own plates as a strike sprays them, turning hard on the light
- * brake for the nearest while they last, which sweeps the tight circle that flies back through
- * them: the way to catch them back, though not one that pays this pilot (above).
- *
- * `catches`, on for every pilot unless told otherwise, catches a surging wing with the brake and
- * pumps a fold open (CATCH) over whatever else it was doing: the wing comes first. Told not to, it
- * flies as a player who knows none of it.
- *
- * `tricks` flies one trick, once, as soon as the wing is `from` metres up: `{ swaps, from }` holds a
- * turn a moment and then reverses it as each swing tops out (the swing watch's tops), `swaps` times,
- * for a set of wingovers; `{ swaps, loops, from }` flies on from those wingovers to the first top past
- * a loop's entry (LOOP), presses the brake there, and then the key each of the loop's moments asks
- * for as it comes, ▲ over the wing and ▼ under it, until it has gone round `loops` times, and then
- * presses no more, so that it rolls out; `{ pumps, from }`, circling on as it was, lets go of the brake and presses
- * it, and then pitches the wing, pressing a fifth of a second after each forward peak and letting go
- * a fifth after each back one, until it has peaked ahead `pumps` times, and then catches it, braking
- * while it swings forward. Then it flies on until the set has landed (or been lost) and goes back to
- * flying as before. Over everything else while it lasts, but for pumping a fold, and for catching a
- * surge once it is done pumping.
- *
- * `decide(world, intent)` writes what it asks of the wing this step into `intent`. Without the
- * kettlebells and the meet in the world, or without `react`, `collect`, `gates` and `recover`, it
- * flies exactly as it always has, but for catching its wing.
+ * `tricks` requests a physical move at `from` metres: alternating turns for `swaps` wingover
+ * peaks, an energetic inversion for `loops`, or brake cycles for `pumps`. Recovery always follows
+ * the observed wing; no maneuver enters through a key threshold or scripted angle.
  */
 export function createReferencePilot({
   withFlock = true, brake = 'none', react = null, collect = false, gates = collect ? WORTH_RUNES : false, recover = false, catches = true,
   tricks = null,
 } = {}) {
-  // The circle it aims for round the middle of the lift: 11 m hands up and 6 m on any brake, inside
-  // the 14.4 m and 8.2 m the wing turns at full rate, so that it circles as tight as it can. Aimed
-  // at 14 m and 9 m, on the light brake it settled 12 to 15 m out, which cost nothing while a
-  // hunted core stood flat out to 17 m. Now that one peaks at its middle (CLOUD_HUNT.peak), a circle
-  // out there gets a fifth less lift than one round the middle; aimed tighter, half its circling is
-  // within 13 m of it.
-  const radius = brake === 'none' ? 11 : 6;
-  let deepFor = 0;
-  let tap = 0;
+  // Aim within the new wing's practical turning radius, with wind compensation below.
+  const radius = brake === 'none' ? 25 : 21;
+  let followed = 0;
+  let followedGeneration = -1;
   // Which way it turns off a kettlebell's line: picked once for each warning, when it reacts, and
   // held until the bell has passed (0 until then). Picked afresh every step, it would undo its own
   // turn as soon as the wing answered and dither about straight: hit a quarter to a third of the
@@ -132,28 +101,20 @@ export function createReferencePilot({
   let folded = 0;
   let surged = 0;
   let catching = false;
-  // The trick: 0 waiting for its height, 1 in a held turn before the first swap, 2 swapping or
-  // pumping, 3 catching and flying level till it lands, 4 done, 5 looping; the watch's counts last
-  // step, the turn, brake or bar it holds, a timer for the press or let-go to come, and round a loop
-  // the moment it last pressed for and the loops it had gone round when it began.
-  const trick = {
-    phase: 0, at: 0, count: 0, tops: 0, fronts: 0, backs: 0, landed: 0, lost: 0, turn: 0, brake: false, bar: false, wait: -1, want: false,
-    next: 0, loopsAt: 0,
-  };
+  // Intentional reference maneuvers use the same observed cues a player sees. Their only
+  // authority is the controls emitted below; all motion and rewards remain physical.
+  const trickCoach = createFlightCoach();
+  const trick = { phase: 0, at: 0, armedAt: 0, movesAt: 0, loopsAt: 0, topsAt: 0, frontsAt: 0, landed: 0, lost: 0,
+    following: false, pending: null, applyAt: 0,
+    hands: { left: false, right: false, brake: false, deepBrake: false, bar: false, ears: false } };
   const lead = Math.round(CATCH.react / RUN.step);
   const hold = Math.round(CATCH.hold / RUN.step);
   const gap = Math.round(CATCH.gap / RUN.step);
 
-  // The light brake held as a pilot holds it in a run: let go for EASE just before it would go deep
-  // (the ease's timer is the circling's own, counted down each step), so it never does.
-  function easedBrake(g) {
-    if (tap <= 0 && g.brake > BRAKE.shelf - 0.01) tap = EASE;
-    return tap <= 0;
-  }
-
   // Steers straight at a point, hands up and off the bar.
   function steer(world, intent, x, z) {
-    const { pos, yaw } = world.g;
+    const { pos } = world.g;
+    const yaw = world.g.track ?? world.g.yaw;
     intent.turn = clamp(wrapAngle(Math.atan2(x - pos.x, -(z - pos.z)) - yaw) * 2.5, -1, 1);
     intent.brake = false;
     intent.bar = false;
@@ -164,7 +125,8 @@ export function createReferencePilot({
   function follow(world, intent) {
     const trail = world.meet?.state.trail;
     if (!trail?.live) return false;
-    const { pos, yaw } = world.g;
+    const { pos } = world.g;
+    const yaw = world.g.track ?? world.g.yaw;
     const along = (pos.x - trail.x) * trail.ux + (pos.z - trail.z) * trail.uz;
     for (let i = 0; i < trail.plates.length; i++) {
       const plate = trail.plates[i];
@@ -182,7 +144,8 @@ export function createReferencePilot({
   function circleBack(world, intent) {
     const meet = world.meet?.state;
     if (!meet) return false;
-    const { pos, yaw } = world.g;
+    const { pos } = world.g;
+    const yaw = world.g.track ?? world.g.yaw;
     let best = Infinity;
     let target = null;
     for (let i = 0; i < meet.loose.length; i++) {
@@ -198,7 +161,7 @@ export function createReferencePilot({
     }
     if (!target) return false;
     intent.turn = clamp(wrapAngle(Math.atan2(target.x - pos.x, -(target.z - pos.z)) - yaw) * 2.5, -1, 1);
-    intent.brake = easedBrake(world.g);
+    intent.brake = true;
     intent.bar = false;
     return true;
   }
@@ -244,7 +207,7 @@ export function createReferencePilot({
         return false;
       }
       steer(world, intent, cx, cz);
-      intent.brake = easedBrake(world.g);
+      intent.brake = true;
       return true;
     }
     for (let i = 0; i < stones.length; i++) {
@@ -284,100 +247,87 @@ export function createReferencePilot({
     }
   }
 
-  // Flies the trick it was told to, once: wingovers by the tops of the swing, or a pitched swing by
-  // its peaks, then level till the set lands. Says whether it had the wing this step.
+  // First release ordinary navigation and wait for a genuinely steady rig. A short deliberate
+  // deep pull then opens acro authority. Wingover/pitch corrections follow real semantic cues
+  // with 0.2s reaction; inversion entry is a reproducible input trace, never a prescribed orbit.
   function trickWing(world, intent) {
-    const { g, watch, style } = world;
-    const w = watch.state;
+    const { g, watch, style } = world, w = watch.state, elapsed = world.sky.state.elapsed;
     if (trick.phase === 4) return false;
     if (trick.phase === 0) {
       if (g.pos.y < tricks.from || world.sky.state.pilot.collapse > 0 || g.stall > 0) return false;
-      trick.phase = 1;
-      trick.at = world.sky.state.elapsed;
-      trick.turn = tricks.swaps ? 1 : 0;
-      trick.brake = false;
-      Object.assign(trick, { tops: w.tops, fronts: w.fronts, backs: w.backs, landed: style?.state.landed ?? 0, lost: style?.state.lost ?? 0 });
+      trick.phase = 1; trick.at = elapsed;
+      trick.movesAt = w.moves; trick.loopsAt = g.loops;
+      trick.topsAt = w.tops; trick.frontsAt = w.fronts;
+      trick.landed = style?.state.landed ?? 0; trick.lost = style?.state.lost ?? 0;
+      trickCoach.reset();
     }
-    const elapsed = world.sky.state.elapsed;
+    if (style && style.state.landed > trick.landed) {
+      const more = tricks.loops ? g.loops - trick.loopsAt < tricks.loops :
+        tricks.swaps ? w.tops - trick.topsAt < tricks.swaps : w.fronts - trick.frontsAt < tricks.pumps;
+      if (more) {
+        trick.phase = 1; trick.following = false; trick.pending = null;
+        trick.landed = style.state.landed; trick.movesAt = w.moves; trickCoach.reset();
+      } else { trick.phase = 4; return false; }
+    }
+    if (elapsed - trick.at > 100 || (style && style.state.lost > trick.lost)) {
+      trick.phase = 4; return false;
+    }
+    const h = trick.hands;
     if (trick.phase === 1) {
-      // A turn held long enough to settle into it, then the first swap; or hands up a moment, the
-      // brake let go, and then the first press.
-      if (tricks.swaps && elapsed - trick.at >= 3) {
-        trick.turn = -1;
-        trick.phase = 2;
-      } else if (tricks.pumps) {
-        trick.brake = elapsed - trick.at >= 1;
-        if (trick.brake) trick.phase = 2;
+      Object.assign(h, { left: false, right: false, brake: false, deepBrake: false, bar: false });
+      if (w.calm >= 1 && Math.abs(g.bank) < 0.175) {
+        trick.phase = tricks.loops ? 5 : 2; trick.armedAt = world.steps;
       }
+    }
+    const ticks = world.steps - trick.armedAt;
+    if (trick.phase === 5) {
+      const entry = ticks < 580;
+      h.left = entry && ticks >= 285; h.right = entry && ticks < 285;
+      h.deepBrake = ticks < 12; h.brake = h.deepBrake || !entry && g.pitch < 0;
+      h.bar = entry;
+      // Additional requested orbits start only after a real complete recovery, with fresh input.
+      if (g.loops > trick.loopsAt && g.loops - trick.loopsAt < tricks.loops && w.calm >= 1) trick.armedAt = world.steps;
+      if (g.loops - trick.loopsAt >= tricks.loops && !style && w.calm >= 1) { trick.phase = 4; return false; }
     } else if (trick.phase === 2) {
-      if (tricks.swaps) trick.brake = trick.bar = false;
-      if (tricks.swaps && w.tops > trick.tops) {
-        trick.tops = w.tops;
-        trick.count += 1;
-        if (tricks.loops && trick.count >= tricks.swaps && Math.abs(g.bank) >= LOOP.entry) {
-          // At a top past the entry once its swaps are flown: the brake, and over it goes.
-          trick.brake = true;
-          trick.turn = 0;
-          trick.phase = 5;
-          trick.next = -1;
-          trick.loopsAt = g.loops;
-        } else if (trick.count >= tricks.swaps + (tricks.loops ? 6 : 0)) {
-          // Its swaps flown, or, waiting for a top steep enough to loop from, too many more.
-          trick.turn = 0;
-          trick.phase = 3;
-        } else trick.turn = -w.topSide;
+      const kind = tricks.swaps ? 'wingover' : 'pitch';
+      const message = trickCoach.step(RUN.step, { g, watch: w, style: style?.state, input: h,
+        clearance: world.air.clearance ?? Infinity,
+        fogClearance: Number.isFinite(world.sky.state.fogHeight) ? g.pos.y - world.sky.state.fogHeight : Infinity, eligible: true });
+      if (message?.context === kind) trick.following = true;
+      if (trick.pending && world.steps >= trick.applyAt) {
+        const m = trick.pending;
+        for (const key of m.release) h[key] = false;
+        if (m.release.includes('brake')) h.deepBrake = false;
+        for (const key of m.hold) h[key] = true;
+        if (m.hold.includes('brake')) h.deepBrake = m.brakeDepth === 'deep';
+        trick.pending = null;
       }
-      if (tricks.pumps) {
-        if (w.fronts > trick.fronts) {
-          trick.fronts = w.fronts;
-          trick.count += 1;
-          if (trick.count >= tricks.pumps) trick.phase = 3;
-          else [trick.wait, trick.want] = [Math.round(0.2 / RUN.step), true];
-        }
-        if (w.backs > trick.backs) {
-          trick.backs = w.backs;
-          [trick.wait, trick.want] = [Math.round(0.2 / RUN.step), false];
-        }
-        if (trick.wait >= 0 && trick.wait-- === 0) trick.brake = trick.want;
+      if (!trick.following) {
+        const turn = kind === 'wingover' ? ticks < 270 ? 1 : -1 : 0;
+        h.left = turn < 0; h.right = turn > 0;
+        h.deepBrake = kind === 'wingover' ? ticks < 12 : ticks % 390 < 108;
+        h.brake = h.deepBrake; h.bar = false;
+      } else if (!trick.pending && message && (message.hold.some(key => !h[key]) ||
+          message.release.some(key => h[key]) || message.hold.includes('brake') && h.deepBrake !== (message.brakeDepth === 'deep'))) {
+        trick.pending = message; trick.applyAt = world.steps + 12;
       }
+      if (!style && w.moves > trick.movesAt && w.calm >= 1) { trick.phase = 4; return false; }
     }
-    else if (trick.phase === 5) {
-      // Round the loop: each moment's key as it comes (its window is still open the step after),
-      // until it has gone round enough; then nothing, and it rolls out.
-      trick.brake = trick.bar = false;
-      if (g.loop === 0) trick.phase = 3;
-      else if (trick.next === -1) trick.next = g.loopNext;
-      else if (g.loopNext !== trick.next) {
-        const top = Math.round(trick.next / Math.PI) % 2 === 1;
-        trick.next = g.loopNext;
-        if (g.loops - trick.loopsAt < tricks.loops) {
-          trick.bar = top;
-          trick.brake = !top;
-        }
-      }
-    }
-    if (trick.phase === 3) {
-      // Caught and flown level: the brake on while the wing still swings forward, and hands up.
-      if (tricks.swaps) trick.turn = 0;
-      trick.brake = !!tricks.pumps && g.pitchRate < 0 && g.pitch < 0;
-      const done = style ? style.state.landed > trick.landed || style.state.lost > trick.lost : w.calm >= 1.5;
-      if (done || elapsed - trick.at > 40) {
-        trick.phase = 4;
-        return false;
-      }
-    }
-    // A pitched swing is flown circling on as before; wingovers and loops have the turn to themselves.
-    if (tricks.swaps) intent.turn = trick.turn;
-    intent.brake = trick.brake;
-    intent.bar = trick.bar;
+    intent.turn = Number(h.right) - Number(h.left);
+    intent.brake = h.brake; intent.deepBrake = h.deepBrake; intent.bar = h.bar;
     return true;
   }
 
   // Catches its own wing: the brake `react` seconds into a surge, held till it swings back, and two
-  // pumps into a fold, a strike's or a front collapse's alike.
+  // pumps into an external-strike fold. Frontal inflation needs released controls.
   function catchWing(world, intent) {
     const { g } = world;
-    if (world.sky.state.pilot.collapse > 0 || g.tuck > 0) {
+    if (g.tuck > 0) {
+      intent.turn = 0; intent.brake = intent.deepBrake = intent.bar = false;
+      folded = surged = 0; catching = false;
+      return;
+    }
+    if (world.sky.state.pilot.collapse > 0) {
       const k = folded - lead;
       folded += 1;
       intent.brake = k >= 0 && k < 2 * (hold + gap) && k % (hold + gap) < hold;
@@ -403,35 +353,55 @@ export function createReferencePilot({
 
   return {
     decide(world, intent) {
+      intent.deepBrake = false;
       const { sky, g } = world;
       const { state } = sky;
       let target = null;
       let nearest = Infinity;
-      for (const thermal of state.thermals) {
+      const previous = state.thermals[followed];
+      const available = (thermal, distance) => thermal.live && thermal.strength >= 0.35 &&
+        (thermal === state.thermals[0] || cloudThermalRemaining(thermal) >= Math.max(25, distance / Math.max(8, g.speed) + 15));
+      if (previous && available(previous, Math.hypot(previous.x - g.pos.x, previous.z - g.pos.z)) &&
+          (followedGeneration < 0 || previous.generation === followedGeneration)) {
+        target = previous;
+        nearest = Math.hypot(previous.x - g.pos.x, previous.z - g.pos.z);
+      }
+      if (!target) for (const thermal of state.thermals) {
         const distance = Math.hypot(thermal.x - g.pos.x, thermal.z - g.pos.z);
-        if (thermal.live && thermal.strength >= 0.3 && distance < nearest) [target, nearest] = [thermal, distance];
+        if (available(thermal, distance) && distance < nearest) [target, nearest] = [thermal, distance];
+      }
+      // Keep a safe circle while the next cells bloom rather than leaving straight through the
+      // arena edge when every candidate is temporarily too old to reach.
+      if (!target && previous && previous.generation === followedGeneration) {
+        target = previous;
+        nearest = Math.hypot(previous.x - g.pos.x, previous.z - g.pos.z);
+      }
+      if (target) {
+        followed = state.thermals.indexOf(target);
+        followedGeneration = target.generation;
       }
       let turn = 0;
       if (target) {
-        const bearing = Math.atan2(target.x - g.pos.x, -(target.z - g.pos.z));
         const dir = target === state.thermals[0] ? 1 : withFlock ? target.dir : -target.dir;
-        // Head straight in, then hold a circle by aiming along it and a little inward.
-        const want = nearest > 30 ? bearing : bearing - dir * (Math.PI / 2) * clamp(1 - (nearest - radius) / 28, 0, 1.4);
-        turn = clamp(wrapAngle(want - g.yaw) * 2.5, -1, 1);
+        // Follow a point ahead on a core-relative circle, allowing the wing time to bank. Rate
+        // damping prevents alternating overcorrections as the pilot enters a drifting cell.
+        const angle = Math.atan2(g.pos.x - target.x, -(g.pos.z - target.z)) + dir * 0.8;
+        const x = target.x + ((target.vx || 0) - (world.air.windX || 0)) * 2 + Math.sin(angle) * radius;
+        const z = target.z + ((target.vz || 0) - (world.air.windZ || 0)) * 2 - Math.cos(angle) * radius;
+        const want = Math.atan2(x - g.pos.x, -(z - g.pos.z));
+        turn = clamp(wrapAngle(want - (g.track ?? g.yaw)) * 1.2 - g.trackRate, -1, 1);
       }
-      deepFor = g.brake >= BRAKE.shelf ? deepFor + RUN.step : 0;
-      if (tap <= 0 && ((brake === 'eased' && g.brake > BRAKE.shelf - 0.01) || (brake === 'late' && deepFor >= 1))) tap = EASE;
-      tap -= RUN.step;
       intent.turn = turn;
-      intent.brake = brake !== 'none' && target !== null && nearest <= 30 && sky.inside(g.pos) && tap <= 0 && g.stall === 0;
+      intent.brake = brake !== 'none' && target !== null &&
+        (target === state.thermals[0] || nearest <= target.r * 1.5) && sky.inside(g.pos);
       intent.bar = false;
       // The reflexes come after the lift is chosen: a gate it has set off for, then its own sprayed
       // plates, the trail, and a kettlebell over them all.
       if (!(gates && gate(world, intent)) && !(recover && circleBack(world, intent)) && collect) follow(world, intent);
       if (react !== null) dodge(world, intent);
       // Pumping a swing on purpose, it lets it surge: the catch comes once the pumps are done.
-      const pitching = tricks && trickWing(world, intent) && trick.phase === 2 && !!tricks.pumps;
-      if (catches && !pitching) catchWing(world, intent);
+      const maneuver = tricks && trickWing(world, intent);
+      if (catches && !maneuver) catchWing(world, intent);
       return intent;
     },
     /** Whether its hands are on the brake catching a surge, over whatever else it would do. */
@@ -447,7 +417,7 @@ export function createReferencePilot({
  * is (finishRun): its meet, if it has one, judges what is left on the bar. One cut short by `limit`
  * has not ended, and is left for the caller to fly on or finish.
  */
-export function flyPilot(world, pilot, { limit = 200 } = {}) {
+export function flyPilot(world, pilot, { limit = RUN.seconds } = {}) {
   const { state } = world.sky;
   const intent = { turn: 0, brake: false, bar: false };
   let reason = null;

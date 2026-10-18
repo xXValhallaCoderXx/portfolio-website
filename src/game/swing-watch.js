@@ -4,15 +4,11 @@
 // all see the same tricks; a run's style is scored from it (meet-style.js), and the swing gauge
 // (swing-gauge.js) and the sounds read it. Kept small and free of page code: the fjord carries it.
 
-import { LOOP, pitchPeak } from './flight.js';
+import { pitchPeak } from './flight.js';
 
-// The bands a trick is judged in, in degrees: a pitched swing by how far ahead it peaks, a wingover
-// by how far it banks at its top. Each top band sits a few degrees under the fold the swing risks
-// (PITCH.line, 57°, and ROLL.limit, 78°), and the first above anything one move of ordinary flying
-// does: a brake let go swings the wing some 17° ahead, and one hard reversal of a held turn banks it
-// 45°, so a wingover's first swap is its run-up and the second its first to count. A dodge turned
-// straight back is two swaps, and can make that one (51-56°): alone, it is no set in hand
-// (meet-style.js STYLE.inHand).
+// A move must exceed ordinary turning and brake transients. Completion requires the observed
+// alternating cycle or a deliberately shaped pitch caught with a fresh brake press. Near-peak
+// timing earns a separate precision grade; raw angles and key presses never award a move.
 export const BANDS = Object.freeze({ pitch: Object.freeze([20, 30, 40, 50]), roll: Object.freeze([50, 58, 66, 72]) });
 
 // How the swings are read. Angles in radians, times in seconds.
@@ -20,7 +16,7 @@ export const BANDS = Object.freeze({ pitch: Object.freeze([20, 30, 40, 50]), rol
 //   grow     a forward peak still builds the swing if it falls short of the last by no more than this
 //   surge    a swing going forward toward a peak this far ahead or further is a surge heading for
 //            the fold (the tuck line less a margin to brake in): braked as it goes, it is caught as
-//            it turns back short of the line, and the brake there loops no wingover (LOOP.surge)
+//            it turns back short of the line, and the brake there loops no wingover (WATCH.surge)
 //   calm     under this much pitch, and `still` rad/s of it, the swing fore and aft is calm
 //   top      a wingover's top counts from this much bank
 //   gap      wingovers' tops on alternate sides this close together are one chain of them
@@ -36,8 +32,8 @@ export const BANDS = Object.freeze({ pitch: Object.freeze([20, 30, 40, 50]), rol
 //   within   a swing is being pumped while its last forward peak and the pilot's last press or
 //            let-go of the brake are no older than this
 export const WATCH = Object.freeze({
-  half: 0.26, grow: 0.05, surge: LOOP.surge, calm: 0.175, still: 0.3, within: 4, top: 0.7, gap: 2, level: 0.785,
-  wing: 0.759, early: 0.12, late: 0.2, pump: 0.45, pumped: 0.35, straight: 1,
+  half: 0.26, grow: 0.05, surge: 0.35, calm: 0.175, still: 0.3, within: 6, top: 0.7, gap: 5, level: 0.262,
+  wing: 0.873, early: 0.2, late: 0.2, pump: 0.3, pumped: 0.35, straight: 1, perfect: 0.08, intent: 12, maxTop: Math.PI * 0.55, ears: 0.01,
 });
 
 const DEG = Math.PI / 180;
@@ -86,6 +82,7 @@ export function createSwingWatch() {
     catches: 0, caughtPeak: 0, caughtAt: -Infinity, brakeAt: -Infinity, pumping: 0, tops: 0, top: 0, topSide: 0, topAt: -Infinity, chain: 0, breaks: 0, broke: 0, calm: 0,
     timed: 0, timedKind: 0, timedAt: -Infinity, swappedAt: -Infinity, wingTop: 0, linking: 0,
     looping: 0, loops: 0, loopAt: -Infinity,
+    rollAcceleration: 0, moves: 0, moveKind: 0, moveBand: 0, moveSize: 0, moveAt: -Infinity, quality: 1,
   };
   // The swing as it was last step, to find its turns, whether a surge is heading for the fold, and
   // whether something has the wing.
@@ -102,27 +99,55 @@ export function createSwingWatch() {
   let swappedTo = 0;
   let braked = false;
   let topAnswered = true;
-  // The wing's own counts of its loops and of their presses on time, as last seen.
+  // Completed physical orbits already seen.
   let loopsSeen = 0;
-  let loopTimedSeen = 0;
+  let previousTop = 0;
+  let previousTopAt = -Infinity;
+  let completedTop = 0;
+  let pitchTimed = 0;
+  let measuredRollWas = 0;
+  let rollTimedAt = -Infinity;
+  let drivenAt = -Infinity;
+  let brakeChanges = 0;
+  let rollQuality = 1;
 
   function reset() {
     state.clock = state.fronts = state.backs = state.front = state.back = state.building = 0;
     state.catches = state.caughtPeak = state.tops = state.top = state.topSide = state.chain = state.breaks = state.broke = state.calm = 0;
     state.timed = state.timedKind = state.wingTop = state.linking = state.pumping = state.looping = state.loops = 0;
     state.loopAt = -Infinity;
-    loopsSeen = loopTimedSeen = 0;
+    loopsSeen = 0;
     state.frontAt = state.backAt = state.topAt = state.timedAt = state.swappedAt = state.caughtAt = state.brakeAt = -Infinity;
     pitchRate = bankWas = rolling = way = straightFor = swappedTo = 0;
     broken = braked = surging = false;
     topAnswered = true;
+    state.moves = state.moveKind = state.moveBand = state.moveSize = 0;
+    state.moveAt = -Infinity;
+    state.quality = 1;
+    previousTop = completedTop = pitchTimed = measuredRollWas = state.rollAcceleration = 0;
+    previousTopAt = rollTimedAt = drivenAt = -Infinity;
+    brakeChanges = 0;
+    rollQuality = 1;
   }
 
-  function onTime(kind, now) {
+  function onTime(kind, now, offset = WATCH.late) {
     state.timed += 1;
     state.timedKind = kind;
     state.timedAt = now;
-    if (kind === 3) topAnswered = true;
+    if (kind === 3) { topAnswered = true; rollTimedAt = now; rollQuality = Math.abs(offset) <= WATCH.perfect ? 2 : 1; }
+    state.quality = Math.abs(offset) <= WATCH.perfect ? 2 : 1;
+    if (kind === 1 || kind === 2) pitchTimed += 1;
+  }
+
+  // Completion is observed motion, never a correctly pressed key by itself. One event is emitted
+  // for each complete alternating cycle, so linking it cannot retroactively score its first top.
+  function complete(kind, band, size, now) {
+    if (band === 0 && kind !== 3) return;
+    state.moves += 1;
+    state.moveKind = kind;
+    state.moveBand = band;
+    state.moveSize = size;
+    state.moveAt = now;
   }
 
   /**
@@ -133,45 +158,72 @@ export function createSwingWatch() {
   function step(dt, g, struck = false, controls = null) {
     state.clock += dt;
     const now = state.clock;
-    if (controls) {
+    const measuredRate = g.rollRate ?? 0;
+    state.rollAcceleration = ((measuredRate - measuredRollWas) / dt) * 0.15 + state.rollAcceleration * 0.85;
+    if (controls && !controls.steered) {
       // A swap of the turn just after the wingover's top it answers, the way back from it. Flown
       // straight a while, the last turn is forgotten, and the next swaps nothing.
       const turn = Math.sign(controls.turn);
+      if (turn !== 0 && Math.abs(g.bank) > WATCH.top) drivenAt = now;
       straightFor = turn === 0 ? straightFor + dt : 0;
       if (straightFor > WATCH.straight) way = 0;
       if (turn !== 0 && turn !== way) {
         if (way !== 0) {
           state.swappedAt = now;
           swappedTo = turn;
-          if (!topAnswered && turn === -state.topSide && now - state.topAt <= WATCH.late) onTime(3, now);
+          if (!topAnswered && turn === -state.topSide && now - state.topAt <= WATCH.late) onTime(3, now, now - state.topAt);
         }
         way = turn;
       }
       // A press just after a pitched swing peaks ahead, or a let-go just after it peaks behind.
       const brake = !!controls.brake;
       const pitched = state.building >= 1 && state.front >= WATCH.pumped;
-      if (pitched && brake && !braked && state.frontAt > state.backAt && now - state.frontAt <= WATCH.pump) onTime(1, now);
-      if (pitched && !brake && braked && state.backAt > state.frontAt && now - state.backAt <= WATCH.pump) onTime(2, now);
-      if (brake !== braked) state.brakeAt = now;
+      if (pitched && brake && !braked && state.frontAt > state.backAt && now - state.frontAt <= WATCH.pump) onTime(1, now, now - state.frontAt);
+      if (pitched && !brake && braked && state.backAt > state.frontAt && now - state.backAt <= WATCH.pump) onTime(2, now, now - state.backAt);
+      if (brake !== braked) {
+        brakeChanges = now - state.brakeAt <= WATCH.within ? brakeChanges + 1 : 1;
+        state.brakeAt = now;
+      }
       braked = brake;
     }
     // Anything that takes the wing out of the pilot's hands breaks off the trick in hand.
-    const breaking = g.tuck > 0 ? 1 : g.tip > 0 ? 2 : g.stall > 0 ? 3 : struck ? 4 : g.ears > 0 ? 5 : 0;
+    const breaking = controls?.steered ? 6 : g.tuck > 0 ? 1 : g.stall > 0 ? 3 : struck ? 4 : g.ears > WATCH.ears ? 5 : 0;
     if (breaking && !broken) {
       state.breaks += 1;
       state.broke = breaking;
       state.building = state.chain = 0;
+      previousTop = pitchTimed = brakeChanges = 0;
+      state.top = state.topSide = state.wingTop = 0;
+      state.topAt = state.frontAt = state.backAt = state.swappedAt = state.timedAt = -Infinity;
+      rollTimedAt = drivenAt = -Infinity;
+      completedTop = state.tops;
+      way = swappedTo = straightFor = 0;
+      topAnswered = true;
     }
     broken = breaking !== 0;
+    if (broken) {
+      surging = false;
+      pitchRate = g.pitchRate;
+      rolling = 0;
+      bankWas = g.bank;
+      measuredRollWas = measuredRate;
+      loopsSeen = g.loops;
+      state.calm = state.pumping = state.linking = state.looping = 0;
+      return;
+    }
     // A surge heading for the fold, braked as it goes, is caught as it turns back short of the line;
     // one that turns back by itself, or tucks, was not.
-    if (broken) surging = false;
-    else if (g.pitchRate < 0 && pitchPeak(g) < -WATCH.surge) surging = true;
+    if (g.pitchRate < 0 && pitchPeak(g) < -WATCH.surge) surging = true;
     else if (surging && g.pitchRate >= 0) {
       if (controls?.brake) {
         state.catches += 1;
         state.caughtPeak = -g.pitch;
         state.caughtAt = now;
+        if (state.building >= 1 && brakeChanges >= 3 && now - state.brakeAt <= WATCH.pump * 2) {
+          state.quality = now - state.brakeAt <= WATCH.perfect ? 2 : 1;
+          complete(1, bandOf(BANDS.pitch, -g.pitch), -g.pitch, now);
+          pitchTimed = brakeChanges = 0;
+        }
       }
       surging = false;
     }
@@ -195,20 +247,17 @@ export function createSwingWatch() {
     const built = state.building >= 2 && state.front >= WATCH.pumped && state.caughtAt < state.frontAt;
     state.pumping = built && now - state.frontAt <= WATCH.within && now - state.brakeAt <= WATCH.within ? 1 : 0;
 
+    measuredRollWas = measuredRate;
     // A loop going round: each time round, and each press on time, as the wing counts them (a flight
     // begun again counts from nought). Round a loop the bank wraps, and its tops are none of a
     // wingover's: the watch of the bank starts over once it is back.
     state.looping = g.loop !== 0 ? 1 : 0;
     if (g.loops < loopsSeen) loopsSeen = g.loops;
-    if (g.loopTimed < loopTimedSeen) loopTimedSeen = g.loopTimed;
     if (g.loops > loopsSeen) {
+      for (let n = loopsSeen; !controls?.steered && now - drivenAt < WATCH.intent && n < g.loops; n++) complete(3, 4, Math.PI * 2, now);
       state.loops += g.loops - loopsSeen;
       state.loopAt = now;
       loopsSeen = g.loops;
-    }
-    if (g.loopTimed > loopTimedSeen) {
-      onTime(controls?.bar ? 4 : 5, now);
-      loopTimedSeen = g.loopTimed;
     }
     if (state.looping) {
       rolling = 0;
@@ -217,13 +266,15 @@ export function createSwingWatch() {
       return;
     }
     // A wingover tops out where the bank stops rolling.
-    const rate = g.bank - bankWas;
-    if (rolling * rate < 0 && Math.abs(g.bank) >= WATCH.top) {
+    const rate = Math.atan2(Math.sin(g.bank - bankWas), Math.cos(g.bank - bankWas));
+    if (rolling * rate < 0 && Math.abs(g.bank) >= WATCH.top && Math.abs(g.bank) < WATCH.maxTop) {
       const side = Math.sign(g.bank);
       // A wingover's top: a steep one, or one the turn was reversed into. Only these link, each on
       // the other side from the last and not long after it; the overshoot of a turn rolled into from
       // straight flight is no wingover, and nothing links to it.
       const wing = Math.abs(g.bank) >= WATCH.wing || now - state.swappedAt <= WATCH.gap ? 1 : 0;
+      previousTop = state.top;
+      previousTopAt = state.topAt;
       state.chain = wing === 1 && state.chain > 0 && side === -state.topSide && now - state.topAt <= WATCH.gap ? state.chain + 1 : wing;
       state.tops += 1;
       state.top = Math.abs(g.bank);
@@ -232,7 +283,15 @@ export function createSwingWatch() {
       // A wingover's top waits for its swap; one just before it, the way back from it, was on time.
       state.wingTop = wing;
       topAnswered = wing === 0;
-      if (!topAnswered && swappedTo === -side && now - state.swappedAt <= WATCH.early) onTime(3, now);
+      if (!topAnswered && swappedTo === -side && now - state.swappedAt <= WATCH.early) onTime(3, now, state.swappedAt - now);
+    }
+    const drivenCycle = state.swappedAt >= previousTopAt - WATCH.early && swappedTo === state.topSide;
+    if (!broken && !controls?.steered && state.chain >= 2 && state.tops - completedTop >= 2 &&
+        previousTop >= WATCH.wing && state.top >= WATCH.wing && (drivenCycle || rollTimedAt >= previousTopAt - WATCH.early)) {
+      // Completed motion earns CLEAN; a reversal near the actual top separately earns precision.
+      state.quality = rollTimedAt >= state.topAt - WATCH.early ? rollQuality : 1;
+      complete(2, bandOf(BANDS.roll, Math.min(previousTop, state.top)), Math.min(previousTop, state.top), now);
+      completedTop = state.tops;
     }
     if (rate !== 0) rolling = rate;
     bankWas = g.bank;
@@ -243,7 +302,7 @@ export function createSwingWatch() {
     state.linking = recent && swappedTo === -state.topSide && state.swappedAt >= state.topAt - WATCH.early ? 1 : 0;
 
     // Level and calm: little bank, and the swing fore and aft all but still.
-    const settled = !broken && Math.abs(g.bank) < WATCH.level && Math.abs(g.pitch) < WATCH.calm && Math.abs(g.pitchRate) < WATCH.still;
+    const settled = !broken && !controls?.steered && Math.abs(g.bank) < WATCH.level && Math.abs(g.rollRate ?? 0) < WATCH.still && Math.abs(g.pitch) < WATCH.calm && Math.abs(g.pitchRate) < WATCH.still;
     state.calm = settled ? state.calm + dt : 0;
   }
 

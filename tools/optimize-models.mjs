@@ -54,6 +54,25 @@ for (const name of inputs) {
   doc.setLogger(new Logger(Logger.Verbosity.WARN));
   const before = triangles(doc);
 
+  // New islands are authored in metres with their complete undersides below the shelf.
+  // Normalize only these exports: longest side one unit, bottom at Y=0, centred in X/Z.
+  if (/^island-(alpine|ruins|split)\.glb$/.test(runtimeName)) {
+    const positions = doc.getRoot().listAccessors().filter((a) =>
+      doc.getRoot().listMeshes().some((m) => m.listPrimitives().some((p) => p.getAttribute('POSITION') === a)));
+    const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+    for (const accessor of positions) {
+      const data = accessor.getArray();
+      for (let i = 0; i < data.length; i++) { const axis = i % 3; min[axis] = Math.min(min[axis], data[i]); max[axis] = Math.max(max[axis], data[i]); }
+    }
+    const size = Math.max(...max.map((value, axis) => value - min[axis]));
+    const origin = [(min[0] + max[0]) / 2, min[1], (min[2] + max[2]) / 2];
+    for (const accessor of positions) {
+      const data = accessor.getArray();
+      for (let i = 0; i < data.length; i++) data[i] = (data[i] - origin[i % 3]) / size;
+      accessor.setArray(data);
+    }
+  }
+
   // The scene lights every model itself, so only the colour texture is worth shipping.
   for (const material of doc.getRoot().listMaterials()) {
     material.setNormalTexture(null).setMetallicRoughnessTexture(null).setMetallicFactor(0).setRoughnessFactor(1);

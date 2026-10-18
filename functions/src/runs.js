@@ -35,6 +35,7 @@ import { bynameFor } from '../../src/game/meet-bynames.js';
 import { BOARD, boardKey, outranks } from '../../src/game/board.js';
 import { byRank } from '../../src/game/score.js';
 import { WORLD_BOARD, digest, normalizeWorldRow, runId } from '../../src/game/board-world.js';
+import { isJudgedEnding } from '../../src/game/run-rules.js';
 
 export const LIMITS = Object.freeze({
   // Requests from one client in a minute, by route: an IPv4 address, or an IPv6 address's /64
@@ -74,7 +75,7 @@ const isRecord = (value) => value !== null && typeof value === 'object' && !Arra
 const TOKEN = new RegExp(`^[A-Za-z0-9_-]{${LIMITS.token[0]},${LIMITS.token[1]}}$`);
 const DEVICE = /^[0-9a-f]{32}$/;
 const FLIGHT = new RegExp(`^[0-9a-f]{${WORLD_BOARD.id}}$`);
-const judged = (reason) => reason === 'fog' || reason === 'landed';
+const judged = isJudgedEnding;
 
 // What a run flew, as its replay came to it: where it went (its height each second), how it ended
 // and what it lifted. Two logs whose keys differ only where the step cannot feel them (while the

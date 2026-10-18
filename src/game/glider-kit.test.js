@@ -5,6 +5,8 @@ import { LIVERIES } from './livery.js';
 import { HELMET } from './helmet.js';
 import { createTestLoader } from './test-models.js';
 import { createSketchpad } from './test-canvas.js';
+import { DataTexture } from 'three';
+import { HARNESSES } from './harness.js';
 
 // The kit the glider wears (wing-kit.js: a livery and the helmet), on the real glider from
 // public/models/. The parts are the real livery and helmet modules, fetched through a log of what
@@ -12,9 +14,9 @@ import { createSketchpad } from './test-canvas.js';
 const STEP = 1 / 60;
 const CALM = { bank: 0, pace: 0, turn: 0, lift: 0, liftSide: 0, landed: false };
 
-function dressable({ load = null, livery = () => import('./livery.js'), helmet = () => import('./helmet.js') } = {}) {
+function dressable({ load = null, livery = () => import('./livery.js'), helmet = () => import('./helmet.js'), harness = () => import('./harness.js') } = {}) {
   const loader = createTestLoader();
-  const asked = { livery: 0, helmet: 0, canvases: [] };
+  const asked = { livery: 0, harness: 0, helmet: 0, canvases: [] };
   const parts = {
     livery: () => {
       asked.livery += 1;
@@ -23,6 +25,10 @@ function dressable({ load = null, livery = () => import('./livery.js'), helmet =
     helmet: () => {
       asked.helmet += 1;
       return helmet();
+    },
+    harness: () => {
+      asked.harness += 1;
+      return harness();
     },
     canvas: () => {
       const pad = createSketchpad();
@@ -50,10 +56,10 @@ test('a glider dressed in nothing keeps the very material its wing came with, an
   const owned = await loader.owned();
   assert.ok(owned.materials.has(wing.material), 'the file\'s own material');
   assert.equal(wing.geometry.attributes.uv1, undefined, 'no second set of coordinates');
-  assert.deepEqual(asked, { livery: 0, helmet: 0, canvases: [] });
+  assert.deepEqual(asked, { livery: 0, harness: 0, helmet: 0, canvases: [] });
   assert.deepEqual(loader.calls.map(([name]) => name), ['wing', 'pilot-skeleton']);
   assert.equal(glider.helmet, null);
-  assert.deepEqual(glider.kit, { wing: 'standard', helmet: false });
+  assert.deepEqual(glider.kit, { wing: 'standard', harness: 'standard', helmet: false });
 });
 
 test('a livery is a copy of the wing\'s own material, its picture both colour and glow through the wing\'s second coordinates, and the standard wing comes back as the very material it was', async () => {
@@ -235,9 +241,9 @@ test('a glider whose models never came wears nothing, asks for no part, and stil
   t.mock.method(console, 'warn', () => {});
   const { glider, asked } = dressable({ load: () => Promise.reject(new Error('404')) });
   await glider.setKit({ wing: 'raven', helmet: true });
-  assert.deepEqual(asked, { livery: 0, helmet: 0, canvases: [] });
+  assert.deepEqual(asked, { livery: 0, harness: 0, helmet: 0, canvases: [] });
   assert.equal(glider.helmet, null);
-  assert.deepEqual(glider.kit, { wing: 'raven', helmet: true }, 'the choice itself is kept');
+  assert.deepEqual(glider.kit, { wing: 'raven', harness: 'standard', helmet: true }, 'the choice itself is kept');
 });
 
 test('a part that will not load leaves the glider as it was and says so, and the next wear tries again', async (t) => {
@@ -257,4 +263,99 @@ test('a part that will not load leaves the glider as it was and says so, and the
   await glider.setKit({ wing: 'sheetless', helmet: true });
   assert.equal(wingOf(glider).material.map.name, 'livery-sheetless');
   assert.ok(glider.helmet?.visible);
+});
+
+const bodyOf = (glider) => {
+  let body = null;
+  glider.group.traverse((part) => { if (part.isSkinnedMesh) body ??= part; });
+  return body;
+};
+const cocoonTexture = (id) => {
+  const texture = new DataTexture(new Uint8Array([120, 140, 150, 255]), 1, 1);
+  texture.name = `harness-${id}`;
+  return texture;
+};
+const harnessParts = (make = async (id) => cocoonTexture(id)) => async () => ({ HARNESSES, harnessTexture: make });
+
+test('independent cocoon dressing owns its map and material, preserves other gliders and bones, and restores the exact original', async () => {
+  const loader = createTestLoader({ maps: true });
+  const { glider } = dressable({ load: loader.loadModel, harness: harnessParts() });
+  const twin = dressable({ load: loader.loadModel }).glider;
+  await Promise.all([glider.ready, twin.ready]);
+  const body = bodyOf(glider), other = bodyOf(twin);
+  const material = body.material, geometry = body.geometry, map = material.map;
+  assert.equal(other.material, material, 'the loader shares its original');
+  const rest = body.skeleton.bones.map((bone) => bone.quaternion.toArray());
+  await glider.setKit({ wing: 'raven', harness: 'flyte' });
+  assert.equal(wingOf(glider).material.map.name, 'livery-raven');
+  assert.equal(body.material.map.name, 'harness-flyte');
+  assert.equal(body.material.map, body.material.emissiveMap);
+  assert.equal(body.material.emissiveIntensity, material.emissiveIntensity);
+  assert.notEqual(body.material, material);
+  assert.equal(other.material, material);
+  assert.equal(material.map, map);
+  assert.equal(body.geometry, geometry);
+  assert.deepEqual(body.skeleton.bones.map((bone) => bone.quaternion.toArray()), rest);
+  const dressed = body.material, first = dressed.map;
+  let disposed = 0;
+  first.addEventListener('dispose', () => disposed++);
+  await glider.setKit({ wing: 'raven', harness: 'hird' });
+  assert.equal(disposed, 1);
+  assert.equal(body.material, dressed, 'one owned material is reused');
+  const second = dressed.map;
+  let secondDisposed = 0;
+  second.addEventListener('dispose', () => secondDisposed++);
+  await glider.setKit({ wing: 'raven', harness: 'standard' });
+  assert.equal(body.material, material);
+  assert.equal(wingOf(glider).material.map.name, 'livery-raven');
+  assert.equal(secondDisposed, 1);
+  assert.equal(dressed.map, null);
+  assert.equal(dressed.emissiveMap, null);
+  assert.equal(disposed, 1);
+  await glider.setKit({ harness: 'golden' });
+  assert.equal(body.material, material);
+});
+
+test('an in-flight harness request is shared, and a superseded texture is disposed without replacing the latest choice', async () => {
+  const waiting = new Map();
+  const { glider } = dressable({ harness: harnessParts((id) => new Promise((resolve) => waiting.set(id, resolve))) });
+  await glider.ready;
+  const original = bodyOf(glider).material;
+  const first = glider.setKit({ harness: 'raven' });
+  const duplicate = glider.setKit({ harness: 'raven' });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(waiting.size, 1);
+  const last = glider.setKit({ harness: 'flyte' });
+  await new Promise((resolve) => setImmediate(resolve));
+  const late = cocoonTexture('raven');
+  let released = 0;
+  late.addEventListener('dispose', () => released++);
+  waiting.get('flyte')(cocoonTexture('flyte'));
+  await last;
+  waiting.get('raven')(late);
+  await Promise.all([first, duplicate]);
+  assert.equal(bodyOf(glider).material.map.name, 'harness-flyte');
+  assert.equal(released, 1);
+  const pending = glider.setKit({ harness: 'hird' });
+  await new Promise((resolve) => setImmediate(resolve));
+  await glider.setKit({ harness: 'standard' });
+  waiting.get('hird')(cocoonTexture('hird'));
+  await pending;
+  assert.equal(bodyOf(glider).material, original);
+});
+
+test('a harness failure preserves the current pilot material and the next choice retries', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  let fail = true;
+  const { glider } = dressable({ harness: harnessParts(async (id) => {
+    if (fail) throw new Error('offline');
+    return cocoonTexture(id);
+  }) });
+  await glider.ready;
+  const original = bodyOf(glider).material;
+  await glider.setKit({ harness: 'raven' });
+  assert.equal(bodyOf(glider).material, original);
+  fail = false;
+  await glider.setKit({ harness: 'raven' });
+  assert.equal(bodyOf(glider).material.map.name, 'harness-raven');
 });

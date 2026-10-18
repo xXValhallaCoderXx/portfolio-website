@@ -1,5 +1,5 @@
 // Good Lift's local board: the best runs of each Daily Sky flown on this device, kept inside the
-// game's own store (good-lift-store.js, under 'good-lift-v1'). A day's board is the top BOARD.keep
+// game's own store (good-lift-store.js, under 'good-lift'). A day's board is the top BOARD.keep
 // runs flown on one UTC day under one version of the rules (sim-version.js), since a run flown
 // under one version is never judged against another. Runs rank by score (the total lifted by the
 // style its tricks landed, score.js), then by peak, then by which started first, so a board always
@@ -19,16 +19,16 @@
 // flies them again.
 import { bynameOf } from './meet-bynames.js';
 import { byRank, outranks } from './score.js';
+import { MAX_LINK } from './recorder.js';
 
 // How much the board remembers: the best `keep` runs of each day, for `days` UTC days (today and
-// the 13 before it). A row is about 1.2 KB, mostly its log, so a full board is some 170 KB.
+// the 13 before it). The independent log budget bounds storage even for rapidly changing inputs.
 export const BOARD = Object.freeze({ keep: 10, days: 14 });
 
-// What one row may hold. A log is base64url (recorder.js writes it) under `log` characters (8 KB):
-// a real run's is 1.1 to 1.6 thousand, and a challenge link longer than that is not read at all.
-// `lights` is more lifts than any run is judged (the meet keeps 16, and the fog allows twelve
-// lines and the mist), so a damaged row's lights cannot grow without bound.
-export const ROW = Object.freeze({ log: 8192, lights: 32 });
+// A row can hold a complete ten-minute trace and every judgment the meet can issue.
+export const ROW = Object.freeze({ log: MAX_LINK, lights: 96 });
+// Keep persistent logs below one MiB of text; progression is stored independently of this budget.
+export const BOARD_LOG_BUDGET = 1_048_576;
 
 /** The board key of a UTC day's Daily Sky flown under one version of the rules. */
 export const boardKey = (version, day) => `${version}:${day}`;
@@ -60,13 +60,11 @@ export { outranks };
 
 /**
  * A clean copy of what a run banked, { total, style, peak, red }, held to the rules a row's are (see
- * normalizeRow), or null when any of them is damaged. A style missing, as on a row written before
- * style was carried, is none. Anything else in the object is left behind.
+ * normalizeRow), or null when any of them is damaged. Anything else in the object is left behind.
  */
 export function normalizeScore(score) {
   if (!isRecord(score)) return null;
-  const { total, peak, red } = score;
-  const style = score.style ?? 0;
+  const { total, style, peak, red } = score;
   if (!Number.isInteger(style) || style < 0 || style % 5 !== 0) return null;
   // Twice the total is a whole number of 5 kg exactly when the total is a multiple of 2.5, and
   // doubling is exact in floating point, so no near miss rounds its way onto the board.
@@ -101,18 +99,18 @@ export function normalizeScore(score) {
  * Anything else in the object is left behind. A damaged row is dropped, never repaired: a total
  * rounded to the nearest plate, or a name guessed from lower case, would be a run nobody flew,
  * and its log would not replay to it. A byname is the one exception: it says only how the run was
- * flown, and its log earns it again whenever it is replayed, so one this build does not know (a
- * later build's, or damage) is left off and the run keeps its row.
+ * flown, and its log earns it again whenever it is replayed, so one this build does not know (damage) is left off and the run keeps its row.
  */
 export function normalizeRow(row) {
   if (!isRecord(row)) return null;
   const { who, via, at, log, byname } = row;
   if (typeof who !== 'string' || !WHO.test(who)) return null;
+  if (typeof byname !== 'string') return null;
   if (via !== 'me' && via !== 'link') return null;
   const score = normalizeScore(row);
   if (!score) return null;
   if (!isAmount(at)) return null;
-  if (typeof log !== 'string' || log.length >= ROW.log || !LOG.test(log)) return null;
+  if (typeof log !== 'string' || log.length > ROW.log || !LOG.test(log)) return null;
   return { who, via, ...score, at, log, byname: bynameOf(byname) ? byname : '' };
 }
 
@@ -136,6 +134,23 @@ export function normalizeBoard(raw) {
       if (!rows.some((other) => other.log === row.log)) rows.push(row);
     }
     if (rows.length) board.days[key] = { rows };
+  }
+  return board;
+}
+
+/** Evicts older days' lower-ranked runs first, keeping the newest day's best throughout. */
+export function trimBoardLogs(board, budget = BOARD_LOG_BUDGET) {
+  const keys = Object.keys(board.days).sort((a, b) => boardDay(a) - boardDay(b));
+  let size = 0;
+  for (const key of keys) for (const row of board.days[key].rows) size += row.log.length;
+  for (const key of keys) {
+    const rows = board.days[key].rows;
+    while (size > budget && rows.length > 0) {
+      if (key === keys[keys.length - 1] && rows.length === 1) break;
+      size -= rows.pop().log.length;
+    }
+    if (!rows.length) delete board.days[key];
+    if (size <= budget) break;
   }
   return board;
 }
@@ -203,8 +218,7 @@ export function withBot(rows, bot) {
   return [...rows.slice(0, place), pinned, ...rows.slice(place)];
 }
 
-// The most bots a day's scores can hold: more than flown, so a build that flies another can still
-// read what this one kept, and a damaged list cannot grow without bound.
+// Bound the number of cached bot scores even when storage is damaged.
 const BOTS_KEPT = 8;
 
 /**

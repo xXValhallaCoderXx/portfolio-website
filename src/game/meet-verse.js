@@ -75,6 +75,11 @@ export const VERSES = Object.freeze([
     line: (n) => `You rode the ravens' road to ${n.peak} m and laid ${n.total} kg in the hoard before the grey tide rose.`,
   }),
   Object.freeze({
+    id: 'soaring', tier: 3,
+    fits: (run) => run.reason === 'time' && run.total > 0,
+    line: (n) => `Ten minutes on the raven-road, ${n.total} kg banked and ${n.peak} m of sky beneath you.`,
+  }),
+  Object.freeze({
     id: 'hillside', tier: 3,
     fits: (run) => run.reason === 'landed' && run.total > 0,
     line: (n) => `You brought your wind-steed home to the hillside, ${n.total} kg banked from a sky ${n.peak} m high.`,
@@ -87,7 +92,7 @@ export const VERSES = Object.freeze([
   Object.freeze({
     id: 'stair', tier: 3, first: true,
     fits: (run) => run.reason !== 'quit' && !run.lifts.some((lift) => lift.line > 0),
-    line: (n) => `The ravens' stair waits for you yet: you rose to ${n.peak} m, and the first line hangs at 250 m.`,
+    line: (n) => `The ravens' stair waits for you yet: you rose to ${n.peak} m, and the first line hangs at 150 m.`,
   }),
   Object.freeze({
     id: 'set-down', tier: 3, first: true,

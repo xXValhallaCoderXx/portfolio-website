@@ -3,9 +3,11 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { clone as cloneModel } from 'three/addons/utils/SkeletonUtils.js';
 import { PROJECTS } from '../content.js';
-import { ZONES, STONES, THERMALS, TREES, BOULDERS, GATEWAY, heightAt } from './terrain.js';
+import { ZONES, STONES, TREES, BOULDERS, GATEWAY, heightAt } from './terrain.js';
 import { APPROACH_WINDS } from './approach.js';
 import { BRAKE } from './flight.js';
+import { FJORD_THERMALS, fjordWindAt, sampleFjordAir } from './atmosphere.js';
+import { createNordicSky } from './nordic-sky.js';
 
 const FILL = 0x0a1a2c;
 const LINE = 0x4fb8ff;
@@ -253,9 +255,11 @@ function furnish(holder, name, size, standIn) {
 
 // The supplied sock and pole share a mesh. Rotate about the pole, and move only the high,
 // outboard cloth vertices; each instance owns its geometry so the four animations stay apart.
-function windsock(wind, animated, phase) {
+export function buildWindsock({ wind = { x: 1.15, z: -1.8, speed: Math.hypot(1.15, -1.8) }, phase = 0, loadModel: load = loadModel } = {}) {
   const holder = new THREE.Group();
-  const direction = Math.atan2(-wind.z, wind.x);
+  let direction = Math.atan2(-wind.z, wind.x);
+  let speed = wind.speed ?? Math.hypot(wind.x, wind.z);
+  const field = {}, point = new THREE.Vector3();
   holder.rotation.y = direction;
   const fallback = new THREE.Group();
   const pole = solid(new THREE.CylinderGeometry(0.07, 0.1, 8, 6), { line: LINE });
@@ -269,7 +273,8 @@ function windsock(wind, animated, phase) {
   fallback.add(pole, cloth);
   holder.add(fallback);
   const moving = [];
-  loadModel('windsock', 8, 0.12).then((model) => {
+  const ready = load('windsock', 8, 0.12).then((model) => {
+    if (!model) return false;
     model.position.x = 8 * 0.17;
     model.traverse((part) => {
       if (!part.isMesh) return;
@@ -287,27 +292,36 @@ function windsock(wind, animated, phase) {
     });
     holder.remove(fallback);
     holder.add(model);
+    return true;
   }).catch((error) => console.warn('The windsock model did not load; keeping the pole and cloth.', error));
-  animated.push((time) => {
-    const flutter = time * 4 + phase;
-    holder.rotation.y = direction + Math.sin(time * 1.4 + phase) * 0.045;
-    cloth.rotation.x = Math.sin(flutter) * 0.12;
-    cloth.position.y = 7.1 + Math.sin(flutter) * 0.07;
+  function update(time, windAt = fjordWindAt, calm = false) {
+    holder.getWorldPosition(point);
+    field.windX = field.windZ = undefined;
+    field.x = field.z = 0;
+    windAt(point.x, point.y + 7.1, point.z, field);
+    const wx = Number.isFinite(field.windX) ? field.windX : field.x;
+    const wz = Number.isFinite(field.windZ) ? field.windZ : field.z;
+    speed = Math.hypot(wx, wz);
+    if (speed > 0.05) direction = Math.atan2(-wz, wx);
+    holder.rotation.y = direction;
+    const flutter = calm ? 0 : time * (2 + Math.min(4, speed)) + phase;
+    cloth.rotation.x = calm ? 0 : Math.sin(flutter) * 0.12;
+    cloth.position.y = 7.1 + (calm ? 0 : Math.sin(flutter) * 0.07);
     for (const { geometry, rest } of moving) {
       const positions = geometry.attributes.position;
       for (let i = 0; i < rest.length; i += 3) {
         const x = rest[i], y = rest[i + 1], z = rest[i + 2];
         const mask = smooth(-0.12, -0.05, x) * smooth(0.73, 0.8, y);
         const reach = Math.max(0, (x + 0.12) / 0.404);
-        const filled = 0.8 + wind.speed * 0.25;
+        const filled = 0.7 + Math.min(1.3, speed * 0.25);
         positions.array[i] = x;
-        positions.array[i + 1] = y + mask * (0.014 * reach * Math.sin(flutter + reach * 6) - 0.025 * (1 - filled) * reach);
-        positions.array[i + 2] = z * (1 + mask * (filled - 1)) + mask * reach * 0.014 * Math.sin(flutter * 1.3 + reach * 9);
+        positions.array[i + 1] = y + mask * ((calm ? 0 : 0.014 * reach * Math.sin(flutter + reach * 6)) - 0.025 * (1 - filled) * reach);
+        positions.array[i + 2] = z * (1 + mask * (filled - 1)) + (calm ? 0 : mask * reach * 0.014 * Math.sin(flutter * 1.3 + reach * 9));
       }
       positions.needsUpdate = true;
     }
-  });
-  return holder;
+  }
+  return { group: holder, ready, update };
 }
 
 /** A visible, fly-through arch. The controller owns discovery and crossing detection. */
@@ -336,8 +350,9 @@ export function buildGateway() {
     new THREE.MeshBasicMaterial({ color: CYAN, transparent: true, opacity: 0.2,
       side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
   );
-  halo.position.y = 27;
-  halo.scale.set(11, 18, 1);
+  const { minY, maxY, minZ, maxZ } = GATEWAY.corridor;
+  halo.position.y = (minY + maxY) / 2 - GATEWAY.baseY;
+  halo.scale.set((maxZ - minZ) / 2, (maxY - minY) / 2, 1);
   group.add(halo);
   const runes = new THREE.Group();
   const runeMaterial = new THREE.LineBasicMaterial({ color: CYAN, transparent: true, opacity: 0.9, fog: false });
@@ -404,10 +419,11 @@ export function buildPlaces() {
     );
     place.add(ring, pulse, pillar);
     const wind = APPROACH_WINDS.find((candidate) => candidate.id === zone.id);
-    const sock = windsock(wind, animated, marks.size * 1.7);
+    const sock = buildWindsock({ wind, phase: marks.size * 1.7 });
+    animated.push((time, windAt, calm) => sock.update(time, windAt, calm));
     const [sockX, sockZ] = spotAt(zone, [-zone.r + 5, -7]);
-    sock.position.set(sockX, 0, sockZ);
-    place.add(sock);
+    sock.group.position.set(sockX, 0, sockZ);
+    place.add(sock.group);
     if (zone.id === 'experience') {
       const sink = new THREE.Mesh(
         new THREE.CircleGeometry(16, 24),
@@ -474,8 +490,8 @@ export function buildPlaces() {
   return {
     group,
     harbour,
-    update(time) {
-      for (const tick of animated) tick(time);
+    update(time, windAt = fjordWindAt, calm = false) {
+      for (const tick of animated) tick(time, windAt, calm);
       for (const mark of marks.values()) {
         const t = (time * 0.4) % 1;
         mark.pulse.scale.setScalar(1 - t * 0.85);
@@ -543,10 +559,12 @@ export function buildThermals() {
   const spark = sparkTexture();
   const perColumn = 70;
   const top = 280;
-  const columns = THERMALS.map((thermal) => {
+  const columns = FJORD_THERMALS.map((thermal) => {
     const seeds = [];
     for (let i = 0; i < perColumn; i++) {
-      seeds.push({ phase: Math.random() * top, spin: Math.random() * Math.PI * 2, reach: 0.25 + Math.random() * 0.6 });
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.random() * thermal.r * 0.6;
+      seeds.push({ x: Math.cos(angle) * radius, y: Math.random() * top, z: Math.sin(angle) * radius });
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(perColumn * 3), 3));
@@ -562,24 +580,39 @@ export function buildThermals() {
         depthWrite: false,
       }),
     );
-    sparks.position.set(thermal.x, thermal.y, thermal.z);
+    sparks.position.set(thermal.x, heightAt(thermal.x, thermal.z), thermal.z);
     sparks.frustumCulled = false;
     const base = circle(thermal.r, EMBER, 0.4);
-    base.position.set(thermal.x, thermal.y + 0.5, thermal.z);
+    base.position.set(thermal.x, heightAt(thermal.x, thermal.z) + 0.5, thermal.z);
     group.add(sparks, base);
     return { thermal, seeds, geo };
   });
 
+  let lastTime = 0;
+  const position = { x: 0, y: 0, z: 0 };
+  const flow = {};
   return {
     group,
     update(time) {
+      const dt = Math.max(0, Math.min(0.1, time - lastTime));
+      lastTime = time;
       for (const { thermal, seeds, geo } of columns) {
+        const base = heightAt(thermal.x, thermal.z);
         const pos = geo.attributes.position;
         seeds.forEach((seed, i) => {
-          const y = (seed.phase + time * 9) % top;
-          const angle = seed.spin + y * 0.05;
-          const radius = thermal.r * 0.55 * seed.reach * (0.6 + 0.4 * (y / top));
-          pos.setXYZ(i, Math.cos(angle) * radius, y, Math.sin(angle) * radius);
+          position.x = thermal.x + seed.x;
+          position.y = base + seed.y;
+          position.z = thermal.z + seed.z;
+          sampleFjordAir(position, time, flow);
+          seed.x += flow.windX * dt;
+          seed.y += flow.windY * dt;
+          seed.z += flow.windZ * dt;
+          if (seed.y > top || seed.y < 1 || Math.hypot(seed.x, seed.z) > thermal.r) {
+            seed.x = Math.cos(i * 2.4) * thermal.r * 0.3;
+            seed.z = Math.sin(i * 2.4) * thermal.r * 0.3;
+            seed.y = 5;
+          }
+          pos.setXYZ(i, seed.x, seed.y, seed.z);
         });
         pos.needsUpdate = true;
       }
@@ -587,78 +620,8 @@ export function buildThermals() {
   };
 }
 
-export function buildSky() {
-  const group = new THREE.Group();
-
-  const count = 1400;
-  const points = new Float32Array(count * 3);
-  for (let i = 0; i < count; i++) {
-    const theta = Math.random() * Math.PI * 2;
-    const phi = Math.acos(Math.random() * 0.98 + 0.02);
-    points[i * 3] = 2200 * Math.sin(phi) * Math.cos(theta);
-    points[i * 3 + 1] = 2200 * Math.cos(phi);
-    points[i * 3 + 2] = 2200 * Math.sin(phi) * Math.sin(theta);
-  }
-  const starGeo = new THREE.BufferGeometry();
-  starGeo.setAttribute('position', new THREE.BufferAttribute(points, 3));
-  group.add(
-    new THREE.Points(
-      starGeo,
-      new THREE.PointsMaterial({
-        color: 0xcfe6ff,
-        size: 1.6,
-        sizeAttenuation: false,
-        transparent: true,
-        opacity: 0.85,
-        depthWrite: false,
-        fog: false,
-      }),
-    ),
-  );
-
-  const aurora = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 } },
-    vertexShader: /* glsl */ `
-      uniform float uTime;
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        vec3 p = position;
-        p.z += sin(p.x * 0.006 + uTime * 0.12) * 90.0 + sin(p.x * 0.017 - uTime * 0.2) * 30.0;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-      }`,
-    fragmentShader: /* glsl */ `
-      uniform float uTime;
-      varying vec2 vUv;
-      void main() {
-        float rays = 0.5 + 0.5 * sin(vUv.x * 140.0 + sin(vUv.x * 17.0 + uTime * 0.35) * 5.0);
-        // At a ribbon's edge vUv can land just outside 0..1. Raising a negative number to a power
-        // has no valid result, so keep the base in range.
-        float curtain = smoothstep(0.0, 0.07, vUv.y) * pow(clamp(1.0 - vUv.y, 0.0, 1.0), 1.7);
-        float ends = smoothstep(0.0, 0.18, vUv.x) * (1.0 - smoothstep(0.82, 1.0, vUv.x));
-        float pulse = 0.75 + 0.25 * sin(uTime * 0.5 + vUv.x * 6.0);
-        vec3 col = mix(vec3(0.12, 0.95, 0.72), vec3(0.22, 0.38, 1.0), smoothstep(0.0, 0.7, vUv.y));
-        gl_FragColor = vec4(col, curtain * ends * (0.3 + 0.7 * rays) * pulse * 0.5);
-      }`,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-  });
-  const ribbons = [
-    { x: 0, y: 340, z: -950, turn: 0, width: 1500 },
-    { x: -620, y: 400, z: -700, turn: 0.6, width: 1100 },
-    { x: 700, y: 320, z: -500, turn: -0.9, width: 1000 },
-    { x: 300, y: 380, z: 1000, turn: Math.PI + 0.3, width: 1200 },
-  ];
-  for (const ribbon of ribbons) {
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(ribbon.width, 280, 120, 1), aurora);
-    mesh.position.set(ribbon.x, ribbon.y, ribbon.z);
-    mesh.rotation.y = ribbon.turn;
-    group.add(mesh);
-  }
-
-  return { group, update: (time) => (aurora.uniforms.uTime.value = time) };
+export function buildSky(options = {}) {
+  return createNordicSky({ loadModel, ...options });
 }
 
 // A glider made of boxes, shown until the models arrive (or if they fail to load).
@@ -757,7 +720,7 @@ const MOTION = {
   stallRaise: 0.8, // how high the hands are thrown in a stall, as a share of the speed bar's
   armTremble: 0.03, // how much the arms tremble as the wing nears a stall
   armFlail: 0.08, // how much they flail while it is stalled
-  bodyLean: 0.06, // how far the pilot's upper body leans toward the side being steered
+  bodyLean: 0.06, // each torso joint's ordinary lean; coordinated weight shift adds the same again
   headTurn: 0.4, // how far the pilot's head turns to look into a turn
   brakePull: 0.035, // how far a full steer pulls the trailing edge down on that side
   // How far the full brake pulls the trailing edge down on both sides: 0.40 m where the real edge
@@ -1033,11 +996,12 @@ function landmarks(rest, anchors) {
   };
 }
 
-// Where the glider's kit comes from (see setKit below): the livery and the helmet, each fetched the
-// first time it is worn, a canvas to paint a livery on, and the site's root, under which the
+// Where the glider's kit comes from (see setKit below): wing, cocoon and helmet, each fetched the
+// first time it is worn, a canvas for colour textures, and the site's root, under which the
 // owner's own paintings would be. A test hands in its own.
 const KIT_PARTS = Object.freeze({
   livery: () => import('./livery.js'),
+  harness: () => import('./harness.js'),
   helmet: () => import('./helmet.js'),
   canvas: () => document.createElement('canvas'),
   get base() {
@@ -1056,6 +1020,7 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
   const sling = new THREE.Group();
   const seat = new THREE.Group();
   const placeholder = placeholderGlider();
+  const fallbackLines = Float32Array.from(placeholder.children[1].geometry.attributes.position.array);
   group.add(sling, seat, placeholder);
 
   let rig = null;
@@ -1086,7 +1051,10 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
       seat.add(pilot);
       group.add(lines);
       // `material` is the wing's own, from its file: the standard wing, which a livery never touches.
-      rig = { wing, pilot, mesh, rest, anchors, joints, lines, marks: landmarks(rest, anchors), material: mesh.material };
+      let body = null;
+      pilot.traverse((part) => { if (part.isSkinnedMesh) body ??= part; });
+      rig = { wing, pilot, body, pilotMaterial: body?.material, mesh, rest, anchors, joints, lines, marks: landmarks(rest, anchors), material: mesh.material,
+        base: { pivot: pivot.clone(), wing: wing.position.clone(), pilot: pilot.position.clone() } };
       return true;
     })
     .catch((error) => {
@@ -1105,6 +1073,7 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
   const air = {
     time: 0, rough: 0, steerLeft: 0, steerRight: 0, brake: 0, bar: 0, rest: 0, luff: 0, stall: 0,
     trail: 0, trailLeft: 0, trailRight: 0, collapse: 0, foldLeft: 0, foldRight: 0, ears: 0, tuck: 0,
+    coordinatedLean: 0,
   };
   // What an emergency does to the gear, each from 0 to 1: the wing crumpling, being gathered in,
   // and the arm throwing the reserve. Whoever stages the emergency sets these.
@@ -1114,6 +1083,12 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
   const pilotToGroup = new THREE.Matrix4();
   const worldToGroup = new THREE.Matrix4();
   const point = new THREE.Vector3();
+  const suspension = new THREE.Vector3();
+  const pilotHeading = new THREE.Quaternion();
+  const torsoLean = new THREE.Quaternion();
+  const physicalForward = new THREE.Vector3(0, 0, -1);
+  const physicalUp = new THREE.Vector3(0, 1, 0);
+  let physicalWas = false;
 
   // How far an upper arm turns from the hands-off pose, in radians about the pilot's right axis
   // (a hand goes up as it grows), given the steering on its side and `side`, -1 left or 1 right.
@@ -1144,13 +1119,16 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
     return clamp(angle, PILOT.arms[0], PILOT.arms[1]);
   }
 
-  // What the glider wears (wing-kit.js's kit, less the chalk, which is the run's): the wing's livery,
-  // or 'standard', and whether the helmet is on. A part is fetched the first time it is worn, and a
+  // What the glider wears (wing-kit.js's kit, less the chalk, which is the run's): independent wing
+  // and cocoon colours, and whether the helmet is on. A part is fetched the first time it is worn, and a
   // choice made while it was on its way wins over it when it comes. `material` is the wing's dressed
   // copy of its own material, `livery` the livery it is dressed in and `texture` that livery's
   // picture, `helmet` the helmet once it is made and `fetching` the helmet on its way.
-  const worn = { wing: 'standard', helmet: false };
-  const dressing = { material: null, livery: '', texture: null, helmet: null, fetching: null };
+  const worn = { wing: 'standard', harness: 'standard', helmet: false };
+  const dressing = {
+    material: null, livery: '', texture: null, helmet: null, fetching: null,
+    harnessMaterial: null, harness: '', harnessTexture: null, harnessPending: null,
+  };
 
   // The livery taken off is let go, its picture given back by the graphics card, so that however
   // many are tried in the kit tab only the one worn is held there (an owner's picture is a few MB
@@ -1194,6 +1172,53 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
       dressed.needsUpdate = true;
       mesh.material = dressed;
     });
+  }
+
+  function undressHarness() {
+    dressing.harnessTexture?.dispose();
+    dressing.harnessTexture = null;
+    dressing.harness = '';
+    if (dressing.harnessMaterial) dressing.harnessMaterial.map = dressing.harnessMaterial.emissiveMap = null;
+  }
+
+  // The shared pilot material is never tinted: an owned texture recolours only the cocoon's UV
+  // mask. One request per desired theme; a superseded result is released before it can be worn.
+  function dressHarness() {
+    if (!rig?.body) return Promise.resolve();
+    const id = worn.harness;
+    if (id === 'standard') {
+      dressing.harnessPending = null;
+      rig.body.material = rig.pilotMaterial;
+      undressHarness();
+      return Promise.resolve();
+    }
+    if (dressing.harness === id) return Promise.resolve();
+    if (dressing.harnessPending?.id === id) return dressing.harnessPending.promise;
+    const request = { id, promise: null };
+    dressing.harnessPending = request;
+    request.promise = parts.harness().then(async (harness) => {
+      if (dressing.harnessPending !== request || worn.harness !== id) return;
+      if (!harness.HARNESSES[id]) {
+        rig.body.material = rig.pilotMaterial;
+        undressHarness();
+        return;
+      }
+      const texture = await harness.harnessTexture(id, rig.pilotMaterial.map, { canvas: parts.canvas(), base: parts.base });
+      if (dressing.harnessPending !== request || worn.harness !== id) {
+        texture.dispose();
+        return;
+      }
+      const material = (dressing.harnessMaterial ??= rig.pilotMaterial.clone());
+      undressHarness();
+      dressing.harnessTexture = texture;
+      dressing.harness = id;
+      material.map = material.emissiveMap = texture;
+      material.needsUpdate = true;
+      rig.body.material = material;
+    }).finally(() => {
+      if (dressing.harnessPending === request) dressing.harnessPending = null;
+    });
+    return request.promise;
   }
 
   // The helmet is made and fitted to the head once (helmet.js), and after that only shown or hidden.
@@ -1245,8 +1270,9 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
         turnJoint(joints.rightArm, RIGHT, -0.9 * sweep, true);
         turnJoint(joints.rightArm, UP, -1.1 * sweep, true);
       }
-      turnJoint(joints.waist, FORWARD, steer * MOTION.bodyLean);
-      turnJoint(joints.chest, FORWARD, steer * MOTION.bodyLean);
+      const lean = (steer + air.coordinatedLean) * MOTION.bodyLean;
+      turnJoint(joints.waist, FORWARD, lean);
+      turnJoint(joints.chest, FORWARD, lean);
       turnJoint(joints.head, UP, -steer * MOTION.headTurn);
     }
     const surface = mesh.geometry.attributes.position;
@@ -1308,25 +1334,70 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
       return reserve.canopy;
     },
     /**
-     * Dresses the glider in `kit` ({ wing, helmet }, wing-kit.js): a wing that is not a livery is
-     * the standard wing. Settles once it is all on, or at once on the stand-in, which wears nothing.
+     * Dresses the glider in `kit` ({ wing, harness, helmet }, wing-kit.js). Unknown themes use the
+     * original material. Settles once it is all on, or at once on the undressed stand-in.
      * A part that will not load leaves the glider as it was, and says so.
      */
     setKit(kit) {
       worn.wing = typeof kit?.wing === 'string' ? kit.wing : 'standard';
+      worn.harness = typeof kit?.harness === 'string' ? kit.harness : 'standard';
       worn.helmet = kit?.helmet === true;
       return ready
-        .then(() => Promise.all([dressWing(), dressHead()]))
+        .then(() => Promise.all([dressWing(), dressHarness(), dressHead()]))
         .then(() => undefined, (error) => {
           console.warn('Part of the kit did not load; the glider keeps what it had.', error);
         });
     },
-    /** What the glider wears now ({ wing, helmet }), and its helmet once one has been made. */
+    /** What the glider wears now ({ wing, harness, helmet }), and its helmet once made. */
     get kit() {
       return { ...worn };
     },
     get helmet() {
       return dressing.helmet;
+    },
+    // Airborne poses come straight from interpolated simulation bodies. Canopy rotation never
+    // rotates the pilot around the group origin; the actual suspension connects their paths.
+    posePhysical(snapshot, detail) {
+      this.pose({ ...detail, swing: 0, rough: 0, heave: 0, physical: true });
+      group.position.copy(snapshot.pilot.pos);
+      group.quaternion.identity();
+      if (rig) {
+        sling.position.copy(snapshot.canopy.pos).sub(snapshot.pilot.pos);
+        sling.quaternion.copy(snapshot.canopy.q);
+        rig.wing.position.set(0, 0, 0);
+        rig.wing.updateMatrix();
+        seat.position.set(0, 0, 0);
+        rig.pilot.position.set(0, -PILOT.drop, 0);
+        rig.pilot.updateMatrix();
+        suspension.copy(snapshot.canopy.pos).sub(snapshot.pilot.pos).normalize();
+        seat.quaternion.setFromUnitVectors(physicalUp, suspension);
+        pilotHeading.setFromAxisAngle(physicalUp, -snapshot.yaw);
+        seat.quaternion.multiply(pilotHeading);
+        redraw();
+      } else {
+        // The fallback remains readable when model loading fails.
+        placeholder.quaternion.identity();
+        const [wing, cords, body, head] = placeholder.children;
+        wing.quaternion.copy(snapshot.canopy.q);
+        point.set(0, 7.2, 0).applyQuaternion(wing.quaternion);
+        wing.position.copy(snapshot.canopy.pos).sub(snapshot.pilot.pos).sub(point);
+        suspension.copy(snapshot.canopy.pos).sub(snapshot.pilot.pos).normalize();
+        pilotHeading.setFromUnitVectors(physicalUp, suspension);
+        body.quaternion.copy(pilotHeading); head.quaternion.copy(pilotHeading);
+        torsoLean.setFromAxisAngle(physicalForward, air.coordinatedLean * MOTION.bodyLean * 2);
+        body.quaternion.multiply(torsoLean); head.quaternion.multiply(torsoLean);
+        body.position.set(0, 0.3, 0).applyQuaternion(pilotHeading);
+        head.position.set(0, 1.15, -0.1).applyQuaternion(pilotHeading);
+        const ends = cords.geometry.attributes.position;
+        for (let i = 0; i < ends.count; i++) {
+          point.fromArray(fallbackLines, i * 3);
+          if (i % 2 === 0) point.applyQuaternion(pilotHeading);
+          else point.y -= 7.2, point.applyQuaternion(wing.quaternion).add(snapshot.canopy.pos).sub(snapshot.pilot.pos);
+          ends.setXYZ(i, point.x, point.y, point.z);
+        }
+        ends.needsUpdate = true;
+      }
+      physicalWas = true;
     },
     /**
      * For tests and QA: writes into `out`, in metres, how the glider stands after its last pose.
@@ -1378,15 +1449,30 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
      * always has. Handed in, it is drawn as it is, and the springs keep only what the air does to the
      * wing: the brake, the pace and a stall already swing it through the flight, and where the pace
      * and the brake hold it once that swing dies is eased in, never sprung.
+     * `coordinatedLean` is the signed physical weight shift, -1 to 1 and already eased. It
+     * bends only the upper body during physical flight, independently of decorative motion.
      */
     pose({
       dt, time, bank, pace, turn, lift, liftSide, landed,
       flying = false, brake = 0, bar = 0, luff = 0, stall = 0, foldLeft = 0, foldRight = 0, rough = 0,
-      ears = 0, tuck = 0, heave = 0, swing,
+      ears = 0, tuck = 0, heave = 0, swing, physical = false, coordinatedLean = 0,
     }) {
+      if (physicalWas && rig && !physical) {
+        sling.position.copy(rig.base.pivot);
+        seat.position.copy(rig.base.pivot);
+        rig.wing.position.copy(rig.base.wing);
+        rig.pilot.position.copy(rig.base.pilot);
+        rig.wing.updateMatrix();
+        rig.pilot.updateMatrix();
+      }
+      physicalWas = false;
       const { clamp } = THREE.MathUtils;
       const step = Math.min(dt, 0.1);
       const flown = swing !== undefined;
+      // This weight shift is already eased by the physical controls. It only bends torso
+      // joints; the simulated suspension, pilot origin and canopy pose stay authoritative.
+      air.coordinatedLean = physical && flying && !landed && Number.isFinite(coordinatedLean)
+        ? clamp(coordinatedLean, -1, 1) : 0;
       if (step > 0) {
         const bankRate = clamp((bank - sway.lastBank) / step, -3, 3);
         const liftRate = clamp((lift - sway.lastLift) / step, -20, 20);
@@ -1430,55 +1516,59 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
         air.trailLeft = air.steerLeft * steering * held * (1 - air.ears);
         air.trailRight = air.steerRight * steering * held * (1 - air.ears);
 
-        const pull = MOTION.swingSpeed ** 2;
-        const drag = 2 * MOTION.swingDamping * MOTION.swingSpeed;
-        const gust = MOTION.gusts * air.rough;
-        // Faster flight puts the wing ahead (negative pitch) and the brake holds it back; a turn
-        // starting or ending rolls it first. Nearing a stall it hangs back and rocks to and fro,
-        // and once stalled it drops back further, rocking no more. A flight's own swing already
-        // carries the stall and the swings the pace and the brake set going, so with it the spring
-        // rests on the rocking alone, and where the pace and the brake hold the wing is eased in.
-        const hunting = air.luff * held;
-        const sits = -pace * MOTION.speedPitch + MOTION.brakePitch * air.brake;
-        const pitchRest = flown ? MOTION.luffPitch * hunting : sits + MOTION.luffPitch * hunting + MOTION.stallPitch * air.stall;
-        if (flown) sway.trim = settle(sway.trim, clamp(sits, -0.5, 0.5), Math.min(1, step * MOTION.trimEase));
-        const rollRest = -bankRate * MOTION.turnLead;
-        // Rising air knocks the wing back and lifts the side nearer its core, and a wing folded on
-        // one side rolls toward it.
-        const pitchPush =
-          liftRate * MOTION.liftKick +
-          gust * (Math.sin(time * 1.7) * 0.6 + Math.sin(time * 3.1 + 1.3) * 0.4) +
-          MOTION.luffRock * hunting * Math.sin(time * 3.6);
-        let rollPush =
-          liftRate * liftSide * MOTION.liftKick +
-          gust * (Math.sin(time * 1.3 + 2.1) * 0.6 + Math.sin(time * 2.7 + 0.5) * 0.4) +
-          MOTION.spinRoll * (air.foldLeft - air.foldRight);
-        // The side over a core lifts as the moment to turn into it comes.
-        if (Math.abs(heave) >= 0.001) rollPush += MOTION.heave * heave;
-        sway.pitchRate += kick;
-        const slices = Math.ceil(step * 90);
-        const h = step / slices;
-        for (let i = 0; i < slices; i++) {
-          sway.pitchRate += (pull * (pitchRest - sway.pitch) - drag * sway.pitchRate + pitchPush) * h;
-          sway.pitch = clamp(sway.pitch + sway.pitchRate * h, -0.5, 0.5);
-          sway.rollRate += (pull * (rollRest - sway.roll) - drag * sway.rollRate + rollPush) * h;
-          sway.roll = clamp(sway.roll + sway.rollRate * h, -0.5, 0.5);
+        if (!physical) {
+          const pull = MOTION.swingSpeed ** 2;
+          const drag = 2 * MOTION.swingDamping * MOTION.swingSpeed;
+          const gust = MOTION.gusts * air.rough;
+          // Faster flight puts the wing ahead (negative pitch) and the brake holds it back; a turn
+          // starting or ending rolls it first. Nearing a stall it hangs back and rocks to and fro,
+          // and once stalled it drops back further, rocking no more. A flight's own swing already
+          // carries the stall and the swings the pace and the brake set going, so with it the spring
+          // rests on the rocking alone, and where the pace and the brake hold the wing is eased in.
+          const hunting = air.luff * held;
+          const sits = -pace * MOTION.speedPitch + MOTION.brakePitch * air.brake;
+          const pitchRest = flown ? MOTION.luffPitch * hunting : sits + MOTION.luffPitch * hunting + MOTION.stallPitch * air.stall;
+          if (flown) sway.trim = settle(sway.trim, clamp(sits, -0.5, 0.5), Math.min(1, step * MOTION.trimEase));
+          const rollRest = -bankRate * MOTION.turnLead;
+          // Rising air knocks the wing back and lifts the side nearer its core, and a wing folded on
+          // one side rolls toward it.
+          const pitchPush =
+            liftRate * MOTION.liftKick +
+            gust * (Math.sin(time * 1.7) * 0.6 + Math.sin(time * 3.1 + 1.3) * 0.4) +
+            MOTION.luffRock * hunting * Math.sin(time * 3.6);
+          let rollPush =
+            liftRate * liftSide * MOTION.liftKick +
+            gust * (Math.sin(time * 1.3 + 2.1) * 0.6 + Math.sin(time * 2.7 + 0.5) * 0.4) +
+            MOTION.spinRoll * (air.foldLeft - air.foldRight);
+          // The side over a core lifts as the moment to turn into it comes.
+          if (Math.abs(heave) >= 0.001) rollPush += MOTION.heave * heave;
+          sway.pitchRate += kick;
+          const slices = Math.ceil(step * 90);
+          const h = step / slices;
+          for (let i = 0; i < slices; i++) {
+            sway.pitchRate += (pull * (pitchRest - sway.pitch) - drag * sway.pitchRate + pitchPush) * h;
+            sway.pitch = clamp(sway.pitch + sway.pitchRate * h, -0.5, 0.5);
+            sway.rollRate += (pull * (rollRest - sway.roll) - drag * sway.rollRate + rollPush) * h;
+            sway.roll = clamp(sway.roll + sway.rollRate * h, -0.5, 0.5);
+          }
+          // On the ground the wing drops forward, clear of the camera.
+          sway.collapse += ((landed ? -1.25 : 0) - sway.collapse) * Math.min(1, step * 5);
         }
-        // On the ground the wing drops forward, clear of the camera.
-        sway.collapse += ((landed ? -1.25 : 0) - sway.collapse) * Math.min(1, step * 5);
       }
 
-      sling.rotation.set(sway.pitch + sway.trim + sway.collapse + sway.swing, 0, sway.roll);
-      // The pilot leans along with each swing, hangs under the flight's own, and leans into a turn:
-      // as far as a thermalling turn takes it (its bank of 0.63 at most), and no further however
-      // steep a wingover banks the whole rig, which already rolls the pilot with it.
-      seat.rotation.set(
-        (sway.pitch + sway.trim) * MOTION.pilotFollow + sway.swing * MOTION.hang,
-        0,
-        sway.roll * MOTION.pilotFollow - clamp(bank, -MOTION.leanMost, MOTION.leanMost) * 0.35,
-      );
-      placeholder.rotation.x = sway.collapse * 0.4;
-      if (rig) redraw();
+      if (!physical) {
+        sling.rotation.set(sway.pitch + sway.trim + sway.collapse + sway.swing, 0, sway.roll);
+        // The pilot leans along with each swing, hangs under the flight's own, and leans into a turn:
+        // as far as a thermalling turn takes it (its bank of 0.63 at most), and no further however
+        // steep a wingover banks the whole rig, which already rolls the pilot with it.
+        seat.rotation.set(
+          (sway.pitch + sway.trim) * MOTION.pilotFollow + sway.swing * MOTION.hang,
+          0,
+          sway.roll * MOTION.pilotFollow - clamp(bank, -MOTION.leanMost, MOTION.leanMost) * 0.35,
+        );
+        placeholder.rotation.x = sway.collapse * 0.4;
+      }
+      if (rig && !physical) redraw();
     },
   };
 }

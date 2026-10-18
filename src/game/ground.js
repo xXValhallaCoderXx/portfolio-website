@@ -8,11 +8,13 @@
 // The numbers here are part of how a run flies (sim-version.test.js fingerprints the ground and the
 // plateaus), so changing any of them needs a new SIM_VERSION.
 
-// The arch stands across the eastward departure from launch. This corridor describes the
-// pilot's clearance, leaving room above for the canopy and to either side for the wings.
+// The arch stands across the eastward departure from launch. The corridor bounds its glowing
+// opening; entry checks its full stone depth with a small margin for the suspended pilot.
+// These entry bounds do not change the terrain or the scored rune gates inside Good Lift.
 export const GATEWAY = {
   x: 85, z: 320, baseY: 52, size: 60, rotationY: Math.PI / 2,
-  corridor: { minZ: 316, maxZ: 324, minY: 70, maxY: 88 },
+  corridor: { minZ: 309, maxZ: 331, minY: 61, maxY: 97 },
+  entry: { halfDepth: 11.4, margin: 2 },
 };
 
 export const smoothstep = (a, b, x) => {

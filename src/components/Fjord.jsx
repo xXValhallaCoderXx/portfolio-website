@@ -338,7 +338,7 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
           </h2>
           <p>
             // A powerlifting meet in the sky{address.kind === 'daily' ? ` · Daily #${dailyNumber(dayOf())}` : ''}. Climb through a line
-            every 250 m, where three judges light the lift. Dodge Hrungnir's kettlebells and outclimb the fog.
+            every 150 m, where three judges light the lift. Read the wind, build clean maneuvers, and climb as the challenge grows.
           </p>
           {address.bad && <p className="dim">// that sky could not be read, so here is today's.</p>}
           {address.kind === 'vs' &&
@@ -362,8 +362,8 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
             <button onClick={() => onExit(null)}>[ back to the page ]</button>
           </p>
           <p className="dim for-keys">← → steer · space brake · ↑ (or ← and → together) speed bar · e big ears · esc end run · r again · b music</p>
-          <p className="dim for-touch">◀ ▶ steer · ▼ brake · ◀ and ▶ together for the speed bar · ▼ ▼ together for big ears</p>
-          <p className="dim">tricks earn style, which multiplies your score: swap the turn as each swing tops out, pitch the wing and catch it, or loop out of a big wingover; the gauge says when</p>
+          <p className="dim for-touch">◀ ▶ steer · ▼ brake · ▲ speed bar · hold ears to descend</p>
+          <p className="dim">build wingovers with the swing, shape a pitch and catch it, or carry the momentum into an inversion. Recover level to bank style; the flight coach shows your progress.</p>
         </div>
       )}
       {flying && live && !armed && !lost && !address && (
@@ -381,7 +381,7 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
             <button onClick={() => onExit(null)}>[ back to the page ]</button>
           </p>
           <p className="dim for-keys">← → steer · space brake · shift speed up · click a pillar to fly there · m map · h controls</p>
-          <p className="dim for-touch">◀ ▶ steer · ▼ brake · » speed up · tap a lit pillar to fly there</p>
+          <p className="dim for-touch">◀ ▶ steer · ▼ brake · ▲ speed bar · ears to descend · tap a pillar to fly there</p>
         </div>
       )}
       {flying && panel && (

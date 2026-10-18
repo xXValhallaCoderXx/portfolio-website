@@ -128,7 +128,7 @@ export function createCloudbase({ scene, loadModel = null, calm = false }) {
           float edge = 1.0 - smoothstep(${FOG_SURFACE.edge.toFixed(2)}, 1.0, length(p));
           float cloud = sin(p.x * 22.0 + time * 0.13) * sin(p.y * 18.0 - time * 0.11);
           cloud += 0.5 * sin((p.x + p.y) * 37.0 + time * 0.19);
-          vec3 color = mix(vec3(0.22, 0.36, 0.51), vec3(0.64, 0.78, 0.86), 0.55 + cloud * 0.13);
+          vec3 color = mix(vec3(0.035, 0.065, 0.10), vec3(0.12, 0.19, 0.25), 0.55 + cloud * 0.13);
           gl_FragColor = vec4(color, edge * 0.93);
         }`,
       side: THREE.DoubleSide,

@@ -8,20 +8,22 @@
 // Hung where the glide meets the fog, rather than on the fog's surface as it is now, the ring is
 // always a few degrees under the pilot's own level, where the chase camera looks (it looks 9° down
 // and sees about 30° either way). On the surface it would be out of the bottom of the picture
-// whenever the fog rises faster than about 8 m/s, which is from a few seconds after the horn: just
-// when the ring matters most. The maths is plain functions, tested by themselves; the view is one
+// when the fog accelerates late in a run, just when the ring matters most. The maths is plain
+// functions, tested by themselves; the view is one
 // band. It only ever reads the run, so nothing a run flies depends on it.
 import * as THREE from 'three';
 import { FLIGHT } from './flight.js';
-import { CLOUD_WIND, CLOUD_ZONE, cloudFogSpeed } from './cloudbase-state.js';
+import { CLOUD_ZONE, cloudFogSpeed, cloudThermalRemaining } from './cloudbase-state.js';
 import { FOG_SURFACE, ORDER } from './cloudbase.js';
 import { MEET } from './meet-state.js';
+import { sampleAtmosphere } from './atmosphere.js';
+import { surfaceAt } from './ground.js';
+import { glideDuration, glidePathClear, movingLiftIntercept } from './glide-math.js';
 
 export const GLIDE = Object.freeze({
-  // The glide hands up in still air (flight.js): 11.5 m/s through the air and 1.2 m/s down, the
-  // 9.6:1 of trim, which is what a pilot flies who has not thought about it. Once the fog climbs
-  // faster than 1.6 m/s, which is all but a run's first ten seconds, the bar reaches further still,
-  // so a ring drawn for trim promises no more than either gives.
+  // The computed hands-up trim (flight.js) is about 11.6 m/s through the air and 1.3 m/s down.
+  // The forecast uses that ordinary glide; moving lift, terrain clearance and the accelerating
+  // fog decide whether a source remains reachable.
   speed: FLIGHT.speed.trim, sink: FLIGHT.sink.trim,
   // m over its surface at which the fog takes the wing: where the run's own step ends a run.
   catch: 3,
@@ -46,7 +48,6 @@ export const GLIDE = Object.freeze({
   // Cyan for go, the site's own; amber for climb first, the colour this game gives lift.
   go: 0x2dd4ee, climb: 0xffb04a,
   // s: how long in all, each visit, the ring's word is said as a line of advice (good-lift.js).
-  teach: 12,
 });
 
 // The ring's word as a line of advice, for a visitor still learning what its colours mean. Each
@@ -69,43 +70,28 @@ const FOG_SEEN = (FOG_SURFACE.radius * (1 + FOG_SURFACE.edge)) / 2;
  * `fogHeight` that is `elapsed` seconds into its run. The fog is walked forward with its own speed
  * (cloudFogSpeed), which grows as it climbs and as the run goes on and races after the horn, and
  * the wing sinks at trim. In still fog this would be the height to lose over the sink, so the
- * ring's radius would be that height times the 9.6 of trim; the fog's climb is what shortens it.
+ * ring's radius would be that height times the trim glide ratio; the fog's climb shortens it.
  * At most `limit` seconds: a caller who stops caring past some radius says so.
  */
 export function glideTime(y, fogHeight, elapsed, limit = 60) {
-  let gap = y - fogHeight - GLIDE.catch;
-  if (!(gap > 0)) return 0;
-  const h = GLIDE.step;
-  let fog = fogHeight;
-  let t = 0;
-  while (t < limit) {
-    const now = cloudFogSpeed(fog, elapsed + t);
-    const then = cloudFogSpeed(fog + now * h, elapsed + t + h);
-    const rise = 0.5 * (now + then) * h;
-    const next = gap - rise - GLIDE.sink * h;
-    // Met within this step: where, by the gap closing evenly across it.
-    if (next <= 0) return Math.min(limit, t + (h * gap) / (gap - next));
-    fog += rise;
-    gap = next;
-    t += h;
-  }
-  return limit;
+  return glideDuration(y, fogHeight, elapsed, limit, {
+    fogSpeed: cloudFogSpeed, sink: GLIDE.sink, catchHeight: GLIDE.catch, step: GLIDE.step,
+  });
 }
 
-/**
- * The breeze a glide is carried by at height `y`, into `out` ({ x, z } in m/s): the run's own wind
- * at each cloud layer (`state.wind`), turning evenly from one layer to the next, with the launch
- * hill's lee taken off low down, as the run blows it (cloudbase-state.js). A gust passes, and lift
- * shelters a pilot only while they are in it, so neither is counted: a glide is long, and out of lift.
- */
-export function breezeAt(state, y, out) {
+/** Local ambient drift, with the same terrain shelter as the wing; brief gusts are not forecast. */
+const breezePoint = { x: 0, y: 0, z: 0 };
+const breezeWeather = { windX: 0, windZ: 0, thermals: [] };
+export function breezeAt(state, y, out, pos = state.pilot) {
   const levels = state.wind;
   let i = 0;
   while (i < levels.length - 2 && y >= levels[i + 1].y) i++;
   const amount = clamp((y - levels[i].y) / (levels[i + 1].y - levels[i].y), 0, 1);
-  const lee = ease(clamp((y - CLOUD_WIND.lee[0]) / (CLOUD_WIND.lee[1] - CLOUD_WIND.lee[0]), 0, 1));
-  out.x = mix(levels[i].x, levels[i + 1].x, amount) * lee;
-  out.z = mix(levels[i].z, levels[i + 1].z, amount) * lee;
+  breezeWeather.windX = state.windEnabled === false ? 0 : mix(levels[i].x, levels[i + 1].x, amount);
+  breezeWeather.windZ = state.windEnabled === false ? 0 : mix(levels[i].z, levels[i + 1].z, amount);
+  breezePoint.x = pos?.x ?? CLOUD_ZONE.x; breezePoint.y = y; breezePoint.z = pos?.z ?? CLOUD_ZONE.z;
+  sampleAtmosphere(breezePoint, breezeWeather, out);
+  out.x = out.windX; out.y = out.windY; out.z = out.windZ;
   return out;
 }
 
@@ -120,6 +106,8 @@ export function breezeAt(state, y, out) {
 export function glideRing(run, pos, wind, out, limit = 60) {
   const state = run.state ?? run;
   const t = glideTime(pos.y, state.fogHeight, state.elapsed, limit);
+  out.startX = pos.x; out.startY = pos.y; out.startZ = pos.z;
+  out.windX = wind.x; out.windZ = wind.z;
   out.t = t;
   out.r = GLIDE.speed * t;
   out.x = pos.x + wind.x * t;
@@ -143,8 +131,17 @@ export function glideWord(run, ring, was, skip, out) {
   for (let i = 1; i < thermals.length; i++) {
     const thermal = thermals[i];
     if (i === skip || !thermal.live || thermal.move > 0 || thermal.strength < MEET.alive) continue;
-    const dx = thermal.x - ring.x;
-    const dz = thermal.z - ring.z;
+    let intercept = 0;
+    let tx = thermal.x, tz = thermal.z;
+    if (Number.isFinite(ring.startX)) {
+      const start = { x: ring.startX, y: ring.startY, z: ring.startZ };
+      const reach = movingLiftIntercept(start, thermal, { x: ring.windX, z: ring.windZ }, {}, GLIDE.speed);
+      intercept = reach.seconds; tx = reach.x; tz = reach.z;
+      if (intercept > ring.t || intercept >= cloudThermalRemaining(thermal) - 4) continue;
+      if (!glidePathClear(start, { x: tx, z: tz }, intercept, surfaceAt, 8, GLIDE.sink)) continue;
+    }
+    const dx = tx - ring.x;
+    const dz = tz - ring.z;
     const inside = ring.r - Math.sqrt(dx * dx + dz * dz);
     if (inside > margin) {
       margin = inside;
@@ -251,7 +248,7 @@ export function createGlideRing({ scene }) {
       state.rodeAt = sky.elapsed;
     }
     const skip = sky.elapsed - state.rodeAt < GLIDE.leave ? state.riding : -1;
-    breezeAt(sky, pos.y, wind);
+    breezeAt(sky, pos.y, wind, pos);
     // The glide is walked no further than it takes the ring to take in all the fog: past that a
     // bigger ring would show nothing more.
     const ax = pos.x - CLOUD_ZONE.x;

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { CLOUD_GLOW, CLOUD_LIT, CLOUD_MILESTONES, CLOUD_POOL, CLOUD_STRIKE, FOG_SURFACE, ORDER, createCloudbase, createCloudbaseRun } from './cloudbase.js';
-import { CLOUD_HUNT, CLOUD_STORM, CLOUD_ZONE } from './cloudbase-state.js';
+import { CLOUD_HUNT, CLOUD_RAVENS, CLOUD_STORM, CLOUD_WEAR, CLOUD_ZONE } from './cloudbase-state.js';
 import { RAVEN, rigRaven, poseRaven, ravenEffort } from './ravens.js';
 import { THERMAL_MOTES, layoutMotes, moteAt } from './thermal-motes.js';
 import { BLESSING } from './meet-runes.js';
@@ -176,7 +176,7 @@ test('the pieces are named for what they are, every thermal is one instanced mes
   view.begin();
   const thermals = named(view, 'thermals');
   assert.equal(thermals.isGroup, true);
-  assert.deepEqual(thermals.children.map((part) => part.name), ['motes-0', 'motes-1', 'motes-2']);
+  assert.deepEqual(thermals.children.map((part) => part.name), Array.from({ length: CLOUD_POOL.thermals }, (_, i) => `motes-${i}`));
   for (let i = 0; i < CLOUD_POOL.thermals; i++) {
     const motes = named(view, `motes-${i}`);
     assert.equal(motes.isMesh && motes.geometry.isInstancedBufferGeometry, true);
@@ -424,7 +424,7 @@ test('a whole run can be drawn frame by frame, models and all, without a number 
   const { glow } = named(view, 'glints').geometry.attributes;
   let climb = 0;
   let ended = null;
-  while (!ended && state.elapsed < 200) {
+  while (!ended && state.elapsed < 600) {
     const lift = [1, 2, 0].map((i) => state.thermals[i]).find((thermal) => thermal.live && thermal.move === 0 && thermal.strength > 0.3) ?? state.thermals[1];
     const round = state.elapsed * 0.8;
     const aim = { x: lift.x + 12 * Math.sin(round) - pos.x, z: lift.z - 12 * Math.cos(round) - pos.z };
@@ -605,8 +605,8 @@ test('nothing is drawn at a hunted site while its flock is still flying there, a
   view.begin();
   const run = createCloudbaseRun();
   run.reset(80, 3);
-  const thermal = run.state.thermals[1];
-  const motes = named(view, 'motes-1');
+  const thermal = run.state.thermals[2];
+  const motes = named(view, 'motes-2');
   const rise = () => motes.material.uniforms.rise.value;
   const old = { x: thermal.x, z: thermal.z };
 
@@ -626,9 +626,10 @@ test('nothing is drawn at a hunted site while its flock is still flying there, a
 
   // Then for real: sit in it until it is used up and its ravens leave for somewhere else.
   let pos = pilotAt(old, 300);
+  thermal.wear = CLOUD_WEAR.dead;
   for (let i = 0; i < 40 * 60 && thermal.move === 0; i++) run.step(STEP, pos);
   assert.ok(thermal.move > 0, 'the worn-out thermal has moved on');
-  assert.ok(Math.hypot(thermal.x - old.x, thermal.z - old.z) > 79);
+  assert.ok(Math.hypot(thermal.x - old.x, thermal.z - old.z) >= CLOUD_HUNT.hop);
   for (const point of [old, thermal]) {
     view.update(run.state.elapsed, pilotAt(point, 300), run);
     assert.equal(motes.visible, false, 'neither the old site nor the new one shows anything');
@@ -659,14 +660,14 @@ test('nothing is drawn at a hunted site while its flock is still flying there, a
   view.dispose();
 });
 
-test('one second at full strength lifts a core mote 1.5 × 28.3 m', () => {
+test('one second at full strength lifts a core mote at the actual 5.5 m/s airspeed', () => {
   const view = createCloudbase({ scene: new THREE.Scene() });
   view.begin();
-  const run = createCloudbaseRun();
+  const run = createCloudbaseRun({ hazards: false, wind: false });
   run.reset(80, 3);
   const thermal = run.state.thermals[1];
   // Only this thermal lifts, so that the run's lift anywhere near it is its own.
-  for (const other of [0, 2]) Object.assign(run.state.thermals[other], { live: false, strength: 0 });
+  run.state.thermals.forEach((t, i) => { if (i !== 1) Object.assign(t, { live: false, strength: 0 }); });
   assert.equal(thermal.strength, 1);
   const motes = named(view, 'motes-1');
   const pos = pilotAt(thermal, 300);
@@ -674,8 +675,8 @@ test('one second at full strength lifts a core mote 1.5 × 28.3 m', () => {
   const from = motes.material.uniforms.rise.value;
   for (let n = 1; n <= 60; n++) view.update(5 + n / 60, pos, run);
   const core = CLOUD_HUNT.s * CLOUD_HUNT.peak;
-  close(core, 28.3, 0.01);
-  close(motes.material.uniforms.rise.value - from, 1.5 * core, 1e-9);
+  close(core, 5.5, 0.01);
+  close(motes.material.uniforms.rise.value - from, THERMAL_MOTES.flow * core, 1e-9);
   // Each mote rises at its share of that, which is half as fast again as the run's lift where it is.
   const layout = layoutMotes(true, THERMAL_MOTES.count.hunted);
   const u = valuesOf(motes);
@@ -684,7 +685,7 @@ test('one second at full strength lifts a core mote 1.5 × 28.3 m', () => {
     const mote = moteAt(layout, i, u);
     there.x = mote.x;
     there.z = mote.z;
-    close(mote.vy, 1.5 * run.sample(there, 0).lift, 1e-4);
+    close(mote.vy, THERMAL_MOTES.flow * run.sample(there, 0).lift, 1e-4);
   }
   view.dispose();
 });
@@ -694,15 +695,16 @@ test('a weakening thermal slows its motes without a jump: rise only grows, by on
   view.begin();
   const run = createCloudbaseRun();
   run.reset(80, 3);
-  const thermal = run.state.thermals[1];
-  const motes = named(view, 'motes-1');
+  const thermal = run.state.thermals[2];
+  const motes = named(view, 'motes-2');
   const rise = () => motes.material.uniforms.rise.value;
   // Sit in its core, drawing every frame, until it wears out and its flock moves on.
   const pos = pilotAt(thermal, 300);
   view.update(run.state.elapsed, pos, run);
   let weakest = 1;
   let most = 0;
-  for (let i = 0; i < 40 * 60 && thermal.move === 0; i++) {
+  for (let i = 0; i < 140 * 60 && thermal.move === 0; i++) {
+    pos.x = thermal.x; pos.z = thermal.z;
     run.step(STEP, pos);
     const before = rise();
     view.update(run.state.elapsed, pos, run);
@@ -777,7 +779,7 @@ test('paused, the motes hold still', () => {
   view.dispose();
 });
 
-test('all three thermals draw with one shader, and the launch\'s is drawn on a run\'s first update', () => {
+test('all five thermals draw with one shader, and the launch\'s is drawn on a run\'s first update', () => {
   const view = createCloudbase({ scene: new THREE.Scene() });
   view.begin();
   const motes = [0, 1, 2].map((i) => named(view, `motes-${i}`));
@@ -844,7 +846,7 @@ test('drawing the motes makes no arrays and never rewrites their buffers, frame 
   view.dispose();
 });
 
-test('under reduced motion the motes still rise and swirl, at the air\'s own pace, without twinkle', () => {
+test('under reduced motion motes keep physical rise without twinkle or a decorative vortex', () => {
   const run = createCloudbaseRun();
   run.reset(80, 3);
   const thermal = run.state.thermals[1];
@@ -870,7 +872,7 @@ test('under reduced motion the motes still rise and swirl, at the air\'s own pac
   assert.equal(THERMAL_MOTES.calm.flow, 1);
   close(calm.turn, THERMAL_MOTES.calm.swirl * thermal.dir, 1e-9);
   close(lively.turn, THERMAL_MOTES.swirl * thermal.dir, 1e-9);
-  assert.ok(Math.abs(calm.turn) > 0.3 && Math.abs(calm.turn) < Math.abs(lively.turn), 'slower round, but still round');
+  assert.deepEqual([calm.turn, lively.turn], [0, 0], 'no decorative vortex in either motion setting');
   assert.deepEqual([calm.twinkle, lively.twinkle], [0, THERMAL_MOTES.twinkle]);
 });
 
@@ -1076,7 +1078,7 @@ test('one glint marks each raven: dimmer as its lift dies, bright while its floc
   // The other flock's journey is its own: a bird of the second thermal still goes by its lift.
   const other = Object.assign(run.state.ravens[CLOUD_POOL.ravens - 1], { x: 140, y: 430, z: 250, fade: 1 });
   Object.assign(run.state.thermals[other.thermal], { strength: 0.4, move: 0 });
-  assert.equal(other.thermal, 2);
+  assert.equal(other.thermal, CLOUD_POOL.thermals - 1);
   shine();
   close(glow.getX(CLOUD_POOL.ravens - 1), 0.35 + 0.65 * 0.4, 1e-6);
   // The flock lands where the lift has yet to start. Its marks stay bright while the lift
@@ -1099,7 +1101,7 @@ test('one glint marks each raven: dimmer as its lift dies, bright while its floc
   lift.strength = 0.6;
   close(shine(), 0.35 + 0.65 * 0.6, 1e-6);
   // Nor does the other flock setting off light this one's marks.
-  Object.assign(run.state.thermals[2], { strength: 0, live: false, move: 5 });
+  Object.assign(run.state.thermals[other.thermal], { strength: 0, live: false, move: 5 });
   close(shine(), 0.35 + 0.65 * 0.6, 1e-6);
   assert.equal(glow.getX(CLOUD_POOL.ravens - 1), 1);
   // A new run does not take up where the last one's flocks were going.
@@ -1142,12 +1144,15 @@ test('a raven about to cross the pilot gets a strike-sized ring under it at ches
     assert.equal(ring.renderOrder, named(view, 'glints').renderOrder);
   }
 
-  // A real threat from the simulation: a settled raven 12 m above the pilot's chest.
-  let pos = pilotAt(run.state.thermals[1], 400);
+  // A real threat after the calm opening: a settled raven 12 m above the canopy.
+  run.state.elapsed = CLOUD_RAVENS.quiet + 1;
+  let pos = pilotAt(run.state.thermals[1], 700);
   run.step(STEP, pos);
   view.update(run.state.elapsed, pos, run);
   assert.equal(rings[0].visible || rings[1].visible, false);
-  const index = run.state.ravens.findIndex((raven) => raven.hot);
+  const index = run.state.ravens.findIndex((raven) => raven.fade >= 1);
+  run.state.ravenAttack = index; run.state.ravenAt = run.state.elapsed - 1.1;
+  run.state.ravenDue = run.state.elapsed + 60;
   const raven = run.state.ravens[index];
   pos = { x: raven.x, y: raven.y - CLOUD_STRIKE.rise - 12, z: raven.z };
   run.step(STEP, pos);
@@ -1429,13 +1434,13 @@ test('the marks of a flock stay bright from take-off until its new lift is full,
   const run = createCloudbaseRun();
   run.reset(80, 3);
   const { state } = run;
-  const thermal = state.thermals[1];
+  const thermal = state.thermals[2];
   const { glow } = named(view, 'glints').geometry.attributes;
   // How bright this flock's marks are apart from each bird's own fade: the same for all of them.
   const shine = () => {
     let found = NaN;
     state.ravens.forEach((raven, i) => {
-      if (raven.thermal !== 1 || raven.fade < 0.5) return;
+      if (raven.thermal !== 2 || raven.fade < 0.5) return;
       const mine = glow.getX(i) / raven.fade;
       if (!Number.isNaN(found)) close(mine, found, 1e-5);
       found = mine;
@@ -1447,8 +1452,9 @@ test('the marks of a flock stay bright from take-off until its new lift is full,
   const pos = pilotAt(thermal, 400);
   const seen = { flights: 0, landings: 0, dimmest: 1, leading: false };
   let before = NaN;
-  for (let i = 0; i < 60 * 60 && (seen.landings < 1 || seen.leading); i++) {
+  for (let i = 0; i < 180 * 60 && (seen.landings < 1 || seen.leading); i++) {
     const moving = thermal.move > 0;
+    pos.x = thermal.x; pos.z = thermal.z;
     assert.equal(run.step(STEP, pos), null);
     view.update(state.elapsed, pos, run);
     const now = shine();

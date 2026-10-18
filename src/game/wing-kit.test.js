@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 import { GAME_STORE as RESET_KEY } from './achievements.js';
-import { KIT_KEY, WINGS, clearKit, emptyKit, normalizeKit, readKit, writeKit } from './wing-kit.js';
+import { KIT_KEY, KIT_THEMES, clearKit, emptyKit, normalizeKit, readKit, writeKit } from './wing-kit.js';
 
 // A storage that keeps what it is given, as the page's localStorage does.
 function memoryStorage(entries = {}) {
@@ -22,9 +22,9 @@ afterEach(() => {
   else delete globalThis.localStorage;
 });
 
-test('a visitor starts on the standard wing with no helmet and no chalk, and that is what a missing, damaged or foreign kit reads as', () => {
-  assert.deepEqual(emptyKit(), { wing: 'standard', helmet: false, chalk: false });
-  assert.equal(WINGS[0], 'standard');
+test('a visitor starts in standard colours with no helmet and no chalk, and that is what a missing, damaged or foreign kit reads as', () => {
+  assert.deepEqual(emptyKit(), { wing: 'standard', harness: 'standard', helmet: false, chalk: false });
+  assert.equal(KIT_THEMES[0], 'standard');
   assert.deepEqual(readKit(memoryStorage()), emptyKit());
   for (const text of ['{broken', 'null', '[]', '"raven"', '7', JSON.stringify({ wing: 'golden', helmet: 'yes', chalk: 1 })]) {
     assert.deepEqual(readKit(memoryStorage({ [KIT_KEY]: text })), emptyKit(), text);
@@ -33,22 +33,26 @@ test('a visitor starts on the standard wing with no helmet and no chalk, and tha
     assert.deepEqual(normalizeKit(nonsense), emptyKit());
   }
   // Each part stands on its own: a known wing is kept even beside a broken helmet.
-  assert.deepEqual(normalizeKit({ wing: 'hird', helmet: 'on', chalk: true, extra: 1 }), { wing: 'hird', helmet: false, chalk: true });
+  assert.deepEqual(normalizeKit({ wing: 'hird', harness: 'golden', helmet: 'on', chalk: true, extra: 1 }), { wing: 'hird', harness: 'standard', helmet: false, chalk: true });
+  assert.deepEqual(normalizeKit({ wing: 'golden', harness: 'raven' }), { ...emptyKit(), harness: 'raven' });
 });
 
 test('a kit written is read back as written, under its own key, sharing nothing with what it was given', () => {
   const storage = memoryStorage();
-  const kit = { wing: 'valkyrie', helmet: true, chalk: true };
+  const kit = { wing: 'valkyrie', harness: 'flyte', helmet: true, chalk: true };
   assert.equal(writeKit(kit, storage), true);
   assert.deepEqual(JSON.parse(storage.items.get(KIT_KEY)), kit);
   const read = readKit(storage);
   assert.deepEqual(read, kit);
   read.wing = 'raven';
+  read.harness = 'hird';
   assert.equal(kit.wing, 'valkyrie');
+  assert.equal(kit.harness, 'flyte');
   // Every wing there is can be worn, and only those.
-  for (const wing of WINGS) {
-    writeKit({ wing }, storage);
+  for (const wing of KIT_THEMES) {
+    writeKit({ wing, harness: wing }, storage);
     assert.equal(readKit(storage).wing, wing);
+    assert.equal(readKit(storage).harness, wing);
   }
   // Kept apart from the fjord's progress and from Good Lift's own store, so neither's normaliser
   // ever drops it, and the page's reset clears it by its own name.
@@ -62,9 +66,9 @@ test('a kit written is read back as written, under its own key, sharing nothing 
 test('where storage is blocked or full, the kit lasts for the visit, and the next write that lands has the last word', () => {
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('blocked'); } });
   assert.deepEqual(readKit(), emptyKit());
-  assert.equal(writeKit({ wing: 'raven', chalk: true }), false);
-  assert.deepEqual(readKit(), { wing: 'raven', helmet: false, chalk: true });
-  assert.deepEqual(readKit(null), { wing: 'raven', helmet: false, chalk: true });
+  assert.equal(writeKit({ wing: 'raven', harness: 'sheetless', chalk: true }), false);
+  assert.deepEqual(readKit(), { wing: 'raven', harness: 'sheetless', helmet: false, chalk: true });
+  assert.deepEqual(readKit(null), { wing: 'raven', harness: 'sheetless', helmet: false, chalk: true });
   // Storage that reads but refuses writes keeps the visit's copy rather than what it held before.
   clearKit(memoryStorage());
   const full = memoryStorage({ [KIT_KEY]: JSON.stringify({ wing: 'hird' }) });

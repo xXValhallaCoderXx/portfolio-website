@@ -8,7 +8,7 @@
 // very same byname.
 
 // How much of a thing a run must have met before a byname about it can be earned, so that none is
-// earned by default: no kettlebell is thrown under 550 m, and no storm cloud drifts under 580 m.
+// earned by default: no kettlebell is thrown under 700 m, and no storm cloud drifts under 580 m.
 export const BYNAME = Object.freeze({
   lines: 4, // lines judged, the mist's not counted, for the Unbroken: the clean meet's four
   thrown: 3, // kettlebells thrown, for the Unstruck and Bell-dodger: Giant-dodger's three
@@ -19,12 +19,7 @@ export const BYNAME = Object.freeze({
 // Lines judged on the way up: the mist's judging of the bar as the run ends is no line.
 const lines = (sheet) => sheet.lifts.filter((lift) => lift.line > 0).length;
 
-// Every byname, in the order a run is judged for them, the rarer before the more common. Measured
-// on five reference pilots (pilots.js) over 40 skies under SIM_VERSION 2, the share of runs that met
-// each rule, from the pilot that met it least to the one that met it most: the Unbroken 0 to 20%,
-// the Unstruck 0 to 28%, the Centred 43 to 70%, Bell-dodger 0 to 88% (none for the pilot that never
-// dodges), Horn-lifter 40 to 85% and Cloud-shy 33 to 43%. A player centres a circle less surely than
-// a pilot that steers by the core's own position, so the Centred stays above the two after it.
+// A run earns one byname; check the rarer achievements before the more common ones.
 export const BYNAMES = Object.freeze([
   Object.freeze({
     id: 'unbroken',
@@ -68,8 +63,10 @@ export const BYNAMES = Object.freeze([
  * The byname a run earns its pilot, from its sheet (summariseRun's): the id of the first of BYNAMES
  * whose rule it meets, or '' for none. A run the sky did not judge earns none.
  */
+import { isJudgedEnding } from './run-rules.js';
+
 export function bynameFor(sheet) {
-  if (sheet?.reason !== 'fog' && sheet?.reason !== 'landed') return '';
+  if (!isJudgedEnding(sheet?.reason)) return '';
   for (const byname of BYNAMES) if (byname.earns(sheet)) return byname.id;
   return '';
 }

@@ -2,35 +2,44 @@
 // distances are metres, all rates are metres/second and all angles are radians; only step()
 // advances the run, so opening the map really pauses it. A run is laid out from its seed alone:
 // the same seed and the same flight always give the same sky.
-export const CLOUD_ZONE = Object.freeze({ x: 125, z: 238, r: 135 });
-export const CLOUD_GATE = Object.freeze({ x: 85, y: 80, z: 320, yaw: Math.PI / 2 });
+import { sampleAtmosphere, thermalProfile } from './atmosphere.js';
+import { CLOUD_WEATHER, cloudWeatherAt } from './cloud-weather.js';
+import { THERMAL_FLOW, createThermalFlowState, resetThermalFlow, stepThermalFlow } from './thermal-flow.js';
+export { CLOUD_WEATHER } from './cloud-weather.js';
+export { THERMAL_FLOW as CLOUD_RAVEN_FLOW } from './thermal-flow.js';
+
+export const CLOUD_ZONE = Object.freeze({ x: 0, z: 80, r: 320 });
+// Enter beyond the stone arch with room to cross to either windward cliff.
+export const CLOUD_GATE = Object.freeze({ x: 85, y: 100, z: 280, yaw: 0 });
 export const CLOUD_DEFAULT_SEED = 1;
 export const CLOUD_MILESTONES = Object.freeze([500, 1000, 1500]);
 
 // How many of each thing a run holds. The pools never grow or shrink, so the view can keep them.
-// Slot 0 of the thermals is the launch column; the other two are hunted, each with its own flock.
-export const CLOUD_POOL = Object.freeze({ thermals: 3, ravens: 10, clouds: 33, gusts: 4 });
+// Slot 0 of the thermals is the launch column; the other four are hunted, each with its own flock.
+export const CLOUD_POOL = Object.freeze({ thermals: 5, ravens: 20, clouds: 33, gusts: 4 });
 
-// The launch column lifts the pilot clear of the east-shore hillside. `s` is m/s across the core.
-export const CLOUD_LAUNCH = Object.freeze({ x: 125, z: 320, r: 34, s: 17 });
+// The anchored launch source stands over the safe northward valley departure. `s` is m/s across the core.
+export const CLOUD_LAUNCH = Object.freeze({ x: 100, z: 285, r: 60, s: 5.5 });
+export const CLOUD_OPENING = Object.freeze({ height: 450, blend: 45, r: 80, second: Object.freeze({ x: 60, z: 170 }) });
+// Draw an interval once, when an opportunity is scheduled. Learning progress never enters the sky.
+export const CLOUD_ENCOUNTERS = Object.freeze({
+  raven: Object.freeze({ from: 500, first: Object.freeze([45, 60]), every: Object.freeze([60, 90]), high: Object.freeze([25, 40]), warning: 1, window: 3 }),
+  gust: Object.freeze({ from: 500, first: Object.freeze([30, 45]), every: Object.freeze([90, 120]), high: Object.freeze([40, 60]) }),
+});
+export function encounterInterval(schedule, peak, draw) {
+  const amount = Math.max(0, Math.min(1, (peak - schedule.from) / (1000 - schedule.from)));
+  const lo = schedule.every[0] + (schedule.high[0] - schedule.every[0]) * amount;
+  const hi = schedule.every[1] + (schedule.high[1] - schedule.every[1]) * amount;
+  return lo + (hi - lo) * draw;
+}
 // Seconds flown inside a thermal: full strength until `full`, gone at `dead`.
-export const CLOUD_WEAR = Object.freeze({ full: 16, dead: 26 });
+export const CLOUD_WEAR = Object.freeze({ full: 75, dead: 110 });
 
-// Hunted thermals: hidden, two at a time, found by the ravens circling in them. `margin` keeps a
-// whole column inside the zone, `separation` is between the two sites, `hop` between a thermal's
-// old site and its next, and `launchClear` keeps the flocks out of the launch climb. A thermal
-// lives `life` seconds, taking `bloom` to start and `fade` to die of old age. `s` is the lift
-// that pays for the wind: at 18 m/s, which balanced the game in still air, a breeze of 2 to 4 m/s
-// took 1,500 m from four runs in five that had reached it.
-//
-// A hunted thermal's lift peaks at its middle (`core` 1: it fades over the whole radius, where the
-// launch column stands flat out to 45% of its own) and is `peak` times `s` there. That leaves a
-// centred hands-up circle (14.4 m) the `s` every circle in the core had before, a centred
-// light-brake circle (8.2 m) 30% more, and a circle let drift off the middle less with every
-// metre: the vario rises and falls once a circle, which is what centring by feel is done by.
+// Four drifting cells give time to centre, climb and choose the next source. They fade before
+// changing wind could carry a live core outside the arena. Peak values are environmental m/s.
 export const CLOUD_HUNT = Object.freeze({
-  r: 38, s: 19.25, margin: 42, separation: 85, hop: 80, launchClear: 62, tries: 24, rimSteps: 120,
-  life: [50, 66], bloom: 4, fade: 8, core: 1, peak: 1.47,
+  r: 60, s: 5.5, margin: 85, separation: 110, hop: 60, launchClear: 100, tries: 128, rimSteps: 360,
+  life: [90, 120], bloom: 5, fade: 12, core: 0.7, peak: 1, drift: 270,
 });
 
 // Ravens ride each hunted thermal as a ladder of `flock` birds, `stack` metres tall, repeated up
@@ -40,7 +49,7 @@ export const CLOUD_HUNT = Object.freeze({
 // can strike below `grace`. Orbits are `orbit` metres wide at `speed`; a flock moves on at `cruise`,
 // each bird leaving `lag` seconds after the one before and tucking in by `tuck` on the way.
 export const CLOUD_RAVENS = Object.freeze({
-  flock: 5, stack: 120, below: 40, floor: 200, edge: 14, grace: 260,
+  flock: 5, stack: 120, below: 40, floor: 200, edge: 14, grace: 500, quiet: 60,
   orbit: [9, 21], speed: 9.5, climb: 0.5, bank: 0.5, cruise: 13, lag: 0.35, tuck: 0.75, settle: 2,
 });
 
@@ -55,7 +64,7 @@ export const CLOUD_RAVENS = Object.freeze({
 // hold, and a brake held through, do nothing: two long, deep pumps are what reopens a real wing.
 // Pumped twice, a fold in a core costs 31 m at its lowest instead of 55.
 export const CLOUD_STRIKE = Object.freeze({
-  radius: 4.6, rise: 3, half: 4.5, collapse: 2.4, sink: 26, shield: 8, scatter: 12, cover: 0.15,
+  radius: 4.6, rise: 3, half: 4.5, collapse: 2.4, sink: 8, shield: 12, scatter: 12, cover: 0.15,
   warn: Object.freeze({ above: 25, reach: 8 }),
   pump: Object.freeze({ hold: 0.3, cut: 0.4, most: 2 }),
 });
@@ -67,20 +76,15 @@ export const CLOUD_STRIKE = Object.freeze({
 // over the last `seam`. Depth inside a cloud builds over the outer `edge` of its hazard; lift is
 // gone by a depth of 1 / `cap`, and `sink` is added at the heart. No hazard dips below `floor`.
 export const CLOUD_STORM = Object.freeze({
-  layers: Object.freeze([580, 730, 870, 1060, 1180, 1290, 1380, 1560, 1670, 1770]),
-  counts: Object.freeze([2, 2, 3, 3, 3, 4, 4, 4, 4, 4]),
-  floor: 530, jitter: 24, long: [66, 107], tall: [0.85, 1.2], deep: [0.85, 1.2],
-  shape: Object.freeze({ y: 0.563, z: 0.741 }), edge: 0.3, cap: 2.5, sink: 6, wind: [2, 4], lane: 100, span: 440, seam: 30,
+  layers: Object.freeze([560, 680, 800, 930, 1060, 1190, 1320, 1460, 1580, 1700]),
+  counts: Object.freeze([1, 2, 3, 3, 4, 4, 4, 4, 4, 4]),
+  floor: 500, jitter: 24, long: [66, 107], tall: [0.85, 1.2], deep: [0.85, 1.2],
+  shape: Object.freeze({ y: 0.563, z: 0.741 }), edge: 0.3, cap: 2.5, sink: 3, wind: CLOUD_WEATHER.speed, lane: 240, span: 840, seam: 30,
 });
 
-// The breeze the pilot flies in is the wind that carries the clouds: at each cloud layer it is
-// that layer's own (CLOUD_STORM.wind), turning evenly with height in between, so the clouds show
-// the wind a climbing pilot is about to meet. Each layer's wind points within `walk` of the one
-// below. Low down, the launch hill keeps it off: nothing under `lee[0]` and all of it by `lee[1]`.
-// Rising air carries its own, so inside lift only the share 1 - `shelter` of the breeze is felt,
-// and a circle in a core drifts a third as far as one in the open. Beyond the zone the wind stops
-// pushing outward within `edge`, so nothing can be blown away from the game.
-export const CLOUD_WIND = Object.freeze({ walk: 0.35, lee: Object.freeze([110, 300]), shelter: 0.65, edge: 30 });
+// Modest seeded shear turns the ambient wind between cloud layers. Terrain, rather than an
+// absolute-altitude switch, determines windward lift and shelter.
+export const CLOUD_WIND = Object.freeze({ walk: 0.15 });
 
 // Gusts cross the zone as straight bands that can be seen coming. The first sets off between
 // `first` seconds and after that one every `every`. A band starts `start` upwind of the zone
@@ -89,29 +93,36 @@ export const CLOUD_WIND = Object.freeze({ walk: 0.35, lee: Object.freeze([110, 3
 // its first `rise` and dying away over its last `fall` of `depth`, and is `half` wide to each
 // side, softening over the outer `soft`.
 export const CLOUD_GUST = Object.freeze({
-  first: Object.freeze([20, 33]), every: Object.freeze([16, 26]), start: 215, speed: 12, strength: Object.freeze([3, 5.5]),
-  spread: 0.35, depth: 55, rise: 6, fall: 30, half: 80, soft: 30, lane: 70,
+  first: CLOUD_ENCOUNTERS.gust.first, every: CLOUD_ENCOUNTERS.gust.every, start: 410, speed: 10, strength: Object.freeze([0.8, 1.8]),
+  spread: 0.35, depth: 55, rise: 12, fall: 30, half: 100, soft: 30, lane: 160,
 });
 
 // What the streaks need of this sky to draw its gust bands (wind-streaks.js): the zone they cross,
 // the bands' own shape and the launch hill's lee.
-export const RUN_SKY = Object.freeze({ zone: CLOUD_ZONE, gust: CLOUD_GUST, lee: CLOUD_WIND.lee });
+export const RUN_SKY = Object.freeze({ zone: CLOUD_ZONE, gust: CLOUD_GUST });
 
 const TAU = Math.PI * 2;
+const EMPTY_THERMALS = Object.freeze([]);
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const ease = (value) => value * value * (3 - 2 * value);
 const mix = (from, to, amount) => from + (to - from) * amount;
 const wrap = (value, span) => ((value % span) + span) % span;
 // Lift across a column, 0 to 1: flat in the middle, fading over the outer share `fade` of it.
-const profile = (distance, radius, fade = 0.55) => ease(clamp((radius - distance) / (radius * fade), 0, 1));
+const profile = (distance, radius, fade = 0.55) => thermalProfile(distance, radius, fade);
 export const cloudThermalStrength = (wear) => ease(clamp((CLOUD_WEAR.dead - wear) / (CLOUD_WEAR.dead - CLOUD_WEAR.full), 0, 1));
-export const cloudFogSpeed = (fogHeight, elapsed) => 1.2 + 0.002 * fogHeight + 0.035 * elapsed + 0.95 * Math.max(elapsed - 110, 0);
+export const cloudFogSpeed = (fogHeight, elapsed) => 0.25 + 0.001 * elapsed + 0.08 * Math.max(elapsed - 300, 0);
+// Advice must account for an early boundary fade without changing a cell's seeded lifetime.
+export const cloudThermalRemaining = (thermal = {}) => Math.max(0, Math.min(
+  (thermal.life ?? Infinity) - (thermal.age ?? 0), thermal.edgeFade >= 0 ? thermal.edgeFade : Infinity,
+));
 
 /**
  * `hazards: false` flies the same sky with harmless ravens and no cloud, and `wind: false` flies it
- * in still air (the clouds still drift), for tests and tuning.
+ * in still air, for tests and tuning. `fixedWind: {x,z}` pins every ambient layer for repeatable
+ * direction tests; wind:false overrides it. Neither option changes the wing's controls.
  */
-export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
+export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = null } = {}) {
+  if (fixedWind && (!Number.isFinite(fixedWind.x) || !Number.isFinite(fixedWind.z))) throw new RangeError('invalid fixed ambient wind');
   const Z = CLOUD_ZONE;
   const L = CLOUD_LAUNCH;
   const H = CLOUD_HUNT;
@@ -128,13 +139,18 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
     elapsed: 0,
     fogHeight: 0,
     peak: 0,
+    openingAt: -1,
     active: false,
+    windEnabled: wind,
+    ambientX: 0, ambientZ: 0,
+    weather: {},
     // `x, z` is where the lift is, or where it is going while its flock is still flying there
     // from `fromX, fromZ` (`move` seconds left of `moveTime`). `strength` is what the air and the
     // view use, from 0 to 1. `dir` is the way its ravens turn: 1 is a right-hand circle.
     thermals: Array.from({ length: CLOUD_POOL.thermals }, (_, i) => ({
       x: L.x, z: L.z, r: i ? H.r : L.r, s: i ? H.s : L.s, wear: 0, age: 0, life: Infinity, strength: 0, live: false,
       move: 0, moveTime: 0, fromX: L.x, fromZ: L.z, dir: 1, rise: 0, scatter: 0,
+      generation: 0, vx: 0, vz: 0, fade: i ? H.core : 0.55, edgeFade: -1,
     })),
     // `heading` reads like the pilot's yaw and `bank` is positive with the right wing down. `flap`
     // is effort, from soaring (0) to flying hard (1); `fade` is how much of the bird is there.
@@ -146,15 +162,18 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
     // which are turned by `turn` about the vertical. `fade` scales the hazard and its picture.
     clouds: Array.from({ length: CLOUD_POOL.clouds }, () => ({
       x: 0, y: 0, z: 0, rx: 1, ry: 1, rz: 1, turn: 0, cos: 1, sin: 0, fade: 0, lane: 0, along: 0, ux: 0, uz: -1, speed: 0,
+      layer: 0, vx: 0, vz: 0,
     })),
     // The breeze at each cloud layer's height: how fast it blows toward the east (x) and the south (z).
-    wind: Array.from({ length: S.layers.length }, (_, i) => ({ y: S.layers[i], x: 0, z: 0 })),
+    wind: Array.from({ length: S.layers.length }, (_, i) => ({ y: S.layers[i], x: 0, z: 0, shear: 0, scale: 1 })),
     // Gust bands on their way across. `strength` 0 is an empty slot. A band blows and travels
     // along `ux, uz`; its front is `at` metres past the zone centre along that line and its middle
     // `lane` to the side of it. `born` is the run time it set off.
     gusts: Array.from({ length: CLOUD_POOL.gusts }, () => ({ strength: 0, ux: 0, uz: -1, born: 0, lane: 0, at: 0 })),
     gustDue: 0,
     gustCount: 0,
+    ravenDue: -1, ravenCount: 0, ravenAttack: -1, ravenAt: -Infinity,
+    flow: createThermalFlowState(CLOUD_POOL.thermals),
     // `x, y, z` is where the pilot was at the last step. `collapse` and `shield` count down in
     // seconds. `cloud` is depth inside a cloud from 0 to 1, `thermal` the slot the pilot is in (or
     // -1), `danger` 1 while a raven is about to cross, and `headroom` the clear air up to a cloud
@@ -167,7 +186,9 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
       danger: 0, headroom: 999, gustAhead: 999, gustIn: 99, gustSlot: -1,
     },
   };
-  const felt = { x: 0, z: 0, front: 0, rough: 0 };
+  const felt = { x: 0, y: 0, z: 0, front: 0, rough: 0 };
+  const point = { x: 0, y: 0, z: 0 };
+  const weather = { windX: 0, windZ: 0, thermals: state.thermals };
 
   // The same generator the terrain scatters its forest with, kept as a bare counter in the state
   // so that a copied run carries on exactly where the original would.
@@ -191,7 +212,24 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
     return Math.hypot(pos.x - Z.x, pos.z - Z.z) <= Z.r;
   }
 
-  // The breeze at a height, before the hill's lee or any lift is counted: each layer's own at
+  function updateLayer(level) {
+    if (!wind || fixedWind) {
+      level.x = wind && fixedWind ? fixedWind.x : 0;
+      level.z = wind && fixedWind ? fixedWind.z : 0;
+    } else {
+      const heading = state.weather.heading + level.shear;
+      const speed = clamp(state.weather.speed * level.scale, CLOUD_WEATHER.speed[0], CLOUD_WEATHER.speed[1]);
+      level.x = Math.sin(heading) * speed; level.z = -Math.cos(heading) * speed;
+    }
+  }
+
+  function updateWeather() {
+    cloudWeatherAt(state.seed, state.elapsed, state.weather, fixedWind, wind);
+    for (let i = 0; i < state.wind.length; i++) updateLayer(state.wind[i]);
+    state.ambientX = state.wind[0].x; state.ambientZ = state.wind[0].z;
+  }
+
+  // The ambient breeze at a height, before local terrain and thermals: each layer's own at
   // that layer, turning evenly between neighbours, and the lowest layer's below it.
   function layerWind(y, out) {
     const levels = state.wind;
@@ -203,69 +241,43 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
     return out;
   }
 
-  // The air's own movement at a point, into `out`: `x, z` in m/s over the ground, `front` the
-  // strength of any gust band there from 0 to 1, and `rough` how much of that band is blowing on
-  // the tail of a glider heading along `hx, hz` (a gust from behind is the one that matters).
+  // One environmental field for the wing, the streaks and the clouds. Bird strikes are wing
+  // damage and remain a separate sink penalty; they never change the air drawn around the pilot.
   function airAt(x, y, z, hx, hz, out) {
-    out.x = out.z = out.front = out.rough = 0;
-    if (!wind || !state.active) return out;
-    const lee = ease(clamp((y - W.lee[0]) / (W.lee[1] - W.lee[0]), 0, 1));
-    // Behind the launch hill nothing blows, breeze or gust.
-    if (lee === 0) return out;
+    point.x = x; point.y = y; point.z = z;
+    out.front = 0;
     layerWind(y, out);
-    out.x *= lee;
-    out.z *= lee;
-    const dx = x - Z.x;
-    const dz = z - Z.z;
-    // Square roots rather than Math.hypot here: the streaks ask for the wind dozens of times a
-    // frame, and hypot hands back a number the engine has to allocate.
-    const reach = Math.sqrt(dx * dx + dz * dz);
-    if (reach <= Z.r) {
-      // Rising air carries its own: the deeper in lift, the less of the breeze gets in. This is
-      // the lift that is there, whatever a cloud or a folded wing lets the pilot have of it.
-      let share = 0;
-      for (let i = 0; i < state.thermals.length; i++) {
-        const thermal = state.thermals[i];
-        if (!thermal.live || thermal.strength <= 0) continue;
-        const ax = x - thermal.x;
-        const az = z - thermal.z;
-        share += thermal.strength * profile(Math.sqrt(ax * ax + az * az), thermal.r);
-      }
-      const open = 1 - W.shelter * Math.min(1, share);
-      out.x *= open;
-      out.z *= open;
-    }
-    for (let i = 0; i < state.gusts.length; i++) {
+    weather.windX = wind && state.active ? out.x : 0;
+    weather.windZ = wind && state.active ? out.z : 0;
+    const ambientX = weather.windX, ambientZ = weather.windZ;
+    weather.thermals = state.active && inside(point) ? state.thermals : EMPTY_THERMALS;
+    let front = 0, gustRough = 0;
+    const dx = x - Z.x, dz = z - Z.z;
+    if (wind && state.active && y >= CLOUD_ENCOUNTERS.gust.from) for (let i = 0; i < state.gusts.length; i++) {
       const band = state.gusts[i];
       if (band.strength === 0) continue;
-      // How far ahead of the front the point is; behind the front it is inside the band.
       const ahead = dx * band.ux + dz * band.uz - band.at;
-      if (ahead >= 0 || ahead <= -G.depth) continue;
       const aside = Math.abs(dz * band.ux - dx * band.uz - band.lane);
-      if (aside >= G.half) continue;
+      if (ahead >= 0 || ahead <= -G.depth || aside >= G.half) continue;
       const blow = ease(clamp(-ahead / G.rise, 0, 1)) * ease(clamp((ahead + G.depth) / G.fall, 0, 1)) *
         (1 - ease(clamp((aside - (G.half - G.soft)) / G.soft, 0, 1)));
-      out.x += band.ux * band.strength * lee * blow;
-      out.z += band.uz * band.strength * lee * blow;
-      out.front = Math.max(out.front, blow);
-      out.rough = Math.max(out.rough, blow * lee * Math.max(0, band.ux * hx + band.uz * hz));
+      weather.windX += band.ux * band.strength * blow;
+      weather.windZ += band.uz * band.strength * blow;
+      front = Math.max(front, blow);
+      gustRough = Math.max(gustRough, blow * 0.35);
     }
-    if (reach > Z.r) {
-      // Past the edge the wind may carry the pilot along or back, never further out.
-      const outward = (out.x * dx + out.z * dz) / reach;
-      if (outward > 0) {
-        const cut = outward * ease(clamp((reach - Z.r) / W.edge, 0, 1));
-        out.x -= (dx / reach) * cut;
-        out.z -= (dz / reach) * cut;
-      }
-    }
+    sampleAtmosphere(point, weather, out);
+    out.ambientX = ambientX; out.ambientZ = ambientZ;
+    out.front = front; out.rough = Math.max(out.rough, gustRough);
+    if (!state.active) out.windX = out.windY = out.windZ = out.lift = out.sink = out.rough = 0;
+    const depth = state.active && y >= S.floor ? depthAt(x, y + K.rise, z) : 0;
+    out.windY = Math.min(0, out.windY) + Math.max(0, out.windY) * (1 - Math.min(1, depth * S.cap)) - S.sink * depth;
+    out.lift = Math.max(0, out.windY); out.sink = Math.max(0, -out.windY);
+    out.x = out.windX; out.y = out.windY; out.z = out.windZ;
     return out;
   }
 
-  /** The wind at a point, for whoever draws it: `out.x`, `out.z` in m/s and `out.front` from 0 to 1. */
-  function windAt(x, y, z, out) {
-    return airAt(x, y, z, 0, 0, out);
-  }
+  function windAt(x, y, z, out) { return airAt(x, y, z, 0, 0, out); }
 
   // Sets a gust band off across the zone. The scheduled ones blow within a spread of the breeze
   // where the pilot is; gust() below sets one off by hand.
@@ -306,16 +318,20 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
     }
     // Set off by the clock, not by the step that happens to notice: a long step launches every
     // band it has passed, each already as far along as it should be.
-    while (state.elapsed >= state.gustDue) {
+    if (state.gustDue < 0 && state.peak >= CLOUD_ENCOUNTERS.gust.from)
+      state.gustDue = state.elapsed + mix(G.first[0], G.first[1], pick(4));
+    while (state.gustDue >= 0 && state.elapsed >= state.gustDue) {
       const count = state.gustCount;
       layerWind(Number.isFinite(pos.y) ? pos.y : CLOUD_GATE.y, felt);
       const heading = Math.atan2(felt.x, -felt.z) + (pick(100 + 4 * count) * 2 - 1) * G.spread;
-      launch(state.gustDue, heading, (pick(102 + 4 * count) * 2 - 1) * G.lane, mix(G.strength[0], G.strength[1], pick(101 + 4 * count)));
-      state.gustDue += mix(G.every[0], G.every[1], pick(103 + 4 * count));
+      if (pos.y >= CLOUD_ENCOUNTERS.gust.from)
+        launch(state.gustDue, heading, (pick(102 + 4 * count) * 2 - 1) * G.lane, mix(G.strength[0], G.strength[1], pick(101 + 4 * count)));
+      state.gustDue += encounterInterval(CLOUD_ENCOUNTERS.gust, state.peak, pick(103 + 4 * count));
       state.gustCount = count + 1;
     }
     const dx = pos.x - Z.x;
     const dz = pos.z - Z.z;
+    if (pos.y < CLOUD_ENCOUNTERS.gust.from) return;
     for (let i = 0; i < state.gusts.length; i++) {
       const band = state.gusts[i];
       if (band.strength === 0 || Math.abs(dz * band.ux - dx * band.uz - band.lane) >= G.half) continue;
@@ -335,71 +351,81 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
     }
   }
 
-  // How far a candidate site is from breaking a rule, in metres; zero or more means it fits.
-  function slackAt(i, x, z, first, otherPlaced) {
+  // Births start upwind with enough room for the entire boundary fade. A changing breeze has
+  // no straight endpoint forecast: runtime fading keeps the live centre inside the safe radius.
+  function pickSite(i, first) {
     const slot = state.thermals[i];
-    const other = state.thermals[3 - i];
-    let slack = Math.hypot(x - L.x, z - L.z) - H.launchClear;
-    if (otherPlaced) slack = Math.min(slack, Math.hypot(x - other.x, z - other.z) - H.separation);
-    if (!first) slack = Math.min(slack, Math.hypot(x - slot.fromX, z - slot.fromZ) - H.hop);
-    return slack;
-  }
-
-  function pickSite(i, first, otherPlaced) {
-    const reach = Z.r - H.margin;
-    let bestX = Z.x;
-    let bestZ = Z.z;
-    let best = -Infinity;
-    for (let n = 0; n < H.tries && best < 0; n++) {
-      const radius = reach * Math.sqrt(rand());
-      const angle = rand() * TAU;
-      const x = Z.x + Math.sin(angle) * radius;
-      const z = Z.z + Math.cos(angle) * radius;
-      const slack = slackAt(i, x, z, first, otherPlaced);
-      if (slack > best) [bestX, bestZ, best] = [x, z, slack];
-    }
-    if (best < 0) {
-      // Somewhere on the rim always fits these distances: do not widen them without checking.
-      const start = rand() * TAU;
-      for (let n = 0; n < H.rimSteps && best < 0; n++) {
-        const angle = start + (n * TAU) / H.rimSteps;
-        const x = Z.x + Math.sin(angle) * reach;
-        const z = Z.z + Math.cos(angle) * reach;
-        const slack = slackAt(i, x, z, first, otherPlaced);
-        if (slack > best) [bestX, bestZ, best] = [x, z, slack];
+    const reach = Z.r - H.margin - (H.drift / slot.life) * H.fade - 2;
+    const speed = Math.sqrt(slot.vx * slot.vx + slot.vz * slot.vz);
+    const ux = speed > 0 ? slot.vx / speed : 0, uz = speed > 0 ? slot.vz / speed : -1;
+    let chosenX = Z.x, chosenZ = Z.z, best = -Infinity;
+    for (let n = 0; n < H.tries * 8; n++) {
+      const along = -reach + rand() * reach;
+      const across = (2 * rand() - 1) * reach;
+      const x = Z.x + ux * along - uz * across;
+      const z = Z.z + uz * along + ux * across;
+      let slack = reach - Math.hypot(x - Z.x, z - Z.z);
+      slack = Math.min(slack, Math.hypot(x - L.x, z - L.z) - H.launchClear);
+      if (!first) slack = Math.min(slack, Math.hypot(x - slot.fromX, z - slot.fromZ) - H.hop);
+      for (let j = 1; j < state.thermals.length; j++) {
+        if (j === i || (first && j >= i)) continue;
+        const other = state.thermals[j];
+        if (!other.live && other.generation === 0) continue;
+        slack = Math.min(slack, Math.hypot(x - other.x, z - other.z) - H.separation);
       }
+      if (slack > best) { best = slack; chosenX = x; chosenZ = z; }
+      if (slack >= 0) break;
     }
-    state.thermals[i].x = bestX;
-    state.thermals[i].z = bestZ;
+    if (best < 0) return false;
+    slot.x = chosenX; slot.z = chosenZ;
+    return true;
   }
 
   const strengthOf = (thermal, hunted) => !hunted ? cloudThermalStrength(thermal.wear) :
-    ease(clamp(thermal.age / H.bloom, 0, 1)) * cloudThermalStrength(thermal.wear) * ease(clamp((thermal.life - thermal.age) / H.fade, 0, 1));
+    ease(clamp(thermal.age / H.bloom, 0, 1)) * cloudThermalStrength(thermal.wear) * ease(clamp((thermal.life - thermal.age) / H.fade, 0, 1)) *
+      (thermal.edgeFade < 0 ? 1 : ease(clamp(thermal.edgeFade / H.fade, 0, 1)));
 
-  // A spent thermal starts again somewhere else, and its ravens set off for the new place at once.
+  function cellVelocity(thermal) {
+    const base = state.wind[0], speed = Math.hypot(base.x, base.z);
+    const scale = speed > 0 ? Math.min(1, H.drift / (thermal.life * speed)) : 0;
+    thermal.vx = base.x * scale; thermal.vz = base.z * scale;
+  }
+
+  function prepareCell(i, first) {
+    const thermal = state.thermals[i];
+    // Strong wind changes drift speed, never the seeded time available to climb a source.
+    thermal.life = mix(H.life[0], H.life[1], rand());
+    thermal.edgeFade = -1;
+    cellVelocity(thermal);
+    if (!pickSite(i, first)) return false;
+    thermal.generation += 1;
+    return true;
+  }
+
   function relocate(i) {
     const thermal = state.thermals[i];
-    thermal.fromX = thermal.x;
-    thermal.fromZ = thermal.z;
-    pickSite(i, false, true);
+    thermal.fromX = thermal.x; thermal.fromZ = thermal.z;
+    if (!prepareCell(i, false)) {
+      thermal.live = false; thermal.strength = 0; thermal.move = thermal.moveTime = 1; thermal.waiting = true;
+      return;
+    }
+    thermal.waiting = false;
     thermal.moveTime = thermal.move = Math.hypot(thermal.x - thermal.fromX, thermal.z - thermal.fromZ) / R.cruise + R.lag * (R.flock - 1);
     thermal.live = false;
-    // A flock still scattered from a strike keeps settling on the way; snapping it back would
-    // jump every bird by metres in a single step.
     thermal.strength = thermal.wear = thermal.age = 0;
-    thermal.life = mix(H.life[0], H.life[1], rand());
   }
 
   function layoutClouds() {
     let n = 0;
-    let heading = 0;
+    let shear = 0;
     for (let layer = 0; layer < S.layers.length; layer++) {
-      // One wind to a layer, never far round from the layer below, so the breeze turns with
-      // height the way wind does and the pilot's drift changes on the way up.
-      heading = layer === 0 ? rand() * TAU : heading + (rand() * 2 - 1) * W.walk;
-      const speed = mix(S.wind[0], S.wind[1], rand());
-      state.wind[layer].x = Math.sin(heading) * speed;
-      state.wind[layer].z = -Math.cos(heading) * speed;
+      const offset = (rand() * 2 - 1) * W.walk, scale = mix(0.9, 1.1, rand());
+      shear = layer === 0 ? 0 : shear + offset;
+      const level = state.wind[layer];
+      level.shear = shear; level.scale = layer === 0 ? 1 : scale;
+      updateLayer(level);
+      const speed = Math.hypot(level.x, level.z);
+      const ux = speed > 0 ? level.x / speed : 0, uz = speed > 0 ? level.z / speed : -1;
       const count = S.counts[layer];
       for (let i = 0; i < count; i++, n++) {
         const cloud = state.clouds[n];
@@ -410,33 +436,44 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
         cloud.turn = rand() * TAU;
         cloud.cos = Math.cos(cloud.turn);
         cloud.sin = Math.sin(cloud.turn);
-        cloud.ux = Math.sin(heading);
-        cloud.uz = -Math.cos(heading);
+        cloud.layer = layer;
+        cloud.ux = ux;
+        cloud.uz = uz;
         cloud.speed = speed;
+        cloud.vx = level.x; cloud.vz = level.z;
         // Lanes are staggered across the wind; clouds in one layer may still merge.
         cloud.lane = -S.lane + ((i + 0.15 + 0.7 * rand()) * 2 * S.lane) / count;
         cloud.along = rand() * S.span;
+        const along = cloud.along - S.span / 2;
+        cloud.x = Z.x + ux * along - uz * cloud.lane;
+        cloud.z = Z.z + uz * along + ux * cloud.lane;
         cloud.y = Math.max(S.layers[layer] + (rand() - 0.5) * S.jitter, S.floor + cloud.ry);
       }
     }
   }
 
-  // Where every cloud is now: a straight drift along its layer's wind, coming round again far
-  // enough outside the zone that a cloud is never seen to appear or vanish over the pilot.
-  function driftClouds() {
+  // Integrate current wind, rather than rotating a position computed from wind × elapsed.
+  // Both wraps lie beyond the arena; a cloud is invisible before it changes sides.
+  function driftClouds(dt = 0) {
     for (let i = 0; i < state.clouds.length; i++) {
       const cloud = state.clouds[i];
-      const along = wrap(cloud.along + cloud.speed * state.elapsed, S.span) - S.span / 2;
-      cloud.x = Z.x + cloud.ux * along - cloud.uz * cloud.lane;
-      cloud.z = Z.z + cloud.uz * along + cloud.ux * cloud.lane;
-      cloud.fade = ease(clamp((S.span / 2 - Math.abs(along)) / S.seam, 0, 1));
+      const level = state.wind[cloud.layer];
+      cloud.vx = level.x; cloud.vz = level.z;
+      cloud.speed = Math.hypot(level.x, level.z);
+      cloud.ux = cloud.speed > 0 ? level.x / cloud.speed : 0;
+      cloud.uz = cloud.speed > 0 ? level.z / cloud.speed : -1;
+      const x = wrap(cloud.x - Z.x + level.x * dt + S.span / 2, S.span) - S.span / 2;
+      const z = wrap(cloud.z - Z.z + level.z * dt + S.span / 2, S.span) - S.span / 2;
+      cloud.x = Z.x + x; cloud.z = Z.z + z;
+      cloud.fade = ease(clamp((S.span / 2 - Math.abs(x)) / S.seam, 0, 1)) *
+        ease(clamp((S.span / 2 - Math.abs(z)) / S.seam, 0, 1));
     }
   }
 
   // How deep a point is inside cloud, from 0 at a hazard's surface to 1 well inside it.
   function depthAt(x, y, z) {
     let deepest = 0;
-    if (!hazards) return deepest;
+    if (!hazards || y < S.floor) return deepest;
     for (let i = 0; i < state.clouds.length; i++) {
       const cloud = state.clouds[i];
       if (cloud.fade < 0.05) continue;
@@ -494,7 +531,9 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
       // which copy is here. Birds shrink away toward either end, so the join is never seen.
       raven.y = low + wrap(thermal.rise + (raven.rung * R.stack) / R.flock - low, R.stack);
       raven.fade = ease(clamp(Math.min(raven.y - low, low + R.stack - raven.y) / R.edge, 0, 1));
-      raven.hot = hazards && !moving && thermal.live && thermal.age >= R.settle && thermal.scatter === 0 && raven.fade >= 1 && altitude >= R.grace;
+      raven.hot = hazards && i === state.ravenAttack && state.elapsed - state.ravenAt >= CLOUD_ENCOUNTERS.raven.warning &&
+        state.elapsed - state.ravenAt < CLOUD_ENCOUNTERS.raven.warning + CLOUD_ENCOUNTERS.raven.window &&
+        !moving && thermal.live && thermal.scatter === 0 && raven.fade >= 1 && altitude >= R.grace;
       raven.bank = thermal.dir * R.bank * (1 - 0.8 * hump);
       // Effort follows what the bird is doing a moment late, so a flock never changes its wingbeat
       // all at once as it leaves or lands.
@@ -507,6 +546,10 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
     state.seed = seed >>> 0;
     state.rng = state.seed | 0;
     state.elapsed = state.fogHeight = 0;
+    state.openingAt = -1;
+    state.ravenDue = -1; state.ravenCount = 0; state.ravenAttack = -1; state.ravenAt = -Infinity;
+    resetThermalFlow(state.flow);
+    updateWeather();
     state.peak = Number.isFinite(startAltitude) ? Math.max(0, startAltitude) : CLOUD_GATE.y;
     state.active = true;
     const pilot = state.pilot;
@@ -523,7 +566,7 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
       band.uz = -1;
     }
     state.gustCount = 0;
-    state.gustDue = mix(G.first[0], G.first[1], pick(4));
+    state.gustDue = -1;
     const column = state.thermals[0];
     column.x = column.fromX = L.x;
     column.z = column.fromZ = L.z;
@@ -532,21 +575,42 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
     column.strength = 1;
     column.live = true;
     column.dir = 1;
-    // The order of these draws is part of what a seed means.
-    for (let i = 1; i < state.thermals.length; i++) {
-      const thermal = state.thermals[i];
-      pickSite(i, true, i === 2);
-      thermal.fromX = thermal.x;
-      thermal.fromZ = thermal.z;
-      // Both are already rising when the run starts, so the first ravens are in the sky at once.
-      thermal.age = H.bloom;
-      thermal.wear = thermal.move = thermal.moveTime = thermal.scatter = 0;
-      thermal.life = mix(H.life[0], H.life[1], rand());
-      thermal.live = true;
-      thermal.dir = rand() < 0.5 ? 1 : -1;
-      thermal.rise = rand() * R.stack;
-      thermal.strength = strengthOf(thermal, true);
+    column.generation = 1; column.vx = column.vz = 0; column.edgeFade = -1;
+    column.r = CLOUD_OPENING.r;
+    for (const thermal of state.thermals.slice(1)) { thermal.generation = 0; thermal.live = false; }
+    layoutClouds();
+    state.ambientX = state.wind[0].x; state.ambientZ = state.wind[0].z;
+    // Retry the whole initial layout when a greedy placement paints the last cell into a corner.
+    let placed = false;
+    for (let attempt = 0; attempt < 256 && !placed; attempt++) {
+      placed = true;
+      for (let i = 1; i < state.thermals.length; i++) {
+        const thermal = state.thermals[i];
+        thermal.generation = 0; thermal.live = false;
+        if (i === 1) {
+          thermal.life = mix(H.life[0], H.life[1], rand());
+          thermal.x = CLOUD_OPENING.second.x; thermal.z = CLOUD_OPENING.second.z;
+          thermal.r = CLOUD_OPENING.r; thermal.generation = 1;
+          thermal.vx = thermal.vz = 0; thermal.edgeFade = -1;
+        } else {
+          thermal.r = H.r;
+          if (!prepareCell(i, true)) { placed = false; break; }
+        }
+        thermal.fromX = thermal.x; thermal.fromZ = thermal.z;
+        thermal.age = H.bloom;
+        thermal.wear = thermal.move = thermal.moveTime = thermal.scatter = 0;
+        thermal.waiting = false;
+        thermal.live = true;
+        const drawnDir = rand() < 0.5 ? 1 : -1;
+        // Teach one safe direction through the opening transfer. Consume the same seeded
+        // draw so later flocks, cell positions and weather retain their independent layout.
+        thermal.dir = i === 1 ? -(Math.sign(state.ambientX) || -1) : drawnDir;
+        thermal.rise = rand() * R.stack;
+        thermal.strength = strengthOf(thermal, true);
+        if (i === 1) { thermal.age = 0; thermal.strength = 1; }
+      }
     }
+    if (!placed) throw new Error('This seeded sky has no safe thermal layout');
     for (let i = 0; i < state.ravens.length; i++) {
       const raven = state.ravens[i];
       raven.radius = mix(R.orbit[0], R.orbit[1], (raven.rung * 0.618034 + rand()) % 1);
@@ -555,7 +619,6 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
       raven.x = raven.z = raven.flap = 0;
       raven.threat = false;
     }
-    layoutClouds();
     driftClouds();
     flyRavens(0, pilot.y);
   }
@@ -596,11 +659,21 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
     return true;
   }
 
-  function step(dt, pos) {
+  // Optional physical eligibility comes from the shared run step, never the coach or lessons.
+  function step(dt, pos, context) {
     if (!state.active || !Number.isFinite(dt) || dt <= 0) return null;
     state.elapsed += dt;
+    updateWeather();
     // Movement is stepped by the caller before this clock, so the final climb counts as well.
     if (Number.isFinite(pos.y)) state.peak = Math.max(state.peak, pos.y);
+    if (state.openingAt < 0 && state.peak >= CLOUD_OPENING.height) {
+      state.openingAt = state.elapsed;
+      for (let i = 0; i < 2; i++) {
+        const t = state.thermals[i];
+        t.age = t.wear = 0; t.edgeFade = -1;
+      }
+    }
+    const opening = state.openingAt < 0 ? 0 : ease(clamp((state.elapsed - state.openingAt) / CLOUD_OPENING.blend, 0, 1));
     state.fogHeight += cloudFogSpeed(state.fogHeight, state.elapsed) * dt;
     const pilot = state.pilot;
     // How fast the pilot is moving, from where they were a step ago; a leap is not a speed.
@@ -614,9 +687,9 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
     pilot.shield = Math.max(0, pilot.shield - dt);
 
     blowGusts(pos, vx, vz);
-    driftClouds();
+    driftClouds(dt);
     const chest = pos.y + K.rise;
-    pilot.cloud = depthAt(pos.x, chest, pos.z);
+    pilot.cloud = pos.y >= S.floor ? depthAt(pos.x, chest, pos.z) : 0;
     pilot.headroom = headroomAt(pos.x, chest, pos.z);
     if (pilot.cloud > 0) pilot.cloudTime += dt;
 
@@ -624,9 +697,11 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
     pilot.thermal = -1;
     for (let i = 0; i < state.thermals.length; i++) {
       const thermal = state.thermals[i];
+      if (i < 2) thermal.r = mix(CLOUD_OPENING.r, i ? H.r : L.r, opening);
       if (thermal.move > 0) {
         thermal.move = Math.max(0, thermal.move - dt);
         thermal.scatter = Math.max(0, thermal.scatter - dt);
+        if (thermal.move === 0 && thermal.waiting) { relocate(i); continue; }
         if (thermal.move === 0) {
           // The last raven is in: the lift starts here now.
           thermal.live = true;
@@ -638,22 +713,30 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
       if (!thermal.live) continue;
       const here = within && Math.hypot(pos.x - thermal.x, pos.z - thermal.z) < thermal.r;
       if (here) pilot.thermal = i;
+      if (i < 2 && state.openingAt < 0) {
+        thermal.vx = thermal.vz = thermal.wear = thermal.age = 0;
+        thermal.strength = 1;
+        if (i) thermal.rise += R.climb * thermal.s * dt;
+        continue;
+      }
       if (i > 0) {
-        // A thermal only grows old while the other one is still good, so the sky is never left
-        // without lift. Once it has started to fade, it finishes.
-        const other = state.thermals[3 - i];
-        const spare = other.move === 0 && other.age >= H.bloom && other.age <= other.life - H.fade && other.wear < CLOUD_WEAR.full;
-        const brink = thermal.life - H.fade;
-        if (spare || thermal.age > brink || thermal.age + dt <= brink) thermal.age += dt;
+        cellVelocity(thermal);
+        if (i === 1) { thermal.vx *= opening; thermal.vz *= opening; }
+        const maximumSpeed = H.drift / thermal.life;
+        if (thermal.edgeFade < 0 && Math.hypot(thermal.x - Z.x, thermal.z - Z.z) + maximumSpeed * dt >=
+          Z.r - H.margin - maximumSpeed * H.fade) thermal.edgeFade = H.fade;
+        thermal.x += thermal.vx * dt; thermal.z += thermal.vz * dt;
+        thermal.age += dt;
+        if (thermal.edgeFade >= 0) thermal.edgeFade = Math.max(0, thermal.edgeFade - dt);
       }
       // Lift is used up by flying in it, though not while a cloud is holding the pilot down. A
       // hunted thermal that has begun to weaken burns out by itself, so none is left as a decoy.
       if ((here && pilot.cloud === 0) || (i > 0 && thermal.wear >= CLOUD_WEAR.full)) thermal.wear = Math.min(CLOUD_WEAR.dead, thermal.wear + dt);
-      thermal.strength = strengthOf(thermal, i > 0);
+      thermal.strength = i < 2 ? mix(1, strengthOf(thermal, i > 0), opening) : strengthOf(thermal, true);
       if (i > 0) {
         thermal.rise += R.climb * thermal.s * thermal.strength * dt;
         thermal.scatter = Math.max(0, thermal.scatter - dt);
-        if (thermal.wear >= CLOUD_WEAR.dead || thermal.age >= thermal.life) {
+        if (thermal.wear >= CLOUD_WEAR.dead || thermal.age >= thermal.life || thermal.edgeFade === 0) {
           relocate(i);
           // Its `x, z` is already somewhere else: the pilot is not in it any more.
           if (pilot.thermal === i) pilot.thermal = -1;
@@ -661,6 +744,32 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
       } else if (thermal.strength === 0) thermal.live = false;
     }
 
+    stepThermalFlow(state.flow, dt, pos, state.thermals, vx, vz,
+      context?.flowEligible !== false && within && pilot.collapse === 0 && pilot.shield === 0 && pilot.cloud < K.cover);
+    const encounter = CLOUD_ENCOUNTERS.raven;
+    if (hazards && state.ravenDue < 0 && state.peak >= encounter.from)
+      state.ravenDue = state.elapsed + mix(encounter.first[0], encounter.first[1], pick(7000));
+    if (state.elapsed - state.ravenAt >= encounter.warning + encounter.window || pos.y < encounter.from || pilot.shield > 0)
+      state.ravenAttack = -1;
+    // Spend a seeded interval faster only during sustained opposing traffic. Warning and
+    // collision windows still use real elapsed time, including their full one-second lead.
+    if (hazards && pos.y >= encounter.from && state.ravenDue >= 0 && state.ravenAttack < 0 &&
+        state.flow.pressure && state.flow.sense < 0)
+      state.ravenDue -= dt * (THERMAL_FLOW.pressureRate - 1);
+    if (state.ravenDue >= 0 && state.elapsed >= state.ravenDue) {
+      // A missed or unsafe opportunity is spent too; never retry it on every frame.
+      state.ravenAttack = -1;
+      if (pos.y >= encounter.from && pilot.shield === 0 && pilot.cloud < K.cover) {
+        let nearest = Infinity;
+        for (let i = 0; i < state.ravens.length; i++) {
+          const bird = state.ravens[i], t = state.thermals[bird.thermal];
+          const reach = Math.hypot(bird.x - pos.x, bird.z - pos.z);
+          if (t.live && !t.move && !t.scatter && reach < nearest) { nearest = reach; state.ravenAttack = i; }
+        }
+        state.ravenAt = state.elapsed;
+      }
+      state.ravenDue = state.elapsed + encounterInterval(encounter, state.peak, pick(7001 + state.ravenCount++));
+    }
     flyRavens(dt, pos.y);
     const exposed = pilot.shield === 0 && pilot.cloud < K.cover;
     let striker = -1;
@@ -670,7 +779,8 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
       const above = raven.y - chest;
       const flat = Math.hypot(raven.x - pos.x, raven.z - pos.z);
       // Marked from well above until it is below the reach of a strike, not just until it is level.
-      raven.threat = exposed && raven.hot && above >= -K.half && above <= K.warn.above && flat < K.warn.reach;
+      raven.threat = exposed && i === state.ravenAttack && pos.y >= encounter.from &&
+        state.elapsed - state.ravenAt < encounter.warning + encounter.window;
       if (raven.threat) pilot.danger = 1;
       if (striker < 0 && exposed && raven.hot && Math.abs(above) < K.half && flat < K.radius) striker = i;
     }
@@ -689,33 +799,17 @@ export function createCloudbaseRun({ hazards = true, wind = true } = {}) {
    * to have the answer written into an object of the caller's instead of a new one.
    */
   function sample(pos, yaw = 0, out = {}) {
-    out.lift = out.sink = out.liftSide = out.windX = out.windZ = out.rough = 0;
-    if (!state.active) return out;
-    const collapsed = state.pilot.collapse > 0;
-    const depth = depthAt(pos.x, pos.y + K.rise, pos.z);
-    // A folded wing and a storm cloud pull down wherever they are; lift only exists in the zone.
-    out.sink = S.sink * depth + (collapsed ? K.sink : 0);
-    airAt(pos.x, pos.y, pos.z, Math.sin(yaw), -Math.cos(yaw), felt);
-    out.windX = felt.x;
-    out.windZ = felt.z;
-    out.rough = felt.rough;
-    if (!inside(pos)) return out;
-    let lift = 0;
-    let side = 0;
+    airAt(pos.x, pos.y, pos.z, Math.sin(yaw), -Math.cos(yaw), out);
+    out.hazardSink = state.active && state.pilot.collapse > 0 ? K.sink : 0;
+    let side = 0, rising = 0;
     for (let i = 0; i < state.thermals.length; i++) {
-      const thermal = state.thermals[i];
-      if (!thermal.live || thermal.strength === 0) continue;
-      const distance = Math.hypot(pos.x - thermal.x, pos.z - thermal.z);
-      // The launch column is flat across its core; a hunted thermal peaks at its middle.
-      const shape = i ? H.peak * profile(distance, thermal.r, H.core) : profile(distance, thermal.r);
-      const rising = thermal.s * thermal.strength * shape;
-      const right = (thermal.x - pos.x) * Math.cos(yaw) + (thermal.z - pos.z) * Math.sin(yaw);
-      lift += rising;
-      side += (rising * right) / thermal.r;
+      const t = state.thermals[i];
+      if (!t.live || !inside(pos)) continue;
+      const lift = t.s * t.strength * profile(Math.hypot(pos.x - t.x, pos.z - t.z), t.r, t.fade);
+      const right = (t.x - pos.x) * Math.cos(yaw) + (t.z - pos.z) * Math.sin(yaw);
+      side += lift * right / t.r; rising += lift;
     }
-    const open = collapsed ? 0 : 1 - Math.min(1, depth * S.cap);
-    out.lift = lift * open;
-    out.liftSide = lift > 0 ? clamp(side / lift, -1, 1) : 0;
+    out.liftSide = rising > 0 ? clamp(side / rising, -1, 1) : 0;
     return out;
   }
 

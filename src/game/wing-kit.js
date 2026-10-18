@@ -1,4 +1,4 @@
-// What the visitor flies in, wherever they fly: the wing's livery, the Gjermundbu helmet and the
+// What the visitor flies in, wherever they fly: the wing and harness colours, the Gjermundbu helmet and the
 // chalk on their hands. Good Lift earns them (good-lift-store.js holds the ladder) and writes the
 // choice here, under a key of its own, so that the engine can dress the glider as the page opens
 // without loading any of the game. It imports nothing, so it can sit in the page's own bundle.
@@ -11,22 +11,22 @@
 /** The localStorage key the kit is kept under; the page's reset clears it by name. */
 export const KIT_KEY = 'good-lift-kit';
 
-// The wings there are, in the order the kit lists them. The standard wing is the one every visitor
-// starts with, exactly as it has always been drawn; every other is a livery (livery.js).
-export const WINGS = Object.freeze(['standard', 'raven', 'calibrated', 'sheetless', 'flyte', 'hird', 'valkyrie']);
+// The themes available independently for the wing and cocoon harness, in kit order.
+export const KIT_THEMES = Object.freeze(['standard', 'raven', 'calibrated', 'sheetless', 'flyte', 'hird', 'valkyrie']);
 
-/** The kit a visitor starts with: the standard wing, no helmet and no chalk. */
-export const emptyKit = () => ({ wing: 'standard', helmet: false, chalk: false });
+/** The kit a visitor starts with: standard colours, no helmet and no chalk. */
+export const emptyKit = () => ({ wing: 'standard', harness: 'standard', helmet: false, chalk: false });
 
 /**
- * A valid kit from anything: a wing that is not one of WINGS is the standard wing, and the helmet
- * and the chalk are on only when they are `true`. Never throws, and shares nothing with `raw`.
+ * A valid kit from anything: unknown wing or harness themes become standard independently; helmet
+ * and chalk are on only when they are `true`. Never throws, and shares nothing with `raw`.
  */
 export function normalizeKit(raw) {
   const kit = emptyKit();
   try {
     if (raw === null || typeof raw !== 'object') return kit;
-    if (WINGS.includes(raw.wing)) kit.wing = raw.wing;
+    if (KIT_THEMES.includes(raw.wing)) kit.wing = raw.wing;
+    if (KIT_THEMES.includes(raw.harness)) kit.harness = raw.harness;
     kit.helmet = raw.helmet === true;
     kit.chalk = raw.chalk === true;
   } catch {

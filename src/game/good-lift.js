@@ -4,24 +4,22 @@
 // loaded only when a pilot is about to fly it, so the page's hero never carries it. The engine in
 // game.js hands over what the two share through `host`.
 import { Vector3 } from 'three';
-import { CLOUD_HUNT, CLOUD_MILESTONES, CLOUD_STRIKE, RUN_SKY, createCloudbaseRun } from './cloudbase-state.js';
+import { CLOUD_MILESTONES, CLOUD_STRIKE, RUN_SKY, createCloudbaseRun } from './cloudbase-state.js';
 import { ORDER, createCloudbase } from './cloudbase.js';
 import { runEffects } from './run-effects.js';
-import { STONES_LEAD, cloudbaseHint } from './cloudbase-hints.js';
-import { holdHint } from './hints.js';
-import { BRAKE, PITCH, ROLL, pitchPeak } from './flight.js';
-import { SWING_GAUGE } from './swing-gauge.js';
+import { pitchPeak } from './flight.js';
 import { CATCH } from './pilots.js';
 import { createRunWorld, finishRun, startRun, stepBits } from './run-step.js';
 import { createWindStreaks } from './wind-streaks.js';
-import { MEET, PLATE_KIND, TRAIL, createMeet } from './meet-state.js';
+import { MEET, PLATE_KIND, createMeet } from './meet-state.js';
 import { BELLS, BELL_PHASE, BELL_RESULT, createBells } from './bells.js';
 import { BLESSING, GATE, GATES, RUNE, RUNE_NAME, RUNE_SIGN } from './meet-runes.js';
 import { createMeetView } from './meet-view.js';
 import { resolveSky, seedFor, skyId } from './daily.js';
 import { featsFor } from './meet-card.js';
 import { DAY_MS, dailyNumber, dayOf, gameHref } from './good-lift-address.js';
-import { earnFeats, keepEarned, kitAfterRun, kitSheet, readStore, recordRun, setInitials as nameRuns, updateStore } from './good-lift-store.js';
+import { clearStore, earnFeats, keepEarned, kitAfterRun, kitSheet, learnTrickLesson, repeatTrickLessons, readStore, recordRun, setInitials as nameRuns, updateStore } from './good-lift-store.js';
+import { createTrickLessons } from './trick-lessons.js';
 import { readKit, writeKit } from './wing-kit.js';
 import { createChalk } from './meet-chalk.js';
 import { addRow, boardKey, outranks, rowsFor } from './board.js';
@@ -31,8 +29,10 @@ import { bynameFor } from './meet-bynames.js';
 import { verseFor } from './meet-verse.js';
 import { isBlocked } from './meet-initials.js';
 import { SIM_VERSION } from './sim-version.js';
-import { createLoopKeys, createRecorder, createTouchEars, decodeLog, encodeLog, inputBits } from './recorder.js';
+import { isJudgedEnding } from './run-rules.js';
+import { createRecorder, decodeLog, encodeLog, inputBits } from './recorder.js';
 import { replayLog } from './replay.js';
+import { createReplayWork } from './replay-work.js';
 import { STYLE, createStyle } from './meet-style.js';
 import { summariseRun } from './meet-sheet.js';
 import { createMusic } from './music.js';
@@ -40,7 +40,8 @@ import { createSurge } from './run-surge.js';
 import { createEntry } from './run-entry.js';
 import { createOnlineBoard, placeOf, takenOff } from './board-online.js';
 import { LIGHTNING, createLightning } from './run-lightning.js';
-import { GLIDE, createGlideRing } from './run-glide.js';
+import { createGlideRing } from './run-glide.js';
+import { createRunCoachEnvironment, runCoachHazard, runCoachWarning, thermalRideIdentity } from './coach-run.js';
 import './good-lift.css';
 
 // The meet sheet comes with the game, never with the page: the page draws it through the engine.
@@ -55,8 +56,8 @@ const sameSheet = (run, again) => !!again && !again.error && again.reason === ru
   run.lifts.every((lift, i) => lift.red === again.lifts[i].red && lift.kg === again.lifts[i].kg && lift.good === again.lifts[i].good) &&
   again.stats.style === run.stats.style;
 
-// Whether two kits (wing-kit.js's, normalised) are the same wing, helmet and chalk.
-const sameKit = (a, b) => a.wing === b.wing && a.helmet === b.helmet && a.chalk === b.chalk;
+// Whether two kits (wing-kit.js's, normalised) wear the same colours and gear.
+const sameKit = (a, b) => a.wing === b.wing && a.harness === b.harness && a.helmet === b.helmet && a.chalk === b.chalk;
 
 // Wall seconds a good lift holds the flight still for: a heartbeat, felt more than seen.
 export const HIT_STOP = 0.07;
@@ -65,12 +66,6 @@ export const JUDGES = Object.freeze(['contact', 'control', 'airspace']);
 // Seconds the lights stay up after a line, and between one pickup and the next for the next to
 // ring a step higher.
 const LIGHTS_FOR = 2.5;
-// When the next plate of a boarded trail is worth the ears: no further off than `ahead` (m), the
-// wing more than `over` metres too high for it on the bar's glide, in lift under `lift` m/s, which
-// the ears' 6 m/s still sinks through.
-const EARS_REACH = Object.freeze({ ahead: 40, over: 2, lift: 6 });
-// A flock worth flying into for the entry's hint: within `range` metres and `ahead` radians of the nose.
-const APPROACH = Object.freeze({ range: 70, ahead: 1 });
 const CHAIN = 2;
 // The pentatonic steps a run of pickups climbs, in semitones.
 const PENTA = [0, 2, 4, 7, 9];
@@ -80,7 +75,7 @@ const kg = (value) => value.toLocaleString('en-GB', { maximumFractionDigits: 1 }
 const metres = (value) => Math.round(value).toLocaleString('en-GB');
 
 // What each rune stone offers, as the label over it says it: its rune and name, and in a few words
-// what its blessing does (by RUNE). The hint says it in full once one is taken (cloudbase-hints.js).
+// what its blessing does (by RUNE).
 export const GATE_LABELS = Object.freeze([
   null,
   Object.freeze(['ᚠ Fehu', 'plates come to you']),
@@ -91,10 +86,6 @@ export const GATE_LABELS = Object.freeze([
 // A stone's label stands `rise` metres over the middle of its opening (clear of its rune), and only
 // while the pilot is within `range` metres of it: the stones round the lift being climbed.
 const LABEL = Object.freeze({ rise: 4.5, range: 160 });
-// How near (m, level) the plate under a storm cloud and the fog's bait must be for the hint to point
-// at them: the cloud's is hung within THUNDER.inward (8 m) of the pilot and the bait BAIT.aside
-// (20 m) off to a side, so a pilot further off than this has flown away from them.
-const NOTICE = Object.freeze({ thunder: 40, bait: 60 });
 // How a kettlebell came out, as the meet sheet names the Beast's (by BELL_RESULT).
 const OUTCOMES = Object.freeze(['falling', 'hit', 'close', 'dodged', 'shielded', 'hidden', 'glanced']);
 
@@ -131,19 +122,20 @@ const BRIEF_MARKUP = /* html */ `
   <div class="fj-brief" role="note" aria-label="How Good Lift is flown" hidden>
     <small></small>
     <b>GOOD LIFT</b>
-    <p>Climb in the thermals the ravens circle, and lift at a line every 250 m: three white lights bank the bar. Plates load from your reps, the trails and the dodges. The fog rises under you.</p>
+    <p>Climb in the thermals the ravens circle: hold one direction + normal brake. Brake slows the wing and tightens the circle; rising air provides lift. Deep brake is unnecessary here. Three white lights bank the bar at each 150 m line. Plates add optional bonus kg; the fog rises under you.</p>
     <dl class="fj-brief-keys">
       <dt>← →</dt><dd>turn</dd>
-      <dt>space</dt><dd>brake: tap it every couple of seconds; held, it goes deep and stalls</dd>
+      <dt>space</dt><dd>brake: hold to slow and tighten a turn; double-tap and hold, or hold X, for deep brake</dd>
       <dt>↑</dt><dd>speed bar</dd>
       <dt>e</dt><dd>big ears: sink fast</dd>
-      <dt>tricks</dt><dd>space in time to pitch the wing, ← → at each top for wingovers; from a big one, space to loop, then ↑ over the wing and space under it. Style multiplies your total</dd>
+      <dt>tricks</dt><dd>safe lessons begin at 500 m for pitch and catch, then 750 m for wingovers. Tricks spend height and earn style for your final score. Back to lift: T</dd>
     </dl>
     <dl class="fj-brief-touch">
       <dt>◀ ▶</dt><dd>turn</dd>
-      <dt>▼</dt><dd>brake: tap it every couple of seconds; held, it goes deep and stalls</dd>
-      <dt>◀▶</dt><dd>both: speed bar · ▼ ▼ both: big ears</dd>
-      <dt>tricks</dt><dd>▼ in time to pitch the wing, ◀ ▶ at each top for wingovers; from a big one, ▼ to loop, then ▲ over the wing and ▼ under it. Style multiplies your total</dd>
+      <dt>▼</dt><dd>brake: hold to slow and tighten a turn; double-tap and hold for deep brake</dd>
+      <dt>▲</dt><dd>speed bar: faster glide</dd>
+      <dt>ears</dt><dd>sink fast; release to reopen</dd>
+      <dt>tricks</dt><dd>safe lessons begin at 500 m, then 750 m. Tricks spend height and earn style for your final score. Tap Back to lift to leave a lesson</dd>
     </dl>
     <em><span class="fj-brief-keys">any key to fly</span><span class="fj-brief-touch">tap to fly</span></em>
   </div>`;
@@ -183,14 +175,20 @@ const LIGHTS = /* html */ `
  *   onWorld(world)          the world board has answered for the Daily Sky the meet sheet shows: its
  *                           best runs, where this browser stands and what became of the run sent
  *                           (see shareWorld)
- *   kit(), wear(kit)        what the visitor flies in ({ wing, helmet, chalk }, wing-kit.js), and
+ *   kit(), wear(kit)        what the visitor flies in ({ wing, harness, helmet, chalk }, wing-kit.js), and
  *                           dressing the glider in another; wear returns the kit now worn
  */
 export function createGoodLift(host) {
   const { g, controls, air, scene, camera, effects, stage } = host;
+  const startingKit = keepEarned(readKit(), readStore());
+  if (!sameKit(startingKit, readKit())) writeKit(startingKit);
+  if (!sameKit(startingKit, host.kit())) host.wear(startingKit);
   const sound = host.sound;
   const panned = (ctx, pan) => sound.panned(ctx, pan);
   const sky = createCloudbaseRun();
+  const coachEnvironment = createRunCoachEnvironment(sky);
+  const lessons = createTrickLessons({ learned: () => readStore().learnedLessons,
+    onLearned: id => learnTrickLesson(id) });
   const meet = createMeet();
   const style = createStyle();
   const bells = createBells();
@@ -199,12 +197,8 @@ export function createGoodLift(host) {
   // to turn into one, passing it on the flock's side (run-entry.js).
   const surge = createSurge();
   const entry = createEntry();
-  // Both ▼ of a touch screen pressed together, for the big ears (recorder.js), and the controls the
-  // keys and buttons ask for each step, written into the log as its bits.
-  const touchEars = createTouchEars();
-  const asked = { left: false, right: false, brake: false, bar: false, ears: false };
-  // Round a loop, the newer of the brake and the bar held, each a press of its own.
-  const loopKeys = createLoopKeys();
+  // Stable keyboard and touch intents, written into the same five-bit log each step.
+  const asked = { left: false, right: false, brake: false, deepBrake: false, bar: false, ears: false };
   const view = createCloudbase({ scene, loadModel: host.loadModel, calm: host.calm });
   const meetView = createMeetView({ scene, loadModel: host.loadModel, calm: host.calm });
   // The chalk the kit puts on the pilot's hands, puffing as a plate or a rep loads.
@@ -214,41 +208,32 @@ export function createGoodLift(host) {
   // the run (run-lightning.js, run-glide.js).
   const lightning = createLightning({ scene, calm: host.calm });
   const glide = createGlideRing({ scene });
-  // Seconds the glide ring's word has been said as a line this visit, and the run time the hint was
-  // last chosen at.
-  let taught = 0;
-  let hintAt = 0;
   // The run's own streaks, with its gust fronts, drawn after its fog.
   const streaks = createWindStreaks({ scene, order: ORDER.aboveFog, calm: host.calm, sky: RUN_SKY });
   // The run's controls, step by step: with its seed, all a run is. `whole` says the log holds every
   // step flown, none refused for want of room.
   const recorder = createRecorder();
   let whole = true;
-  // Challenge links read and replayed, by their text: a replay takes some 30 ms, once is enough.
+  // Long recordings are checked in short tasks so results and challenge starts stay responsive.
+  const checks = createReplayWork();
   const challenges = new Map();
+  const checkingChallenges = new Map();
+  function cancelChecks() {
+    checks.cancel();
+    checkingChallenges.clear();
+  }
   // The last run's log and sheet, for whoever wants to check it (QA replays it elsewhere).
   let lastRun = null;
   // The result the meet sheet was handed. The map opened over the sheet and closed draws it again
   // from this, so what the pilot changes there (initials, the opt-in, the kit) is kept in it too.
   let shownResult = null;
-  // What the hints and sounds have answered so far this run: strikes, and whether the last was a
-  // kettlebell's; seconds turning against a flock and without lift; the hunted thermals ridden and
-  // the one being ridden now; the meet's and the bells' counts; when the last close call came (and
-  // whether it was the Beast's), the horn and the run's first rep to depth, and whether this
-  // thermal's last rep missed its core; the pickups rung in a row and when the last of them was;
-  // the iron off the trail loaded, the sprays and the kg lost; bells turned aside by Algiz, stones
-  // flown through and crumbled, and when the last blessing was taken, Algiz turned a bell aside and
-  // Tiwaz lost the bar; the line of the last stones the climb came level with, and when; whether the
-  // wing was surging, the tucks, tips and pumps answered and when the last tuck and tip came; whether the ears
-  // have been pulled this run, and how long they have been held in climbing air; and when the moment
-  // came to turn into a core, and which way.
+  // Events already answered with sound, a flare or an animation this run.
   const seen = {
-    strikes: 0, bellHit: false, against: 0, searching: 0, rides: 0, riding: 0,
-    thrown: 0, hits: 0, close: 0, count: 0, plates: 0, reps: 0, deep: 0, trails: 0, horn: false, shallow: false,
-    closeAt: -Infinity, hornAt: -Infinity, deepAt: -Infinity, chain: 0, chainAt: -Infinity, beastClose: false,
+    strikes: 0, bellHit: false, riding: 0,
+    thrown: 0, hits: 0, close: 0, count: 0, plates: 0, reps: 0, deep: 0, trails: 0, horn: false,
+    chain: 0, chainAt: -Infinity,
     wind: 0, bait: 0, sprays: 0, lost: 0, glanced: 0, gates: 0, crumbled: 0,
-    blessedAt: -Infinity, glancedAt: -Infinity, lostAt: -Infinity, levelLine: 0, levelAt: -Infinity,
-    surging: false, tucks: 0, pumps: 0, tuckAt: -Infinity, tips: 0, tipAt: -Infinity, earsUsed: false, earsClimb: 0, turnAt: -Infinity, turnSide: 0,
+    surging: false, tucks: 0, pumps: 0,
   };
   // The run's style as last answered (meet-style.js): sets landed and lost, the elements in the set in
   // hand and its name, the style shown and in which form, and when a set last landed or was lost,
@@ -256,12 +241,10 @@ export function createGoodLift(host) {
   // showed (the stamp, or the points of the set in hand).
   const styled = {
     landed: 0, lost: 0, elements: 0, total: -1, compact: null, inHand: '', trick: '', points: 0,
-    landedAt: -Infinity, lostAt: -Infinity, stamp: '', stampUntil: -Infinity, stamped: null, pending: -1,
+    stamp: '', stampUntil: -Infinity, stamped: null, pending: -1,
   };
   // The blessing the readouts show, by RUNE.
   let shownRune = RUNE.none;
-  const held = { line: '', since: 0 };
-  const moment = {};
   // How the last step left things, for the engine: whether a raven had the wing as it began, and
   // whether the glider is outside the sky.
   const last = { collapsed: false, outside: false };
@@ -296,7 +279,7 @@ export function createGoodLift(host) {
   const barCell = host.hud('bar');
   const varioCell = host.hud('vario');
   const styleCell = host.hud('style');
-  stage.querySelector('.fj-swing').insertAdjacentHTML('beforebegin', STYLE_LINE);
+  stage.querySelector('.fj-coach').insertAdjacentHTML('beforebegin', STYLE_LINE);
   stage.querySelector('.fj-toasts').insertAdjacentHTML('beforebegin', BRIEF_MARKUP);
   const briefEl = stage.querySelector('.fj-brief');
   const styleEl = stage.querySelector('.fj-style');
@@ -334,37 +317,32 @@ export function createGoodLift(host) {
     // The bots never take a frame from a run: those still flying wait for the next sheet. Nor does
     // the world board's answer for the last one, which has no sheet left to show it.
     bots.pause();
+    shownResult = null;
     worldAsks += 1;
     startRun(world, seed);
     recorder.reset();
     whole = true;
     startedAt = Date.now();
-    seen.strikes = seen.against = seen.searching = seen.rides = seen.riding = 0;
+    seen.strikes = seen.riding = 0;
     seen.thrown = seen.hits = seen.close = seen.count = seen.plates = seen.reps = seen.deep = seen.trails = seen.chain = 0;
     seen.wind = seen.bait = seen.sprays = seen.lost = seen.glanced = seen.gates = seen.crumbled = 0;
-    seen.levelLine = 0;
-    seen.bellHit = seen.horn = seen.shallow = seen.beastClose = false;
-    seen.closeAt = seen.hornAt = seen.deepAt = seen.chainAt = seen.blessedAt = seen.glancedAt = seen.lostAt = seen.levelAt = -Infinity;
-    seen.tucks = seen.pumps = seen.tips = seen.earsClimb = seen.turnSide = 0;
-    seen.surging = seen.earsUsed = false;
-    seen.tuckAt = seen.tipAt = seen.turnAt = -Infinity;
+    seen.bellHit = seen.horn = false;
+    seen.chainAt = -Infinity;
+    seen.tucks = seen.pumps = 0;
+    seen.surging = false;
     Object.assign(styled, {
       landed: 0, lost: 0, elements: 0, total: -1, compact: null, inHand: '', trick: '', points: 0,
-      landedAt: -Infinity, lostAt: -Infinity, stamp: '', stampUntil: -Infinity, stamped: null, pending: -1,
+      stamp: '', stampUntil: -Infinity, stamped: null, pending: -1,
     });
     styleEl.textContent = '';
     styleEl.className = 'fj-style';
     rows.toggleAttribute('data-style', false);
     surge.reset();
     entry.reset();
-    touchEars.reset();
-    loopKeys.reset();
     varioCell.classList.remove('surge');
     barCell.classList.remove('depth', 'blessed');
     showRune(RUNE.none);
     hideLabels();
-    held.line = '';
-    held.since = 0;
     last.collapsed = last.outside = false;
     view.begin();
     meetView.begin();
@@ -372,7 +350,6 @@ export function createGoodLift(host) {
     chalk.begin();
     lightning.begin();
     glide.begin();
-    hintAt = 0;
     hideLights();
     hornEl.classList.remove('on');
     showChevron(false);
@@ -406,6 +383,8 @@ export function createGoodLift(host) {
     music.stop(now);
     labelMusic(false);
     bots.pause();
+    cancelChecks();
+    shownResult = null;
     worldAsks += 1;
   }
 
@@ -458,7 +437,7 @@ export function createGoodLift(host) {
     const rival = sky?.target && !sky.target.error ? sky.target : null;
     const line = rival
       ? `to beat: ${rival.who || 'a pilot'} · ${scoreOf(rival).toLocaleString('en-GB')} pts · ${metres(rival.peak)} m`
-      : 'opener at 250 m · three white lights';
+      : 'opener at 150 m · three white lights';
     titleSmall.textContent = label;
     titleLine.textContent = full ? line : '';
     titleLine.style.setProperty('--chars', line.length);
@@ -473,26 +452,18 @@ export function createGoodLift(host) {
     }, (full ? TITLE.full : TITLE.short) * 1000);
     clearTimeout(saidTimer);
     saidEl.textContent = '';
-    saidTimer = setTimeout(() => (saidEl.textContent = `Good Lift. ${label}.${full ? ` ${rival ? line : 'The opener is at 250 metres.'}` : ''}`), 120);
+    saidTimer = setTimeout(() => (saidEl.textContent = `Good Lift. ${label}.${full ? ` ${rival ? line : 'The opener is at 150 metres.'}` : ''}`), 120);
   }
 
-  /**
-   * One fixed step with the keys as `input`, and `first` and `second` whether each ▼ of a touch
-   * screen is held. Returns 'fog' or 'landed' if the run ended.
-   */
-  function step(dt, input, first = false, second = false) {
-    // The keys a step are recorded and flown through the one step every replay flies too, which
-    // reads both ways at once as the speed bar: on a touch screen the only way to it. Both ▼ pressed
-    // together are the big ears, as E is on keys. A run that outlasts the log flies on unrecorded,
-    // and cannot then be raced or put on the board.
-    const paired = touchEars.step(first, second);
-    // Round a loop only the newer of the brake and the bar held is flown (createLoopKeys).
-    const keys = loopKeys.step(input.brake, input.bar, g.loop !== 0 && !g.loopOut);
+  /** One recorded fixed step with the five fixed control actions. */
+  function step(dt, input) {
+    // Record resolved brake depth, so replays do not depend on gesture or device timing.
     asked.left = input.left;
     asked.right = input.right;
-    asked.bar = keys.bar;
-    asked.brake = keys.brake && !paired;
-    asked.ears = input.ears || paired;
+    asked.bar = input.bar;
+    asked.brake = input.brake;
+    asked.deepBrake = input.deepBrake;
+    asked.ears = input.ears;
     const bits = inputBits(asked);
     if (!recorder.push(bits)) whole = false;
     last.collapsed = sky.state.pilot.collapse > 0;
@@ -516,38 +487,22 @@ export function createGoodLift(host) {
       // Only one bell is ever in the air, so it is the last one thrown.
       const bell = thrown.bells[(thrown.thrown - 1) % thrown.bells.length];
       seen.close = thrown.close;
-      seen.closeAt = elapsed;
-      seen.beastClose = bell.beast;
       sound.play('close', 0.3, rush, sideOf(bell));
       pickup(elapsed, 1);
     }
     if (thrown.glanced > seen.glanced) {
       seen.glanced = thrown.glanced;
-      seen.glancedAt = elapsed;
       sound.play('glance', 1, ricochet, sideOf(thrown.bells[(thrown.thrown - 1) % thrown.bells.length]));
     }
     answerMeet(meet.state, elapsed);
     answerRunes(meet.state.runes, elapsed);
-    // What the hints want to know, counted in the run's own time so the map pauses it too.
-    seen.searching = g.lift < 1 ? seen.searching + dt : g.lift > 3 ? 0 : seen.searching;
     const flock = pilot.thermal > 0 ? sky.state.thermals[pilot.thermal] : null;
-    seen.against = flock && Math.abs(g.yawRate) > 0.2 && Math.sign(g.yawRate) !== flock.dir ? seen.against + dt : 0;
-    // A thermal that has moved is a new one to ride; coming back to the same one is not.
-    const riding = flock ? pilot.thermal * 1e6 + Math.round(flock.x) * 1e3 + Math.round(flock.z) : seen.riding;
+    // Drift keeps the same ride; only a different slot or reborn cell resets the lessons.
+    const riding = flock ? thermalRideIdentity(pilot.thermal, flock) : seen.riding;
     if (riding !== seen.riding) {
       seen.riding = riding;
-      seen.rides += 1;
-      seen.shallow = false;
       surge.reset();
       entry.reset();
-    }
-    // The moment the climb first comes level with a set of stones still waiting near it (from
-    // STONES_LEAD under their opening's foot to its top): the time to dash for one, said once a set.
-    const { runes } = meet.state;
-    const under = runes.line - g.pos.y;
-    if (runes.line !== seen.levelLine && under <= GATES.tall + STONES_LEAD && under >= -GATES.tall && stonesNear(runes)) {
-      seen.levelLine = runes.line;
-      seen.levelAt = elapsed;
     }
     // The lift surging as a circle closes on the core is heard from the core's side, and flares
     // the vario for whoever has the sound off: the beat to straighten on.
@@ -560,22 +515,18 @@ export function createGoodLift(host) {
     // wing over the core lifting, said by the hint with the way to turn.
     const turnIn = entry.step(dt, g.lift, flock ? flock.strength : 1, g.yawRate, g.liftSide, flock ? flock.dir : 1, flying);
     if (turnIn) {
-      seen.turnAt = elapsed;
-      seen.turnSide = turnIn;
       sound.play('lifted', 1, thump, clamp(turnIn * 0.7, -0.7, 0.7));
       flare(varioCell, 'lifted');
       effects.heave = turnIn;
     }
-    answerWing(dt, elapsed);
+    answerWing();
     answerStyle(elapsed);
     awardMilestones(sky.state.peak);
     return ended;
   }
 
-  // Answers what the wing did this step: a surge toward a fold, a tuck or a tip, a pump of a folded
-  // wing, and the ears, which the hints keep count of. A surge caught is the engine's to hear
-  // (game.js), over the fjord as here.
-  function answerWing(dt, elapsed) {
+  // Answer physical surges, frontal folds and external-strike pumps with sound.
+  function answerWing() {
     const surging = g.tuck === 0 && g.pitchRate < 0 && pitchPeak(g) < -CATCH.surge;
     if (surging && !seen.surging) sound.play('lurch', 0.4, lurch);
     seen.surging = surging;
@@ -585,20 +536,10 @@ export function createGoodLift(host) {
       sound.play('tuck', 0.5, flap);
       host.flash();
     }
-    // Held at the last moment it was collapsed, so the hints count from its opening.
-    if (g.tuck > 0) seen.tuckAt = elapsed;
-    // A tip collapse rattles from the side of the half that unloaded.
-    if (world.tips > seen.tips) {
-      seen.tips = world.tips;
-      seen.tipAt = elapsed;
-      sound.play('tip', 0.5, flap, 0.7 * g.tipSide);
-    }
     // A pump of a folded wing let go in time, a strike's or a front collapse's.
-    const pumps = world.pump.n + g.tuckPumps;
+    const pumps = world.pump.n;
     if (pumps > seen.pumps) sound.play('pump', 0.2, thunk);
     seen.pumps = pumps;
-    if (g.ears > 0) seen.earsUsed = true;
-    seen.earsClimb = g.ears >= 0.9 && g.vy > 1 ? seen.earsClimb + dt : 0;
   }
 
   // What a set of tricks is called: its wingovers, its loops, its pitched swing, or, mixed, its tricks.
@@ -621,7 +562,6 @@ export function createGoodLift(host) {
       if (inHand && s.links > 0) sound.play('swish', 0.08, swish, s.links);
     }
     if (s.landed > styled.landed) {
-      styled.landedAt = elapsed;
       styled.trick = styled.inHand;
       styled.points = s.said;
       styled.stamp = 'landed';
@@ -632,11 +572,10 @@ export function createGoodLift(host) {
       if (lightsEl.hidden) {
         clearTimeout(saidTimer);
         saidEl.textContent = '';
-        saidTimer = setTimeout(() => (saidEl.textContent = `Trick landed: ${styled.trick}, plus ${styled.points} style.`), 120);
+        saidTimer = setTimeout(() => (saidEl.textContent = `Move banked: ${styled.trick}, plus ${styled.points} style.`), 120);
       }
     }
     if (s.lost > styled.lost) {
-      styled.lostAt = elapsed;
       styled.points = s.said;
       styled.stamp = 'lost';
       styled.stampUntil = elapsed + STAMP.lost;
@@ -653,7 +592,7 @@ export function createGoodLift(host) {
     if (stamped !== styled.stamped || pending !== styled.pending) {
       styled.stamped = stamped;
       styled.pending = pending;
-      styleEl.textContent = stamped === 'landed' ? `LANDED +${styled.points.toLocaleString('en-GB')}` : stamped === 'lost' ? `lost +${styled.points.toLocaleString('en-GB')}`
+      styleEl.textContent = stamped === 'landed' ? `BANKED +${styled.points.toLocaleString('en-GB')}` : stamped === 'lost' ? `lost +${styled.points.toLocaleString('en-GB')}`
         : pending >= 0 ? `${styled.inHand} +${pending.toLocaleString('en-GB')}` : '';
       styleEl.className = stamped ? `fj-style ${stamped}` : 'fj-style';
     }
@@ -684,16 +623,13 @@ export function createGoodLift(host) {
     // A strike under Tiwaz takes the whole bar; any other loses only what its plates cannot hold.
     if (state.lost > seen.lost) {
       seen.lost = state.lost;
-      if (state.runes.blessing.rune === RUNE.tiwaz) seen.lostAt = elapsed;
     }
     if (state.reps > seen.reps) {
       seen.reps = state.reps;
       // A rep to depth (its circle centred on the core) rings twice and stamps the bar. One off the
       // core is a plain rep, and the hints say how to centre the next.
       const deep = state.deep > seen.deep;
-      seen.shallow = !deep;
       if (deep) {
-        if (seen.deep === 0) seen.deepAt = elapsed;
         seen.deep = state.deep;
         flare(barCell, 'depth');
       }
@@ -715,7 +651,6 @@ export function createGoodLift(host) {
     }
     if (state.horn && !seen.horn) {
       seen.horn = true;
-      seen.hornAt = elapsed;
       sound.play('horn', 10, horn);
       hornEl.classList.add('on');
     }
@@ -726,7 +661,6 @@ export function createGoodLift(host) {
   function answerRunes(runes, elapsed) {
     if (runes.taken > seen.gates) {
       seen.gates = runes.taken;
-      seen.blessedAt = elapsed;
       const gate = runes.gates.find((each) => each.state === GATE.taken && each.ended === elapsed) ?? runes.gates[0];
       sound.play('chime', 1, chime, sideAt(gate.x, gate.z));
     }
@@ -916,7 +850,7 @@ export function createGoodLift(host) {
 
   /** Writes the run's readouts and returns the hint line to show, or '' (`quiet` says show none). */
   function hud(quiet) {
-    const { pilot, elapsed, fogHeight } = sky.state;
+    const { pilot, fogHeight } = sky.state;
     const lift = meet.state;
     // The altitude is the one readout every screen shows, so it carries what has hit the wing, and
     // otherwise the next line to reach.
@@ -948,156 +882,7 @@ export function createGoodLift(host) {
       hideLights();
       return '';
     }
-    const column = pilot.thermal >= 0 ? sky.state.thermals[pilot.thermal] : null;
-    moment.collapse = pilot.collapse;
-    moment.stall = g.stall;
-    moment.stallSide = g.stallSide;
-    moment.harsh = controls.harsh;
-    moment.surging = seen.surging ? 1 : 0;
-    moment.tuck = g.tuck;
-    moment.tucked = elapsed - seen.tuckAt;
-    moment.tipped = elapsed - seen.tipAt;
-    // Near a fold a trick can come to, where the wing can come to one: never round a loop, which banks
-    // it all the way over and neither swings nor tips it.
-    const tuckLine = PITCH.line + PITCH.held * Math.min(1, g.brake / BRAKE.light);
-    moment.nearTuck = controls.folds && g.pitch < 0 && -g.pitch >= tuckLine - SWING_GAUGE.near && g.pitchRate < 0;
-    moment.nearTip = controls.folds && g.loop === 0 && Math.abs(g.bank) >= ROLL.limit - SWING_GAUGE.near;
-    // The tricks: a set landed or lost, the set in hand, and one being flown.
-    moment.landed = elapsed - styled.landedAt;
-    moment.trick = styled.trick;
-    moment.points = styled.points;
-    moment.lost = elapsed - styled.lostAt;
-    moment.inHand = style.state.elements >= STYLE.inHand ? styled.inHand : '';
-    moment.inHandPitch = style.state.last === 1;
-    moment.pitching = world.watch.state.pumping === 1;
-    moment.looping = g.loop !== 0 && !g.loopOut;
-    moment.loopable = effects.gauge.loopable;
-    moment.wingover = world.watch.state.linking === 1 || world.watch.state.chain >= 2;
-    moment.tricksLanded = style.state.landed;
-    moment.ears = g.ears;
-    moment.earsUsed = seen.earsUsed;
-    moment.earsClimb = seen.earsClimb;
-    moment.turnIn = elapsed - seen.turnAt;
-    moment.turnSide = seen.turnSide;
-    moment.brake = g.brake;
-    moment.deep = effects.deep;
-    moment.load = g.stallLoad;
-    moment.gustAhead = pilot.gustAhead;
-    // The pilot's own depth: the picture can be grey while only the camera is in the cloud.
-    moment.cloud = pilot.cloud;
-    moment.outside = last.outside;
-    moment.elapsed = elapsed;
-    moment.fogClearance = g.pos.y - fogHeight;
-    moment.lift = g.lift;
-    moment.headroom = pilot.headroom;
-    moment.climbing = g.vy > 2;
-    moment.thermal = pilot.thermal;
-    // A hunted thermal is weak while it starts too; only one past its start is dying.
-    moment.dying = !!column && column.strength < 0.85 && (pilot.thermal === 0 || column.age > CLOUD_HUNT.bloom);
-    moment.flockDir = column ? column.dir : 1;
-    moment.against = seen.against;
-    moment.rides = seen.rides;
-    moment.searching = seen.searching;
-    moment.touch = host.touch;
-    moment.bellHit = seen.bellHit;
-    const coming = bells.state.warning >= 0 ? bells.state.bells[bells.state.warning] : null;
-    moment.bell = coming && coming.result === BELL_RESULT.pending ? (coming.circling ? 1 : 2) : 0;
-    moment.beast = !!coming && coming.result === BELL_RESULT.pending && coming.beast;
-    moment.closeCall = elapsed - seen.closeAt;
-    moment.beastClose = seen.beastClose;
-    moment.glanced = elapsed - seen.glancedAt;
-    moment.barLost = elapsed - seen.lostAt;
-    moment.horn = elapsed - seen.hornAt;
-    const { runes } = lift;
-    moment.blessing = runes.blessing.rune;
-    moment.blessed = elapsed - seen.blessedAt;
-    moment.double = runes.blessing.rune === RUNE.tiwaz;
-    moment.trail = lift.trail.live && lift.trail.boarded < 0;
-    moment.trailHigh = trailHigh(lift, runes);
-    approach(pilot);
-    moment.shallow = seen.shallow;
-    moment.depth = elapsed - seen.deepAt;
-    // The stones still waiting near the pilot, the line they stand at, when they were raised and
-    // when the climb came level with them.
-    moment.stones = stonesNear(runes) ? runes.line : 0;
-    moment.stonesNew = elapsed - runes.gates[0].at;
-    moment.stonesLevel = runes.line === seen.levelLine ? elapsed - seen.levelAt : Infinity;
-    // The iron loose in the sky: a strike's plates flying, a front's plates not yet arrived (worth
-    // a word to a pilot circling in lift, who has a circle to widen), and a plate under a cloud or
-    // on the fog close enough to be worth one.
-    moment.sprayed = moment.front = moment.thunder = moment.bait = false;
-    for (let i = 0; i < lift.loose.length; i++) {
-      const plate = lift.loose[i];
-      if (!plate.live) continue;
-      const level = Math.hypot(plate.x - g.pos.x, plate.z - g.pos.z);
-      if (plate.kind === PLATE_KIND.scatter) moment.sprayed = true;
-      else if (plate.kind === PLATE_KIND.wind && !plate.still && pilot.thermal >= 0) moment.front = true;
-      else if (plate.kind === PLATE_KIND.thunder && level <= NOTICE.thunder) moment.thunder = true;
-      else if (plate.kind === PLATE_KIND.bait && level <= NOTICE.bait) moment.bait = true;
-    }
-    moment.fronts = lift.fronts;
-    // With nothing more pressing to say, the glide ring's word, until the visitor has had it up for
-    // GLIDE.teach seconds this visit: by then its colours speak for themselves.
-    const line = holdHint(held, cloudbaseHint(moment) || (taught < GLIDE.teach ? glide.state.line : ''), elapsed);
-    if (line && line === glide.state.line) taught += Math.max(0, elapsed - hintAt);
-    hintAt = elapsed;
-    return line;
-  }
-
-  // Whether the next plate ahead on a trail already boarded lies further under the wing than the
-  // bar's glide brings it down by the time it gets there, in air the ears can sink through: the
-  // moment to say they would reach it. Worked out by hand, as stonesNear is.
-  function trailHigh(lift, runes) {
-    const { trail } = lift;
-    if (!trail.live || trail.boarded < 0 || g.lift >= EARS_REACH.lift) return false;
-    const reach = runes.blessing.rune === RUNE.fehu ? BLESSING.reach : TRAIL.reach;
-    const here = (g.pos.x - trail.x) * trail.ux + (g.pos.z - trail.z) * trail.uz;
-    for (let i = 0; i < trail.plates.length; i++) {
-      const plate = trail.plates[i];
-      if (!plate.live || (plate.x - trail.x) * trail.ux + (plate.z - trail.z) * trail.uz < here) continue;
-      const dx = plate.x - g.pos.x;
-      const dz = plate.z - g.pos.z;
-      const across = Math.sqrt(dx * dx + dz * dz);
-      if (across > EARS_REACH.ahead) return false;
-      return g.pos.y - across * trail.slope - plate.y - reach > EARS_REACH.over;
-    }
-    return false;
-  }
-
-  // On the way into a thermal: whether a settled flock that still lifts lies ahead, close enough to
-  // fly into, while the glider is in no hunted thermal yet, and which way that flock turns.
-  function approach(pilot) {
-    moment.approach = false;
-    moment.approachDir = 1;
-    if (pilot.thermal > 0) return;
-    let nearest = APPROACH.range * APPROACH.range;
-    const { thermals } = sky.state;
-    for (let i = 1; i < thermals.length; i++) {
-      const thermal = thermals[i];
-      if (!thermal.live || thermal.move !== 0 || thermal.strength < MEET.alive) continue;
-      const dx = thermal.x - g.pos.x;
-      const dz = thermal.z - g.pos.z;
-      const away = dx * dx + dz * dz;
-      if (away >= nearest) continue;
-      const off = Math.atan2(dx, -dz) - g.yaw;
-      if (Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) > APPROACH.ahead) continue;
-      nearest = away;
-      moment.approach = true;
-      moment.approachDir = thermal.dir;
-    }
-  }
-
-  // Whether any of the set of stones raised last still waits near the pilot (as its label would
-  // show it): stones left behind round a lift the pilot has flown away from are not worth a word.
-  // Asked every step, so worked out by hand (Math.hypot boxes the numbers it is handed).
-  function stonesNear(runes) {
-    for (let i = 0; i < runes.gates.length; i++) {
-      const gate = runes.gates[i];
-      const dx = gate.x - g.pos.x;
-      const dz = gate.z - g.pos.z;
-      if (gate.state === GATE.waiting && dx * dx + dz * dz <= LABEL.range * LABEL.range) return true;
-    }
-    return false;
+    return '';
   }
 
   // The rune beside the bar: the blessing held, or none. A new one flares as it is taken.
@@ -1115,7 +900,7 @@ export function createGoodLift(host) {
   }
 
   /**
-   * Ends the run and says how it went, for the meet sheet; nothing of it is left drawn. The fog and
+   * Ends the run and says how it went, for the meet sheet; nothing of it is left drawn. The fog, time limit and
    * a touchdown judge what is on the bar, and any other `reason` forfeits it. `flown` is the sky it
    * was flown on ({ kind, seed, day }, daily.js). A run ended silently (`record` false: Back, a
    * retry mid-run, leaving the page) is not recorded at all.
@@ -1149,6 +934,7 @@ export function createGoodLift(host) {
       log: '',
       link: '',
       verified: false,
+      verifying: false,
       // The byname the run earned its pilot and the skald's line for it, both read off its sheet
       // alone, so a replay of the run earns the same.
       byname: bynameFor(sheet),
@@ -1163,6 +949,7 @@ export function createGoodLift(host) {
     // in the log but not in the run's count of steps flown, and a replay counts it the same way.)
     let written = '';
     let again = null;
+    let pendingReplay = null;
     if (record && whole) {
       try {
         const log = encodeLog(
@@ -1172,18 +959,17 @@ export function createGoodLift(host) {
         );
         written = log;
         const read = decodeLog(log);
-        again = read.ok ? replayLog(read.log) : { error: read.why };
-        result.verified = sameSheet(sheet, again);
-        if (result.verified) {
-          result.log = log;
-          result.link = `${location.origin}${gameHref({ kind: 'vs', vs: log })}`;
-        } else console.warn('Good Lift: this run did not replay to the same sheet, so it stays off the board.');
+        if (read.ok) {
+          result.verifying = true;
+          pendingReplay = checks.run(read.log);
+        } else again = { error: read.why };
       } catch (error) {
         console.warn('Good Lift: this run could not be written down.', error);
       }
     }
     // Kept for checking from outside: the log as written, verified or not, and what replaying it came to.
-    lastRun = { log: result.log, written, again, result: sheet, recorded: recorder.steps, steps: world.steps };
+    const receipt = { log: result.log, written, again, result: sheet, recorded: recorder.steps, steps: world.steps };
+    lastRun = receipt;
     // Into this device's store: the bests, the tonnage, the feats, the daily streak and the day's
     // board. The feats it earned are announced by the sheet as it opens, never during a run.
     const was = readStore();
@@ -1192,7 +978,7 @@ export function createGoodLift(host) {
       // A rival raced on the day's own sky goes on its board too, as the link it came from, if the
       // sky judged that run: one ended with [ end run ] is on no board, here or where it was flown.
       const { target } = result;
-      if (target && kind === 'daily' && (target.reason === 'fog' || target.reason === 'landed')) addRow(store.board, boardKey(SIM_VERSION, result.day), { who: target.who, via: 'link', total: target.total, style: target.style ?? 0, peak: target.peak, red: target.red, at: startedAt, log: target.log, byname: target.byname });
+      if (target && kind === 'daily' && isJudgedEnding(target.reason)) addRow(store.board, boardKey(SIM_VERSION, result.day), { who: target.who, via: 'link', total: target.total, style: target.style ?? 0, peak: target.peak, red: target.red, at: startedAt, log: target.log, byname: target.byname });
       return recordRun(store, {
         kind, day: result.day, total, style: result.stats.style, peak, red: lifts.map((each) => each.red), at: startedAt, log: result.log,
         reason: result.reason, feats: featsFor(result), byname: result.byname,
@@ -1252,8 +1038,28 @@ export function createGoodLift(host) {
     // The bots fly the sky for the sheet; with no sheet to show, those still flying wait.
     if (record) askBots(result, stored.bots);
     else bots.pause();
-    if (record && result.online) shareWorld(result, result.board.rows, !!initials && optIn).catch((error) => console.warn('Good Lift: the world board could not be asked.', error));
+    if (record && result.online && !pendingReplay) shareWorld(result, result.board.rows, !!initials && optIn).catch((error) => console.warn('Good Lift: the world board could not be asked.', error));
     shownResult = result;
+    if (pendingReplay) pendingReplay.then((checked) => {
+      receipt.again = checked;
+      if (checked.error === 'cancelled') return;
+      result.verifying = false;
+      result.verified = sameSheet(sheet, checked);
+      if (result.verified) {
+        result.log = receipt.log = written;
+        result.link = `${location.origin}${gameHref({ kind: 'vs', vs: written })}`;
+        if (kind === 'daily' && isJudgedEnding(result.reason)) updateStore((store) => addRow(store.board, boardKey(SIM_VERSION, result.day), {
+          who: initials, via: 'me', total, style: sheet.stats.style, peak, red: lifts.map((lift) => lift.red), at: result.at, log: written, byname: result.byname,
+        }));
+      } else console.warn('Good Lift: this run did not replay to the same sheet, so it stays off the board.');
+      const storedNow = readStore();
+      result.board = kind === 'daily' ? { rows: rowsFor(storedNow.board, boardKey(SIM_VERSION, result.day)), mine: result.log } : null;
+      // A completed older recording may enter storage while a new run flies. It cannot replace
+      // that run's sheet, start a world request, or move the player's focus.
+      if (shownResult !== result) return;
+      host.onResultUpdate?.(result);
+      if (result.online) shareWorld(result, result.board.rows, !!initials && optIn).catch((error) => console.warn('Good Lift: the world board could not be asked.', error));
+    });
     return result;
   }
 
@@ -1272,7 +1078,7 @@ export function createGoodLift(host) {
   async function shareWorld(result, rows, optedIn) {
     const ask = ++worldAsks;
     const own = rows.filter((row) => row.via === 'me' && row.who);
-    const judged = result.reason === 'fog' || result.reason === 'landed';
+    const judged = isJudgedEnding(result.reason);
     const sending = judged && optedIn && result.verified && own[0]?.log === result.log;
     const sent = sending ? await online.send(result.log, result.day) : null;
     if (ask !== worldAsks) return;
@@ -1371,7 +1177,7 @@ export function createGoodLift(host) {
   }
 
   /**
-   * The kit tab's choice (any of { wing, helmet, chalk }, over the kit kept so far), kept to what
+   * The kit tab's choice (any of { wing, harness, helmet, chalk }, over the kit kept so far), kept to what
    * this device has earned, written down for every flight after it (wing-kit.js) and worn at once.
    * Returns the kit now worn.
    */
@@ -1390,27 +1196,32 @@ export function createGoodLift(host) {
    * saying why it cannot be raced. The numbers a link claims are never trusted, and initials the
    * board will not show (meet-initials.js) are shown as none, wherever the link was written.
    */
-  function challenge(address) {
+  async function challenge(address) {
     const text = address?.vs ?? '';
     if (challenges.has(text)) return challenges.get(text);
+    if (checkingChallenges.has(text)) return checkingChallenges.get(text);
     const read = decodeLog(text);
     let target;
     if (!read.ok) target = { error: read.why };
     else if (read.log.simVersion !== SIM_VERSION) target = { error: 'version' };
     else {
-      const sheet = replayLog(read.log);
-      target = sheet.error
-        ? { error: sheet.error }
-        : {
-          who: isBlocked(read.log.initials) ? '' : read.log.initials,
-          seed: read.log.seed, day: read.log.day, reason: sheet.reason, total: sheet.total, style: sheet.stats.style, peak: sheet.peak, red: sheet.lifts.map((lift) => lift.red), log: text,
-          // Its score, worked out here, so the page's start screen can show it without the game's code.
-          score: scoreOf({ total: sheet.total, style: sheet.stats.style }),
-          byname: bynameFor(sheet),
-        };
+      const pending = checks.run(read.log).then((sheet) => targetFor(read.log, text, sheet));
+      checkingChallenges.set(text, pending);
+      target = await pending;
+      if (checkingChallenges.get(text) === pending) checkingChallenges.delete(text);
     }
-    challenges.set(text, target);
+    if (target.error !== 'cancelled') challenges.set(text, target);
+    while (challenges.size > 4) challenges.delete(challenges.keys().next().value);
     return target;
+  }
+
+  function targetFor(log, text, sheet) {
+    return sheet.error ? { error: sheet.error } : {
+      who: isBlocked(log.initials) ? '' : log.initials,
+      seed: log.seed, day: log.day, reason: sheet.reason, total: sheet.total, style: sheet.stats.style, peak: sheet.peak,
+      red: sheet.lifts.map((lift) => lift.red), log: text,
+      score: scoreOf({ total: sheet.total, style: sheet.stats.style }), byname: bynameFor(sheet),
+    };
   }
 
   /**
@@ -1418,9 +1229,9 @@ export function createGoodLift(host) {
    * the run to beat as `target`; one flown on today's Daily Sky is today's daily, any other a named
    * sky. One that cannot be raced is the day's sky, with `notice` saying why.
    */
-  function skyFor(address) {
+  async function skyFor(address) {
     if (address?.kind !== 'vs') return resolveSky(address);
-    const target = challenge(address);
+    const target = await challenge(address);
     if (target.error) return { ...resolveSky(null), notice: target.error };
     // Today's Daily Sky only if it really is today's sky: a log can say today with another seed.
     const today = dayOf(Date.now());
@@ -1435,6 +1246,8 @@ export function createGoodLift(host) {
   }
 
   function dispose() {
+    cancelChecks();
+    shownResult = null;
     bots.dispose();
     music.dispose();
     view.dispose();
@@ -2253,6 +2066,7 @@ export function createGoodLift(host) {
     /** The sky an address asks for: { kind, seed, day }, and a challenge's `target`. */
     resolveSky: skyFor,
     challenge,
+    cancelReplays: cancelChecks,
     replay,
     get lastRun() { return lastRun; },
     /** The meet sheet's bots: where they are with the sky they fly, and what they last told a sheet. */
@@ -2267,8 +2081,6 @@ export function createGoodLift(host) {
     get bells() { return bells; },
     get surge() { return surge; },
     get entry() { return entry; },
-    /** What the hint was last chosen from (cloudbaseHint's facts), as of the last readout. */
-    get hintFacts() { return moment; },
     get view() { return view; },
     get meetView() { return meetView; },
     get chalk() { return chalk; },
@@ -2276,6 +2088,19 @@ export function createGoodLift(host) {
     get glide() { return glide; },
     get streaks() { return streaks; },
     get world() { return world; },
+    get pumpLimit() { return CLOUD_STRIKE.pump.most; },
+    get coachEnvironment() { return coachEnvironment; },
+    stepCoach: (dt, frame) => lessons.step(dt, frame),
+    resetLessons: () => lessons.reset(),
+    cancelLesson: () => lessons.cancel(),
+    repeatLessons: () => {
+      repeatTrickLessons();
+      lessons.repeat();
+    },
+    clearProgress: () => clearStore(),
+    get lessons() { return lessons.state; },
+    get coachHazard() { return runCoachHazard(world); },
+    get coachWarning() { return runCoachWarning(world); },
     get style() { return style; },
   };
 }

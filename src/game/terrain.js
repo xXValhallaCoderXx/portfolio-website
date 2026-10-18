@@ -41,7 +41,8 @@ export const THERMALS = [
   { x: shore(-250, -1, 20), z: -250, r: 40, s: 5.5 },
 ].map((thermal) => ({ ...thermal, y: surfaceAt(thermal.x, thermal.z) }));
 
-export const START = { x: centerX(340), y: 95, z: 340, yaw: 0 };
+// Leave a longer northward lead-in before turning east through the arch.
+export const START = { x: centerX(340), y: 100, z: 375, yaw: 0 };
 
 const DEEP = new THREE.Color(0x06101c);
 const ROCK = new THREE.Color(0x163a60);

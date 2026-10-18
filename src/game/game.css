@@ -32,9 +32,16 @@
   min-width: 17ch;
 }
 
-.fj-hud > dl dd.up {
+.fj-hud [data-hud='vario'].up {
   color: var(--ember);
 }
+
+.fj-hud > dl .fj-vario-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; }
+.fj-thermal-air { display: grid; grid-template-columns: 56px 8ch; gap: 0 7px; color: #ffe6b0; font-size: 9px; line-height: 1.5; letter-spacing: .05em; }
+.fj-thermal-air[hidden] { display: none; }
+.fj-thermal-air > span:first-child { grid-column: 1 / -1; color: #d1bea0; font-size: 8px; }
+.fj-thermal-track { display: block; align-self: center; height: 4px; overflow: hidden; border-radius: 2px; background: #564b37; }
+.fj-thermal-track i { display: block; height: 100%; background: #ffe6b0; transform: scaleX(0); transform-origin: left; }
 
 .fj-hud nav {
   position: absolute;
@@ -137,510 +144,6 @@
   text-align: center;
   text-shadow: 0 0 6px var(--bg);
   pointer-events: none;
-}
-
-/* ---- the brake meter, under the hint */
-
-/* One track: the brake fills it from the left and the stall load grows in from the right in the
-   game's danger red, meeting the fill as the wing stalls. Its cyan part is the light brake and its
-   amber part the deep one, where they fall in stall-effects.js (BRAKE_METER: the first 10% is the
-   take-up, the next 40% the light brake). Only transforms and colours change while it is up. */
-.fj-brake {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: min(260px, calc(100% - 44px));
-  color: var(--dim);
-  font-size: 12px;
-  line-height: 1;
-  text-shadow: 0 0 6px var(--bg);
-  opacity: 0;
-  transform: translateX(-50%);
-  transition: opacity 0.25s;
-  pointer-events: none;
-  contain: layout style;
-}
-
-.fj-brake:not([data-state='']) {
-  opacity: 1;
-}
-
-.fj-brake b {
-  flex: none;
-  min-width: 5ch;
-  font-weight: normal;
-  text-align: right;
-}
-
-.fj-brake span {
-  position: relative;
-  flex: 1;
-  height: 8px;
-  overflow: hidden;
-  border: 1px solid var(--rule);
-  background:
-    linear-gradient(90deg, transparent 0 10%, rgba(45, 212, 238, 0.18) 10% 50%, rgba(255, 157, 74, 0.16) 50%),
-    rgba(6, 10, 19, 0.7);
-}
-
-.fj-brake i {
-  position: absolute;
-  inset: 0;
-  transform: scaleX(0);
-  will-change: transform;
-}
-
-.fj-brake i:first-child {
-  background: var(--cyan);
-  transform-origin: 0 50%;
-}
-
-.fj-brake i:last-child {
-  background: #ff546b;
-  transform-origin: 100% 50%;
-}
-
-.fj-brake[data-state='deep'] i:first-child,
-.fj-brake[data-state='near'] i:first-child {
-  background: var(--ember);
-}
-
-.fj-brake[data-state='late'] b,
-.fj-brake[data-state='deep'] b {
-  color: var(--ember);
-}
-
-.fj-brake[data-state='near'] b,
-.fj-brake[data-state='stalled'] b {
-  color: #ff546b;
-}
-
-/* The big ears fill the track in a violet of their own: not the light brake's cyan, the deep
-   brake's amber or the stall's red. */
-.fj-brake[data-state='ears'] i:first-child {
-  background: #b9a4ff;
-}
-
-.fj-brake[data-state='ears'] b {
-  color: #b9a4ff;
-}
-
-.fj-brake[data-state='near'] span {
-  animation: fj-brake-near 0.28s steps(2, jump-none) infinite;
-}
-
-@keyframes fj-brake-near {
-  to {
-    border-color: #ff546b;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fj-brake[data-state='near'] span {
-    border-color: #ff546b;
-    animation: none;
-  }
-}
-
-.lost .fj-brake {
-  display: none;
-}
-
-/* ---- the swing gauge, between the pilot and the hint
-
-   A cross whose dot is the wing as the pilot sees it (swing-gauge.js): up for the wing ahead, down
-   for behind, across with the bank, the middle two-thirds of the way down. The arm that counts is
-   bright and the other dim; ticks mark the bands a trick is judged in, cyan up to the last peak's
-   and white for the next; red ends mark the folds, only where the wing can come to them. As a
-   moment to act comes, the dot lights up with what to do. Only transforms and states change. */
-.fj-swing {
-  position: absolute;
-  bottom: 92px;
-  left: 50%;
-  width: 200px;
-  height: 72px;
-  border-radius: 6px;
-  background: rgba(6, 10, 19, 0.35);
-  opacity: 0;
-  transform: translateX(-50%);
-  transition: opacity 0.25s;
-  pointer-events: none;
-  contain: layout style;
-}
-
-.fj-swing[data-on='1'] {
-  opacity: 1;
-}
-
-.fj-swing-x,
-.fj-swing-y {
-  position: absolute;
-  background: rgba(198, 214, 228, 0.4);
-  transition: opacity 0.2s;
-}
-
-.fj-swing-x {
-  top: 67%;
-  right: 0;
-  left: 0;
-  height: 2px;
-  margin-top: -1px;
-}
-
-.fj-swing-y {
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: 2px;
-  margin-left: -1px;
-}
-
-.fj-swing[data-mode='roll'] .fj-swing-y,
-.fj-swing[data-mode='pitch'] .fj-swing-x {
-  opacity: 0.3;
-}
-
-.fj-swing-x i,
-.fj-swing-y i {
-  position: absolute;
-  background: rgba(198, 214, 228, 0.7);
-}
-
-.fj-swing-x i {
-  top: -4px;
-  width: 2px;
-  height: 10px;
-  margin-left: -1px;
-}
-
-.fj-swing-y i {
-  left: -4px;
-  width: 10px;
-  height: 2px;
-  margin-top: -1px;
-}
-
-/* The bands reached by the last peak, and the next to reach. */
-.fj-swing[data-band='1'] .t1,
-.fj-swing[data-band='2'] :is(.t1, .t2),
-.fj-swing[data-band='3'] :is(.t1, .t2, .t3),
-.fj-swing[data-band='4'] i {
-  background: var(--cyan);
-}
-
-.fj-swing[data-band='0'] .t1,
-.fj-swing[data-band='1'] .t2,
-.fj-swing[data-band='2'] .t3,
-.fj-swing[data-band='3'] .t4 {
-  background: #fff;
-}
-
-.fj-swing-x b,
-.fj-swing-y b {
-  position: absolute;
-  background: rgba(255, 84, 107, 0.45);
-}
-
-.fj-swing-x b {
-  top: -2px;
-  height: 6px;
-}
-
-.fj-swing-y b {
-  left: -2px;
-  width: 6px;
-}
-
-.fj-swing[data-safe='1'] :is(.fj-swing-x, .fj-swing-y) b {
-  display: none;
-}
-
-.fj-swing[data-near='1'] :is(.fj-swing-x, .fj-swing-y) b {
-  background: #ff546b;
-  animation: fj-swing-near 0.5s steps(2, jump-none) infinite;
-}
-
-@keyframes fj-swing-near {
-  to {
-    opacity: 0.35;
-  }
-}
-
-.fj-swing-at,
-.fj-swing-at > span {
-  position: absolute;
-  inset: 0;
-  will-change: transform;
-}
-
-.fj-swing-at b {
-  position: absolute;
-  top: 67%;
-  left: 50%;
-  width: 12px;
-  height: 12px;
-  margin: -6px 0 0 -6px;
-  border-radius: 50%;
-  background: #c6d6e4;
-  box-shadow: 0 0 6px rgba(6, 10, 19, 0.9);
-}
-
-.fj-swing:not([data-cue='']) .fj-swing-at b {
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(45, 212, 238, 0.55), 0 0 14px rgba(45, 212, 238, 0.7);
-}
-
-.fj-swing-at b::after {
-  position: absolute;
-  bottom: 15px;
-  left: 50%;
-  color: #fff;
-  font-size: 13px;
-  line-height: 1;
-  text-shadow: 0 0 6px var(--bg);
-  transform: translateX(-50%);
-}
-
-.fj-swing[data-cue='catch'] .fj-swing-at b::after,
-.fj-swing[data-cue='press'] .fj-swing-at b::after,
-.fj-swing[data-cue='pump'] .fj-swing-at b::after {
-  content: '▼';
-}
-
-.fj-swing[data-cue='release'] .fj-swing-at b::after {
-  content: '▽';
-}
-
-.fj-swing[data-cue='left'] .fj-swing-at b::after {
-  content: '◀';
-}
-
-.fj-swing[data-cue='right'] .fj-swing-at b::after {
-  content: '▶';
-}
-
-/* The catch and a fold's pump are the ones that cannot wait: their dot is ringed in white. */
-.fj-swing:is([data-cue='catch'], [data-cue='pump']) .fj-swing-at b {
-  box-shadow: 0 0 0 3px #fff, 0 0 16px rgba(255, 255, 255, 0.7);
-}
-
-/* Round a loop the cross gives way to its ring: the wing at its middle and the pilot the dot going
-   round it, ▲ where they pass over the wing and ▼ where they pass under it, lit as each moment
-   comes. Only the dot's holder turns. */
-.fj-swing-loop {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 46px;
-  height: 46px;
-  margin: -23px 0 0 -23px;
-  border: 1px solid rgba(198, 214, 228, 0.45);
-  border-radius: 50%;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.fj-swing-loop em {
-  position: absolute;
-  left: 100%;
-  margin-left: 8px;
-  color: var(--dim);
-  font-size: 10px;
-  font-style: normal;
-  line-height: 1;
-}
-
-.fj-swing-loop em:first-child {
-  top: -2px;
-}
-
-.fj-swing-loop em:last-child {
-  bottom: -2px;
-}
-
-.fj-swing-loop > span {
-  position: absolute;
-  inset: 0;
-}
-
-.fj-swing-loop b {
-  position: absolute;
-  bottom: -5px;
-  left: 50%;
-  width: 10px;
-  height: 10px;
-  margin-left: -5px;
-  border-radius: 50%;
-  background: #fff;
-}
-
-.fj-swing[data-mode='loop'] .fj-swing-loop {
-  opacity: 1;
-}
-
-.fj-swing[data-mode='loop'] :is(.fj-swing-x, .fj-swing-y, .fj-swing-at) {
-  opacity: 0;
-}
-
-.fj-swing[data-cue='up'] .fj-swing-loop em:first-child,
-.fj-swing[data-cue='down'] .fj-swing-loop em:last-child {
-  color: #fff;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fj-swing[data-near='1'] :is(.fj-swing-x, .fj-swing-y) b {
-    animation: none;
-  }
-}
-
-.lost .fj-swing,
-.cloudbase-ended .fj-swing {
-  display: none;
-}
-
-/* ---- the prompt to act on a swing, by the wing
-
-   A big sign over the wing (or beside it, the side a wingover's turn swaps to), with the word for
-   what to do and a ring that closes on it as the moment comes: lit white as it comes, ember for a
-   surge to catch, and a cyan tick when the hands were on time. Placed by transform, and only
-   while it shows. */
-.fj-cue {
-  position: absolute;
-  top: 0;
-  left: 0;
-  /* Over the toasts, which come before it (a moment to act cannot wait behind an achievement), and
-     under the menu. */
-  z-index: 3;
-  display: none;
-  width: 60px;
-  height: 60px;
-  margin: -30px 0 0 -30px;
-  pointer-events: none;
-  will-change: transform;
-}
-
-.fj-cue:not([data-cue='']),
-.fj-cue[data-good='1'] {
-  display: block;
-}
-
-.fj-cue i {
-  position: absolute;
-  inset: 0;
-  border: 2px solid rgba(45, 212, 238, 0.85);
-  border-radius: 50%;
-  box-shadow: 0 0 12px rgba(45, 212, 238, 0.45);
-  will-change: transform;
-}
-
-.fj-cue b {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: rgba(6, 10, 19, 0.55);
-  color: rgba(234, 244, 255, 0.75);
-  font-size: 28px;
-  font-weight: normal;
-  line-height: 1;
-}
-
-.fj-cue small {
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  margin-top: 6px;
-  color: var(--dim);
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-shadow: 0 0 6px var(--bg);
-  white-space: nowrap;
-  transform: translateX(-50%);
-}
-
-/* The moment has come: lit. */
-.fj-cue[data-live='1'] b {
-  background: rgba(45, 212, 238, 0.35);
-  color: #fff;
-  box-shadow: 0 0 0 3px #fff, 0 0 22px rgba(45, 212, 238, 0.8);
-}
-
-.fj-cue[data-live='1'] small {
-  color: #fff;
-}
-
-/* A surge to catch and a fold to pump open cannot wait: ember, lit at once. The pump's ring closes
-   as its hold fills. */
-.fj-cue:is([data-cue='catch'], [data-cue='pump']) i {
-  border-color: var(--ember);
-  box-shadow: 0 0 14px rgba(255, 157, 74, 0.6);
-}
-
-.fj-cue:is([data-cue='catch'], [data-cue='pump']) b {
-  background: rgba(255, 157, 74, 0.35);
-  color: #fff;
-  box-shadow: 0 0 0 3px var(--ember), 0 0 22px rgba(255, 157, 74, 0.75);
-}
-
-.fj-cue:is([data-cue='catch'], [data-cue='pump']) small {
-  color: var(--ember);
-}
-
-/* The hands on time: a cyan tick that pops, and is gone. */
-.fj-cue[data-good='1'] i {
-  transform: scale(1) !important;
-  border-color: var(--cyan);
-}
-
-.fj-cue[data-good='1'] b {
-  background: rgba(45, 212, 238, 0.45);
-  color: #fff;
-  box-shadow: 0 0 24px rgba(45, 212, 238, 0.9);
-  animation: fj-cue-good 0.35s ease-out both;
-}
-
-.fj-cue[data-good='1'] small {
-  color: var(--cyan);
-}
-
-@keyframes fj-cue-good {
-  from {
-    scale: 1.4;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fj-cue[data-good='1'] b {
-    animation: none;
-  }
-}
-
-.lost .fj-cue,
-.cloudbase-ended .fj-cue {
-  display: none !important;
-}
-
-@media (pointer: coarse) {
-  .fj-cue {
-    width: 52px;
-    height: 52px;
-    margin: -26px 0 0 -26px;
-  }
-
-  .fj-cue b {
-    font-size: 24px;
-  }
-}
-
-@media (max-width: 560px) {
-  .fj-swing {
-    width: 168px;
-    height: 64px;
-  }
 }
 
 .fj-labels {
@@ -959,41 +462,6 @@
     height: 6px;
   }
 
-  /* The button the swing gauge says to press now, ringed in white: a ▼ to catch, press or pump,
-     dashed to let it go, an arrow to swap a wingover's turn. The brake's own amber and a stall's red,
-     below, show over it. */
-  .fj-touch:is([data-cue='catch'], [data-cue='press'], [data-cue='pump'], [data-cue='down']) [data-input='brake'],
-  .fj-touch[data-cue='up'] [data-input='bar'],
-  .fj-touch[data-cue='left'] [data-input='left'],
-  .fj-touch[data-cue='right'] [data-input='right'] {
-    border-color: #fff;
-    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.5), 0 0 18px rgba(45, 212, 238, 0.55);
-  }
-
-  .fj-touch[data-cue='release'] [data-input='brake'] {
-    border-style: dashed;
-    border-color: #fff;
-  }
-
-  /* The ▼ under the thumb says it too: amber as the light brake runs out, red near the stall. */
-  .fj-touch[data-brake='late'] [data-input='brake'],
-  .fj-touch[data-brake='deep'] [data-input='brake'] {
-    border-color: var(--ember);
-    box-shadow: 0 0 0 3px rgba(255, 157, 74, 0.45);
-  }
-
-  .fj-touch[data-brake='near'] [data-input='brake'],
-  .fj-touch[data-brake='stalled'] [data-input='brake'] {
-    border-color: #ff546b;
-    box-shadow: 0 0 0 4px rgba(255, 84, 107, 0.55), 0 0 22px rgba(255, 84, 107, 0.6);
-  }
-
-  /* Violet with the ears in, both ▼ holding them. */
-  .fj-touch[data-brake='ears'] [data-input='brake'] {
-    border-color: #b9a4ff;
-    box-shadow: 0 0 0 3px rgba(185, 164, 255, 0.45);
-  }
-
   /* Between the pilot and the hint, clear of the meter and the thumbs. */
   .fj-swing {
     bottom: calc(max(18px, env(safe-area-inset-bottom)) + 112px);
@@ -1118,4 +586,99 @@
   .cloudbase .fj-hud > dl {
     gap: 2px 10px;
   }
+}
+
+/* A single coach, shared by both kinds of manual flight. */
+.fj-coach {
+  position: absolute; bottom: 40px; left: 50%; z-index: 3;
+  width: min(370px, calc(100% - 32px)); box-sizing: border-box;
+  padding: 12px 16px; border: 1px solid rgba(94,230,255,.28); border-radius: 12px;
+  background: rgba(6,15,27,.88); backdrop-filter: blur(12px);
+  transform: translateX(-50%); pointer-events: none; color: #eaf4ff;
+  box-shadow: 0 8px 32px rgba(0,0,0,.18); text-align: center;
+}
+.fj-coach[hidden] { display: none; }
+.fj-coach [hidden] { display: none !important; }
+.fj-coach-kicker { display: block; color: #8aa4bb; font-size: 9px; line-height: 1.4; letter-spacing: .12em; margin-bottom: 6px; text-transform: uppercase; }
+.fj-coach strong { display: block; font-size: 15px; line-height: 1.35; letter-spacing: .04em; font-weight: 650; }
+.fj-coach[data-action='left'] strong::before, .fj-coach[data-action='right'] strong::before,
+.fj-coach[data-action='prepare-left'] strong::before, .fj-coach[data-action='prepare-right'] strong::before { display: inline-block; margin-right: 8px; font-size: 22px; line-height: .9; vertical-align: -.08em; }
+.fj-coach[data-action='left'] strong::before { content: '◀'; }
+.fj-coach[data-action='right'] strong::before { content: '▶'; }
+.fj-coach[data-action='prepare-left'] strong::before { content: '◁'; }
+.fj-coach[data-action='prepare-right'] strong::before { content: '▷'; }
+.fj-coach small { display: block; margin-top: 5px; color: #b6c9d9; font-size: 11px; line-height: 1.45; }
+.fj-coach [data-coach='controls'] { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; margin-top: 8px; }
+.fj-coach-control { display: inline-flex; align-items: center; gap: 5px; border: 1px solid rgba(138,164,187,.4); border-radius: 5px; padding: 4px 6px; color: #b6c9d9; font-size: 10px; line-height: 1.2; }
+.fj-coach-control kbd { display: inline-block; border: 0; padding: 0; color: inherit; font: inherit; white-space: nowrap; }
+.fj-coach-control[data-advice='hold'] { border-color: #b8f6ff; }
+.fj-coach-control[data-held='true'] { background: #173948; color: #d4f9ff; }
+.fj-coach-control[data-advice='release'][data-held='true'] { border-style: dashed; border-color: #ffb066; background: #352a20; color: #ffd7ae; }
+.fj-coach-released { color: #b6c9d9; font-size: 10px; }
+.fj-coach [data-coach='feedback'] { display: block; margin-top: 7px; color: #83efc0; font-size: 11px; line-height: 1.3; }
+.fj-coach [data-coach='progress'] { margin-top: 8px; }
+.fj-coach [data-coach='progress'] > span { display: block; margin-bottom: 4px; color: #b6c9d9; font-size: 10px; line-height: 1.2; }
+.fj-coach [data-coach='progress'] i { display: block; height: 3px; border-radius: 2px; background: rgba(94,230,255,.12); overflow: hidden; }
+.fj-coach [data-coach='progress'] i b { display: block; height: 100%; background: #5ee6ff; transform-origin: left; }
+.fj-coach [data-coach='announce'] { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.fj-coach [data-coach='cancel'] { pointer-events: auto; min-height: 36px; margin-top: 8px; padding: 7px 12px; border: 1px solid #8aa4bb; border-radius: 5px; color: #eaf4ff; background: #14232e; font: inherit; font-size: 11px; cursor: pointer; touch-action: manipulation; }
+.fj-coach [data-coach='cancel']:focus-visible { outline: 2px solid #5ee6ff; outline-offset: 3px; }
+.fj-coach[data-state='timing'], .fj-coach[data-state='timed'] { border-color: #5ee6ff; }
+.fj-coach[data-state='complete'] strong, .fj-coach[data-state='banked'] strong { color: #83efc0; }
+.fj-coach[data-state='banked'] { border-color: #83efc0; box-shadow: 0 0 24px rgba(131,239,192,.13); }
+.fj-coach[data-state='recover'] { border-color: #ffb066; }
+.fj-coach[data-state='recover'] strong { color: #ffb066; }
+.fj-coach[data-state='ridge'] strong { color: #83efc0; }
+.fj-coach[data-state='lee'] { border-color: #ffb066; }
+.fj-coach[data-state='lee'] strong { color: #ffb066; }
+.fj-coach[data-warning='true'] { border-color: #ffb066; }
+.fj-coach[data-warning='true'] [data-coach='feedback'] { color: #ffb066; }
+.lost .fj-coach, .cloudbase-ended .fj-coach { display: none; }
+.fj-hud > dl { border-radius: 10px; border-color: rgba(94,230,255,.18); background: rgba(6,15,27,.82); line-height: 1.7; }
+.fj-hud > dl [data-hud='vario'] { font-size: 18px; font-weight: 650; }
+.fj-hud > dl [data-hud='wind'] { color: #8aa4bb; }
+.fj-hud nav > [data-do='sound'], .fj-hud nav > [data-do='music'], .fj-hud nav > [data-do='fullscreen'], .fj-hud nav > [data-do='exit'] { display: none; }
+.fj-hud .fj-keys-more { display: flex; }
+.fj-touch > span { display: flex; gap: 7px; pointer-events: none; }
+.fj-touch button { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border-radius: 14px; width: 56px; height: 60px; background: rgba(6,15,27,.84); }
+.fj-touch button small { font-size: 9px; letter-spacing: .03em; }
+.fj-touch button.held { color: #06101b; background: #5ee6ff; border-color: #b8f6ff; }
+.fj-touch button[data-coach-action='hold'] { border-color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,.5); }
+.fj-touch button[data-coach-action='release'] { border-style: dashed; border-color: #ffb066; box-shadow: 0 0 0 2px rgba(255,176,102,.35); }
+.fj-touch button[data-coach-action='release'].held { background: #ffb066; }
+.fj-touch button[data-input='brake'] small { white-space: normal; max-width: 48px; line-height: 1.1; }
+.fj-touch button[data-brake-depth='deep'] { color: #10101e; background: #d3b3ff; border-color: #f2e5ff; }
+.fj-touch button[data-brake-depth='deep'][data-coach-action='release'] { background: #ffb066; }
+.fj-touch button[data-brake-advice='deep'][data-coach-action='hold'] { border-color: #e9d3ff; box-shadow: 0 0 0 2px rgba(211,179,255,.5); }
+.fj-touch button[data-coach-action='hold']::after, .fj-touch button[data-coach-action='release']::after { position: absolute; top: -9px; right: 3px; padding: 1px 4px; border-radius: 3px; color: #d4f9ff; background: #173948; font-size: 8px; line-height: 1.3; letter-spacing: .02em; }
+.fj-touch button[data-coach-action='hold']::after { content: 'hold'; }
+.fj-touch button[data-brake-advice='deep'][data-coach-action='hold']::after { content: 'deep'; }
+.fj-touch button[data-coach-action='release']::after { content: 'release'; color: #ffd7ae; background: #352a20; }
+.fj-touch button:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
+@media (pointer: coarse), (max-width: 560px) {
+  .playing .fj-touch { display: flex; bottom: max(18px, env(safe-area-inset-bottom)); padding: 0 12px; gap: 12px; }
+  .fj-touch button { width: 52px; height: 58px; min-height: 44px; margin: 0; }
+  .fj-coach { bottom: calc(96px + env(safe-area-inset-bottom)); padding: 10px 12px; }
+  .fj-coach strong { font-size: 13px; }
+  .fj-coach small { font-size: 11px; }
+  .fj-hud > dl { box-sizing: border-box; max-width: calc(100% - 195px); gap: 0 9px; }
+  .fj-hud > dl [data-hud='speed'] { display: inline; color: #b6c9d9; }
+  .fj-hud > dl [data-hud='vario'] { font-size: 14px; }
+  .fj-thermal-air { flex-basis: 100%; grid-template-columns: 44px 8ch; font-size: 8px; }
+  .fj-hud > dl [data-hud='wind'] { font-size: 10px; }
+  .fj-hud nav { gap: 5px; }
+  .fj-hint { bottom: 195px; padding: 0 24px; box-sizing: border-box; font-size: 10px; }
+}
+@media (max-width: 560px) {
+  .fj-hud nav > [data-do='map'] kbd,
+  .fj-hud nav > [data-do='keys'] .for-keys { display: none; }
+  .fj-hud nav > [data-do='keys'] .for-touch { display: inline; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .fj-coach { bottom: 22px; width: min(330px, calc(100% - 330px)); padding: 8px 10px; }
+  .fj-coach-kicker { margin-bottom: 4px; font-size: 8px; }
+  .fj-coach strong { font-size: 13px; }
+  .fj-coach small { font-size: 10px; line-height: 1.3; }
+  .fj-coach [data-coach='controls'] { margin-top: 6px; }
+  .fj-hint { bottom: 115px; }
 }

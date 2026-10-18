@@ -1,12 +1,14 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { LIVERIES, liveryPicture, paintLivery } from '../game/livery.js';
+import { HARNESSES } from '../game/harness.js';
+import { emptyKit } from '../game/wing-kit.js';
 import { THOUSAND_POUNDS, kilos } from '../game/meet-card.js';
 
 // The meet sheet's kit tab: what the kilos banked over every run, and two of the feats, have earned
 // (`sheet`, good-lift-store.js's kitSheet), and the choice of what to fly in. A choice goes to the
 // game (`onKit`), which keeps only what has been earned, writes it down and dresses the glider at
 // once, and hands back the kit now worn. Plain controls throughout, each labelled with its state:
-// a group of radio buttons for the wing and a check box each for the chalk and the helmet. Like
+// independent radio groups for wing and harness, and check boxes for chalk and helmet. Like
 // the rest of the sheet it ships with the game, never with the page.
 
 const NAMES = { standard: 'Standard', chalk: 'Chalk', gjermundbu: 'Gjermundbu helmet' };
@@ -23,19 +25,19 @@ const FEATS = {
 
 const nameOf = (key) => LIVERIES[key]?.name ?? NAMES[key] ?? key;
 const lookOf = (key) => LIVERIES[key]?.look ?? LOOKS[key] ?? '';
-const tonnes = (kg) => `${(kg / 1000).toLocaleString('en-GB', { maximumFractionDigits: 1 })} t`;
+const weight = (kg) => kg < 1000 ? `${kilos(kg)} kg` : `${(kg / 1000).toLocaleString('en-GB', { maximumFractionDigits: 1 })} t`;
 // Whether this device asks for less motion, for which the chalk, though switched on, never shows
 // (meet-chalk.js).
 const calmDevice = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 // A row's classes: quiet while still to earn, lit while worn.
 const rowClass = (earned, worn) => [earned ? '' : 'locked', worn ? 'worn' : ''].filter(Boolean).join(' ') || undefined;
 
-// A piece as the news names it: a wing as a wing.
-const pieceName = (item) => (item.kind === 'wing' ? `${nameOf(item.id)} wing` : nameOf(item.id));
+// One theme unlocks both pieces, and appears only once in the progress ladder and news.
+const pieceName = (item) => (item.kind === 'wing' ? `${nameOf(item.id)} wing + harness` : nameOf(item.id));
 
 // What a piece still asks for, and how far off it is.
 function asks(item, sheet) {
-  if (item.kg) return `${tonnes(item.kg)} banked · ${kilos(item.left)} kg to go`;
+  if (item.kg) return `${weight(item.kg)} banked · ${kilos(item.left)} kg to go`;
   if (item.feat === 'thousand-pound-club') {
     return `${FEATS[item.feat]} · best ${kilos(sheet.best)} kg, ${kilos(Math.max(0, THOUSAND_POUNDS - sheet.best))} kg short`;
   }
@@ -91,7 +93,7 @@ export function KitNews({ sheet }) {
 /** The kit tab. Without a `sheet` (a run's controller that keeps none) it says so and offers nothing. */
 export default function GoodLiftKit({ sheet, onKit }) {
   const id = useId();
-  const [worn, setWorn] = useState(() => sheet?.worn ?? { wing: 'standard', helmet: false, chalk: false });
+  const [worn, setWorn] = useState(() => sheet?.worn ?? emptyKit());
   useEffect(() => {
     if (sheet?.worn) setWorn(sheet.worn);
   }, [sheet]);
@@ -119,7 +121,7 @@ export default function GoodLiftKit({ sheet, onKit }) {
     <div className="good-lift-kit">
       <p className="good-lift-tonnage">
         lifetime <strong>{kilos(sheet.tonnage)} kg</strong> banked
-        {next ? ` · next: ${pieceName(next)} at ${tonnes(next.kg)}, ${kilos(next.left)} kg to go` : ' · every rung of the ladder is open'}
+        {next ? ` · next: ${pieceName(next)} at ${weight(next.kg)}, ${kilos(next.left)} kg to go` : ' · every rung of the ladder is open'}
       </p>
       <p className="good-lift-ladder" aria-hidden="true">
         <i style={{ '--done': done.toFixed(3) }} />
@@ -138,6 +140,24 @@ export default function GoodLiftKit({ sheet, onKit }) {
                 {fresh.has(key) && <em> new</em>}
               </b>{' '}
               <span>{key === 'standard' ? lookOf(key) : state(item)}</span>
+            </label>
+          );
+        })}
+      </fieldset>
+
+      <fieldset className="good-lift-choice">
+        <legend>cocoon harness</legend>
+        <p className="dim">// each colour unlocks for wing and harness together. Mix them as you like.</p>
+        {wings.map((key) => {
+          const item = piece(key);
+          const theme = HARNESSES[key];
+          const look = theme?.look ?? 'the original blue-grey cocoon';
+          return (
+            <label key={key} className={rowClass(item.earned, worn.harness === key)}>
+              <input type="radio" name={`${id}-harness`} value={key} checked={worn.harness === key} disabled={!item.earned} onChange={() => choose({ harness: key })} />
+              <span className={`good-lift-swatch harness${theme ? '' : ' standard'}`} style={theme ? { '--body': theme.body, '--trim': theme.trim } : undefined} aria-hidden="true" />
+              <b>{nameOf(key)}{fresh.has(key) && <em> new</em>}</b>{' '}
+              <span>{item.earned ? `unlocked · ${look}` : asks(item, sheet)}</span>
             </label>
           );
         })}

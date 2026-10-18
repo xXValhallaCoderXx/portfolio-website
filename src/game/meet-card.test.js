@@ -92,8 +92,8 @@ test('once the bots land, the sheet says the medals lightest first, which one TS
 });
 
 test('the barogram stays in its frame, with the fog under the flight and the horn where it sounded', () => {
-  const n = 150;
-  const trace = { alt: new Float32Array(241), fog: new Float32Array(241), total: new Float32Array(241), n };
+  const n = 401;
+  const trace = { alt: new Float32Array(601), fog: new Float32Array(601), total: new Float32Array(601), n };
   for (let i = 0; i < n; i++) {
     trace.alt[i] = 80 + i * 8;
     trace.fog[i] = Math.max(0, i * 5 - 100);
@@ -109,7 +109,7 @@ test('the barogram stays in its frame, with the fog under the flight and the hor
   for (let i = 0; i < n; i++) assert.ok(alt[i][1] <= fog[i + 1][1]);
   assert.deepEqual(fog[0], [0, 96], 'the fog is filled from the floor');
   assert.deepEqual(chart.lines.map((each) => [each.line, each.good]), [[250, true], [500, false], [750, true], [1000, true]]);
-  assert.ok(Math.abs(chart.horn - (110 / (n - 1)) * 320) < 0.1);
+  assert.ok(Math.abs(chart.horn - (300 / (n - 1)) * 320) < 0.1);
   assert.equal(barogram({ ...trace, n: 60 }, lifts).horn, null, 'a run over before the horn has none');
   assert.ok(chart.ceiling >= 80 + (n - 1) * 8);
   // A peak reached between two samples, and a line judged above every sample, both stay inside.
@@ -127,6 +127,7 @@ test('the world board\'s line says how many are on it, where this browser stands
   assert.equal(worldSaid({ rows: rows(100), rank: 0, sent: { ok: true, why: '', rank: 0 } }), '100 pilots on it · this run went up, but not into the top 100');
   assert.equal(worldSaid({ rows: rows(9), rank: 4, sent: { ok: false, why: 'not-best', rank: 4 } }), '9 pilots on it · you: #4 · your better run is already on it');
   assert.equal(worldSaid({ rows: rows(9), rank: 0, sent: { ok: false, why: 'mismatch', rank: 0 } }), '9 pilots on it · its replay of this run came to another sheet, so it stays here');
+  assert.equal(worldSaid({ rows: [], rank: 0, sent: { ok: false, why: 'version', rank: 0 } }), 'nobody on it yet · the world board is updating its flight rules; this run stays on this device');
   // A reason this build does not know is a plain no; a board that failed to judge the run said no to nothing.
   assert.equal(worldSaid({ rows: rows(2), rank: 0, sent: { ok: false, why: 'later', rank: 0 } }), '2 pilots on it · it turned this run down');
   for (const why of ['store', 'fault']) assert.equal(worldSaid({ rows: rows(2), rank: 0, sent: { ok: false, why, rank: 0 } }), '2 pilots on it · it could not be reached, so this run stays here', why);

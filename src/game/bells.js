@@ -1,4 +1,4 @@
-// Hrungnir's kettlebells. From 550 m up the giant throws one at a time at the place the glider
+// Hrungnir's kettlebells. From 700 m up the giant throws one at a time at the place the glider
 // will be 2.4 seconds later if the pilot holds what they are doing, and that is the warning: a
 // grunt from his side, a red ring where it will come down and a chevron if the ring is off the
 // screen. Holding on is a hit; changing what you are doing (pushing the bar in a circle, turning
@@ -8,7 +8,7 @@
 // a stall, about to meet a gust front or near the rim, so a kettlebell is never one more thing on
 // top of a moment the pilot is already fighting.
 //
-// Once a run the giant throws the Beast: the first throw once the pilot has reached 1,000 m is his
+// Once an ordinary bell has introduced the warning, the first throw past 1,000 m is the Beast: his
 // 48 kg bell, with a longer warning and aimed as far ahead again, and a close call by it is worth
 // more. A pilot holding Algiz's blessing (meet-runes.js) has the next bell that would hit glance
 // off instead, which spends the blessing.
@@ -17,18 +17,19 @@
 // draws from the run's seed (never the sky's generator), and nothing allocated once it is made.
 // It is stepped only through run-step.js, after the sky, and the only thing it ever changes
 // outside itself is the strike a hit calls. It reads the meet only for the blessing it holds.
-import { createFlight, stepFlight } from './flight.js';
-import { CLOUD_DEFAULT_SEED, CLOUD_STRIKE, CLOUD_ZONE } from './cloudbase-state.js';
+import { copyFlight, createFlight, stepFlight } from './flight.js';
+import { CLOUD_DEFAULT_SEED, CLOUD_STRIKE, CLOUD_ZONE, encounterInterval } from './cloudbase-state.js';
 import { RUN } from './run-step.js';
 import { surfaceAt } from './ground.js';
 import { RUNE } from './meet-runes.js';
+import { RUN_RULES } from './run-rules.js';
 
 export const BELLS = Object.freeze({
-  from: 550,                        // m of peak before the first throw
-  first: Object.freeze([3, 6]),     // s after first reaching `from` until the first throw
-  every: Object.freeze([16, 22]),   // s from one throw to the next
+  from: 700,                        // m of peak before the first throw
+  first: Object.freeze([10, 15]),   // s after first reaching `from` until the first throw
+  every: Object.freeze([75, 90]),   // s from one throw to the next at the opening height
   often: 1000,                      // m of peak past which the throws come `oftener`
-  oftener: Object.freeze([10, 14]), // s from one throw to the next up there
+  oftener: Object.freeze([35, 45]), // s from one throw to the next up there
   lead: 2.4,                        // s from the throw, and its warning, to the bell reaching the aim
   drop: 96,                         // m above the aim it falls from
   side: 26,                         // m beside the aim it falls from: 41 m/s, 15° off the vertical
@@ -132,9 +133,9 @@ export function createBells() {
   // The look-ahead: a wing of the giant's own, flown in the air the sky has now on what the pilot
   // is holding. Its air and forces are its own as well, so nothing of the run's is touched.
   const ahead = createFlight({ x: 0, y: 0, z: 0 });
-  const held = { turn: 0, brake: false, bar: false, ears: false, locked: false, harsh: false, linger: true, swing: false, folds: false, safe: false, climb: null };
-  const air = { lift: 0, sink: 0, windX: 0, windZ: 0, calm: false, rough: 0, clearance: Infinity };
-  const forces = { lift: 0, sink: 0, liftSide: 0, windX: 0, windZ: 0, rough: 0 };
+  const held = { turn: 0, brake: false, bar: false, ears: false, locked: false, climb: null };
+  const air = { lift: 0, sink: 0, windX: 0, windY: 0, windZ: 0, hazardSink: 0, calm: false, rough: 0, clearance: Infinity };
+  const forces = { lift: 0, sink: 0, liftSide: 0, windX: 0, windY: 0, windZ: 0, hazardSink: 0, rough: 0 };
 
   function reset(seed = CLOUD_DEFAULT_SEED) {
     state.seed = seed >>> 0;
@@ -164,19 +165,16 @@ export function createBells() {
   // would not have the tuck.
   function aim(sky, g, controls, steps) {
     const pos = ahead.pos;
-    Object.assign(ahead, g);
-    ahead.pos = pos;
-    pos.x = g.pos.x;
-    pos.y = g.pos.y;
-    pos.z = g.pos.z;
+    copyFlight(ahead, g);
     Object.assign(held, controls);
-    held.folds = false;
     for (let i = 0; i < steps; i++) {
       sky.sample(pos, ahead.yaw, forces);
       air.lift = forces.lift;
       air.sink = forces.sink;
       air.windX = forces.windX;
+      air.windY = forces.windY ?? forces.lift - forces.sink;
       air.windZ = forces.windZ;
+      air.hazardSink = forces.hazardSink ?? 0;
       air.rough = forces.rough;
       air.calm = false;
       air.clearance = pos.y - surfaceAt(pos.x, pos.z);
@@ -214,9 +212,10 @@ export function createBells() {
   // front about to arrive, or the rim close by. A swinging wing is thrown at as any other: blocking
   // on it would let a pilot pump the swing, or wingover, and never be thrown at.
   function blocked(sky, g) {
+    if (g.pos.y < B.from) return true;
     for (let i = 0; i < state.bells.length; i++) if (state.bells[i].phase !== IDLE) return true;
     const pilot = sky.state.pilot;
-    if (pilot.shield > 0 || pilot.cloud > 0 || pilot.danger > 0 || pilot.gustIn < B.gust || g.stall > 0 || g.tuck > 0 || g.tip > 0) return true;
+    if (pilot.shield > 0 || pilot.cloud > 0 || pilot.danger > 0 || pilot.gustIn < B.gust || g.stall > 0 || g.tuck > 0) return true;
     const dx = g.pos.x - Z.x;
     const dz = g.pos.z - Z.z;
     return dx * dx + dz * dz > (Z.r - B.edge) * (Z.r - B.edge);
@@ -277,7 +276,8 @@ export function createBells() {
   function hurl(world, now) {
     const { sky, g } = world;
     const n = state.thrown;
-    const beast = state.beast.n < 0 && sky.state.peak >= BEAST.from;
+    // Every pilot meets the ordinary warning before the one-off Beast, even after a fast climb.
+    const beast = n > 0 && state.beast.n < 0 && sky.state.peak >= BEAST.from;
     const lead = beast ? BEAST.lead : B.lead;
     const pos = aim(sky, g, world.controls, beast ? BEAST_LOOK : LOOK);
     if (!fair(sky, pos.x, pos.y, pos.z)) {
@@ -303,8 +303,7 @@ export function createBells() {
     bell.kg = beast ? BEAST.kg : B.kg[Math.floor(draw(state.seed, 3 + 4 * n) * B.kg.length)];
     bell.near = FAR;
     bell.circling = Math.abs(g.yawRate) > B.turning && g.bar < 0.5;
-    const gap = sky.state.peak >= B.often ? B.oftener : B.every;
-    state.due = now + mix(gap[0], gap[1], draw(state.seed, 2 + 4 * n));
+    state.due = now + encounterInterval({ from: B.from, every: B.every, high: B.oftener }, sky.state.peak, draw(state.seed, 2 + 4 * n));
     state.thrown = n + 1;
     if (beast) {
       state.beast.n = n;
@@ -324,8 +323,8 @@ export function createBells() {
     const warded = world.meet ? world.meet.state.runes.blessing.rune === RUNE.algiz : false;
     for (let i = 0; i < state.bells.length; i++) if (state.bells[i].phase !== IDLE) fall(state.bells[i], sky, g, now, warded);
     state.clear = blocked(sky, g) ? 0 : state.clear + dt;
-    if (state.due < 0 && sky.state.peak >= B.from) state.due = now + mix(B.first[0], B.first[1], draw(state.seed, 0));
-    if (state.due >= 0 && now >= state.due && now >= state.retry && state.clear >= B.quiet) hurl(world, now);
+    if (state.due < 0 && now >= RUN_RULES.grace && sky.state.peak >= B.from) state.due = now + mix(B.first[0], B.first[1], draw(state.seed, 0));
+    if (now >= RUN_RULES.grace && state.due >= 0 && now >= state.due && now >= state.retry && state.clear >= B.quiet) hurl(world, now);
     state.warning = -1;
     for (let i = 0; i < state.bells.length; i++) {
       if (state.bells[i].phase === WARNING) {

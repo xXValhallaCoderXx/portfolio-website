@@ -9,7 +9,7 @@
  * has judged what was left on the bar. A new object each call, sharing nothing with the world's
  * pools, so it can be kept, sent and compared; it is made once a run, never once a step.
  *
- *   seed, reason      the sky the run was flown on, and how it ended: 'fog', 'landed' or 'quit'
+ *   seed, reason      the sky the run was flown on, and how it ended: 'fog', 'landed', 'time' or 'quit'
  *                     (any other ending is a quit, as the meet counts it)
  *   steps, seconds    fixed steps flown, and run seconds on the sky's clock
  *   total             kg banked by good lifts, a multiple of 2.5 (0 with no meet)
@@ -27,6 +27,8 @@
  *                     wingovers in one set landed, and the deepest pitch caught, in whole degrees
  *   trace             the barogram: `alt`, `fog` and `total` for each run second, `n` of them
  */
+import { isJudgedEnding } from './run-rules.js';
+
 export function summariseRun(world, reason) {
   const { sky, g, meet, bells, trace, style } = world;
   const { state } = sky;
@@ -43,7 +45,7 @@ export function summariseRun(world, reason) {
   const n = trace ? trace.n : 0;
   return {
     seed: state.seed,
-    reason: reason === 'fog' || reason === 'landed' ? reason : 'quit',
+    reason: isJudgedEnding(reason) ? reason : 'quit',
     steps: world.steps,
     seconds: state.elapsed,
     total: met ? met.total : 0,

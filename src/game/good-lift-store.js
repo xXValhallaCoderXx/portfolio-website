@@ -12,20 +12,23 @@
 // Where storage is missing, blocked or full, the store lives in this module's memory for the visit
 // (achievements.js does the same for the fjord when storage is blocked). A visitor who blocks site
 // data therefore still has their runs on the board until they leave. Reads always come back
-// normalised: whatever another tab, an older build or a hand edit left there, the game only ever
+// normalised: whatever another tab or a hand edit left there, the game only ever
 // sees a valid store.
 //
 // Writers re-read before they write. Read, change and write in one go (updateStore does exactly
 // that), never with a store read long before, or a run recorded in another tab is written over.
-import { addRow, boardKey, emptyBoard, normalizeBoard, normalizeBots, pruneBoard } from './board.js';
+import { addRow, boardKey, emptyBoard, normalizeBoard, normalizeBots, pruneBoard, trimBoardLogs } from './board.js';
 import { dayOf } from './good-lift-address.js';
 import { scoreOf, styleOf } from './score.js';
 import { SIM_VERSION } from './sim-version.js';
 import { isBlocked } from './meet-initials.js';
 import { normalizeKit } from './wing-kit.js';
+import { isJudgedEnding } from './run-rules.js';
+import { GAME_STORE } from './good-lift-key.js';
+import { normalizeLearnedLessons } from './trick-learning.js';
 
 /** The localStorage key Good Lift keeps everything under; the page's reset clears it by name. */
-export const GAME_STORE = 'good-lift-v1';
+export { GAME_STORE };
 
 // Every feat there is, in the order the card shows them and recordRun reports them. They live only
 // here, so they never move the fjord's belt.
@@ -51,15 +54,15 @@ export const TRAINING_BLOCK = 7;
 // else, and there is no shop: each rung opens at `kg` banked in all. Two pieces are earned by a feat
 // instead. In the order the kit tab lists them:
 //   chalk       a puff of chalk from the hands as a plate or a rep loads (meet-chalk.js)
-//   raven …     wings: liveries painted over the standard wing (livery.js)
+//   raven …     colour themes: each opens both the wing and cocoon harness
 //   gjermundbu  the helmet (helmet.js), for the 1,000 lb club
 export const KIT = Object.freeze([
-  Object.freeze({ id: 'chalk', kind: 'chalk', kg: 1000 }),
-  Object.freeze({ id: 'raven', kind: 'wing', kg: 2500 }),
-  Object.freeze({ id: 'calibrated', kind: 'wing', kg: 5000 }),
-  Object.freeze({ id: 'sheetless', kind: 'wing', kg: 10000 }),
-  Object.freeze({ id: 'flyte', kind: 'wing', kg: 20000 }),
-  Object.freeze({ id: 'hird', kind: 'wing', kg: 40000 }),
+  Object.freeze({ id: 'chalk', kind: 'chalk', kg: 25 }),
+  Object.freeze({ id: 'raven', kind: 'wing', kg: 50 }),
+  Object.freeze({ id: 'calibrated', kind: 'wing', kg: 100 }),
+  Object.freeze({ id: 'sheetless', kind: 'wing', kg: 250 }),
+  Object.freeze({ id: 'flyte', kind: 'wing', kg: 500 }),
+  Object.freeze({ id: 'hird', kind: 'wing', kg: 1000 }),
   Object.freeze({ id: 'valkyrie', kind: 'wing', feat: 'clean-meet' }),
   Object.freeze({ id: 'gjermundbu', kind: 'helmet', feat: 'thousand-pound-club' }),
 ]);
@@ -76,13 +79,14 @@ export function newlyEarned(before, after) {
 }
 
 /**
- * `kit` (wing-kit.js) with everything `store` has not earned taken off: a wing not earned is the
- * standard wing, and the helmet or the chalk not earned is off. This is all Good Lift ever writes.
+ * `kit` (wing-kit.js) with everything `store` has not earned taken off. Wing and harness are
+ * checked independently against the same earned themes. This is all Good Lift ever writes.
  */
 export function keepEarned(kit, store) {
   const kept = normalizeKit(kit);
   const earned = earnedKit(store);
   if (kept.wing !== 'standard' && !earned.includes(kept.wing)) kept.wing = 'standard';
+  if (kept.harness !== 'standard' && !earned.includes(kept.harness)) kept.harness = 'standard';
   kept.helmet &&= earned.includes('gjermundbu');
   kept.chalk &&= earned.includes('chalk');
   return kept;
@@ -93,7 +97,7 @@ export function keepEarned(kit, store) {
  * `kit` is the choice kept so far (wing-kit.js's readKit, never a kit only tried on), and `before`
  * and `after` the store read either side of the run. Whatever `after` has not earned comes off, so
  * a kit kept from before a reset, or written by hand, does. The chalk comes on by itself the first
- * time it is earned, being no look to pick but a touch on every pickup; a wing or the helmet waits
+ * time it is earned, being no look to pick but a touch on every pickup; colours and the helmet wait
  * in the kit tab to be put on.
  */
 export function kitAfterRun(kit, before, after) {
@@ -127,13 +131,13 @@ export function kitSheet(store, worn, fresh = []) {
 
 /**
  * A store with nothing flown yet. `optIn` says the initials were set where the sheet said they put
- * this browser's best run of each day on the world board (setInitials). Initials set anywhere else,
- * as all were before there was a world board, keep runs on this browser alone. `bots` is what the
+ * this browser's best run of each day on the world board (setInitials). Initials alone do not
+ * grant that consent. `bots` is what the
  * bots came to on the last Daily Sky they flew (board.js normalizeBots: { key, seed, scores }), or
  * null: one day's, as a later day's takes its place.
  */
 export function emptyStore() {
-  return { v: 1, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: emptyBoard(), bots: null };
+  return { best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], learnedLessons: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: emptyBoard(), bots: null };
 }
 
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -142,7 +146,7 @@ const isCount = (value) => Number.isSafeInteger(value) && value >= 0;
 const INITIALS = /^(?:[A-Z]{3})?$/;
 
 /**
- * A valid store from anything: what storage held, a store from an older build, or nonsense. Each
+ * A valid store from anything storage held. Each
  * part that is missing or damaged falls back to its empty value on its own, so one bad number
  * costs only itself:
  * - the bests and the tonnage are non-negative finite numbers;
@@ -150,13 +154,11 @@ const INITIALS = /^(?:[A-Z]{3})?$/;
  * - the last daily is a whole UTC day, and it and the streak stand or fall together, since a
  *   streak with no day, or a day with no streak, cannot be carried on;
  * - feats are known ids, each once;
- * - initials are none or three capitals the board will show (meet-initials.js), so initials a
- *   build before the blocklist kept, and the blocklist now refuses, read as none;
+ * - initials are none or three capitals the board will show (meet-initials.js);
  * - the opt-in to the world board is true only with initials to go up under;
  * - the board keeps its whole rows (board.js);
  * - the day's bots are whole (board.js normalizeBots) or none.
- * The result always has `v` 1, whatever version `raw` claims. Never throws, and shares no object
- * with `raw`.
+ * Never throws, and shares no object with `raw`.
  */
 export function normalizeStore(raw) {
   try {
@@ -164,19 +166,16 @@ export function normalizeStore(raw) {
     if (!isRecord(raw)) return store;
     if (isAmount(raw.best?.total)) store.best.total = raw.best.total;
     if (isAmount(raw.best?.peak)) store.best.peak = raw.best.peak;
-    // The best score, kept since style came to multiply the total (score.js). It is never less than
-    // the best total's own score, which a run with no style scores: a store from before style
-    // counted, with none kept, starts from that, so its next run is no new best for a total it has
-    // already beaten.
-    store.best.score = Math.max(isAmount(raw.best?.score) ? raw.best.score : 0, scoreOf({ total: store.best.total }));
+    if (isAmount(raw.best?.score)) store.best.score = raw.best.score;
     if (isAmount(raw.tonnage)) store.tonnage = raw.tonnage;
     if (isCount(raw.runs)) store.runs = raw.runs;
     if (Array.isArray(raw.feats)) store.feats = [...new Set(raw.feats.filter((id) => FEAT_IDS.includes(id)))];
+    store.learnedLessons = normalizeLearnedLessons(raw.learnedLessons);
     const { last, streak } = isRecord(raw.daily) ? raw.daily : {};
     if (isCount(last) && isCount(streak) && (last === 0) === (streak === 0)) store.daily = { last, streak };
     if (typeof raw.initials === 'string' && INITIALS.test(raw.initials) && !isBlocked(raw.initials)) store.initials = raw.initials;
     store.optIn = raw.optIn === true && store.initials !== '';
-    store.board = normalizeBoard(raw.board);
+    store.board = trimBoardLogs(normalizeBoard(raw.board));
     store.bots = normalizeBots(raw.bots);
     return store;
   } catch {
@@ -270,6 +269,19 @@ export function updateStore(change, storage = deviceStorage()) {
   return result;
 }
 
+/** Save learning as soon as style banks, even if this visit cannot write device storage. */
+export function learnTrickLesson(id, storage = deviceStorage()) {
+  return updateStore(store => {
+    const before = store.learnedLessons.length;
+    store.learnedLessons = normalizeLearnedLessons([...store.learnedLessons, id]);
+    return store.learnedLessons.length > before;
+  }, storage);
+}
+
+export function repeatTrickLessons(storage = deviceStorage()) {
+  updateStore(store => { store.learnedLessons = []; }, storage);
+}
+
 /**
  * Adds the feats among `ids` (an array or a Set) that `store` has not yet earned, and returns them
  * in FEAT_IDS order. Unknown ids are ignored. recordRun uses it, and it serves a feat awarded after
@@ -302,7 +314,7 @@ export function earnFeats(store, ids) {
  *   red      each lift's lights (board.js), the mist last
  *   at       ms since 1970 when the run started
  *   log      the run's log (base64url), or ''
- *   reason   'fog', 'landed' or 'quit'
+ *   reason   'fog', 'landed', 'time' or 'quit'
  *   feats    the feat ids it earned, as the caller judged them
  *   byname   the byname it earned (meet-bynames.js), or '': its board row carries it
  *
@@ -320,7 +332,7 @@ export function earnFeats(store, ids) {
  *   the streak until that day came round, or for good.
  * A streak of TRAINING_BLOCK (seven) days or more earns the training block.
  *
- * Only a Daily Sky that the sky judged (reason 'fog' or 'landed') and that has a log goes on the
+ * Only a Daily Sky that the sky judged (reason 'fog', 'landed' or 'time') and that has a log goes on the
  * day's board, under the store's initials as this device's own run. A run ended with [ end run ]
  * ('quit') forfeits its bar and its place on the board, though what it banked before still counts
  * toward the bests and the tonnage, and it still counts as a run and toward the streak. A run whose
@@ -357,9 +369,9 @@ export function recordRun(store, run, { version = SIM_VERSION, now = Date.now() 
       daily.last = run.day;
     }
     if (daily.streak >= TRAINING_BLOCK) earned.add('training-block');
-    const judged = run.reason === 'fog' || run.reason === 'landed';
+    const judged = isJudgedEnding(run.reason);
     if (judged && typeof run.log === 'string' && run.log !== '') {
-      const row = { who: store.initials, via: 'me', total: run.total, style, peak: run.peak, red: run.red, at: run.at, log: run.log, byname: run.byname };
+      const row = { who: store.initials, via: 'me', total: run.total, style, peak: run.peak, red: run.red, at: run.at, log: run.log, byname: run.byname ?? '' };
       ({ rank, best } = addRow(store.board, boardKey(version, run.day), row));
     }
   }
@@ -375,8 +387,7 @@ export function recordRun(store, run, { version = SIM_VERSION, now = Date.now() 
  *
  * `world` says they were typed where the sheet says initials put this browser's best run of each
  * day on the world board: there, three letters are the pilot's opt-in to it. Anywhere else they
- * leave the opt-in as it was, so initials set before there was a world board never opt in by
- * themselves; and none, wherever they are cleared, opt out.
+ * leave the opt-in as it was; clearing initials always opts out.
  */
 export function setInitials(store, text, { world = false } = {}) {
   const typed = typeof text === 'string' ? text.trim() : null;

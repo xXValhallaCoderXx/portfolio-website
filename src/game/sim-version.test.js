@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { SIM_VERSION } from './sim-version.js';
-import { BRAKE, EARS, FALL, FLIGHT, LOOP, PITCH, ROLL, STALL, TIP, TUCK } from './flight.js';
+import { BRAKE, FLIGHT, PITCH, STALL, PHYSICS } from './flight.js';
+import { ATMOSPHERE } from './atmosphere.js';
+import { RUN_RULES } from './run-rules.js';
 import { BANDS, WATCH } from './swing-watch.js';
 import { STYLE } from './meet-style.js';
 import { SCORE } from './score.js';
@@ -13,11 +15,8 @@ import { BLESSING, GATES, RUNE } from './meet-runes.js';
 import { BEAST, BELLS, BELL_POOL } from './bells.js';
 import { ZONES, surfaceAt } from './terrain.js';
 
-// The fingerprint of the tables each version of the rules shipped with (eight hex digits). A run
-// flown under one version is replayed under it for ever after, by every link and board row that
-// carries it, so the tables of a shipped version never change: a retune is a new version. Pinned
-// on the day a version ships; version 0 is the provisional one Good Lift is built under, and has none.
-const FINGERPRINT = Object.freeze({ 1: '145b525a', 2: 'ba74e01c', 3: '06097c0b', 4: 'd5990922' });
+// Pin the current release's tables. A physical or scoring change requires a new version and pin.
+const FINGERPRINT = 'a4e8e954';
 
 // Everything a run is flown by that is a number rather than code: the wing's tables, every one of
 // the sky's, the step's, the meet's (its plates off the trail and its rune gates and blessings with
@@ -35,7 +34,7 @@ function material() {
     for (let dx = -zone.r; dx <= zone.r; dx += 10) ground.push(Math.round(surfaceAt(zone.x + dx, zone.z + dz) * 100));
   }
   return {
-    FLIGHT, BRAKE, STALL, EARS, PITCH, FALL, TUCK, ROLL, TIP, LOOP, BANDS, WATCH, STYLE, SCORE,
+    FLIGHT, BRAKE, STALL, PITCH, BANDS, WATCH, STYLE, SCORE, PHYSICS, ATMOSPHERE, RUN_RULES,
     ...Object.fromEntries(Object.entries(SKY).filter(([name]) => name.startsWith('CLOUD_'))),
     RUN, MEET, TRAIL, MEET_POOL, WIND, THUNDER, BAIT, SCATTER, GATES, BLESSING, RUNE, BELLS, BELL_POOL, BEAST,
     ZONES: ZONES.map(({ x, z, r, h }) => ({ x, z, r, h })),
@@ -74,15 +73,10 @@ test('sim-version.js imports nothing, so the page can tell which rules a link wa
 
 test('any change to how a run flies changes the fingerprint and needs a new SIM_VERSION', (t) => {
   const print = fingerprint(material());
-  if (SIM_VERSION === 0) {
-    // Nothing flown under the provisional version has been shared, so nothing is pinned to break.
-    t.diagnostic(`fingerprint ${print}. SIM_VERSION 0 is provisional: on ship day set it to 1 and pin FINGERPRINT[1] = '${print}'.`);
-    return;
-  }
-  assert.equal(print, FINGERPRINT[SIM_VERSION],
+  assert.equal(print, FINGERPRINT,
     `The tables a run is flown by are not the ones SIM_VERSION ${SIM_VERSION} shipped with (they now print ${print}), so every ` +
     `link and board row flown under it would replay to a different run. Put them back, or bump SIM_VERSION in ` +
-    `sim-version.js and pin FINGERPRINT[${SIM_VERSION + 1}] = '${print}' here (a new version is a new Daily Sky and a new board).`);
+    `sim-version.js and pin FINGERPRINT = '${print}' here (a new version is a new Daily Sky and a new board).`);
 });
 
 test('the fingerprint moves with every number in the tables, every landing zone and the ground under the sky, and with nothing else', () => {
@@ -90,16 +84,21 @@ test('the fingerprint moves with every number in the tables, every landing zone 
   const print = fingerprint(tables);
   // Every table a run is flown by is in it, and the whole of the ground's grid.
   const names = Object.keys(tables);
-  for (const name of ['FLIGHT', 'BRAKE', 'STALL', 'EARS', 'PITCH', 'FALL', 'TUCK', 'ROLL', 'TIP', 'CLOUD_ZONE', 'CLOUD_GATE', 'CLOUD_LAUNCH', 'CLOUD_WEAR', 'CLOUD_HUNT', 'CLOUD_RAVENS', 'CLOUD_STRIKE', 'CLOUD_STORM', 'CLOUD_WIND', 'CLOUD_GUST', 'CLOUD_POOL',
-    'MEET', 'TRAIL', 'MEET_POOL', 'WIND', 'THUNDER', 'BAIT', 'SCATTER', 'GATES', 'BLESSING', 'RUNE', 'BELLS', 'BELL_POOL', 'BEAST']) {
+  for (const name of ['FLIGHT', 'BRAKE', 'STALL', 'PITCH', 'CLOUD_ZONE', 'CLOUD_GATE', 'CLOUD_LAUNCH', 'CLOUD_WEAR', 'CLOUD_HUNT', 'CLOUD_RAVENS', 'CLOUD_STRIKE', 'CLOUD_STORM', 'CLOUD_WIND', 'CLOUD_GUST', 'CLOUD_POOL',
+    'PHYSICS', 'ATMOSPHERE', 'CLOUD_WEATHER', 'RUN_RULES', 'MEET', 'TRAIL', 'MEET_POOL', 'WIND', 'THUNDER', 'BAIT', 'SCATTER', 'GATES', 'BLESSING', 'RUNE', 'BELLS', 'BELL_POOL', 'BEAST']) {
     assert.ok(names.includes(name), name);
   }
-  assert.equal(tables.ground.length, 28 * 28);
+  assert.equal(tables.ground.length, (Math.floor(2 * SKY.CLOUD_ZONE.r / 10) + 1) ** 2);
   assert.equal(tables.ZONES.length, 4);
   // Each number nudged by itself, one at a time, gives another fingerprint.
   const copy = structuredClone(tables);
   const numbers = [];
+  const seen = new WeakSet();
   const walk = (holder, path) => {
+    // Weather and cloud drift share one speed table. Mutating a shared parameter twice is
+    // the same mutation, even though canonical JSON includes it at two public paths.
+    if (seen.has(holder)) return;
+    seen.add(holder);
     for (const key of Object.keys(holder)) {
       const value = holder[key];
       if (typeof value === 'number') numbers.push([holder, key, `${path}.${key}`]);

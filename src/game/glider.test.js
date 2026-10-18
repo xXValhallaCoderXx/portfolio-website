@@ -462,7 +462,7 @@ test('nearing a stall the hands tremble a few centimetres, and on a wing flying 
   for (const [key, moved] of Object.entries(clean)) assert.equal(moved, 0, `${key} keeps still`);
 });
 
-test('the trailing edge comes down about 0.14 m on the light brake and 0.40 m on the full one, 0.24 m in the middle, and steering still adds on its side', async () => {
+test('the trailing edge comes down about 0.16 m on the working brake and 0.40 m on the full one, 0.24 m in the middle, and steering still adds on its side', async () => {
   const { surface, rest, fly, calmed } = await hangGlider();
   // The rearmost point of the middle of the wing, which no steering line reaches.
   let middle = -1;
@@ -475,8 +475,8 @@ test('the trailing edge comes down about 0.14 m on the light brake and 0.40 m on
   close(wing.edgeRight, 0, 1e-12, 'no brake, right');
   fly(2, { flying: true, brake: BRAKE.light }, 0.1);
   wing = calmed({ flying: true, brake: BRAKE.light });
-  close(wing.edgeLeft, 0.14, 0.005, 'light brake, left');
-  close(wing.edgeRight, 0.14, 0.005, 'light brake, right');
+  close(wing.edgeLeft, 0.4 * BRAKE.light, 0.005, 'working brake, left');
+  close(wing.edgeRight, 0.4 * BRAKE.light, 0.005, 'working brake, right');
   fly(2, { flying: true, brake: 1 }, 0.1);
   wing = calmed({ flying: true, brake: 1 });
   close(wing.edgeLeft, 0.4, 0.005, 'full brake, left');
@@ -597,12 +597,12 @@ test('however far either half folds, the cloth is never turned inside out along 
 test('a stall rocks the wing back well clear of its stops, and a fold on one side rolls the wing toward it', () => {
   // A deep brake into a stall and out again, as flight.js and the game hand it to pose: airspeed
   // falling to the stall's and coming back, the brake let go as the wing goes, the cloth
-  // fluttering as the load builds, and in a spin the inside half folded.
-  const stallFor = STALL.harsh.time + STALL.surge;
+  // fluttering as the load builds, and in an external strike one half folded.
+  const stallFor = 2.9; // a visual severity/fold sequence, independent of flight timing
   const fly = ({ lift = 0, rough = 0, phase = 0, side = 0 }) => {
     const glider = swingOnly();
     const sling = glider.group.children[0];
-    let speed = FLIGHT.speed.deep;
+    let speed = FLIGHT.speed.light;
     let brake = 1;
     let luff = 0;
     let foldLeft = 0;
@@ -611,9 +611,9 @@ test('a stall rocks the wing back well clear of its stops, and a fold on one sid
     for (let n = 0; n < 10 / STEP; n++) {
       const t = n * STEP;
       const stalled = t >= 3 && t < 3 + stallFor;
-      const want = t < 3 ? FLIGHT.speed.deep : stalled ? FLIGHT.speed.stall : FLIGHT.speed.trim;
-      speed += (want - speed) * Math.min(1, STEP * (stalled ? FLIGHT.ease.stall : FLIGHT.ease.speed));
-      if (t >= 3) brake = Math.max(0, brake - STEP * BRAKE.dump);
+      const want = t < 3 ? FLIGHT.speed.light : stalled ? 3 : FLIGHT.speed.trim;
+      speed += (want - speed) * Math.min(1, STEP * (stalled ? 4 : 1.6));
+      if (t >= 3) brake = Math.max(0, brake - STEP * 10);
       luff = t < 3 ? t / 3 : stalled ? 1 : Math.max(0, luff - STEP * 6);
       const folding = stalled && t < 3 + stallFor - 0.35 ? (side ? 0.85 : 0.45) : 0;
       const left = side < 0 || !side ? folding : 0;
@@ -851,3 +851,118 @@ test('the moment to turn in lifts the side of the wing over the core', () => {
   assert.ok(heaved.sway.roll > still.sway.roll + 0.02, `rolled ${heaved.sway.roll} against ${still.sway.roll}`);
 });
 
+
+test('physical rendering places canopy and pilot independently, including an inversion', async () => {
+  const glider = buildGlider({ loadModel });
+  assert.equal(await glider.ready, true);
+  const snapshot = { pilot: { pos: { x: 10, y: 90, z: 20 } }, canopy: { pos: { x: 12, y: 83, z: 20 }, q: { x: 0, y: 0, z: 1, w: 0 } }, yaw: 0 };
+  const unchanged = JSON.stringify(snapshot);
+  glider.posePhysical(snapshot, { ...CALM, dt: STEP, time: 1, flying: true });
+  const [canopy, pilot] = glider.group.children;
+  const v = new THREE.Vector3();
+  canopy.getWorldPosition(v);
+  assert.ok(v.distanceTo(new THREE.Vector3(12, 83, 20)) < 1e-6);
+  pilot.getWorldPosition(v);
+  assert.ok(v.distanceTo(new THREE.Vector3(10, 90, 20)) < 1e-6);
+  assert.equal(JSON.stringify(snapshot), unchanged);
+  glider.pose({ ...CALM, dt: STEP, time: 2 });
+  assert.ok(canopy.position.y < 3, 'ordinary hero posing restores its own rig origin');
+});
+
+test('coordinated physical turns double torso lean in either direction without moving the simulation bodies', async () => {
+  const glider = buildGlider({ loadModel });
+  assert.equal(await glider.ready, true);
+  const turnOf = await turnReader(), v = new THREE.Vector3();
+  const snapshot = { pilot: { pos: { x: 10, y: 90, z: 20 } },
+    canopy: { pos: { x: 12, y: 97, z: 21 }, q: { x: 0, y: 0, z: 0, w: 1 } }, yaw: 0.4 };
+  const unchanged = JSON.stringify(snapshot);
+  for (const side of [-1, 1]) {
+    for (let n = 0; n < 300; n++) glider.posePhysical(snapshot,
+      { ...CALM, flying: true, turn: side, brake: 0.4, dt: STEP, time: n * STEP, coordinatedLean: 0 });
+    const [canopy, pilot] = glider.group.children;
+    const seatRotation = pilot.quaternion.clone(), arm = turnOf(glider, 'L_Upperarm', RIGHT);
+    for (const name of ['Spine01', 'Spine02']) close(turnOf(glider, name, FORWARD), side * 0.06, 1e-9, `${name} ordinary lean`);
+    glider.posePhysical(snapshot, { ...CALM, flying: true, turn: side, brake: 0.4,
+      dt: STEP, time: 6, coordination: 1, coordinatedLean: side });
+    for (const name of ['Spine01', 'Spine02']) close(turnOf(glider, name, FORWARD), side * 0.12, 1e-9, `${name} coordinated lean`);
+    close(turnOf(glider, 'L_Upperarm', RIGHT), arm, 1e-9, 'arm depth stays with its physical control');
+    assert.ok(pilot.quaternion.equals(seatRotation), 'weight shift does not add a fictitious suspension rotation');
+    canopy.getWorldPosition(v); close(v.distanceTo(new THREE.Vector3(12, 97, 21)), 0, 1e-9, 'canopy origin');
+    pilot.getWorldPosition(v); close(v.distanceTo(new THREE.Vector3(10, 90, 20)), 0, 1e-9, 'pilot origin');
+    assert.ok(canopy.quaternion.equals(new THREE.Quaternion(0, 0, 0, 1)), 'canopy orientation stays physical');
+  }
+  assert.equal(JSON.stringify(snapshot), unchanged);
+});
+
+test('coordinated torso lean follows physical rollout, remains still when paused and clears at rest', async () => {
+  const glider = buildGlider({ loadModel });
+  assert.equal(await glider.ready, true);
+  const turnOf = await turnReader();
+  const snapshot = { pilot: { pos: { x: 0, y: 100, z: 0 } },
+    canopy: { pos: { x: 0, y: 107, z: 0 }, q: { x: 0, y: 0, z: 0, w: 1 } }, yaw: 0 };
+  for (let n = 0; n < 300; n++) glider.posePhysical(snapshot,
+    { ...CALM, flying: true, turn: 1, coordinatedLean: 1, dt: STEP, time: n * STEP });
+  let previous = turnOf(glider, 'Spine02', FORWARD);
+  for (const lean of [0.8, 0.5, 0.2, 0]) {
+    glider.posePhysical(snapshot, { ...CALM, flying: true, coordinatedLean: lean, dt: STEP, time: 6 });
+    const actual = turnOf(glider, 'Spine02', FORWARD);
+    assert.ok(actual > 0 && actual < previous, 'release eases towards neutral instead of snapping or adding a swing');
+    close(actual, (glider.air.steerRight + lean) * 0.06, 1e-9, 'posture follows the already eased physical signal');
+    const paused = boneOf(glider, 'Spine02').quaternion.clone();
+    for (let n = 0; n < 10; n++) glider.posePhysical(snapshot,
+      { ...CALM, flying: true, coordinatedLean: lean, dt: 0, time: 6 + n });
+    assert.ok(boneOf(glider, 'Spine02').quaternion.equals(paused), 'rendering time does not advance a paused lean');
+    previous = actual;
+  }
+  for (let n = 0; n < 300; n++) glider.posePhysical(snapshot,
+    { ...CALM, flying: true, coordinatedLean: 0, dt: STEP, time: 7 + n * STEP });
+  close(turnOf(glider, 'Spine01', FORWARD), 0, 1e-9, 'no input leaves the waist at rest');
+  close(turnOf(glider, 'Spine02', FORWARD), 0, 1e-9, 'no input leaves the chest at rest');
+  glider.posePhysical(snapshot, { ...CALM, flying: false, landed: true, coordinatedLean: 1, dt: 0, time: 15 });
+  assert.equal(glider.air.coordinatedLean, 0, 'ground posing cannot keep a flight weight shift');
+  glider.pose({ ...CALM, coordinatedLean: 1, dt: 0, time: 15 });
+  assert.equal(glider.air.coordinatedLean, 0, 'the hero has no coordinated flight weight shift');
+});
+
+test('reduced decorative motion preserves coordinated posture and physical body positions', async () => {
+  const glider = buildGlider({ loadModel });
+  assert.equal(await glider.ready, true);
+  const snapshot = { pilot: { pos: { x: 8, y: 100, z: -4 } },
+    canopy: { pos: { x: 9, y: 107, z: -3 }, q: { x: 0, y: 0, z: 0, w: 1 } }, yaw: 0 };
+  const details = { ...CALM, flying: true, turn: -1, coordinatedLean: -1, coordination: 1, rough: 0, heave: 0 };
+  for (let n = 0; n < 300; n++) glider.posePhysical(snapshot, { ...details, dt: STEP, time: 0 });
+  const chest = boneOf(glider, 'Spine02').quaternion.clone();
+  const origins = glider.group.children.slice(0, 2).map(body => body.getWorldPosition(new THREE.Vector3()).toArray());
+  glider.posePhysical(snapshot, { ...details, dt: 0, time: 100 });
+  assert.ok(boneOf(glider, 'Spine02').quaternion.equals(chest), 'the lean is functional posture, independent of decorative time');
+  assert.deepEqual(glider.group.children.slice(0, 2).map(body => body.getWorldPosition(new THREE.Vector3()).toArray()), origins);
+});
+
+test('model failure still renders separate physical canopy and pilot paths', async () => {
+  const glider = buildGlider({ loadModel: async () => { throw new Error('fixture model unavailable'); } });
+  assert.equal(await glider.ready, false);
+  const snapshot = { pilot: { pos: { x: 0, y: 100, z: 0 } }, canopy: { pos: { x: 0, y: 93, z: 0 }, q: { x: 0, y: 0, z: 1, w: 0 } }, yaw: 0 };
+  glider.posePhysical(snapshot, { ...CALM, dt: STEP, time: 1, flying: true });
+  const fallback = glider.group.children.at(-1);
+  assert.equal(fallback.quaternion.w, 1, 'the entire fallback rig is never spun as one object');
+  assert.ok([...fallback.children[1].geometry.attributes.position.array].every(Number.isFinite));
+});
+
+test('the fallback shows mirrored coordinated posture without moving its physical body origins', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  const glider = buildGlider({ loadModel: async () => { throw new Error('fixture model unavailable'); } });
+  assert.equal(await glider.ready, false);
+  const snapshot = { pilot: { pos: { x: 0, y: 100, z: 0 } },
+    canopy: { pos: { x: 0, y: 107, z: 0 }, q: { x: 0, y: 0, z: 0, w: 1 } }, yaw: 0 };
+  glider.posePhysical(snapshot, { ...CALM, flying: true, dt: STEP, time: 0 });
+  const [wing, cords, body, head] = glider.group.children.at(-1).children;
+  const origins = [wing, body, head].map(part => part.getWorldPosition(new THREE.Vector3()).toArray());
+  for (const side of [-1, 1]) {
+    glider.posePhysical(snapshot, { ...CALM, flying: true, coordinatedLean: side, dt: STEP, time: 1 });
+    close(new THREE.Euler().setFromQuaternion(body.quaternion).z, -side * 0.12, 1e-9, 'fallback torso lean');
+    assert.deepEqual([wing, body, head].map(part => part.getWorldPosition(new THREE.Vector3()).toArray()), origins);
+    assert.ok([...cords.geometry.attributes.position.array].every(Number.isFinite));
+  }
+  glider.posePhysical(snapshot, { ...CALM, flying: true, coordinatedLean: NaN, dt: STEP, time: 2 });
+  assert.ok(body.quaternion.equals(new THREE.Quaternion()), 'missing or invalid telemetry leaves a finite neutral posture');
+});

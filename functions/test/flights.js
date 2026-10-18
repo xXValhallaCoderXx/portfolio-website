@@ -3,7 +3,7 @@
 // recorder taking each step's controls down, so each run comes with its log and the sheet it truly
 // came to. The tests hold what the function makes of a run up against that sheet. They never pin
 // what a pilot lifts, which every SIM_VERSION changes.
-import { TST, createReferencePilot } from '../../src/game/pilots.js';
+import { TST, createReferenceKeys } from '../../src/game/pilots.js';
 import { createRunWorld, finishRun, startRun, stepBits } from '../../src/game/run-step.js';
 import { createCloudbaseRun } from '../../src/game/cloudbase-state.js';
 import { createMeet } from '../../src/game/meet-state.js';
@@ -13,35 +13,13 @@ import { INPUT, MAX_STEPS, createRecorder, decodeLog, encodeLog, inputBits } fro
 import { seedFor } from '../../src/game/daily.js';
 import { SIM_VERSION } from '../../src/game/sim-version.js';
 
-// The reference pilot at the keys, as replay.test.js has it: every `hold` steps it picks which way
-// to steer and holds that arrow until it picks again, for any turn of more than a third, with its
-// brake following its hands, and between lifts it pushes the speed bar. Its keys are written as the
-// game writes them (inputBits), so the bar it still holds while its brake catches a dive stays the brake.
-function keys(options = {}, hold = 9) {
-  const pilot = createReferencePilot(options);
-  const intent = { turn: 0, brake: false, bar: false };
-  let side = 0;
-  let on = 0;
-  let glide = false;
-  return (world) => {
-    pilot.decide(world, intent);
-    const phase = world.steps % hold;
-    if (phase === 0) {
-      side = intent.turn > 0 ? INPUT.right : INPUT.left;
-      on = Math.abs(intent.turn) > 1 / 3 ? hold : 0;
-      glide = world.sky.state.pilot.thermal < 0 && !intent.brake;
-    }
-    const bits = phase < on ? side : 0;
-    return inputBits({ left: bits === INPUT.left, right: bits === INPUT.right, brake: intent.brake, bar: glide });
-  };
-}
-
 // Pilots who fly a day's sky differently, so their runs come to different sheets.
 export const PILOTS = Object.freeze({
-  column: () => keys(), // hands up, circling every lift it finds
-  eased: () => keys({ brake: 'eased' }), // circling on the light brake
-  collector: () => keys({ ...TST, collect: true }), // TST, fetching every trail of plates
-  bar: () => () => INPUT.bar, // straight off the gate on the speed bar, down onto the hillside
+  column: () => createReferenceKeys({ brake: 'none' }), // hands up, circling every lift it finds
+  eased: () => createReferenceKeys(TST), // circling on the light brake
+  collector: () => createReferenceKeys({ ...TST, collect: true }, { hold: 7 }), // TST, fetching every trail of plates
+  landing: () => () => INPUT.right | INPUT.bar, // a manual turn onto terrain in the test day's sky
+  bar: () => () => INPUT.bar, // straight off the gate on the speed bar, carried by that day's weather
 });
 
 /**
