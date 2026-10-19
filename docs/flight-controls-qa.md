@@ -1,6 +1,6 @@
 # Shared flight controls and cleanup
 
-Local, uncommitted candidate based on `4b086e3`, 19 October 2026. Previews:
+Local, uncommitted candidate based on `330e9cd`, 19 October 2026. Previews:
 [outdoor flight](http://localhost:4191/fly) and
 [Good Lift](http://localhost:4191/good-lift?sky=1). No commit, push or deployment performed.
 
@@ -17,14 +17,16 @@ HANDS UP zone, accepted coach targets, ground-velocity TRAVEL marker and actual 
 Sliding into neutral releases both brakes while retaining the gesture; lifting releases them
 and briefly confirms HANDS UP.
 
-The control diagram stays visible during manual flight at one fixed position on the right,
+The control diagram stays visible during manual flight at one fixed position below the pilot,
 including between drags. Only viewport/safe-area changes can move it. A gesture can begin
 anywhere on the flight scenery; its initial point remains the real input origin, while the
 dot moves relative to the centre of the fixed diagram. Lifting resets the dot to neutral
 without hiding the panel. The same 204 × 180 CSS-pixel diagram represents full travel for
-mouse, touch and pen; each keeps its original 120/80-pixel physical drag sensitivity. Tiny
-viewports scale the diagram down to fit. Keyboard/buttons show their actual physical hand
-travel; coach targets remain limited to active drags.
+mouse, touch and pen; each keeps its original 120/80-pixel physical drag sensitivity. Its origin
+is centred horizontally, at 80% of the safe height on narrow screens and 76% on desktop, clamped
+to safe bounds. Short landscape screens use a 164 × 148 diagram; unusually tiny viewports scale
+it further to fit. Coach targets remain limited to active drags. The coach sits below the HUD,
+above the pilot on portrait phones and to the left on desktop/landscape, clear of the control.
 
 The added elements are noninteractive. Navigation labels hide while a drag is captured;
 between drags, labels that overlap the panel stay hidden. Pillars and map navigation remain
@@ -37,8 +39,11 @@ that click too; the next fresh press can select normally. Acquiring the drag cle
 hover and takes control from assisted travel. Assistance remains attached to that landing
 leg, so taking control back cannot earn a manual landing score.
 
-Keyboard, touch buttons, deliberate deep-brake input, Bar/Ears and assisted steering remain
-active controls. Ownership changes, menus, map, pause, blur, hidden pages and mode exits clear
+Manual flight is drag-only in both modes. Flight keys, on-screen flight buttons, manual time
+boost and Bar/Ears shortcuts have been removed. Fresh launches start in direct neutral; pressing
+former flight keys leaves idle input and a captured drag unchanged. Deep brake is a continuous
+pull into the purple range. Navigation, restart, takeoff, reserve and menu shortcuts remain.
+Menus, map, pause, blur, hidden pages and mode exits clear
 captured input. Restart, teleport and a fresh launch clear all held controls and previous
 pointer ownership. The website's idle hero interaction and landing content access remain.
 
@@ -52,18 +57,23 @@ current saved progress and kit data remain unchanged. No migration or automatic 
 was added. Format/version validation, corrupt-input rejection, bounds checks and blocked-storage
 memory remain current safeguards.
 
-Also removed the unused drag-release API and the orphaned target-text CSS rule, and replaced
-duplicate brake quantization in the recorder and cue helper with the shared quantizer.
-The digital controller still serves keyboard/buttons, reference pilots, boundary recovery
-and assisted travel; its active behavior is retained.
+Also removed the obsolete keyboard/button holder sets, listeners, double-tap controller and
+its tests, device-specific briefing/help variants, flight-button and unused brake/swing styles,
+old hint-position tracking and keyboard-specific coach chip metadata. Historical fixture source
+lists retain original capture provenance. The digital simulation path still serves reference
+pilots, boundary recovery, assisted travel and current recordings; its active behavior is retained.
+Help, briefing and live coach feedback describe the remaining drag controls. Bilateral deep-brake
+feedback requires both hands deep; asymmetric pulls retain truthful per-hand feedback.
 
 ## Verification
 
-The current receipt is `.artifacts/static-flight-controls/verification.json`; its neighboring ignored
+The current receipt is `.artifacts/drag-only-controls/verification.json`; its neighboring ignored
 files retain commands, logs, browser reports and screenshots. The complete test set is split
 without omissions into all tests except `opening-guidance.test.js`, then that entire file.
 
-**886 tests pass**: 880 core/application/function tests and six opening/recovery gates.
+**879 tests pass**: 873 core/application/function tests and six opening/recovery gates.
+The lower count reflects the deleted obsolete keyboard/button gesture tests; the asymmetric
+brake feedback has new mirrored regression coverage.
 The opening checks retain 32/32 successes at 0.3-second reactions, 32/32 at 0.6 seconds and
 30/32 at one second; recovery checks pass at 150, 250 and 350 m.
 Focused tests cover gesture slop and cumulative movement,
@@ -73,7 +83,8 @@ cover common safe placement, viewport scaling, equivalent mouse/touch/pen dots a
 and multiple real gesture origins without moving the panel or changing input demands. Existing flight,
 coach, lesson, style, recorded browser replay and server-submission fixtures are included.
 
-Application and function builds, bundle-split and diff checks pass. Responsive browser checks
+Application and function builds, bundle-split and diff checks pass. All ten responsive browser
+cases and both production-preview routes pass with zero page errors. Responsive browser checks
 use Chromium 143.0.7499.4 on Linux with Node 24.21.0:
 
 | Layout | Viewport | Input | Motion preference |
@@ -84,11 +95,15 @@ use Chromium 143.0.7499.4 on Linux with Node 24.21.0:
 | Landscape | 844 × 390 | Native emulated touch | Reduced |
 | Hybrid | 1100 × 760 | Mouse and native emulated touch | Standard |
 
+Phone profiles use native emulated touch. The hybrid profile verifies mouse → touch → mouse
+handoffs with equivalent demands and dot positions. A Chromium mobile-emulation routing trace
+is retained separately; synthetic mouse handoff in `isMobile` mode is not treated as device proof.
+
 The earlier outdoor-controls receipt retains native pointer-capture, restart/teleport and
 projected-pillar navigation coverage in `.artifacts/outside-controls/`. Current browser checks
 exercise both flight modes on all five layouts, including idle visibility, native drags from
-three screen positions, normalized dot/target positions, actual fixed-step brake travel, held
-neutral, release, keyboard ownership, menus/map/pause/blur and stable positions across coach
+three screen positions and directly on the passive control graphic, normalized dot/target positions, actual fixed-step brake travel, held
+neutral, release, ignored flight keys while idle and dragging, menus/map/pause/blur and stable positions across coach
 and warning changes. Projected pillar taps and label buttons exercise real navigation;
 moved-away-and-back drags exercise
 synthetic-click suppression. Assisted takeover retains manual-score ineligibility; fresh manual

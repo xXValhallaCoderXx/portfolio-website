@@ -115,30 +115,22 @@ const MUSIC_BUTTON = /* html */ '<button data-do="music" hidden>[ music: on ]</b
 // Seconds the title card stays up as a run starts: the first of a visit in full, and shorter on
 // every run after it, which gets no typed line.
 const TITLE = Object.freeze({ full: 3.6, short: 2.2 });
-// The briefing: for a device's first `runs` runs, the game and its keys are told over the gate, and
-// the flight waits there until any key or tap. The keys are the ones each device flies by.
+// The briefing explains the drag controls over the gate for a device's first `runs` runs.
+// Flight waits there until the player dismisses it.
 const BRIEF = Object.freeze({ runs: 3 });
 const BRIEF_MARKUP = /* html */ `
   <div class="fj-brief" role="note" aria-label="How Good Lift is flown" hidden>
     <small></small>
     <b>GOOD LIFT</b>
-    <p>Hold and drag on the flight view: left or right pulls that brake; down pulls both. Blend a gentle downward and side pull to circle in lift. Release the mouse or lift your finger for hands up. Full pulls can stall.</p>
-    <p>Climb in the thermals the ravens circle. With keys or buttons, hold one direction + normal brake. Brake slows the wing; rising air provides lift. Three white lights bank the bar at each 150 m line. Plates add optional bonus kg; the fog rises under you.</p>
-    <dl class="fj-brief-keys">
-      <dt>← →</dt><dd>turn</dd>
-      <dt>space</dt><dd>brake: hold to slow and tighten a turn; double-tap and hold, or hold X, for deep brake</dd>
-      <dt>↑</dt><dd>speed bar</dd>
-      <dt>e</dt><dd>big ears: sink fast</dd>
-      <dt>tricks</dt><dd>safe lessons begin at 500 m for pitch and catch, then 750 m for wingovers. Tricks spend height and earn style for your final score. Back to lift: T</dd>
+    <p>Hold and drag anywhere on the flight view. The dot in the control diagram follows your pull from where you started.</p>
+    <p>Climb in the thermals the ravens circle. Brake slows the wing; rising air provides lift. Three white lights bank the bar at each 150 m line. Plates add optional bonus kg; the fog rises under you.</p>
+    <dl>
+      <dt>gentle pull</dt><dd>left or right turns; down pulls both brakes. Blend a gentle downward and side pull to circle in lift.</dd>
+      <dt>deep pull</dt><dd>drag farther down for deep brake. Full pulls can stall; follow the release cue.</dd>
+      <dt>hands up</dt><dd>slide up, release the mouse or lift your finger to let both brakes up.</dd>
+      <dt>tricks</dt><dd>safe lessons begin at 500 m for pitch and catch, then 750 m for wingovers. Tricks spend height and earn style for your final score. Choose Back to lift to leave a lesson.</dd>
     </dl>
-    <dl class="fj-brief-touch">
-      <dt>◀ ▶</dt><dd>turn</dd>
-      <dt>▼</dt><dd>brake: hold to slow and tighten a turn; double-tap and hold for deep brake</dd>
-      <dt>▲</dt><dd>speed bar: faster glide</dd>
-      <dt>ears</dt><dd>sink fast; release to reopen</dd>
-      <dt>tricks</dt><dd>safe lessons begin at 500 m, then 750 m. Tricks spend height and earn style for your final score. Tap Back to lift to leave a lesson</dd>
-    </dl>
-    <em><span class="fj-brief-keys">any key to fly</span><span class="fj-brief-touch">tap to fly</span></em>
+    <em>tap or click to fly</em>
   </div>`;
 // The lights head the column the notifications stack in, which the engine keeps clear of the
 // readouts, so a milestone reached on a line never covers them.
@@ -198,7 +190,7 @@ export function createGoodLift(host) {
   // to turn into one, passing it on the flock's side (run-entry.js).
   const surge = createSurge();
   const entry = createEntry();
-  // Stable keyboard and touch intents, written into the same five-bit log each step.
+  // Fixed-step control snapshot shared by flight, coaching and the recorder.
   const asked = { left: false, right: false, brake: false, deepBrake: false, bar: false, ears: false };
   const view = createCloudbase({ scene, loadModel: host.loadModel, calm: host.calm });
   const meetView = createMeetView({ scene, loadModel: host.loadModel, calm: host.calm });

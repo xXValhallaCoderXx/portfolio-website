@@ -8,7 +8,6 @@ import { createSwingWatch } from './swing-watch.js';
 import { createStyle } from './meet-style.js';
 import { swingGauge, CUES } from './swing-gauge.js';
 import { stallEffects, STALL_EFFECTS } from './stall-effects.js';
-import { createBrakeInput } from './brake-input.js';
 import { createReferencePilot } from './pilots.js';
 import { createCloudbaseRun } from './cloudbase-state.js';
 import { createRunWorld, startRun, stepRun } from './run-step.js';
@@ -134,18 +133,6 @@ test('recovery state is copied without aliasing, predictions do not mutate it an
   assert.deepEqual(g, copy); assert.notEqual(g.physical.flow, copy.physical.flow);
   settleFlight(copy); assert.equal(copy.wingPhase, WING.flying); assert.equal(copy.inflation, 1);
   assert.equal(copy.physical.stallExposure, 0); assert.equal(copy.stall, 0);
-});
-
-test('native deep-to-working gesture release can capture backfly without an unintended full release', () => {
-  const g = aloft(), brake = createBrakeInput();
-  brake.edge(true, { forceDeep: true });
-  for (let tick = 0; tick < 420; tick++) stepFlight(g, brake.step(dt, { held: true, forceDeep: true }), {}, dt);
-  brake.edge(false);
-  for (let tick = 0; tick < 6; tick++) stepFlight(g, brake.step(dt, { held: false, forceDeep: false }), {}, dt);
-  brake.edge(true);
-  for (let tick = 0; tick < 180; tick++) stepFlight(g, brake.step(dt, { held: true, forceDeep: false }), {}, dt);
-  assert.equal(g.wingPhase, WING.backfly); assert.equal(g.deepBrake, false);
-  assert.ok(g.forwardAirspeed < -0.5); assert.ok(g.stall > 0.9);
 });
 
 test('stall and frontal flights dissipate energy and maintain finite suspension without altitude gates', () => {

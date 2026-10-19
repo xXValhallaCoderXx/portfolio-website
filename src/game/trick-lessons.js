@@ -55,8 +55,7 @@ export function createTrickLessons({ learned = () => [], onLearned = () => {} } 
       fields = { action: 'deep-brake', brakeDepth: 'deep',
         hold: id === 'wingover' ? [side, 'brake'] : ['brake'],
         release: id === 'wingover' ? [other, 'bar', 'ears'] : ['left', 'right', 'bar', 'ears'],
-        detail: id === 'pitch' ? rawInput.controlMode === 'brakes' ? 'Drag straight down into the deep range. Build a deliberate backswing; release when it turns forward.'
-          : 'Double-tap and hold brake, or hold X. Build a deliberate backswing; release when it turns forward.' :
+        detail: id === 'pitch' ? 'Drag straight down into the deep range. Build a deliberate backswing; release when it turns forward.' :
           `Hold ${side} and briefly pull deep brake to energize the swing. Then release brake and keep the turn.` };
       if (acceptedFor >= (id === 'pitch' ? 3 : 0.2)) phase(id === 'pitch' ? 'swing' : 'first-turn');
     } else if (state.phase === 'swing') {

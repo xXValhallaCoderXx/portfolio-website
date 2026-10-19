@@ -1,18 +1,12 @@
-// Semantic instructions shared by the coach and its input highlights. Nothing here presses a key.
+// Semantic instructions shared by the coach, reference pilots and presentation.
 import { summarizeControls } from './brake-controls.js';
-export const COACH_CONTROLS = Object.freeze({
-  left: Object.freeze({ label: 'left', keyboard: '← / A', touch: '◀' }),
-  right: Object.freeze({ label: 'right', keyboard: '→ / D', touch: '▶' }),
-  brake: Object.freeze({ label: 'brake', keyboard: '↓ / Space', touch: '▼' }),
-  bar: Object.freeze({ label: 'bar', keyboard: '↑ / W', touch: '▲' }),
-  ears: Object.freeze({ label: 'ears', keyboard: 'E', touch: 'ears' }),
-});
+const controlNames = new Set(['left', 'right', 'brake', 'bar', 'ears']);
 const defaults = {
   left: { title: 'TURN LEFT', hold: ['left'], release: ['right'] },
   right: { title: 'TURN RIGHT', hold: ['right'], release: ['left'] },
   straight: { title: 'HOLD THIS LINE', hold: [], release: ['left', 'right'] },
   brake: { title: 'HOLD BRAKE', hold: ['brake'], release: ['bar'] },
-  'deep-brake': { title: 'DOUBLE-TAP + HOLD BRAKE', hold: ['brake'], release: ['bar'] },
+  'deep-brake': { title: 'PULL DEEP BRAKE', hold: ['brake'], release: ['bar'] },
   'release-brake': { title: 'RELEASE BRAKE', hold: [], release: ['brake'] },
   'release-turns': { title: 'RELEASE TURN AND BAR', hold: [], release: ['left', 'right', 'bar'] },
   'release-all': { title: 'HANDS UP', hold: [], release: ['left', 'right', 'brake', 'bar', 'ears'] },
@@ -20,7 +14,7 @@ const defaults = {
   'prepare-right': { title: 'GET READY RIGHT', hold: [], release: [] },
   none: { title: '', hold: [], release: [] },
 };
-const controls = (names) => [...new Set(names)].filter(name => Object.hasOwn(COACH_CONTROLS, name));
+const controls = (names) => [...new Set(names)].filter(name => controlNames.has(name));
 export const controlHeld = (input, name) => {
   if (input.controlMode === 'brakes') {
     const summary = summarizeControls(input);

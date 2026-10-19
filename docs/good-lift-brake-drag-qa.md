@@ -1,7 +1,8 @@
 # Good Lift — proportional mouse and touch brakes
 
 The current [shared flight controls and cleanup receipt](flight-controls-qa.md) extends these
-controls to outdoor flight and removes the old recording-format reader. It supersedes the
+controls to outdoor flight, removes flight keys/buttons and the old recording-format reader, and
+centres the fixed panel beneath the pilot. It supersedes the
 preview and verification below, which describe the original proportional-control candidate.
 
 The subsequent presentation-only travel marker, drag diagram and coach target are covered by

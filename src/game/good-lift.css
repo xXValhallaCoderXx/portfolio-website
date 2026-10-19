@@ -642,11 +642,6 @@
   .fj-title b {
     font-size: clamp(32px, 7vw, 64px);
   }
-
-  /* Held sideways, the card stands where the hint rides, so the hint waits for it to go. */
-  .fj-title.on ~ .fj-hint {
-    visibility: hidden;
-  }
 }
 
 /* A short window has the readouts reaching a third of the way down: the card goes lower. */
@@ -1370,9 +1365,8 @@
   background: linear-gradient(165deg, var(--body) 0 68%, var(--trim) 69% 83%, var(--body) 84%);
 }
 
-/* ---- the briefing a device's first runs open with: the game and its keys told over the gate, the
-   flight waiting there until any key or tap. In the controls panel's look, and scrolling inside
-   itself on a short screen. The keys shown are the device's own. */
+/* ---- the briefing a device's first runs open with: drag controls over the gate.
+   The card scrolls inside itself on a short screen. */
 
 .fj-brief {
   position: absolute;
@@ -1438,24 +1432,6 @@
 @keyframes fj-brief-go {
   to {
     opacity: 0.45;
-  }
-}
-
-.fj-brief .fj-brief-touch {
-  display: none;
-}
-
-@media (pointer: coarse) {
-  .fj-brief .fj-brief-keys {
-    display: none;
-  }
-
-  .fj-brief dl.fj-brief-touch {
-    display: grid;
-  }
-
-  .fj-brief span.fj-brief-touch {
-    display: inline;
   }
 }
 

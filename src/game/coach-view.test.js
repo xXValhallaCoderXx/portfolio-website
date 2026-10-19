@@ -8,8 +8,6 @@ class Node {
   constructor(document) {
     this.ownerDocument = document; this.children = []; this.dataset = {}; this.style = {};
     this.attributes = new Map(); this.selectors = new Map(); this.writes = 0; this._text = ''; this._hidden = false;
-    const classes = new Set();
-    this.classList = { toggle: (name, on) => on ? classes.add(name) : classes.delete(name), remove: name => classes.delete(name), contains: name => classes.has(name) };
   }
   get textContent() { return this._text; }
   set textContent(value) { this.writes++; this._text = value; }
@@ -18,150 +16,152 @@ class Node {
   set innerHTML(value) { throw new Error('The coach must use textContent'); }
   append(...nodes) { this.children.push(...nodes); }
   querySelector(selector) { return this.selectors.get(selector) ?? null; }
-  querySelectorAll() { return this.children; }
   setAttribute(name, value) { this.writes++; this.attributes.set(name, value); }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
 }
 function fixture() {
   const document = { createElement: () => new Node(document) };
-  const element = new Node(document), touch = new Node(document), parts = {};
+  const element = new Node(document), parts = {};
   for (const name of ['action', 'reason', 'controls', 'feedback', 'progress', 'announce', 'cancel']) {
     parts[name] = new Node(document); element.selectors.set(`[data-coach="${name}"]`, parts[name]);
   }
   parts.kicker = new Node(document); element.selectors.set('.fj-coach-kicker', parts.kicker);
   parts.caption = new Node(document); parts.fill = new Node(document);
   parts.progress.selectors.set('span', parts.caption); parts.progress.selectors.set('i > b', parts.fill);
-  for (const name of ['left', 'right', 'brake', 'bar', 'ears']) {
-    const button = new Node(document); button.dataset.input = name; touch.append(button);
-    if (name === 'brake') button.selectors.set('small', new Node(document));
-  }
-  let raw = {}, touchMode = false, time = 0;
-  const view = createCoachView({ element, touch, input: () => raw, touchMode: () => touchMode, now: () => time });
+  let raw = {}, time = 0;
+  const view = createCoachView({ element, input: () => raw, now: () => time });
   const chip = name => parts.controls.children.find(child => child.dataset.control === name);
-  const button = name => touch.children.find(child => child.dataset.input === name);
-  return { view, element, touch, parts, chip, button, raw: value => { raw = value; }, touchMode: value => { touchMode = value; }, time: value => { time = value; } };
+  return { view, element, parts, chip, raw: value => { raw = value; }, time: value => { time = value; } };
 }
 const reverse = Object.freeze({ state: 'timing', context: 'Wingover', phase: 'Reverse now', action: 'left', title: 'RELEASE RIGHT, THEN LEFT', detail: 'Swap with the swing.', hold: Object.freeze(['left']), release: Object.freeze(['right']) });
 
-test('direct coach chips describe drags and easing without keyboard or double-tap instructions', () => {
+test('coach chips describe drags and easing without keyboard or double-tap instructions', () => {
   const f = fixture(), raw = { controlMode: 'brakes', leftBrake: .3, rightBrake: 0 };
   f.raw(raw);
   f.view.update(actionMessage({ action: 'left', hold: ['left', 'brake'], brakeDepth: 'working', release: ['right', 'bar'] }, raw));
   assert.equal(f.chip('left').children[0].textContent, 'Pulling left brake');
   assert.equal(f.chip('left').children[1].textContent, 'drag left');
+  assert.equal(f.chip('left').children[1].className, 'fj-coach-gesture');
   assert.equal(f.chip('brake').hidden, true, 'one hand is never labelled as both brakes');
   const deep = { controlMode: 'brakes', leftBrake: 1, rightBrake: 1 };
   f.raw(deep);
   f.view.update(actionMessage({ action: 'brake', brakeDepth: 'working' }, deep));
   assert.equal(f.chip('brake').children[0].textContent, 'Ease the pull to working range');
-  assert.equal(f.chip('brake').children[1].textContent, 'drag down');
-  f.raw({ controlMode: 'brakes', leftBrake: .6, rightBrake: .6 });
-  f.view.update(actionMessage({ action: 'deep-brake' }, { controlMode: 'brakes', leftBrake: .6, rightBrake: .6 }));
+  assert.equal(f.chip('brake').children[1].textContent, 'ease toward center');
+  const working = { controlMode: 'brakes', leftBrake: .6, rightBrake: .6 };
+  f.raw(working); f.view.update(actionMessage({ action: 'deep-brake' }, working));
   assert.equal(f.chip('brake').children[0].textContent, 'Pull both brakes deeper');
-  assert.doesNotMatch(f.chip('brake').children[0].textContent, /tap/);
+  assert.equal(f.chip('brake').children[1].textContent, 'drag down');
 });
-
-test('explicit release and hold instructions reflect keyboard input without changing the message or controls', () => {
-  const f = fixture(), raw = Object.freeze({ right: true, left: false }); f.raw(raw);
-  f.view.update(reverse);
+test('explicit release and hold instructions reflect brake pairs without changing the message or controls', () => {
+  const f = fixture(), raw = Object.freeze({ controlMode: 'brakes', leftBrake: 0, rightBrake: .3 });
+  f.raw(raw); f.view.update(reverse);
   assert.equal(f.element.hidden, false);
   assert.equal(f.parts.kicker.textContent, 'Wingover · Reverse now');
   assert.equal(f.parts.action.textContent, 'RELEASE RIGHT, THEN LEFT');
-  assert.equal(f.chip('right').children[0].textContent, 'Release right');
-  assert.equal(f.chip('left').children[0].textContent, 'Hold left');
-  assert.equal(f.chip('left').children[1].textContent, '← / A');
-  assert.equal(f.button('right').classList.contains('held'), true);
-  assert.equal(f.button('right').dataset.coachAction, 'release');
-  assert.equal(f.button('left').dataset.coachAction, 'hold');
-  assert.equal(f.button('right').getAttribute('aria-pressed'), 'true');
+  assert.equal(f.chip('right').children[0].textContent, 'Release right brake');
+  assert.equal(f.chip('right').children[1].textContent, 'ease right');
+  assert.equal(f.chip('left').children[0].textContent, 'Pull left brake');
+  assert.equal(f.chip('left').children[1].textContent, 'drag left');
   assert.equal(f.parts.feedback.hidden, true, 'a held input is not credited as good timing');
-  f.raw(Object.freeze({ left: true, right: false })); f.view.update(reverse);
-  assert.equal(f.chip('left').children[0].textContent, 'Holding left');
-  assert.equal(f.chip('right').children[0].textContent, 'right released');
-  assert.equal(f.button('right').dataset.coachAction, '');
-  assert.equal(f.button('right').classList.contains('held'), false);
-  assert.equal(raw.right, true); assert.deepEqual(reverse.hold, ['left']);
+  f.raw({ controlMode: 'brakes', leftBrake: .3, rightBrake: 0 }); f.view.update(reverse);
+  assert.equal(f.chip('left').children[0].textContent, 'Pulling left brake');
+  assert.equal(f.chip('right').children[0].textContent, 'right brake released');
+  assert.equal(raw.rightBrake, .3); assert.deepEqual(reverse.hold, ['left']);
 });
-test('touch symbols and held feedback use the same raw inputs; all-release recovery stays compact', () => {
-  const f = fixture(); f.touchMode(true); f.raw({ left: true }); f.view.update(reverse);
-  assert.equal(f.chip('left').children[1].textContent, '◀');
-  const handsUp = { state: 'recover', context: 'Recovery', action: 'release-all', title: 'HANDS UP', hold: [], release: ['left', 'right', 'brake', 'bar', 'ears'] };
-  f.view.update(handsUp);
-  assert.equal(f.chip('left').children[0].textContent, 'Release left');
+test('hands up presents release feedback for either hand and settles to a compact neutral message', () => {
+  const f = fixture();
+  const fields = { state: 'recover', context: 'Recovery', action: 'release-all', title: 'HANDS UP', hold: [], release: ['left', 'right', 'brake', 'bar', 'ears'] };
+  const raw = Object.freeze({ controlMode: 'brakes', leftBrake: .3, rightBrake: 0 });
+  f.raw(raw); f.view.update(actionMessage(fields, raw));
+  assert.equal(f.chip('left').children[0].textContent, 'Release left brake');
   assert.equal(f.chip('right').hidden, true);
-  f.raw({}); f.view.update(handsUp);
-  assert.ok(f.parts.controls.children.slice(0, 5).every(chip => chip.hidden));
-  assert.equal(f.parts.controls.children[5].textContent, 'Controls released');
-  assert.equal(f.parts.controls.children[5].hidden, false);
+  assert.equal(f.chip('brake').children[0].textContent, 'Release the pull');
+  assert.equal(f.chip('brake').children[1].textContent, 'slide up / let go');
+  const neutral = { controlMode: 'brakes', leftBrake: 0, rightBrake: 0 };
+  f.raw(neutral); f.view.update(actionMessage(fields, neutral));
+  assert.ok(f.parts.controls.children.slice(0, 3).every(chip => chip.hidden));
+  assert.equal(f.parts.controls.children[3].textContent, 'Hands up');
+  assert.equal(f.parts.controls.children[3].hidden, false);
+  assert.equal(raw.leftBrake, .3);
 });
-test('the existing two-steering-key bar chord is visible without claiming either key was released', () => {
-  const f = fixture(); f.raw({ left: true, right: true });
-  f.view.update({ state: 'building', context: 'Flight', action: 'none', title: 'Current controls', hold: [], release: [] });
-  assert.equal(f.button('left').classList.contains('held'), true);
-  assert.equal(f.button('right').classList.contains('held'), true);
-  assert.equal(f.button('bar').classList.contains('held'), true);
-  assert.equal(f.chip('bar').children[0].textContent, 'Holding bar');
+test('only manual drag controls are created; unavailable bar, ears and digital inputs produce no chips', () => {
+  const f = fixture();
+  f.raw({ left: true, right: true, brake: true, deepBrake: true, bar: true, ears: true });
+  f.view.update({ state: 'building', context: 'Flight', action: 'none', title: 'Current controls', hold: [], release: ['bar', 'ears'] });
+  assert.deepEqual(f.parts.controls.children.slice(0, 3).map(chip => chip.dataset.control), ['left', 'right', 'brake']);
+  assert.equal(f.chip('bar'), undefined); assert.equal(f.chip('ears'), undefined);
+  assert.equal(f.parts.controls.hidden, true);
+  f.raw({ controlMode: 'brakes', leftBrake: .6, rightBrake: .6 });
+  f.view.update({ state: 'building', action: 'brake', title: 'Pull both', hold: ['brake'], release: ['bar', 'ears'] });
+  assert.equal(f.chip('brake').children[0].textContent, 'Holding both brakes');
 });
-test('releasing a touch pointer cannot hide a control still held by the keyboard', () => {
-  const f = fixture(); f.raw({ left: true }); f.view.update(reverse);
-  f.button('left').classList.remove('held'); // the pointer boundary releases its own holder
-  f.view.update(reverse);
-  assert.equal(f.button('left').classList.contains('held'), true);
-  assert.equal(f.button('left').getAttribute('aria-pressed'), 'true');
-});
-test('the same brake button presents normal and deep input with explicit text and shortcut advice', () => {
+test('deep brake is a continuous pull and quiet coaching clears its visual advice', () => {
   const f = fixture();
   const shape = { state: 'building', context: 'Pitch', action: 'deep-brake', brakeDepth: 'deep',
-    title: 'DOUBLE-TAP + HOLD BRAKE', hold: ['brake'], release: ['bar'] };
+    title: 'PULL BOTH BRAKES DEEP', hold: ['brake'], release: ['bar'] };
   f.view.update(shape);
-  assert.equal(f.chip('brake').children[0].textContent, 'Double-tap + hold brake');
-  assert.equal(f.chip('brake').children[1].textContent, 'Space twice / X');
-  assert.equal(f.button('brake').dataset.brakeAdvice, 'deep');
-  f.raw({ brake: true }); f.view.update(shape);
-  assert.equal(f.button('brake').dataset.brakeDepth, 'working');
-  assert.equal(f.button('brake').querySelector('small').textContent, 'normal brake');
-  assert.equal(f.chip('brake').children[0].textContent, 'Release, then double-tap + hold');
-  f.raw({ brake: true, deepBrake: true }); f.view.update(shape);
-  assert.equal(f.button('brake').dataset.brakeDepth, 'deep');
-  assert.equal(f.button('brake').querySelector('small').textContent, 'DEEP BRAKE');
-  assert.match(f.button('brake').getAttribute('aria-label'), /Deep brake held/);
-  assert.equal(f.chip('brake').children[0].textContent, 'Holding deep brake');
-  f.view.update({ ...shape, action: 'brake', brakeDepth: 'working', title: 'PRESS BRAKE' });
-  assert.equal(f.chip('brake').children[0].textContent, 'Release deep brake');
-  assert.equal(f.button('brake').dataset.coachAction, 'release', 'a deep hold does not fulfil a working catch');
+  assert.equal(f.chip('brake').children[0].textContent, 'Pull both brakes deeper');
+  f.raw({ controlMode: 'brakes', leftBrake: .6, rightBrake: .6 }); f.view.update(shape);
+  assert.equal(f.chip('brake').children[0].textContent, 'Pull both brakes deeper');
+  f.raw({ controlMode: 'brakes', leftBrake: 1, rightBrake: 1 }); f.view.update(shape);
+  assert.equal(f.chip('brake').children[0].textContent, 'Holding both deep brakes');
+  f.view.update({ ...shape, action: 'brake', brakeDepth: 'working', title: 'EASE BOTH TO WORKING BRAKE' });
+  assert.equal(f.chip('brake').children[0].textContent, 'Ease the pull to working range');
+  assert.equal(f.chip('brake').dataset.advice, 'release', 'a deep hold does not fulfil a working catch');
   f.view.update(null);
-  assert.equal(f.button('brake').dataset.coachAction, '');
-  assert.equal(f.button('brake').dataset.brakeDepth, 'deep', 'quiet coaching still shows the real held depth');
-  f.raw({ brake: true, deepBrake: true, ears: true }); f.view.update(null);
-  assert.equal(f.button('brake').dataset.brakeDepth, 'working', 'ears suppress deep treatment even for retained gesture intent');
-  assert.equal(f.button('brake').querySelector('small').textContent, 'normal brake');
-  f.raw({}); f.view.update(null);
-  assert.equal(f.button('brake').dataset.brakeDepth, '');
-  assert.equal(f.button('brake').querySelector('small').textContent, 'brake');
+  assert.equal(f.chip('brake').hidden, true);
+  assert.equal(f.chip('brake').dataset.advice, '');
 });
-
-test('accepting thermal circle and ease cues highlights the existing controls without changing either title', () => {
+test('asymmetric pulls never claim both brakes are deep or satisfy a bilateral catch', () => {
+  const f = fixture();
+  for (const direction of ['left', 'right']) {
+    const opposite = direction === 'left' ? 'right' : 'left';
+    const raw = Object.freeze({ controlMode: 'brakes', [`${direction}Brake`]: 1, [`${opposite}Brake`]: .2 });
+    f.raw(raw);
+    const deep = actionMessage({ action: 'deep-brake' }, raw);
+    f.view.update(deep);
+    assert.equal(deep.accepted, false, 'both hands must reach the deep range');
+    assert.equal(f.chip('brake').children[0].textContent, 'Pull both brakes deeper');
+    const working = actionMessage({ action: 'brake', brakeDepth: 'working' }, raw);
+    f.view.update(working);
+    assert.equal(working.accepted, false, 'one deep hand cannot satisfy a bilateral working catch');
+    assert.equal(f.chip('brake').children[0].textContent, 'Ease the pull to working range');
+    assert.equal(f.chip('brake').dataset.advice, 'release');
+    const side = actionMessage({ action: direction, hold: [direction], release: [opposite], brakeDepth: 'deep' }, raw);
+    f.view.update(side);
+    assert.equal(side.accepted, true, 'the same pair can satisfy a deliberate deep side pull');
+    assert.equal(f.chip(direction).children[0].textContent, `Pulling ${direction} brake`);
+    assert.equal(f.chip('brake').children[0].textContent, 'Holding both brakes');
+    assert.deepEqual(raw, { controlMode: 'brakes', [`${direction}Brake`]: 1, [`${opposite}Brake`]: .2 });
+  }
+});
+test('thermal circle and ease cues describe both brakes without changing the resolved titles', () => {
   const f = fixture();
   for (const direction of ['left', 'right']) {
     const opposite = direction === 'left' ? 'right' : 'left';
     const fields = { state: 'lift', context: 'thermal', activity: 'thermalling', phase: 'circle',
       action: direction, stableTitle: true, brakeDepth: 'working',
       title: `CIRCLE ${direction.toUpperCase()} + NORMAL BRAKE`, hold: [direction, 'brake'], release: [opposite, 'bar'] };
-    f.raw({}); f.view.update(actionMessage(fields));
-    assert.equal(f.parts.action.textContent, fields.title);
-    const raw = { [direction]: true, brake: true };
+    const neutral = { controlMode: 'brakes', leftBrake: 0, rightBrake: 0 };
+    f.raw(neutral); f.view.update(actionMessage(fields, neutral));
+    const title = f.parts.action.textContent;
+    assert.equal(title, `PULL DOWN + ${direction.toUpperCase()} · CIRCLE`);
+    const raw = { controlMode: 'brakes', [`${direction}Brake`]: .5, [`${opposite}Brake`]: .2 };
     f.raw(raw); f.view.update(actionMessage(fields, raw));
-    assert.equal(f.parts.action.textContent, fields.title);
+    assert.equal(f.parts.action.textContent, title);
     assert.equal(f.chip(direction).dataset.held, 'true'); assert.equal(f.chip('brake').dataset.held, 'true');
-    assert.equal(f.chip('brake').children[0].textContent, 'Holding brake');
+    assert.equal(f.chip('brake').children[0].textContent, 'Holding both brakes');
     const ease = { ...fields, phase: 'ease', action: 'straight',
       title: `EASE ${direction.toUpperCase()} · KEEP BRAKE`, hold: ['brake'], release: ['left', 'right', 'bar'] };
     f.view.update(actionMessage(ease, raw));
-    assert.equal(f.button(direction).dataset.coachAction, 'release');
-    f.raw({ brake: true }); f.view.update(actionMessage(ease, { brake: true }));
-    assert.equal(f.parts.action.textContent, ease.title);
-    assert.equal(f.button(direction).classList.contains('held'), false);
-    assert.equal(f.button('brake').classList.contains('held'), true);
+    assert.equal(f.chip(direction).dataset.advice, 'release');
+    const both = { controlMode: 'brakes', leftBrake: .2, rightBrake: .2 };
+    f.raw(both); f.view.update(actionMessage(ease, both));
+    assert.equal(f.parts.action.textContent, 'EASE SIDE PULL · KEEP BOTH BRAKES');
+    assert.equal(f.chip(direction).hidden, true);
+    assert.equal(f.chip('brake').dataset.held, 'true');
+    assert.deepEqual(raw, { controlMode: 'brakes', [`${direction}Brake`]: .5, [`${opposite}Brake`]: .2 });
   }
 });
 test('progress is shown only with an explicit meaning and remains finite and accessible', () => {
@@ -181,7 +181,7 @@ test('only semantic instructions are announced; numerical progress and raw held-
   const f = fixture();
   f.view.update(reverse);
   const first = f.parts.announce.textContent, writes = f.parts.announce.writes;
-  f.time(100); f.raw({ left: true });
+  f.time(100); f.raw({ controlMode: 'brakes', leftBrake: .3, rightBrake: 0 });
   f.view.update({ ...reverse, title: 'HOLD LEFT', progress: 0.7, progressLabel: 'Steady 0.7 s' });
   assert.equal(f.parts.announce.textContent, first); assert.equal(f.parts.announce.writes, writes);
   f.view.update({ ...reverse, state: 'building', phase: 'Building', action: 'right', title: 'HOLD RIGHT' });
@@ -192,14 +192,15 @@ test('only semantic instructions are announced; numerical progress and raw held-
   assert.match(f.parts.announce.textContent, /HANDS UP/, 'urgent recovery does not wait behind chatter');
 });
 test('stable frames reuse DOM and reset/dispose clear advice without touching input', () => {
-  const f = fixture(); f.raw({ right: true }); f.view.update(reverse);
+  const f = fixture(), raw = Object.freeze({ controlMode: 'brakes', leftBrake: 0, rightBrake: .3 }); f.raw(raw); f.view.update(reverse);
   const chips = [...f.parts.controls.children], textWrites = f.parts.action.writes + f.parts.reason.writes + f.parts.progress.writes;
   for (let i = 0; i < 50; i++) f.view.update(reverse);
   assert.deepEqual(f.parts.controls.children, chips);
   assert.equal(f.parts.action.writes + f.parts.reason.writes + f.parts.progress.writes, textWrites);
   f.view.reset(); assert.equal(f.element.hidden, true); assert.equal(f.parts.announce.textContent, '');
-  assert.ok(f.touch.children.every(b => b.dataset.coachAction === '' && !b.classList.contains('held')));
-  f.view.update(reverse); assert.equal(f.button('right').classList.contains('held'), true, 'reset never releases a real key');
+  assert.ok(f.parts.controls.children.every(chip => chip.hidden));
+  f.view.update(reverse); assert.equal(f.chip('right').dataset.held, 'true', 'reset never releases a real brake');
+  assert.equal(raw.rightBrake, .3);
   f.view.dispose(); f.view.dispose(); f.view.update(reverse); assert.equal(f.element.hidden, true);
 });
 test('message text remains literal even when a title contains markup', () => {
@@ -245,36 +246,30 @@ test('a warning-only semantic card works without a soaring activity', () => {
   assert.equal(f.parts.controls.hidden, true);
   assert.equal(f.parts.progress.hidden, true);
 });
-test('quiet transit clears recommended highlights while preserving held keys and the bar chord', () => {
-  const f = fixture(), raw = Object.freeze({ left: true, right: true });
+test('quiet transit clears recommendations without changing held brake demands', () => {
+  const f = fixture(), raw = Object.freeze({ controlMode: 'brakes', leftBrake: 0, rightBrake: .3 });
   f.raw(raw); f.view.update(reverse);
-  assert.equal(f.button('left').dataset.coachAction, 'hold');
-  assert.equal(f.button('right').dataset.coachAction, 'release');
+  assert.equal(f.chip('left').dataset.advice, 'hold');
+  assert.equal(f.chip('right').dataset.advice, 'release');
   f.view.update(null);
   assert.equal(f.element.hidden, true);
   assert.equal(f.parts.controls.hidden, true);
   assert.equal(f.parts.announce.textContent, '');
-  for (const name of ['left', 'right', 'brake', 'bar', 'ears']) {
-    assert.equal(f.button(name).dataset.coachAction, '');
+  for (const name of ['left', 'right', 'brake']) {
     assert.equal(f.chip(name).dataset.advice, '');
     assert.equal(f.chip(name).hidden, true);
-    const held = ['left', 'right', 'bar'].includes(name);
-    assert.equal(f.button(name).classList.contains('held'), held);
-    assert.equal(f.button(name).getAttribute('aria-pressed'), String(held));
   }
-  f.raw({}); f.view.update(null);
-  assert.ok(f.touch.children.every(b => !b.classList.contains('held')));
   f.view.update(reverse);
-  assert.equal(f.button('left').dataset.coachAction, 'hold', 'a newly active coach can recommend again');
-  assert.deepEqual(raw, { left: true, right: true });
+  assert.equal(f.chip('left').dataset.advice, 'hold', 'a newly active coach can recommend again');
+  assert.deepEqual(raw, { controlMode: 'brakes', leftBrake: 0, rightBrake: .3 });
 });
 
 test('lesson escape is shown on the active card and disappears for banked, cancelled and absent instruction', () => {
   const f = fixture();
-  const raw = Object.freeze({ right: true, brake: true }); f.raw(raw);
+  const raw = Object.freeze({ controlMode: 'brakes', leftBrake: .2, rightBrake: .5 }); f.raw(raw);
   f.view.update({ ...reverse, canCancelLesson: true, lessonId: 'wingover' });
   assert.equal(f.parts.cancel.hidden, false);
-  assert.equal(raw.right, true); assert.equal(raw.brake, true);
+  assert.equal(raw.rightBrake, .5); assert.equal(raw.leftBrake, .2);
   f.view.update({ ...reverse, state: 'banked' }); assert.equal(f.parts.cancel.hidden, true);
   f.view.update({ ...reverse, canCancelLesson: true }); f.view.update(null);
   assert.equal(f.parts.cancel.hidden, true);

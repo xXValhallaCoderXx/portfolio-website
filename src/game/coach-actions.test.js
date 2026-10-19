@@ -85,7 +85,7 @@ test('straightening and recovery distinguish letting go from a held input', () =
 test('deep shaping and working catches acknowledge the requested brake depth only', () => {
   const shape = { action: 'deep-brake', detail: 'Build the backward swing.' };
   const raw = Object.freeze({ brake: true });
-  assert.equal(actionMessage(shape, {}).title, 'DOUBLE-TAP + HOLD BRAKE');
+  assert.equal(actionMessage(shape, {}).title, 'PULL DEEP BRAKE');
   assert.equal(actionMessage(shape, raw).title, 'RELEASE, THEN DEEP BRAKE');
   assert.equal(actionMessage(shape, raw).accepted, false);
   const deep = actionMessage(shape, { brake: true, deepBrake: true });

@@ -1,5 +1,4 @@
 // The coach only presents resolved instructions and raw held inputs. It never changes flight.
-import { COACH_CONTROLS, controlHeld } from './coach-actions.js';
 import { summarizeControls } from './brake-controls.js';
 
 const clamp = (x) => Math.max(0, Math.min(1, Number.isFinite(x) ? x : 0));
@@ -8,7 +7,7 @@ const attribute = (node, name, value) => { if (node.getAttribute(name) !== value
 const hide = (node, value) => { if (node.hidden !== value) node.hidden = value; };
 
 /** `now` is a presentation clock, injectable for announcement tests; no simulation clock advances. */
-export function createCoachView({ element, touch, touchMode = () => false, input = () => ({}), now = () => performance.now() }) {
+export function createCoachView({ element, input = () => ({}), now = () => performance.now() }) {
   const kicker = element.querySelector('.fj-coach-kicker');
   const action = element.querySelector('[data-coach="action"]');
   const reason = element.querySelector('[data-coach="reason"]');
@@ -19,41 +18,39 @@ export function createCoachView({ element, touch, touchMode = () => false, input
   const progressFill = progress.querySelector('i > b');
   const announce = element.querySelector('[data-coach="announce"]');
   const cancel = element.querySelector('[data-coach="cancel"]');
-  const buttons = new Map();
-  for (const button of touch?.querySelectorAll('[data-input]') ?? []) buttons.set(button.dataset.input, button);
   const chips = [];
-  for (const name of Object.keys(COACH_CONTROLS)) {
+  for (const name of ['left', 'right', 'brake']) {
     const chip = element.ownerDocument.createElement('span');
     const label = element.ownerDocument.createElement('span');
-    const key = element.ownerDocument.createElement('kbd');
+    const gesture = element.ownerDocument.createElement('span');
     chip.className = 'fj-coach-control';
     chip.dataset.control = name;
     chip.hidden = true;
-    chip.append(label, key);
+    gesture.className = 'fj-coach-gesture';
+    chip.append(label, gesture);
     controls.append(chip);
-    chips.push({ name, chip, label, key, held: null, advice: null, button: buttons.get(name) });
+    chips.push({ name, chip, label, gesture });
   }
   const released = element.ownerDocument.createElement('span');
   released.className = 'fj-coach-released'; released.hidden = true;
-  released.textContent = 'Controls released'; controls.append(released);
+  released.textContent = 'Hands up'; controls.append(released);
   attribute(progress, 'role', 'progressbar');
   attribute(progress, 'aria-valuemin', '0'); attribute(progress, 'aria-valuemax', '100');
   let disposed = false, visible = false, semantic = '', pending = '', announcedAt = -Infinity;
   let fill = '';
 
   function syncInputs(message, raw) {
-    const hold = message?.hold ?? [], release = message?.release ?? [];
-    const touchKeys = !!touchMode();
-    const direct = raw.controlMode === 'brakes', effective = direct ? summarizeControls(raw) : raw;
+    const hold = message?.hold ?? [], release = (message?.release ?? []).filter(name => ['left', 'right', 'brake'].includes(name));
+    const effective = summarizeControls({ ...raw, controlMode: 'brakes' });
     let shown = false, heldAny = false;
     for (const item of chips) {
-      const { name, chip, label, key, button } = item;
+      const { name, chip, label, gesture } = item;
       const brake = name === 'brake';
-      const pressed = direct && brake ? effective.commonBrake > 0.04 || release.includes('brake') && effective.anyBrake : controlHeld(raw, name);
-      const deep = brake && pressed && (direct ? effective.maxBrake > 0.70 : !!raw.deepBrake) && !raw.ears;
-      const requestedDepth = brake ? message?.brakeDepth ?? (message?.action === 'deep-brake' ? 'deep' : '') : '';
+      const pressed = brake ? effective.commonBrake > 0.04 || release.includes('brake') && effective.anyBrake : effective[name];
+      const deep = brake && effective.deepBrake;
+      const requestedDepth = brake && hold.includes('brake') ? message?.brakeDepth ?? (message?.action === 'deep-brake' ? 'deep' : '') : '';
       const deepen = requestedDepth === 'deep' && !deep;
-      const soften = requestedDepth === 'working' && deep;
+      const soften = requestedDepth === 'working' && effective.maxBrake > 0.70;
       const advice = soften ? 'release' : hold.includes(name) ? 'hold' : release.includes(name) ? 'release' : '';
       const show = !!message && (pressed || advice === 'hold' || (advice === 'release' && release.length === 1));
       hide(chip, !show);
@@ -61,38 +58,15 @@ export function createCoachView({ element, touch, touchMode = () => false, input
       if (chip.dataset.advice !== advice) chip.dataset.advice = advice;
       if (chip.dataset.held !== String(pressed)) chip.dataset.held = String(pressed);
       if (show) {
-        const nameLabel = direct && brake ? effective.commonBrake > 0.04 ? deep ? 'both deep brakes' : 'both brakes' : 'the pull'
-          : deep ? 'deep brake' : COACH_CONTROLS[name].label;
-        const text = direct ? soften ? 'Ease the pull to working range'
+        const nameLabel = brake ? effective.commonBrake > 0.04 ? deep ? 'both deep brakes' : 'both brakes' : 'the pull' : `${name} brake`;
+        const text = soften ? 'Ease the pull to working range'
           : deepen ? 'Pull both brakes deeper'
             : advice === 'release' ? pressed ? `Release ${nameLabel}` : `${nameLabel} released`
               : name === 'left' || name === 'right' ? `${pressed ? 'Pulling' : 'Pull'} ${name} brake`
-                : `${pressed ? 'Holding' : 'Pull'} ${nameLabel}`
-          : deepen ? pressed ? 'Release, then double-tap + hold' : 'Double-tap + hold brake'
-          : advice === 'release' ? pressed ? `Release ${nameLabel}` : `${nameLabel} released`
-            : pressed ? `Holding ${nameLabel}` : `Hold ${nameLabel}`;
+                : `${pressed ? 'Holding' : 'Pull'} ${nameLabel}`;
         write(label, text);
-        write(key, direct && ['left', 'right', 'brake'].includes(name) ? name === 'brake' ? 'drag down' : `drag ${name}`
-          : deepen ? touchKeys ? '▼ twice' : 'Space twice / X'
-          : deep ? touchKeys ? '▼ deep' : 'X / Space twice' : COACH_CONTROLS[name][touchKeys ? 'touch' : 'keyboard']);
-      }
-      if (button) {
-        if (brake) {
-          const depth = pressed ? deep ? 'deep' : 'working' : '';
-          if (button.dataset.brakeDepth !== depth) button.dataset.brakeDepth = depth;
-          if (button.dataset.brakeAdvice !== requestedDepth) button.dataset.brakeAdvice = requestedDepth;
-          const caption = button.querySelector('small');
-          if (caption) write(caption, deep ? 'DEEP BRAKE' : pressed ? 'normal brake' : 'brake');
-          attribute(button, 'aria-label', deep ? 'Deep brake held; release to return to normal'
-            : pressed ? 'Normal brake held; double-tap and hold for deep brake' : 'Brake; double-tap and hold for deep brake');
-        }
-        if (item.held !== pressed || button.classList.contains('held') !== pressed) {
-          button.classList.toggle('held', pressed);
-          attribute(button, 'aria-pressed', String(pressed));
-          item.held = pressed;
-        }
-        const cue = advice === 'release' && !pressed ? '' : advice;
-        if (item.advice !== cue) { button.dataset.coachAction = cue; item.advice = cue; }
+        write(gesture, soften ? 'ease toward center' : advice === 'release' ? brake ? 'slide up / let go' : `ease ${name}`
+          : brake ? 'drag down' : `drag ${name}`);
       }
     }
     const allReleased = !!message && !shown && !heldAny && release.length > 0;
@@ -163,20 +137,7 @@ export function createCoachView({ element, touch, touchMode = () => false, input
     for (const node of [kicker, action, reason, feedback, progressLabel, announce]) write(node, '');
     reason.hidden = feedback.hidden = progress.hidden = controls.hidden = released.hidden = true;
     progressFill.style.transform = ''; fill = '';
-    for (const item of chips) {
-      item.chip.hidden = true;
-      item.held = item.advice = null;
-      if (item.button) {
-        item.button.classList.remove('held'); item.button.dataset.coachAction = '';
-        attribute(item.button, 'aria-pressed', 'false');
-        if (item.name === 'brake') {
-          item.button.dataset.brakeDepth = item.button.dataset.brakeAdvice = '';
-          const caption = item.button.querySelector('small');
-          if (caption) write(caption, 'brake');
-          attribute(item.button, 'aria-label', 'Brake; double-tap and hold for deep brake');
-        }
-      }
-    }
+    for (const { chip } of chips) chip.hidden = true;
   }
   function dispose() { if (disposed) return; reset(); disposed = true; }
   reset();

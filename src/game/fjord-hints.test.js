@@ -5,14 +5,14 @@ import { HINT_HOLD, HINT_WIDTH, holdHint } from './hints.js';
 const hint = fields => fjordHint({airtime:30,...fields});
 
 test('navigation prioritizes automatic travel, the arch and the boundary',()=>{
- assert.match(hint({auto:'projects',arch:true,outside:true}),/^flying itself to projects/);
+ assert.equal(hint({auto:'projects',arch:true,outside:true}),'flying itself to projects · drag to take over');
  assert.match(hint({nearArch:true}),/^through the arch/);
  assert.match(hint({arch:true}),/^Good Lift/);
  assert.match(hint({outside:true}),/^the fog turns you back/);
 });
-test('ring guidance preserves access and names the active control',()=>{
- assert.equal(hint({nearRing:true,unvisited:true,agl:RING_HIGH+1}),'hold E to descend into the ring');
- assert.equal(hint({nearRing:true,unvisited:true,agl:60,touch:true}),'hold ears to descend into the ring');
+test('ring guidance preserves access with the same reachable descent instruction for mouse and touch',()=>{
+ assert.equal(hint({nearRing:true,unvisited:true,agl:RING_HIGH+1}),'circle down toward the ring');
+ assert.equal(hint({nearRing:true,unvisited:true,agl:60,touch:true}),'circle down toward the ring');
  for(const fields of [{agl:RING_HIGH,unvisited:true},{agl:60,unvisited:false}])assert.equal(hint({nearRing:true,...fields}),'');
 });
 test('the first flight explains website navigation, then becomes quiet',()=>{

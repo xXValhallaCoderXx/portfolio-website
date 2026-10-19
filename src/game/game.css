@@ -95,10 +95,6 @@
 .playing .fj-scene { touch-action: none; user-select: none; }
 .fj-pointer-help { display: none; }
 .playing .fj-pointer-help { display: block; color: #b9d9e7; text-transform: none; letter-spacing: normal; }
-@media (pointer: fine) and (min-width: 561px) {
-  .playing .fj-touch { display: flex; justify-content: flex-end; bottom: 24px; }
-  .playing .fj-touch-steering, .playing .fj-touch [data-input='brake'] { display: none; }
-}
 
 .fj-hud nav {
   position: absolute;
@@ -162,18 +158,6 @@
   margin: 0;
 }
 
-.fj-keys dd span {
-  color: var(--dim);
-}
-
-/* What the on-screen buttons do, shown in place of the keys where there is no keyboard. */
-.fj-keys ul {
-  display: none;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
 .fj-keys .fj-keys-goal {
   margin: 10px 0 0;
   color: var(--dim);
@@ -181,21 +165,10 @@
   text-transform: none;
 }
 
-@media (pointer: coarse) {
-  .fj-keys dl {
-    display: none;
-  }
-
-  .fj-keys ul {
-    display: grid;
-    gap: 5px;
-  }
-}
-
 .fj-hint {
   position: absolute;
   right: 0;
-  bottom: 44px;
+  bottom: max(12px, env(safe-area-inset-bottom));
   left: 0;
   color: var(--dim);
   text-align: center;
@@ -344,40 +317,11 @@
   padding: 0 16px 14px;
 }
 
-/* ---- touch */
-
-.fj-touch {
-  position: absolute;
-  right: 0;
-  bottom: 56px;
-  left: 0;
-  display: none;
-  justify-content: space-between;
-  padding: 0 18px;
-  pointer-events: none;
-}
-
-.fj-touch button {
-  width: 64px;
-  height: 64px;
-  font-size: 22px;
-  pointer-events: auto;
-  touch-action: none;
-  user-select: none;
-}
-
-@media (pointer: coarse) {
-  .playing .fj-touch {
-    display: flex;
-  }
-}
-
 /* The missing-page emergency has no map and nothing to steer. */
 .lost [data-do='keys'],
 .lost .fj-keys,
 .lost [data-do='map'],
-.lost [data-do='fullscreen'],
-.lost .fj-touch {
+.lost [data-do='fullscreen'] {
   display: none !important;
 }
 
@@ -489,72 +433,7 @@
 }
 
 @media (pointer: coarse) {
-  /* The buttons to fly with: round, see-through, and clear of the phone's own bottom edge. */
-  .fj-touch {
-    bottom: max(18px, env(safe-area-inset-bottom));
-    padding: 0 14px;
-  }
-
-  .fj-touch button {
-    width: 58px;
-    height: 58px;
-    border-color: rgba(59, 158, 255, 0.55);
-    border-radius: 50%;
-    background: rgba(6, 10, 19, 0.45);
-  }
-
-  /* Hints sit just above those buttons, not under them, and the brake meter between the two. */
-  .fj-hint {
-    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 82px);
-    padding: 0 22px;
-    font-size: 12px;
-  }
-
-  .fj-brake {
-    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 63px);
-    font-size: 11px;
-  }
-
-  .fj-brake span {
-    height: 6px;
-  }
-
-  /* Between the pilot and the hint, clear of the meter and the thumbs. */
-  .fj-swing {
-    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 112px);
-    width: 168px;
-    height: 64px;
-  }
-}
-
-/* On a phone held sideways the pilot hangs just above the hint, so the meter drops into the gap
-   between the middle buttons instead, without its word. */
-@media (pointer: coarse) and (orientation: landscape) {
-  .fj-hint {
-    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 70px);
-  }
-
-  .fj-brake {
-    bottom: max(8px, env(safe-area-inset-bottom));
-    width: clamp(84px, 15vw, 160px);
-  }
-
-  .fj-brake b {
-    display: none;
-  }
-
-  /* Held sideways it drops to the bottom too, above the meter between the middle buttons. */
-  .fj-swing {
-    bottom: calc(max(8px, env(safe-area-inset-bottom)) + 14px);
-    width: 150px;
-    height: 52px;
-  }
-
-  .fj-swing-loop {
-    width: 36px;
-    height: 36px;
-    margin: -18px 0 0 -18px;
-  }
+  .fj-hint { padding: 0 22px; font-size: 12px; }
 }
 
 .fj-fade {
@@ -570,8 +449,7 @@
   opacity: 1;
 }
 
-/* A finished run leaves the keyboard/touch focus with its reading or retry controls. */
-.cloudbase-ended .fj-touch,
+/* A finished run leaves focus with its reading or retry controls. */
 .cloudbase-ended .fj-labels {
   display: none !important;
 }
@@ -619,26 +497,6 @@
   }
 }
 
-/* Time does not speed up in a run, so its button is a second brake there, and the four sit as two
-   pairs: ◀ ▼ under the left thumb and ▼ ▶ under the right, so either hand can brake and steer. */
-.fj-touch.pairs {
-  justify-content: flex-start;
-  gap: 10px;
-}
-
-.fj-touch.pairs button:nth-child(3) {
-  margin-left: auto;
-}
-
-/* On a phone held sideways the pilot hangs just where the hint would be, and sinks lower still as
-   the camera looks up in a climb. In a run the line rides between the pilot and the wing instead,
-   and follows them down: the game sets --gaze from 0 (level) to 1 (looking fully up). */
-@media (pointer: coarse) and (orientation: landscape) {
-  .cloudbase .fj-hint {
-    bottom: calc(42% - 13% * var(--gaze, 0));
-  }
-}
-
 @media (pointer: coarse), (max-width: 560px) {
   .cloudbase .fj-hud > dl {
     gap: 2px 10px;
@@ -647,11 +505,11 @@
 
 /* A single coach, shared by both kinds of manual flight. */
 .fj-coach {
-  position: absolute; bottom: 40px; left: 50%; z-index: 3;
-  width: min(370px, calc(100% - 32px)); box-sizing: border-box;
+  position: absolute; top: var(--coach-top, 200px); bottom: auto; left: 16px; z-index: 3;
+  width: min(330px, calc(100% - 32px)); box-sizing: border-box;
   padding: 12px 16px; border: 1px solid rgba(94,230,255,.28); border-radius: 12px;
   background: rgba(6,15,27,.88); backdrop-filter: blur(12px);
-  transform: translateX(-50%); pointer-events: none; color: #eaf4ff;
+  transform: none; pointer-events: none; color: #eaf4ff;
   box-shadow: 0 8px 32px rgba(0,0,0,.18); text-align: center;
 }
 .fj-coach[hidden] { display: none; }
@@ -667,7 +525,7 @@
 .fj-coach small { display: block; margin-top: 5px; color: #b6c9d9; font-size: 11px; line-height: 1.45; }
 .fj-coach [data-coach='controls'] { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; margin-top: 8px; }
 .fj-coach-control { display: inline-flex; align-items: center; gap: 5px; border: 1px solid rgba(138,164,187,.4); border-radius: 5px; padding: 4px 6px; color: #b6c9d9; font-size: 10px; line-height: 1.2; }
-.fj-coach-control kbd { display: inline-block; border: 0; padding: 0; color: inherit; font: inherit; white-space: nowrap; }
+.fj-coach-gesture { display: inline-block; border: 0; padding: 0; color: inherit; font: inherit; white-space: nowrap; }
 .fj-coach-control[data-advice='hold'] { border-color: #b8f6ff; }
 .fj-coach-control[data-held='true'] { background: #173948; color: #d4f9ff; }
 .fj-coach-control[data-advice='release'][data-held='true'] { border-style: dashed; border-color: #ffb066; background: #352a20; color: #ffd7ae; }
@@ -696,26 +554,8 @@
 .fj-hud > dl [data-hud='wind'] { color: #8aa4bb; }
 .fj-hud nav > [data-do='sound'], .fj-hud nav > [data-do='music'], .fj-hud nav > [data-do='fullscreen'], .fj-hud nav > [data-do='exit'] { display: none; }
 .fj-hud .fj-keys-more { display: flex; }
-.fj-touch > span { display: flex; gap: 7px; pointer-events: none; }
-.fj-touch button { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border-radius: 14px; width: 56px; height: 60px; background: rgba(6,15,27,.84); }
-.fj-touch button small { font-size: 9px; letter-spacing: .03em; }
-.fj-touch button.held { color: #06101b; background: #5ee6ff; border-color: #b8f6ff; }
-.fj-touch button[data-coach-action='hold'] { border-color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,.5); }
-.fj-touch button[data-coach-action='release'] { border-style: dashed; border-color: #ffb066; box-shadow: 0 0 0 2px rgba(255,176,102,.35); }
-.fj-touch button[data-coach-action='release'].held { background: #ffb066; }
-.fj-touch button[data-input='brake'] small { white-space: normal; max-width: 48px; line-height: 1.1; }
-.fj-touch button[data-brake-depth='deep'] { color: #10101e; background: #d3b3ff; border-color: #f2e5ff; }
-.fj-touch button[data-brake-depth='deep'][data-coach-action='release'] { background: #ffb066; }
-.fj-touch button[data-brake-advice='deep'][data-coach-action='hold'] { border-color: #e9d3ff; box-shadow: 0 0 0 2px rgba(211,179,255,.5); }
-.fj-touch button[data-coach-action='hold']::after, .fj-touch button[data-coach-action='release']::after { position: absolute; top: -9px; right: 3px; padding: 1px 4px; border-radius: 3px; color: #d4f9ff; background: #173948; font-size: 8px; line-height: 1.3; letter-spacing: .02em; }
-.fj-touch button[data-coach-action='hold']::after { content: 'hold'; }
-.fj-touch button[data-brake-advice='deep'][data-coach-action='hold']::after { content: 'deep'; }
-.fj-touch button[data-coach-action='release']::after { content: 'release'; color: #ffd7ae; background: #352a20; }
-.fj-touch button:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
 @media (pointer: coarse), (max-width: 560px) {
-  .playing .fj-touch { display: flex; bottom: max(18px, env(safe-area-inset-bottom)); padding: 0 12px; gap: 12px; }
-  .fj-touch button { width: 52px; height: 58px; min-height: 44px; margin: 0; }
-  .fj-coach { bottom: calc(96px + env(safe-area-inset-bottom)); padding: 10px 12px; }
+  .fj-coach { padding: 10px 12px; }
   .fj-coach strong { font-size: 13px; }
   .fj-coach small { font-size: 11px; }
   .fj-hud > dl { box-sizing: border-box; max-width: calc(100% - 195px); gap: 0 9px; }
@@ -724,18 +564,21 @@
   .fj-thermal-air { flex-basis: 100%; grid-template-columns: 44px 8ch; font-size: 8px; }
   .fj-hud > dl [data-hud='wind'] { font-size: 10px; }
   .fj-hud nav { gap: 5px; }
-  .fj-hint { bottom: 195px; padding: 0 24px; box-sizing: border-box; font-size: 10px; }
+  .fj-hint { padding: 0 24px; box-sizing: border-box; font-size: 10px; }
 }
 @media (max-width: 560px) {
   .fj-hud nav > [data-do='map'] kbd,
   .fj-hud nav > [data-do='keys'] .for-keys { display: none; }
   .fj-hud nav > [data-do='keys'] .for-touch { display: inline; }
 }
+@media (max-width: 560px) and (orientation: portrait) {
+  .fj-coach { left: 50%; width: min(370px, calc(100% - 24px)); transform: translateX(-50%); }
+}
 @media (max-height: 500px) and (orientation: landscape) {
-  .fj-coach { bottom: 22px; width: min(330px, calc(100% - 330px)); padding: 8px 10px; }
+  .fj-coach { left: 12px; width: min(280px, calc(50% - 100px)); padding: 8px 10px; transform: none; }
   .fj-coach-kicker { margin-bottom: 4px; font-size: 8px; }
   .fj-coach strong { font-size: 13px; }
   .fj-coach small { font-size: 10px; line-height: 1.3; }
   .fj-coach [data-coach='controls'] { margin-top: 6px; }
-  .fj-hint { bottom: 115px; }
+  .fj-hint { left: 12px; right: auto; width: calc(50% - 110px); padding: 0; text-align: left; }
 }

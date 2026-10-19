@@ -14,13 +14,12 @@ import { createFlightCues } from './flight-cues.js';
 import { createFlightCoach } from './flight-coach.js';
 import { createLiftGuide } from './lift-guide.js';
 import { createCoachView } from './coach-view.js';
-import { createBrakeInput } from './brake-input.js';
 import { createBrakeDrag } from './brake-drag.js';
 import { brakeByte, summarizeControls } from './brake-controls.js';
 import { interruptsLift, resolveCoachMessage } from './coach-routing.js';
 import { createPlateNotice, createWindNotice, windReadout } from './wind-feedback.js';
 import { crossesGateway } from './gateway.js';
-import { BRAKE, FLIGHT, createFlight, releaseFlight, settleFlight, stepFlight } from './flight.js';
+import { FLIGHT, createFlight, releaseFlight, settleFlight, stepFlight } from './flight.js';
 import { stallEffects, brakeMeter } from './stall-effects.js';
 import { createSwingWatch } from './swing-watch.js';
 import { swingGauge } from './swing-gauge.js';
@@ -45,7 +44,7 @@ const NIGHT = 0x060a13;
 const STEP = 1 / 60;
 const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
 
-// How many times faster the flight runs while boosting or flying itself to a place.
+// How many times faster the flight runs while flying itself to a place.
 const HASTE = 3;
 
 // The arch is the door into Good Lift. Within `near` metres of it and closing on it faster than
@@ -60,24 +59,6 @@ const DAILY = Object.freeze({ kind: 'daily', sky: null, vs: null, bad: null });
 // and the storm clouds come from. At a full gaze it sits `back` metres further behind and `drop`
 // lower, and aims `lift` higher; the gaze comes on at `rise` per second and goes at `fall`.
 const GAZE = { back: 4, drop: 8, lift: 13, rise: 1.2, fall: 0.5 };
-
-const KEYS = {
-  ShiftLeft: 'boost',
-  ShiftRight: 'boost',
-  ArrowLeft: 'left',
-  KeyA: 'left',
-  ArrowRight: 'right',
-  KeyD: 'right',
-  ArrowUp: 'bar',
-  KeyW: 'bar',
-  // A normal hold is working brake; X deliberately asks for the deeper pitch input.
-  ArrowDown: 'brake',
-  KeyS: 'brake',
-  Space: 'brake',
-  KeyX: 'brake',
-  // Big ears: the deliberate descent control in either mode.
-  KeyE: 'ears',
-};
 
 // Everything the game draws over its own canvas. The landing panel is not here: the page renders
 // that, so it can reuse the same section components as the traditional page.
@@ -117,37 +98,25 @@ const MARKUP = /* html */ `
           <button data-do="exit">[ <kbd>esc: </kbd>exit ]</button>
         </div>
         <p>controls</p>
-        <p class="fj-pointer-help">Hold and drag on the flight view: down pulls both brakes, left or right pulls that side. Blend a gentle downward and side pull to circle in lift. Pull farther for more brake; release for hands up. Full pulls can stall. Keys and buttons also work.</p>
+        <p class="fj-pointer-help">Hold and drag anywhere on the flight view. The dot in the fixed control diagram follows your pull from where you started. Full pulls can stall.</p>
         <dl>
-          <dt>← →</dt><dd>steer <span>or A D</span></dd>
-          <dt>space</dt><dd>hold for normal brake; slow down and check a surge <span>or ↓ S</span></dd>
-          <dt>double tap</dt><dd>tap, release, then hold brake for deep acro input <span>or hold X</span></dd>
-          <dt>↑</dt><dd>speed bar: hands up, faster and sinking more <span>or W</span></dd>
-          <dt>e</dt><dd>big ears: hold to descend; release, then brake to reopen faster</dd>
-          <dt>thermals</dt><dd>hold one direction + normal brake to circle; briefly ease the direction to widen. Brake slows the wing; rising air provides lift. Deep brake is unnecessary.</dd>
-          <dt>tricks</dt><dd>use deep brake to set up an energetic swing; release and reverse with the swing for wingovers, or shape a pitch, release and catch with normal brake. A large, energetic swing can carry you over the canopy into an inversion. Recover level to bank the move.</dd>
-          <dt>recovery</dt><dd>holding deep brake can stall the wing. Follow the coach through backfly and the exit surge. A missed pitch catch can fold the leading edge; release brake and bar to let it reopen.</dd>
-          <dt class="fj-keys-fjord">enter</dt><dd class="fj-keys-fjord">take off again once landed <span>or space</span></dd>
-          <dt class="fj-keys-fjord">shift</dt><dd class="fj-keys-fjord">hold to speed time up</dd>
-          <dt class="fj-keys-fjord">click</dt><dd class="fj-keys-fjord">a lit pillar or its label, to fly there by itself</dd>
+          <dt>side pull</dt><dd>drag left or right to turn; use a smaller pull for a gentler turn</dd>
+          <dt>down</dt><dd>pull both brakes into the working range to slow down and check a surge</dd>
+          <dt>deeper</dt><dd>drag farther down into the purple range for deep brake</dd>
+          <dt>hands up</dt><dd>slide up, release the mouse or lift your finger to let both brakes up</dd>
+          <dt>thermals</dt><dd>blend a gentle downward and side pull to circle; ease the side pull to widen. Brake slows the wing; rising air provides lift.</dd>
+          <dt>tricks</dt><dd>use a deep pull to set up an energetic swing; release and reverse the side pull with the swing for wingovers, or shape a pitch, release and catch with a working pull. Recover level to bank the move.</dd>
+          <dt>recovery</dt><dd>holding a deep pull can stall the wing. Follow the coach through backfly and the exit surge. A missed pitch catch can fold the leading edge; let go to let it reopen.</dd>
+          <dt class="fj-keys-fjord">enter</dt><dd class="fj-keys-fjord">take off again once landed</dd>
+          <dt class="fj-keys-fjord">tap / click</dt><dd class="fj-keys-fjord">a lit pillar or its label, to fly there by itself</dd>
           <dt class="fj-keys-fjord">n</dt><dd class="fj-keys-fjord">once landed, fly to the next place</dd>
           <dt>m</dt><dd>map: pick a place to fly to</dd>
           <dt>r</dt><dd>start again from the launch</dd>
           <dt>l · f</dt><dd>sound · fullscreen</dd>
           <dt>esc</dt><dd>back to the page</dd>
         </dl>
-        <ul>
-          <li>◀ ▶ steer</li>
-          <li>▼ hold for normal brake · double-tap and hold for deep brake</li>
-          <li>▲ speed bar · ears to descend</li>
-          <li>hold ears to descend; release, then brake to reopen</li>
-          <li>circle: ◀ or ▶ + normal brake; ease the direction to widen. Rising air provides lift, not the brake.</li>
-          <li>deep brake builds energy; then ◀ ▶ with the swing for wingovers</li>
-          <li>deep brake can stall; follow the coach to stabilise backfly, exit and catch. A frontal fold needs released brake and bar to reopen.</li>
-          <li class="fj-keys-fjord">tap a lit pillar or its label to fly there by itself</li>
-        </ul>
         <p class="fj-keys-goal fj-keys-fjord">land inside a lit ring to read that part of the page</p>
-        <p class="fj-keys-goal fj-keys-run" hidden>Read the air: streaks rise over windward cliffs, and ravens circle thermals. Center the lift and bank the bar every 150 m. Raven warnings, gusts and storms begin above 500 m; kettlebells join at 700 m and the Beast at 1,000 m. Storms bring sink. The fog builds after five minutes; a surviving flight completes at ten. Safe lessons introduce pitch and catch at 500 m, then wingovers at 750 m. Tricks spend height and earn style, increasing your final score. Back to lift (T) leaves a lesson. Hold E for big ears to descend. Hold brake normally for soaring and catches; double-tap and hold it, or hold X, to build pitch or an energetic wingover entry. Release to return to normal. Music: B.</p>
+        <p class="fj-keys-goal fj-keys-run" hidden>Read the air: streaks rise over windward cliffs, and ravens circle thermals. Center the lift and bank the bar every 150 m. Raven warnings, gusts and storms begin above 500 m; kettlebells join at 700 m and the Beast at 1,000 m. Storms bring sink. The fog builds after five minutes; a surviving flight completes at ten. Safe lessons introduce pitch and catch at 500 m, then wingovers at 750 m. Tricks spend height and earn style, increasing your final score. Back to lift (T) leaves a lesson. Use gentle pulls for soaring and working pulls for catches; pull farther into the deep range to build pitch or an energetic wingover entry. Slide up or let go for hands up. Music: B.</p>
       </aside>
     </nav>
   </div>
@@ -171,10 +140,6 @@ const MARKUP = /* html */ `
     <button data-do="back-to-lift" data-coach="cancel" hidden>Back to lift <kbd>T</kbd></button>
     <span data-coach="announce" class="fj-visually-hidden" aria-live="polite" aria-atomic="true"></span>
   </section>
-  <div class="fj-touch">
-    <span class="fj-touch-steering"><button data-input="left" aria-label="Steer left">◀</button><button data-input="right" aria-label="Steer right">▶</button></span>
-    <span class="fj-touch-wing"><button data-input="brake" aria-label="Brake; double-tap and hold for deep brake">▼<small>brake</small></button><button data-input="bar" aria-label="Speed bar">▲<small>bar</small></button><button data-input="ears" aria-label="Big ears">⇣<small>ears</small></button></span>
-  </div>
   <span class="fj-drag-tip" hidden>Hold + drag to fly<br><small>↓ both brakes · release for hands up</small></span>
   <div class="fj-flight-cues" aria-hidden="true"></div>
   <div class="fj-fade"></div>`;
@@ -350,9 +315,7 @@ export function createGame(stage, hooks = {}) {
   vario.reset(g.vy);
   const windNotice = createWindNotice();
   const plateNotice = createPlateNotice();
-  const input = { left: false, right: false, bar: false, brake: false, deepBrake: false, ears: false, boost: false,
-    controlMode: 'legacy', leftBrake: 0, rightBrake: 0 };
-  const brakeInput = createBrakeInput();
+  const input = { controlMode: 'brakes', leftBrake: 0, rightBrake: 0, bar: false, ears: false };
   const brakeDrag = createBrakeDrag();
   const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
   const flightCues = createFlightCues({ element: $('.fj-flight-cues'), stage, camera, reducedMotion: () => motionPreference.matches });
@@ -371,28 +334,6 @@ export function createGame(stage, hooks = {}) {
     stage.classList.remove('brake-dragging');
     const canvas = $('.fj-scene');
     if (id !== null && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
-  }
-  // Who is holding each control. Two keys, or a key and a button, can hold the same one, and it
-  // is only let go when the last of them is.
-  const holders = { left: new Set(), right: new Set(), bar: new Set(), brake: new Set(), ears: new Set(), boost: new Set() };
-  function press(name, by, down) {
-    if (down && ['left', 'right', 'brake', 'bar', 'ears'].includes(name)) {
-      releaseDrag();
-      input.controlMode = 'legacy';
-    }
-    const wasBraking = input.brake;
-    if (down) holders[name].add(by);
-    else holders[name].delete(by);
-    input[name] = holders[name].size > 0;
-    if ((name === 'brake' && !input.brake) || (name === 'ears' && input.ears)) input.deepBrake = false;
-    if (name === 'brake' && (wasBraking !== input.brake || by === 'KeyX')) {
-      brakeInput.edge(input.brake, { forceDeep: holders.brake.has('KeyX'),
-        active: isAirborne() && !mapOpen && !held && !briefing && !portal && !auto });
-    }
-  }
-  function resetBrakeInput() {
-    brakeInput.reset({ held: input.brake, forceDeep: holders.brake.has('KeyX') });
-    input.deepBrake = false;
   }
   let mode = 'intro'; // intro | flying | cloudbase | cloudbase-ended | landed | launching | lost
   const isAirborne = () => mode === 'flying' || mode === 'cloudbase';
@@ -430,7 +371,7 @@ export function createGame(stage, hooks = {}) {
   // `tuck` is how far the wing is shown tucked under, and `heave` the side of the wing over a core
   // lifted as the moment to turn in comes (-1 left to 1 right, written by the run and dying away).
   const effects = {
-    fold: 0, veil: 0, veilShown: 0, shake: 0, gaze: 0, want: { fold: 0, veil: 0, shake: 0, gaze: 0 }, floor: -Infinity, gazeShown: -1, stop: 0,
+    fold: 0, veil: 0, veilShown: 0, shake: 0, gaze: 0, want: { fold: 0, veil: 0, shake: 0, gaze: 0 }, floor: -Infinity, stop: 0,
     foldLeft: 0, foldRight: 0, luff: 0, stall: { left: 0, right: 0, luff: 0, shake: 0, tuck: 0 }, stalled: false,
     tuck: 0, heave: 0,
     meter: { fill: 0, red: 0, state: '' }, meterShown: { fill: -1, red: -1, state: null }, fjordHint: { line: '', since: 0 },
@@ -453,7 +394,6 @@ export function createGame(stage, hooks = {}) {
   const veilEl = $('.fj-veil');
   const strikeEl = $('.fj-strike');
   const hintEl = $('.fj-hint');
-  const touchEl = $('.fj-touch');
   // For looking at a run from the console: a seed to fly again, and the flight held still.
   let pinnedSeed = null;
   let held = false;
@@ -477,19 +417,8 @@ export function createGame(stage, hooks = {}) {
     );
   }
 
-  const touchHolds = [];
   function clearInput() {
     releaseDrag();
-    for (const { button, pointers } of touchHolds) {
-      for (const id of pointers) if (button.hasPointerCapture(id)) button.releasePointerCapture(id);
-      pointers.clear();
-      button.classList.remove('held');
-    }
-    for (const key of Object.keys(holders)) {
-      holders[key].clear();
-      input[key] = false;
-    }
-    resetBrakeInput();
   }
 
   function clearCloudResult() {
@@ -522,8 +451,6 @@ export function createGame(stage, hooks = {}) {
     releaseFlight(g);
     veilEl.style.opacity = '0';
     strikeEl.classList.remove('on');
-    hintEl.style.removeProperty('--gaze');
-    effects.gazeShown = -1;
     if (audio) audio.next = {};
   }
 
@@ -727,7 +654,6 @@ export function createGame(stage, hooks = {}) {
   }
 
   function simulate(dt) {
-    input.deepBrake = brakeInput.step(dt, { held: input.brake, forceDeep: holders.brake.has('KeyX'), active: !auto }).deepBrake && !input.ears;
     airtime += dt;
     previousPosition.copy(g.pos);
     if (mode === 'cloudbase') return simulateRun(dt);
@@ -932,7 +858,6 @@ export function createGame(stage, hooks = {}) {
 
   function launchFrom(x, y, z, yaw, assisted = false) {
     clearInput();
-    input.controlMode = 'legacy';
     hasDragged = false;
     closePanel();
     clearCloudResult();
@@ -1232,20 +1157,11 @@ export function createGame(stage, hooks = {}) {
     const gaze = effects.want.gaze;
     effects.gaze += (gaze - effects.gaze) * (1 - Math.exp(-dt * (gaze > effects.gaze ? GAZE.rise : GAZE.fall)));
     if (effects.gaze < 1e-4 && gaze === 0) effects.gaze = 0;
-    if (touch && mode === 'cloudbase') {
-      // On a phone held sideways the hint rides between the pilot and the wing, and they sink
-      // down the picture as the camera looks up: the stylesheet moves the line by this much.
-      const shown = Math.round(effects.gaze * 50);
-      if (shown !== effects.gazeShown) {
-        effects.gazeShown = shown;
-        hintEl.style.setProperty('--gaze', String(shown / 50));
-      }
-    }
     followHeading(dt);
     chaseTarget();
     if (launchReveal && mode === 'flying') {
       launchReveal.age += dt;
-      if ((input.left || input.right) && launchReveal.age < 0.8) {
+      if (input.leftBrake !== input.rightBrake && launchReveal.age < 0.8) {
         launchReveal.age = 0.8;
         launchReveal.duration = 0.35;
       }
@@ -1419,7 +1335,7 @@ export function createGame(stage, hooks = {}) {
     fog: () => mode === 'cloudbase' ? run.coachEnvironment.fog() : null,
     cloudDepth: (pos) => mode === 'cloudbase' ? run.coachEnvironment.cloudDepth(pos) : 0,
   });
-  const coachView = createCoachView({ element: $('.fj-coach'), touch: touchEl, touchMode: () => touch, input: () => input });
+  const coachView = createCoachView({ element: $('.fj-coach'), input: () => input });
   let coachMessage = null;
   function resetCoach() {
     thermalAir.reset();
@@ -1522,7 +1438,7 @@ export function createGame(stage, hooks = {}) {
     }
     $('.fj-toasts').style.removeProperty('top');
     if (mode === 'flying' && g.stall > 0) hud('alt').textContent = `${Math.max(0, Math.round(g.pos.y))} m · stalled`;
-    const pace = auto ? ` · auto ×${HASTE}` : input.boost ? ` · ×${HASTE}` : g.brake > 0.05 ? ' · brake' : g.bar > 0.5 ? ' · bar' : '';
+    const pace = auto ? ` · auto ×${HASTE}` : g.brake > 0.05 ? ' · brake' : '';
     hud('speed').textContent = `${Math.round(g.speed * 3.6)} km/h${mode === 'flying' ? pace : ''}`;
     const next = nearestZone(true) ?? nearestZone(false);
     const bearing = wrapAngle(Math.atan2(next.zone.x - g.pos.x, -(next.zone.z - g.pos.z)) - g.yaw);
@@ -2144,23 +2060,6 @@ export function createGame(stage, hooks = {}) {
       return;
     }
     if (event.target instanceof Element && event.target.closest('button, a, input, textarea, select, [contenteditable="true"]') && ['Space', 'Enter'].includes(event.code)) return;
-    if (event.code in KEYS) {
-      event.preventDefault();
-      if (event.repeat) return;
-      const name = KEYS[event.code];
-      if (name === 'brake' || name === 'ears') {
-        // A brake key held since before the launch is not a brake until it is pressed again, nor
-        // the ears.
-        if (event.repeat) return;
-        // Space also takes off when landed.
-        if (event.code === 'Space' && mode === 'landed') return takeOff();
-      }
-      if (mapOpen || keysOpen || held || mode === 'launching') return;
-      press(name, event.code, true);
-      // Steering by hand takes the glider back from flying itself.
-      if (name === 'left' || name === 'right') setAuto(null);
-      return;
-    }
     if (event.repeat) return;
     if (event.code === 'KeyM') mapOpen ? closeMap() : openMap();
     else if (event.code === 'KeyH') showKeys();
@@ -2169,17 +2068,12 @@ export function createGame(stage, hooks = {}) {
     else if (event.code === 'KeyT' && mode === 'cloudbase') run?.cancelLesson();
     else if (event.code === 'KeyR') respawn();
     else if (event.code === 'Escape') mapOpen ? closeMap() : keysOpen ? showKeys(false) : mode === 'cloudbase' ? finishCloudbase('quit') : exitFlight();
-    else if (event.code === 'Enter' && mode === 'landed') takeOff();
+    else if (['Enter', 'Space'].includes(event.code) && mode === 'landed') { event.preventDefault(); takeOff(); }
     else if (event.code === 'KeyN' && mode === 'landed') flyToNext();
   });
 
   on(window, 'keyup', (event) => {
     if (event.code === swallowed) swallowed = null;
-    if (mode === 'intro' || !(event.code in KEYS)) return;
-    press(KEYS[event.code], event.code, false);
-    if (event.target instanceof Element && event.target.closest('button, a, input, textarea, select, [contenteditable="true"]') && ['Space', 'Enter'].includes(event.code)) return;
-    // Stops a held space from also clicking whichever button was last focused.
-    event.preventDefault();
   });
 
   on(window, 'blur', () => {
@@ -2197,50 +2091,6 @@ export function createGame(stage, hooks = {}) {
   });
   // Out of sight, Good Lift's music waits for the page to come back.
   on(document, 'visibilitychange', () => { run?.hideMusic(document.hidden); if (document.hidden) clearInput(); });
-
-  for (const button of stage.querySelectorAll('.fj-touch button')) {
-    const heldPointers = new Set();
-    const heldKeys = new Set();
-    touchHolds.push({ button, pointers: heldPointers });
-    on(button, 'keydown', (event) => {
-      if (!['Space', 'Enter'].includes(event.code) || !isAirborne() || mapOpen || keysOpen || held || briefing || portal) return;
-      event.preventDefault();
-      const token = `button:${button.dataset.input}:${event.code}`;
-      if (event.repeat) return;
-      heldKeys.add(token);
-      press(button.dataset.input, token, true);
-      if (['left', 'right'].includes(button.dataset.input)) setAuto(null);
-    });
-    on(button, 'keyup', (event) => {
-      if (!['Space', 'Enter'].includes(event.code)) return;
-      event.preventDefault();
-      const token = `button:${button.dataset.input}:${event.code}`;
-      heldKeys.delete(token);
-      press(button.dataset.input, token, false);
-    });
-    on(button, 'blur', () => {
-      for (const token of heldKeys) press(button.dataset.input, token, false);
-      heldKeys.clear();
-      if (button.dataset.input === 'brake') resetBrakeInput();
-    });
-    on(button, 'pointerdown', (event) => {
-      event.preventDefault();
-      if (!isAirborne() || mapOpen || keysOpen || held || briefing || portal) return;
-      heldPointers.add(event.pointerId);
-      button.setPointerCapture(event.pointerId);
-      press(button.dataset.input, event.pointerId, true);
-      if (button.dataset.input === 'left' || button.dataset.input === 'right') setAuto(null);
-    });
-    const release = (event) => {
-      if (!heldPointers.delete(event.pointerId)) return;
-      press(button.dataset.input, event.pointerId, false);
-      if (button.dataset.input === 'brake' && event.type !== 'pointerup') resetBrakeInput();
-      if (button.hasPointerCapture(event.pointerId)) button.releasePointerCapture(event.pointerId);
-    };
-    on(button, 'pointerup', release);
-    on(button, 'pointercancel', release);
-    on(button, 'lostpointercapture', release);
-  }
 
   const actions = {
     map: () => (mapOpen ? closeMap() : openMap()),
@@ -2293,10 +2143,10 @@ export function createGame(stage, hooks = {}) {
 
     if (mode === 'lost') lostScene.update(elapsed, time + elapsed);
 
-    // Fixed steps keep the flight model identical on slow and fast machines. Boosting, or flying
-    // itself to a place, runs the flight several times faster than the clock. A Cloudbase run is
+    // Fixed steps keep the flight model identical on slow and fast machines. Flying
+    // itself to a place runs the flight several times faster than the clock. A Cloudbase run is
     // never hurried: at three times the speed a raven arrives with no warning at all.
-    haste = isAirborne() && !mapOpen && (auto || (input.boost && mode !== 'cloudbase')) ? HASTE : 1;
+    haste = isAirborne() && !mapOpen && auto ? HASTE : 1;
     time += elapsed;
     // A good lift holds the flight still for a heartbeat: no steps are fed while it lasts, and none
     // are made up afterwards. The step itself never changes.
@@ -2408,11 +2258,12 @@ export function createGame(stage, hooks = {}) {
     else glider.pose(poseDetail);
     updateCoach();
     updateCamera(elapsed);
+    const instruments = $('.fj-hud > dl').getBoundingClientRect();
+    stage.style.setProperty('--coach-top', `${instruments.bottom - stage.getBoundingClientRect().top + 12}px`);
     flightCues.update({ pose: renderedFlight, dt: elapsed, drag: brakeDrag.state, message: coachMessage, input,
       facts: { blocked: !isAirborne() || mapOpen || keysOpen || held || portal || briefing || document.hidden ||
           !!auto || controls.steered || controls.locked || controls.climb != null,
         noseYaw: g.yaw, forwardAirspeed: g.forwardAirspeed, wingPhase: g.wingPhase, stall: g.stall,
-        leftBrake: g.leftBrake / BRAKE.shelf, rightBrake: g.rightBrake / BRAKE.shelf,
         collapse: Math.max(g.tuck, mode === 'cloudbase' ? run?.sky.state.pilot.collapse ?? 0 : 0),
         inverted: !!g.loop || Math.abs(g.bank) >= Math.PI / 2 || g.pilot.pos.y > g.canopy.pos.y,
         recovering: coachMessage?.state === 'recover' } });

@@ -116,11 +116,13 @@ export const overlapsCue = (a, b, gap = 6) => a.left < b.right + gap && a.right 
 
 export function flightControlLayout(safe, out = {}) {
   const width = safe.right - safe.left, height = safe.bottom - safe.top;
-  const travel = Math.max(0, Math.min(BRAKE_DRAG.touchTravel, (width - 44) / 2, (height - 52) / 1.6));
+  const compact = width > height && height <= 500;
+  const travel = Math.max(0, Math.min(compact ? 60 : BRAKE_DRAG.touchTravel, (width - 44) / 2, (height - 52) / 1.6));
   const half = travel + 22, top = upperTravel(travel) + 28, bottom = travel + 24;
   // Only the viewport determines this anchor. Pointer origins, input device and coach messages
   // cannot move it; raw gesture coordinates continue to belong exclusively to the input adapter.
-  const x = safe.right - half, y = clamp(safe.top + height * 0.42, safe.top + top, safe.bottom - bottom);
+  const x = safe.left + width / 2;
+  const y = clamp(safe.top + height * (width <= 560 ? 0.80 : 0.76), safe.top + top, safe.bottom - bottom);
   Object.assign(out, { x, y, travel, left: x - half, right: x + half, top: y - top, bottom: y + bottom });
   return out;
 }
@@ -144,7 +146,7 @@ export function createFlightCues({ element, stage, camera, reducedMotion = () =>
   const handsUp = find('.fj-hands-up');
   const motion = createTravelCue(), layout = {}, suggestion = {}, live = {}, markerBox = {}, targetBox = {};
   const obstacles = [];
-  const exclusions = '.fj-hud > dl, .fj-hud nav, .fj-coach, .fj-touch > span, .fj-lights, .fj-gauge, .fj-cue, .fj-hint, .fj-toasts > *, .fj-title, .fj-style';
+  const exclusions = '.fj-hud > dl, .fj-hud nav, .fj-coach, .fj-lights, .fj-gauge, .fj-cue, .fj-hint, .fj-toasts > *, .fj-title, .fj-style';
   let size = 0, displayed = false, releasedFor = 0;
   const attr = (node, name, value) => { const text = String(value); if (node.getAttribute(name) !== text) node.setAttribute(name, text); };
   const hide = (node, value) => node.toggleAttribute('hidden', value);
@@ -205,10 +207,6 @@ export function createFlightCues({ element, stage, camera, reducedMotion = () =>
         dragCuePoint(intent.dx, intent.dy, intent.pointerType, live);
         scale = T / dragTravel(intent.pointerType);
         left = cueBrake(intent.leftBrake); right = cueBrake(intent.rightBrake);
-      } else if (input.controlMode !== 'brakes') {
-        // Keyboard/buttons retain their controller. Show the physical hand travel they produce.
-        left = cueBrake(facts.leftBrake); right = cueBrake(facts.rightBrake);
-        brakeDragPoint(left, right, 'touch', live);
       } else live.dx = live.dy = 0;
       live.dx *= scale; live.dy *= scale;
       attr(line, 'x2', live.dx); attr(line, 'y2', live.dy);

@@ -113,7 +113,7 @@ export function createFlightCoach() {
         detail: 'The wing is overhead and moving backward. Release brake to let it fly forward; then catch the surge.' });
       if (phase === WING.frontal || phase === WING.opening) return emit({ ...base, action: 'release-all',
         title: phase === WING.frontal ? 'FRONTAL COLLAPSE · HANDS UP' : 'WING REOPENING · KEEP BRAKE RELEASED',
-        detail: 'Release brake and bar. Let the leading edge refill before catching the next forward surge.' });
+        detail: 'Release both brakes. Let the leading edge refill before catching the next forward surge.' });
       return emit({ ...base, action: 'release-all', title: 'LET THE WING REINFLATE AND ACCELERATE',
         detail: 'Keep brake released while airflow returns. Wait for forward flight before catching the surge.' });
     }
@@ -148,7 +148,7 @@ export function createFlightCoach() {
       inverted = recovering = true; wing = pitch = false; consumeEvidence();
       const danger = frame.hazard?.detail ? ` ${frame.hazard.detail}` : '';
       return emit({ state: 'recover', context: 'inversion', phase: 'above', action: 'release-turns',
-        title: 'RECOVER FROM INVERSION', detail: `You are above the canopy. Release turns and bar to recover; the full orbit may not complete.${danger}` });
+        title: 'RECOVER FROM INVERSION', detail: `You are above the canopy. Release the pull to recover; the full orbit may not complete.${danger}` });
     }
     if (frame.hazard) {
       const hazard = frame.hazard;
