@@ -10,11 +10,12 @@ import { ACHIEVEMENTS, GAME_STORE, beltFor, readProgress, writeProgress, emptyPr
 import { scoreLanding, createLandingLeg } from './landing.js';
 import { FJORD_THERMALS, sampleFjordAir, fjordWindAt } from './atmosphere.js';
 import { createFlightView } from './flight-view.js';
+import { createFlightCues } from './flight-cues.js';
 import { createFlightCoach } from './flight-coach.js';
 import { createLiftGuide } from './lift-guide.js';
 import { createCoachView } from './coach-view.js';
 import { createBrakeInput } from './brake-input.js';
-import { createBrakeDrag, BRAKE_DRAG } from './brake-drag.js';
+import { createBrakeDrag } from './brake-drag.js';
 import { summarizeControls } from './brake-controls.js';
 import { interruptsLift, resolveCoachMessage } from './coach-routing.js';
 import { createPlateNotice, createWindNotice, windReadout } from './wind-feedback.js';
@@ -175,7 +176,7 @@ const MARKUP = /* html */ `
     <span class="fj-touch-wing"><button data-input="brake" aria-label="Brake; double-tap and hold for deep brake">▼<small>brake</small></button><button data-input="bar" aria-label="Speed bar">▲<small>bar</small></button><button data-input="ears" aria-label="Big ears">⇣<small>ears</small></button></span>
   </div>
   <span class="fj-drag-tip" hidden>Hold + drag to fly<br><small>↓ both brakes · release for hands up</small></span>
-  <span class="fj-brake-drag" hidden aria-hidden="true"><i></i></span>
+  <div class="fj-flight-cues" aria-hidden="true"></div>
   <div class="fj-fade"></div>`;
 
 /**
@@ -352,7 +353,8 @@ export function createGame(stage, hooks = {}) {
   const input = { left: false, right: false, bar: false, brake: false, deepBrake: false, ears: false, boost: false };
   const brakeInput = createBrakeInput();
   const brakeDrag = createBrakeDrag();
-  const dragEl = $('.fj-brake-drag');
+  const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
+  const flightCues = createFlightCues({ element: $('.fj-flight-cues'), stage, camera, reducedMotion: () => motionPreference.matches });
   const dragTip = $('.fj-drag-tip');
   const brakePair = $('.fj-brake-pair');
   const brakeTracks = [...stage.querySelectorAll('[data-brake-side]')];
@@ -361,7 +363,7 @@ export function createGame(stage, hooks = {}) {
     const id = brakeDrag.state.pointerId;
     brakeDrag.reset();
     input.leftBrake = input.rightBrake = 0;
-    dragEl.hidden = true;
+    flightCues.clearDrag();
     stage.classList.remove('brake-dragging');
     const canvas = $('.fj-scene');
     if (id !== null && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
@@ -1345,7 +1347,7 @@ export function createGame(stage, hooks = {}) {
   // On a touch screen the hints name the on-screen buttons instead of keys.
   const touch = matchMedia('(pointer: coarse)').matches;
   // Visitors who ask for less motion keep everything that tells them something and lose the rest.
-  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const calm = motionPreference.matches;
   // The wind made visible over the fjord: a gentle breeze, no gusts (a run draws its own).
   const streaks = createWindStreaks({ scene, calm });
 
@@ -1413,6 +1415,7 @@ export function createGame(stage, hooks = {}) {
     run?.resetLessons();
     coachMessage = null;
     coachView.reset();
+    flightCues.reset();
   }
   function stepCoach(dt) {
     const watch = mode === 'cloudbase' ? run?.world.watch.state : fjordWatch.state;
@@ -2073,12 +2076,8 @@ export function createGame(stage, hooks = {}) {
     event.preventDefault();
     input.controlMode = 'brakes';
     hasDragged = true;
+    dragTip.hidden = true;
     flightCanvas.setPointerCapture(event.pointerId);
-    const box = stage.getBoundingClientRect();
-    dragEl.style.left = `${event.clientX - box.left}px`;
-    dragEl.style.top = `${event.clientY - box.top}px`;
-    dragEl.querySelector('i').style.transform = 'translate(0px, 0px)';
-    dragEl.hidden = false;
     stage.classList.add('brake-dragging');
   });
   on(flightCanvas, 'pointermove', (event) => {
@@ -2086,10 +2085,6 @@ export function createGame(stage, hooks = {}) {
     event.preventDefault();
     input.leftBrake = brakeDrag.state.leftBrake;
     input.rightBrake = brakeDrag.state.rightBrake;
-    const { dx, dy, pointerType } = brakeDrag.state;
-    const travel = pointerType === 'mouse' ? BRAKE_DRAG.mouseTravel : BRAKE_DRAG.touchTravel;
-    const length = Math.hypot(dx, dy), scale = Math.min(1, travel / Math.max(1, length));
-    dragEl.querySelector('i').style.transform = `translate(${(dx * scale).toFixed(1)}px, ${(dy * scale).toFixed(1)}px)`;
   });
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     on(flightCanvas, type, event => { if (event.pointerId === brakeDrag.state.pointerId) releaseDrag(); });
@@ -2399,6 +2394,13 @@ export function createGame(stage, hooks = {}) {
     else glider.pose(poseDetail);
     updateCoach();
     updateCamera(elapsed);
+    flightCues.update({ pose: renderedFlight, dt: elapsed, drag: brakeDrag.state, message: coachMessage, input,
+      facts: { blocked: mode !== 'cloudbase' || mapOpen || keysOpen || held || portal || briefing || document.hidden ||
+          !!auto || controls.steered || controls.locked || controls.climb != null,
+        noseYaw: g.yaw, forwardAirspeed: g.forwardAirspeed, wingPhase: g.wingPhase, stall: g.stall,
+        collapse: Math.max(g.tuck, run?.sky.state.pilot.collapse ?? 0),
+        inverted: !!g.loop || Math.abs(g.bank) >= Math.PI / 2 || g.pilot.pos.y > g.canopy.pos.y,
+        recovering: coachMessage?.state === 'recover' } });
 
     terrain.update(time);
     sky.update(inRun ? run.sky.state.elapsed : airborne ? airtime : time, { mode, camera, altitude: g.pos.y,

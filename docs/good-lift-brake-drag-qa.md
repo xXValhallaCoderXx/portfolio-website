@@ -1,5 +1,9 @@
 # Good Lift — proportional mouse and touch brakes
 
+The subsequent presentation-only travel marker, drag diagram and coach target are covered by
+[the light flight cues receipt](good-lift-flight-cues-qa.md). Its local preview and verification
+supersede the preview below for reviewing those additions; the control implementation remains unchanged.
+
 Local working candidate based on `af905cc`, 19 October 2026. Preview:
 <http://localhost:4188/good-lift?sky=1>. No deployment performed.
 
