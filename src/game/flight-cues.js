@@ -1,7 +1,7 @@
 // Presentation only: reads snapshots, resolved coach messages and pointer intent. No flight,
 // coach, input or recording clock is advanced here. All retained vectors/DOM nodes are bounded.
 import { Vector3 } from 'three';
-import { BRAKE_DRAG } from './brake-drag.js';
+import { BRAKE_DRAG, dragBrakes } from './brake-drag.js';
 import { BRAKE_CONTROLS } from './brake-controls.js';
 import { actionMessage } from './coach-actions.js';
 
@@ -11,11 +11,41 @@ export const dragTravel = type => type === 'mouse' ? BRAKE_DRAG.mouseTravel : BR
 // Kept identical to the recorder's u8 demands without importing the run-only recorder into the fjord.
 export const cueBrake = value => Math.round(clamp(value, 0, 1) * 255) / 255;
 export const brakeDistance = value => value > 0 ? BRAKE_DRAG.deadzone + (1 - BRAKE_DRAG.deadzone) * value : 0;
+const upperTravel = travel => travel * 0.6;
+const handsUpY = travel => -travel * 0.3;
+
+// Clip the kite at a maximum hand demand. Its upper centre is genuinely hands up:
+// both drag equations are below their dead zone throughout this polygon.
+export function brakeRegionPoints(depth, pointerType = 'mouse') {
+  const T = dragTravel(pointerType), U = upperTravel(T);
+  const distance = (BRAKE_DRAG.deadzone + (1 - BRAKE_DRAG.deadzone) * depth) * T;
+  const x = (U + distance) / (1 + U / T), y = distance - x;
+  return [{ x: 0, y: -U }, { x, y }, { x: 0, y: distance }, { x: -x, y }];
+}
+
+export function dragCuePoint(dx, dy, pointerType = 'mouse', out = {}) {
+  const T = dragTravel(pointerType), length = Math.abs(dx) / T + Math.abs(dy) / (dy < 0 ? upperTravel(T) : T);
+  if (length > 1) {
+    const { leftBrake, rightBrake } = dragBrakes(dx, dy, pointerType);
+    if (leftBrake && rightBrake) return brakeDragPoint(leftBrake, rightBrake, pointerType, out);
+    if (leftBrake || rightBrake) {
+      // Slide a one-hand pull along its demand contour onto the kite. Radial clipping near
+      // the upper corners could incorrectly draw a small live pull inside the neutral zone.
+      const distance = brakeDistance(Math.max(leftBrake, rightBrake)) * T, U = upperTravel(T);
+      const x = Math.min(Math.abs(dx), (U + distance) / (1 + U / T));
+      out.dx = leftBrake ? -x : x; out.dy = distance - x;
+      return out;
+    }
+  }
+  const scale = 1 / Math.max(1, length);
+  out.dx = dx * scale; out.dy = dy * scale;
+  return out;
+}
 
 export function brakeDragPoint(leftBrake, rightBrake, pointerType = 'mouse', out = {}) {
   const travel = dragTravel(pointerType), left = brakeDistance(leftBrake) * travel, right = brakeDistance(rightBrake) * travel;
   // A single-hand suggestion follows the ordinary horizontal pull. Bilateral pulls solve both
-  // demand equations, including the dead zone. Zero has many inverses; the origin means hands up.
+  // demand equations, including the dead zone. Zero has many inverses, including the origin.
   out.dx = leftBrake === 0 ? right : rightBrake === 0 ? -left : (right - left) / 2;
   out.dy = leftBrake === 0 || rightBrake === 0 ? 0 : (right + left) / 2;
   return out;
@@ -44,6 +74,7 @@ export function coachDragTarget(message, pointerType = 'mouse', input = {}, out 
   // The real coach remains the authority, including any extra hold/release constraints.
   if (!actionMessage(message, suggested).accepted) return null;
   brakeDragPoint(left, right, pointerType, out);
+  if (handsUp) out.dy = handsUpY(dragTravel(pointerType));
   out.leftBrake = left; out.rightBrake = right; out.handsUp = handsUp;
   out.accepted = actionMessage(message, { ...input, controlMode: 'brakes',
     leftBrake: cueBrake(input.leftBrake ?? 0), rightBrake: cueBrake(input.rightBrake ?? 0) }).accepted;
@@ -85,7 +116,7 @@ export function createTravelCue() {
 export const overlapsCue = (a, b, gap = 6) => a.left < b.right + gap && a.right > b.left - gap && a.top < b.bottom + gap && a.bottom > b.top - gap;
 
 export function dragCueLayout(drag, safe, obstacles = [], out = {}) {
-  const travel = dragTravel(drag.pointerType), half = travel + 22, top = 24, bottom = travel + 24;
+  const travel = dragTravel(drag.pointerType), half = travel + 22, top = upperTravel(travel) + 28, bottom = travel + 24;
   const rawX = drag.x, rawY = drag.y;
   let x = rawX, y = rawY;
   if (drag.pointerType !== 'mouse') {
@@ -123,24 +154,31 @@ export function dragCueLayout(drag, safe, obstacles = [], out = {}) {
 const markup = `<div class="fj-cue-safe"></div>
   <div class="fj-travel" hidden><i></i><span>TRAVEL</span><div class="fj-travel-turn" hidden>
     <svg viewBox="-22 -14 44 28"><path d="M-17 8 Q-3-14 17 2 M9 1 L17 2 L15-6"/></svg><small></small></div></div>
-  <svg class="fj-brake-drag" hidden><path class="fj-drag-gentle"/><path class="fj-drag-deep"/>
+  <span class="fj-hands-up" hidden>HANDS UP</span>
+  <svg class="fj-brake-drag" hidden><path class="fj-drag-frame"/><path class="fj-drag-neutral"/><path class="fj-drag-gentle" fill-rule="evenodd"/><path class="fj-drag-deep" fill-rule="evenodd"/>
+    <text data-drag="hands-up" text-anchor="middle">HANDS UP</text><text data-drag="release" text-anchor="middle">release / slide up</text>
     <path class="fj-drag-guide"/><text data-drag="left" text-anchor="middle">LEFT</text><text data-drag="right" text-anchor="middle">RIGHT</text>
     <text data-drag="down" text-anchor="middle">DOWN</text><text data-drag="gentle" text-anchor="middle">GENTLE</text><text data-drag="deep" text-anchor="middle">DEEP</text>
     <line class="fj-drag-line" x1="0" y1="0"/><circle class="fj-drag-origin" r="7"/><circle class="fj-drag-center" r="2"/>
-    <g class="fj-drag-target" hidden><circle r="10"/><path d="M-14 0H-11 M11 0H14 M0-14V-11 M0 11V14"/><text text-anchor="middle" y="-15"></text></g>
+    <g class="fj-drag-target" hidden><circle r="10"/><path d="M-14 0H-11 M11 0H14 M0-14V-11 M0 11V14"/></g>
     <circle class="fj-drag-dot" r="5"/></svg>`;
 
 export function createFlightCues({ element, stage, camera, reducedMotion = () => false }) {
   element.innerHTML = markup;
   const find = selector => element.querySelector(selector), travel = find('.fj-travel'), turn = find('.fj-travel-turn');
   const drag = find('.fj-brake-drag'), line = find('.fj-drag-line'), dot = find('.fj-drag-dot'), target = find('.fj-drag-target');
-  const motion = createTravelCue(), layout = {}, suggestion = {}, markerBox = {}, targetBox = {};
+  const handsUp = find('.fj-hands-up');
+  const motion = createTravelCue(), layout = {}, suggestion = {}, live = {}, markerBox = {}, targetBox = {};
   const obstacles = [];
   const exclusions = '.fj-hud > dl, .fj-hud nav, .fj-coach, .fj-touch > span, .fj-lights, .fj-gauge, .fj-cue, .fj-hint, .fj-toasts > *, .fj-title, .fj-style';
-  let size = 0;
+  let size = 0, displayed = false, releasedFor = 0;
   const attr = (node, name, value) => { const text = String(value); if (node.getAttribute(name) !== text) node.setAttribute(name, text); };
   const hide = (node, value) => node.toggleAttribute('hidden', value);
-  function clearDrag() { hide(drag, true); hide(target, true); }
+  function hideDrag() { hide(drag, true); hide(target, true); }
+  function clearDrag({ confirm = false } = {}) {
+    releasedFor = confirm && displayed ? 0.65 : 0;
+    displayed = false; handsUp.hidden = true; hideDrag();
+  }
   function reset() { motion.reset(); travel.hidden = true; clearDrag(); }
   function update({ pose, facts, drag: intent, message, input, dt }) {
     if (facts.blocked) { reset(); return; }
@@ -153,40 +191,53 @@ export function createFlightCues({ element, stage, camera, reducedMotion = () =>
       // Clipped one-pixel live regions announce warnings but reserve no visible screen space.
       if (rect.width > 1 && rect.height > 1) obstacles.push({ left: rect.left - box.left, right: rect.right - box.left, top: rect.top - box.top, bottom: rect.bottom - box.top });
     }
-    clearDrag();
+    hideDrag(); handsUp.hidden = true;
+    releasedFor = Math.max(0, releasedFor - Math.max(0, dt));
+    if (!intent.active && input.controlMode === 'brakes' && releasedFor > 0 && !message?.warning) {
+      const x = layout.x, y = layout.y + handsUpY(layout.travel);
+      Object.assign(targetBox, { left: x - 44, right: x + 44, top: y - 14, bottom: y + 14 });
+      if (targetBox.left >= safe.left && targetBox.right <= safe.right && targetBox.top >= safe.top && targetBox.bottom <= safe.bottom && !obstacles.some(rect => overlapsCue(targetBox, rect))) {
+        handsUp.style.left = `${x}px`; handsUp.style.top = `${y}px`; handsUp.hidden = false;
+        obstacles.push({ ...targetBox });
+      }
+    }
     if (intent.active && input.controlMode === 'brakes') {
+      releasedFor = 0;
       // The input adapter stores viewport coordinates; every element uses this stage-local offset.
       dragCueLayout({ ...intent, x: intent.x - box.left, y: intent.y - box.top }, safe, obstacles, layout);
-      const T = layout.travel, D = brakeDistance(BRAKE_CONTROLS.deepOn) * T;
+      const T = layout.travel, U = upperTravel(T), top = U + 28;
       if (size !== T) {
         size = T;
-        attr(drag, 'viewBox', `${-T - 22} -24 ${2 * T + 44} ${T + 48}`);
-        drag.style.width = `${2 * T + 44}px`; drag.style.height = `${T + 48}px`;
-        attr(find('.fj-drag-gentle'), 'd', `M${-D} 0L0 ${D}L${D} 0Z`);
-        attr(find('.fj-drag-deep'), 'd', `M${-T} 0L0 ${T}L${T} 0L${D} 0L0 ${D}L${-D} 0Z`);
-        const gentle = brakeDistance(0.20) * T;
-        attr(find('.fj-drag-guide'), 'd', `M${-gentle} 0L0 ${gentle}L${gentle} 0 M${-D} 0L0 ${D}L${D} 0`);
-        for (const [name, x, y] of [['left', -T * 0.64, -10], ['right', T * 0.64, -10], ['down', 0, T + 20], ['gentle', T * 0.4, T * 0.3], ['deep', T * 0.4, T * 0.55]]) {
+        attr(drag, 'viewBox', `${-T - 22} ${-top} ${2 * T + 44} ${top + T + 24}`);
+        drag.style.width = `${2 * T + 44}px`; drag.style.height = `${top + T + 24}px`;
+        const points = depth => brakeRegionPoints(depth, intent.pointerType);
+        const path = vertices => vertices.map(({ x, y }, i) => `${i ? 'L' : 'M'}${x} ${y}`).join('') + 'Z';
+        const neutral = path(points(0)), working = path(points(BRAKE_CONTROLS.deepOn)), frame = path(points(1));
+        attr(find('.fj-drag-frame'), 'd', frame); attr(find('.fj-drag-neutral'), 'd', neutral);
+        attr(find('.fj-drag-gentle'), 'd', working + neutral);
+        attr(find('.fj-drag-deep'), 'd', frame + working);
+        const guide = depth => path(points(depth).slice(1)).slice(0, -1);
+        attr(find('.fj-drag-guide'), 'd', guide(0.20) + guide(BRAKE_CONTROLS.deepOn));
+        for (const [name, x, y] of [['hands-up', 0, -U - 14], ['release', 0, -U - 3], ['left', -T * 0.78, -10], ['right', T * 0.78, -10], ['down', 0, T + 20], ['gentle', T * 0.4, T * 0.3], ['deep', T * 0.4, T * 0.55]]) {
           attr(find(`[data-drag="${name}"]`), 'x', x); attr(find(`[data-drag="${name}"]`), 'y', y);
         }
       }
-      drag.style.left = `${layout.x - T - 22}px`; drag.style.top = `${layout.y - 24}px`;
-      const { dx, dy } = intent;
-      const scale = Math.min(1, T / Math.max(1, Math.hypot(dx, dy)), dy < -12 ? -12 / dy : 1);
-      attr(line, 'x2', dx * scale); attr(line, 'y2', dy * scale);
-      attr(dot, 'cx', dx * scale); attr(dot, 'cy', dy * scale);
-      drag.dataset.depth = Math.max(intent.leftBrake, intent.rightBrake) > BRAKE_CONTROLS.deepOn ? 'deep' : 'gentle';
-      hide(drag, false);
+      drag.style.left = `${layout.x - T - 22}px`; drag.style.top = `${layout.y - top}px`;
+      dragCuePoint(intent.dx, intent.dy, intent.pointerType, live);
+      attr(line, 'x2', live.dx); attr(line, 'y2', live.dy);
+      attr(dot, 'cx', live.dx); attr(dot, 'cy', live.dy);
+      const demand = Math.max(cueBrake(intent.leftBrake), cueBrake(intent.rightBrake));
+      drag.dataset.depth = demand <= BRAKE_CONTROLS.released ? 'released' : demand > BRAKE_CONTROLS.deepOn ? 'deep' : 'gentle';
+      hide(drag, false); displayed = true;
       const advised = !facts.recovering && !facts.inverted && !facts.collapse && !facts.stall &&
         (!facts.wingPhase || facts.wingPhase === 'flying') ? coachDragTarget(message, intent.pointerType, input, suggestion) : null;
       attr(find('[data-drag="gentle"]'), 'x', advised?.dx > 0 ? -T * 0.4 : T * 0.4);
       if (advised) {
         const x = layout.x + advised.dx, y = layout.y + advised.dy;
-        Object.assign(targetBox, { left: x - (advised.handsUp ? 30 : 14), right: x + (advised.handsUp ? 30 : 14), top: y - (advised.handsUp ? 24 : 14), bottom: y + 14 });
+        Object.assign(targetBox, { left: x - 14, right: x + 14, top: y - 14, bottom: y + 14 });
         if (targetBox.left >= safe.left && targetBox.right <= safe.right && targetBox.top >= safe.top && targetBox.bottom <= safe.bottom && !obstacles.some(rect => overlapsCue(targetBox, rect))) {
           attr(target, 'transform', `translate(${advised.dx} ${advised.dy})`);
           target.dataset.accepted = String(advised.accepted); target.dataset.release = String(advised.handsUp);
-          const label = target.querySelector('text'); label.textContent = advised.handsUp ? 'HANDS UP' : '';
           hide(target, false);
         }
       }

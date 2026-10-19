@@ -359,11 +359,11 @@ export function createGame(stage, hooks = {}) {
   const brakePair = $('.fj-brake-pair');
   const brakeTracks = [...stage.querySelectorAll('[data-brake-side]')];
   let hasDragged = false;
-  function releaseDrag() {
+  function releaseDrag({ confirm = false } = {}) {
     const id = brakeDrag.state.pointerId;
     brakeDrag.reset();
     input.leftBrake = input.rightBrake = 0;
-    flightCues.clearDrag();
+    flightCues.clearDrag({ confirm });
     stage.classList.remove('brake-dragging');
     const canvas = $('.fj-scene');
     if (id !== null && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
@@ -2087,7 +2087,7 @@ export function createGame(stage, hooks = {}) {
     input.rightBrake = brakeDrag.state.rightBrake;
   });
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-    on(flightCanvas, type, event => { if (event.pointerId === brakeDrag.state.pointerId) releaseDrag(); });
+    on(flightCanvas, type, event => { if (event.pointerId === brakeDrag.state.pointerId) releaseDrag({ confirm: type === 'pointerup' }); });
   }
 
   on(window, 'keydown', (event) => {

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PerspectiveCamera } from 'three';
-import { brakeDragPoint, coachDragTarget, createTravelCue, cueBrake, dragCueLayout, groundTurn, overlapsCue } from './flight-cues.js';
+import { brakeDragPoint, brakeRegionPoints, coachDragTarget, createTravelCue, cueBrake, dragCueLayout, dragCuePoint, groundTurn, overlapsCue } from './flight-cues.js';
 import { createFlightView } from './flight-view.js';
 import { createFlight, stepFlight } from './flight.js';
 import { dragBrakes } from './brake-drag.js';
@@ -127,10 +127,40 @@ test('ordinary side, bilateral working/deep and release suggestions obey coach a
     const target = coachDragTarget(actionMessage({ action }, direct()));
     assert.equal(target.leftBrake, amount); assert.equal(target.rightBrake, amount);
   }
-  for (const action of ['release-all', 'release-brake', 'release-turns']) {
-    const target = coachDragTarget(actionMessage({ action }, direct(1, 1)));
-    assert.ok(target.handsUp); assert.equal(target.dx, 0); assert.equal(target.dy, 0);
+  for (const type of ['mouse', 'touch']) for (const action of ['release-all', 'release-brake', 'release-turns']) {
+    const message = actionMessage({ action }, direct(1, 1)), target = coachDragTarget(message, type, direct(1, 1));
+    assert.ok(target.handsUp); assert.equal(target.dx, 0); assert.ok(target.dy < 0, 'hands up has a reachable target above the origin');
+    const released = dragBrakes(target.dx, target.dy, type);
+    assert.deepEqual(released, { leftBrake: 0, rightBrake: 0 });
+    assert.equal(actionMessage(message, { ...direct(), ...released }).accepted, true);
+    assert.equal(coachDragTarget(message, type, direct()).accepted, true, 'any accepted neutral position satisfies hands up');
   }
+});
+
+test('the upper kite zone is hands up throughout; brake bands follow the existing demand mapping', () => {
+  for (const type of ['mouse', 'touch', 'pen']) for (const depth of [0, .2, .7, 1]) {
+    const points = brakeRegionPoints(depth, type);
+    assert.ok(points[0].y < 0, 'the pad has visible upward travel');
+    for (const point of points.slice(1)) {
+      const pair = dragBrakes(point.x, point.y, type);
+      close(Math.max(pair.leftBrake, pair.rightBrake), depth);
+    }
+    for (let i = 0; i < points.length; i++) for (const amount of [0, .25, .5, .75, 1]) {
+      const a = points[i], b = points[(i + 1) % points.length];
+      const pair = dragBrakes(a.x + (b.x - a.x) * amount, a.y + (b.y - a.y) * amount, type);
+      assert.ok(Math.max(pair.leftBrake, pair.rightBrake) <= depth + 1e-9);
+    }
+  }
+});
+
+test('the live dot can move upward and remains truthful when long gestures reach the kite boundary', () => {
+  for (const type of ['mouse', 'touch', 'pen']) for (const dx of [-600, -120, -30, 0, 30, 120, 600]) for (const dy of [-600, -590, -100, -10, 0, 60, 120, 600]) {
+    const T = type === 'mouse' ? 120 : 80, point = dragCuePoint(dx, dy, type);
+    const actual = dragBrakes(dx, dy, type), shown = dragBrakes(point.dx, point.dy, type);
+    close(shown.leftBrake, actual.leftBrake); close(shown.rightBrake, actual.rightBrake);
+    assert.ok(Math.abs(point.dx) / T + Math.abs(point.dy) / (point.dy < 0 ? T * .6 : T) <= 1 + 1e-9);
+  }
+  assert.ok(dragCuePoint(0, -60, 'touch').dy < -12, 'the old upward visual clamp is gone');
 });
 
 test('targets fade for a range of accepted pulls without requiring the exact suggested point', () => {
@@ -177,14 +207,16 @@ test('touch layout uses one safe offset above the finger; mouse origin stays at 
   const landscape = dragCueLayout({ x: 633, y: 270, pointerType: 'touch' },
     { left: 12, right: 832, top: 12, bottom: 378 }, [landscapeHud, { left: 257, right: 587, top: 256, bottom: 368 }]);
   assert.ok(landscape.y + landscape.travel <= 270 - 48, 'a wide landscape HUD cannot push the deep target onto the finger');
-  assert.equal(overlapsCue(landscape, landscapeHud, 0), false);
-  const handsUp = { left: landscape.x - 30, right: landscape.x + 30, top: landscape.y - 24, bottom: landscape.y + 14 };
-  assert.equal(overlapsCue(handsUp, landscapeHud), false, 'combined horizontal and vertical placement leaves room for HANDS UP');
+  const handsUpPoint = coachDragTarget(actionMessage({ action: 'release-all' }, direct()), 'touch');
+  const handsUp = { left: landscape.x - 14, right: landscape.x + 14, top: landscape.y + handsUpPoint.dy - 14, bottom: landscape.y + handsUpPoint.dy + 14 };
+  assert.equal(overlapsCue(handsUp, landscapeHud), false, 'the upper neutral target clears the landscape HUD');
+  assert.equal(overlapsCue({ left: landscape.x - 28, right: landscape.x + 28, top: landscape.top + 4, bottom: landscape.top + 19 }, landscapeHud), false,
+    'the hands-up caption stays readable in landscape');
   const releaseHud = { ...landscapeHud, bottom: 88.578125 };
   const release = dragCueLayout({ x: 633, y: 270, pointerType: 'touch' },
     { left: 12, right: 832, top: 12, bottom: 378 }, [releaseHud, { left: 257, right: 587, top: 231.265625, bottom: 368 }]);
-  assert.equal(overlapsCue({ left: release.x - 30, right: release.x + 30, top: release.y - 24, bottom: release.y + 14 }, releaseHud), false,
-    'the release label fits below the measured landscape HUD without an oversized collision box');
+  assert.equal(overlapsCue({ left: release.x - 14, right: release.x + 14, top: release.y + handsUpPoint.dy - 14, bottom: release.y + handsUpPoint.dy + 14 }, releaseHud), false,
+    'the upper release target clears the measured landscape HUD');
 });
 
 test('varied render reads leave physical flight, coach and recorder state identical to unobserved flight', () => {
