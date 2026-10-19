@@ -5,6 +5,60 @@ import { thermalRideIdentity, createRunCoachEnvironment, runCoachHazard, runCoac
 import { BELL_RESULT } from './bells.js';
 import { createCloudbaseRun } from './cloudbase-state.js';
 
+const direct = (leftBrake, rightBrake) => ({ controlMode: 'brakes', leftBrake, rightBrake });
+test('direct pulls acknowledge graded side turns and require both hands for a bilateral catch', () => {
+  for (const side of ['left', 'right']) {
+    const input = side === 'left' ? direct(0.30, 0) : direct(0, 0.30);
+    const circle = actionMessage({ action: side, hold: [side, 'brake'], release: [side === 'left' ? 'right' : 'left', 'bar'],
+      brakeDepth: 'working' }, input);
+    assert.equal(circle.accepted, true);
+    assert.deepEqual(circle.hold, [side]);
+    assert.match(circle.title, /PULL .* BRAKE/);
+    assert.equal(actionMessage({ action: 'brake', brakeDepth: 'working' }, input).accepted, false);
+    assert.equal(actionMessage({ action: 'release-all' }, input).accepted, false);
+  }
+  assert.equal(actionMessage({ action: 'brake', brakeDepth: 'working' }, direct(2 / 3, 2 / 3)).accepted, true);
+  assert.equal(actionMessage({ action: 'brake', brakeDepth: 'working' }, direct(1, 1)).accepted, false);
+  assert.equal(actionMessage({ action: 'release-all' }, direct(0, 0)).accepted, true);
+});
+test('direct thermal cues require a blended pull and retain gentle bilateral brake while easing', () => {
+  for (const side of ['left', 'right']) {
+    const other = side === 'left' ? 'right' : 'left';
+    const fields = { action: side, context: 'thermal', brakeDepth: 'working',
+      hold: [side, 'brake'], release: [other, 'bar'] };
+    const blended = side === 'left' ? direct(.50, .20) : direct(.20, .50);
+    const accepted = actionMessage(fields, blended);
+    assert.equal(accepted.accepted, true);
+    assert.match(accepted.title, /PULL DOWN \+/);
+    assert.match(accepted.detail, /keep some brake on both/);
+    assert.equal(actionMessage(fields, side === 'left' ? direct(.30, 0) : direct(0, .30)).accepted, false);
+    assert.equal(actionMessage(fields, side === 'left' ? direct(.20, .50) : direct(.50, .20)).accepted, false);
+    const ease = { action: 'straight', context: 'thermal', brakeDepth: 'working',
+      hold: ['brake'], release: ['left', 'right', 'bar'] };
+    const eased = actionMessage(ease, direct(.20, .20));
+    assert.equal(eased.accepted, true);
+    assert.match(eased.detail, /gentle downward pull/);
+    assert.equal(actionMessage(ease, direct(0, 0)).accepted, false);
+    assert.equal(actionMessage(ease, direct(.6, .6)).accepted, false);
+    assert.equal(actionMessage(eased, direct(.20, .20)).accepted, true, 'resolving a cue again retains its eased brake target');
+  }
+});
+test('direct deep pulls and easing never request double taps, and keep recovery phase advice', () => {
+  const deep = actionMessage({ action: 'deep-brake' }, direct(2 / 3, 2 / 3));
+  assert.equal(deep.title, 'PULL BOTH BRAKES DEEP');
+  assert.doesNotMatch(deep.title + deep.detail, /tap|Space| X/);
+  assert.equal(deep.accepted, false);
+  assert.equal(actionMessage({ action: 'deep-brake' }, direct(1, 0)).accepted, false);
+  assert.equal(actionMessage({ action: 'deep-brake' }, direct(1, 1)).accepted, true);
+  const ease = actionMessage({ action: 'brake', brakeDepth: 'working', state: 'recover',
+    detail: 'Wait underneath the wing.' }, direct(1, 1));
+  assert.equal(ease.title, 'EASE BOTH TO WORKING BRAKE');
+  assert.match(ease.detail, /Wait underneath the wing/);
+  const widen = { action: 'straight', hold: ['brake'], release: ['left', 'right', 'bar'] };
+  assert.equal(actionMessage(widen, direct(.3, 0)).accepted, false);
+  assert.equal(actionMessage(widen, direct(0, 0)).accepted, true);
+});
+
 test('reversal instructions release the opposing control before acknowledging the new one', () => {
   const request = { action: 'left', title: 'REVERSE LEFT NOW', detail: 'The swing is returning.' };
   const raw = { right: true, left: true };

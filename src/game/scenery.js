@@ -1073,7 +1073,7 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
   const air = {
     time: 0, rough: 0, steerLeft: 0, steerRight: 0, brake: 0, bar: 0, rest: 0, luff: 0, stall: 0,
     trail: 0, trailLeft: 0, trailRight: 0, collapse: 0, foldLeft: 0, foldRight: 0, ears: 0, tuck: 0,
-    coordinatedLean: 0,
+    coordinatedLean: 0, directBrakes: 0, leftBrake: 0, rightBrake: 0,
   };
   // What an emergency does to the gear, each from 0 to 1: the wing crumpling, being gathered in,
   // and the arm throwing the reserve. Whoever stages the emergency sets these.
@@ -1102,7 +1102,8 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
     // How far the hand is down its line: the brake, and steering on top of it (only a little more
     // on a deep brake). In a stall the hands let go of the lines altogether, and with the ears in
     // they hold the outer lines and the pilot steers by weight alone.
-    const pull = (1 - air.stall) * (shown + steer * (1 - air.ears) * (1 - (1 - MOTION.steerDeep) * shown));
+    const pull = air.directBrakes ? (1 - air.stall) * (1 - air.ears) * (side < 0 ? air.leftBrake : air.rightBrake)
+      : (1 - air.stall) * (shown + steer * (1 - air.ears) * (1 - (1 - MOTION.steerDeep) * shown));
     // Hands up on the speed bar, or thrown up in a stall a little short of that, so that they can
     // be seen to flail, or up on the outer lines with the ears in. A raised hand leaves its rest; a
     // hand pulling its brake stays down, from a third of a full pull on exactly where it would be
@@ -1456,6 +1457,7 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
       dt, time, bank, pace, turn, lift, liftSide, landed,
       flying = false, brake = 0, bar = 0, luff = 0, stall = 0, foldLeft = 0, foldRight = 0, rough = 0,
       ears = 0, tuck = 0, heave = 0, swing, physical = false, coordinatedLean = 0,
+      controlMode = 'legacy', leftBrake = 0, rightBrake = 0,
     }) {
       if (physicalWas && rig && !physical) {
         sling.position.copy(rig.base.pivot);
@@ -1511,10 +1513,13 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS } =
         // a little more of that on a deep brake). Stalled, the hands are off the lines.
         const held = 1 - air.stall;
         const steering = 1 - (1 - MOTION.steerDeep) * air.brake;
-        air.trail = air.brake * held;
+        air.directBrakes = Number(controlMode === 'brakes');
+        air.leftBrake = share(leftBrake / BRAKE.shelf);
+        air.rightBrake = share(rightBrake / BRAKE.shelf);
+        air.trail = air.directBrakes ? 0 : air.brake * held;
         // With the ears in, the hands are off the brakes and steering pulls no edge down.
-        air.trailLeft = air.steerLeft * steering * held * (1 - air.ears);
-        air.trailRight = air.steerRight * steering * held * (1 - air.ears);
+        air.trailLeft = (air.directBrakes ? air.leftBrake : air.steerLeft * steering) * held * (1 - air.ears);
+        air.trailRight = (air.directBrakes ? air.rightBrake : air.steerRight * steering) * held * (1 - air.ears);
 
         if (!physical) {
           const pull = MOTION.swingSpeed ** 2;

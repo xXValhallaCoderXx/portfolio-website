@@ -19,6 +19,9 @@ export function resetEnvelope(s) {
 
 export function stepEnvelope(s, flow, dt, C) {
   const E = C.envelope, alpha = flow.alpha;
+  // Common travel loads a symmetric stall. Reattachment needs both hands up:
+  // a held unilateral brake must not disappear in the common/minimum depth.
+  const releaseDepth = s.controlMode === 'brakes' ? Math.max(s.leftBrake, s.rightBrake) : s.brake;
   const critical = E.stallAngle - E.brakeIncidence * Math.max(0, s.brake - C.brake);
   s.forwardAirspeed = flow.forward;
   s.linePitch = flow.pitch; s.linePitchRate = flow.pitchRate;
@@ -55,14 +58,14 @@ export function stepEnvelope(s, flow, dt, C) {
     s.backflyFor = backfly ? s.backflyFor + dt : 0;
     if (s.backflyFor >= E.backflyHold) s.wingPhase = WING.backfly;
     else if (s.wingPhase === WING.backfly && !backfly && s.brake >= E.backflyBrake[0]) s.wingPhase = WING.stalled;
-    s.releaseExposure = s.brake < E.releaseBrake ? s.releaseExposure + dt : 0;
+    s.releaseExposure = releaseDepth < E.releaseBrake ? s.releaseExposure + dt : 0;
     if (s.releaseExposure >= E.releaseHold) {
       s.wingPhase = WING.exit; s.recoveryFor = 0;
     }
   } else if (exiting || s.wingPhase === WING.exit) {
     // A brief hands-up transition between the existing deep and working gestures can be
     // captured back into backfly. Holding brake during a genuinely separated exit re-stalls it.
-    if (s.separation > E.reattached && s.brake > E.backflyBrake[0]) {
+    if (s.separation > E.reattached && releaseDepth > E.backflyBrake[0]) {
       s.wingPhase = WING.stalled; s.releaseExposure = 0;
     } else {
       s.separation = approach(s.separation, 0, dt, E.attachTime);
@@ -86,7 +89,7 @@ export function stepEnvelope(s, flow, dt, C) {
     s.recoverySource = 'frontal';
   }
   if (s.wingPhase === WING.frontal || s.wingPhase === WING.opening) {
-    const pressure = flow.forward > E.inletSpeed && alpha > E.frontAngle && s.brake < E.releaseBrake && s.bar < E.releaseBrake;
+    const pressure = flow.forward > E.inletSpeed && alpha > E.frontAngle && releaseDepth < E.releaseBrake && s.bar < E.releaseBrake;
     if (!s.folded) {
       s.inflation = approach(s.inflation, E.foldInflation, dt, E.foldTime);
       if (s.inflation < E.foldInflation + E.foldedMargin) s.folded = true;

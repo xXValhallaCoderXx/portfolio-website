@@ -1,6 +1,8 @@
 // Reactive advice for a manual brake turn. Forecasts use copies of the real wing and read-only air.
 import { copyFlight, createFlight, FLIGHT, stepFlight } from './flight.js';
 import { actionMessage } from './coach-actions.js';
+import { createControlSummary } from './brake-controls.js';
+import { heldControls } from './thermal-centering.js';
 
 export const SOARING_TURN = Object.freeze({
   useful: FLIGHT.sink.trim + 0.25, searchEvery: 0.25, step: 1 / 60,
@@ -17,6 +19,7 @@ export function createSoaringTurn(adapter) {
   let clock = -Infinity, started = 0, searchAt = -Infinity, dir = 0, progress = 0, previousTrack = 0;
   let blocked = false, rollingAt = null, supported = false, forecast = null, state = null;
   const projected = createFlight(), air = {}, wingPoint = {};
+  const observeControls = createControlSummary();
   function publish(message = null) {
     state = Object.freeze({ active: !!dir, supported: !!dir && supported,
       phase: rollingAt === null ? dir ? 'turn' : 'idle' : 'rollout', dir, progress,
@@ -24,6 +27,7 @@ export function createSoaringTurn(adapter) {
     return state;
   }
   function reset() {
+    observeControls.reset();
     clock = searchAt = -Infinity; started = progress = previousTrack = 0;
     dir = 0; rollingAt = null; blocked = supported = false; forecast = null;
     return publish();
@@ -49,7 +53,7 @@ export function createSoaringTurn(adapter) {
     }
     return true;
   }
-  function predict(g, currentAir) {
+  function predict(g, currentAir, input) {
     copyFlight(projected, g);
     const fog = adapter.fog?.();
     let fogY = fog?.height ?? -Infinity;
@@ -60,7 +64,9 @@ export function createSoaringTurn(adapter) {
       if (releasedAt === null && arc >= Math.PI - Math.abs(projected.trackRate || 0) * C.rolloutLead) releasedAt = t;
       Object.assign(air, currentAir);
       adapter.sampleAir(projected.pos, air);
-      const controls = { turn: releasedAt === null ? dir : 0, brake: releasedAt === null, deepBrake: false, bar: false, ears: false };
+      const controls = input.controlMode === 'brakes' ? releasedAt === null ? heldControls(input)
+        : { controlMode: 'brakes', leftBrake: 0, rightBrake: 0, bar: false, ears: false }
+        : { turn: releasedAt === null ? dir : 0, brake: releasedAt === null, deepBrake: false, bar: false, ears: false };
       stepFlight(projected, controls, air, C.step);
       arc += wrap(projected.track - lastTrack) * dir; lastTrack = projected.track;
       minimum = Math.min(minimum, projected.pos.y);
@@ -82,11 +88,14 @@ export function createSoaringTurn(adapter) {
     if (now === clock) return state;
     clock = now;
     const { g, air: currentAir = {}, input = {} } = frame;
-    const turn = Number(!!input.right) - Number(!!input.left);
-    const chord = !!input.brake && !!turn && !input.deepBrake && !input.ears && !input.bar;
+    const summarized = observeControls.step(input);
+    const effective = input.controlMode === 'brakes' ? summarized : input;
+    const turn = Number(!!effective.right) - Number(!!effective.left);
+    const chord = (input.controlMode === 'brakes' ? effective.maxBrake >= 0.15 && effective.maxBrake <= 0.45 : !!input.brake) &&
+      !!turn && !effective.deepBrake && !effective.ears && !effective.bar;
     if (!chord) blocked = false;
     if (frame.suspended || frame.eligible === false || frame.activity === 'thermal' ||
-        input.deepBrake || g.deepBrake || g.acro || g.stall > 0 ||
+        effective.deepBrake || g.deepBrake || g.acro || g.stall > 0 ||
         g.tuck > 0 || g.loop || g.ears > 0.1 || Math.abs(g.bank || 0) > 0.9 || Math.abs(g.pitch || 0) > 0.7) {
       clear(chord); return publish();
     }
@@ -110,7 +119,7 @@ export function createSoaringTurn(adapter) {
       return publish(message);
     }
     if (clock >= searchAt) {
-      forecast = predict(g, currentAir); supported = forecast.safe && forecast.supported;
+      forecast = predict(g, currentAir, input); supported = forecast.safe && forecast.supported;
       searchAt = clock + C.searchEvery;
     }
     if (!supported) { const unsafe = !forecast?.safe; clear(unsafe); return publish(); }

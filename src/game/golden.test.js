@@ -81,7 +81,7 @@ test('Chromium maneuvers and stable recoveries have identical physical and obser
 test('sixteen Chromium lessons replay real circling, setup, matching maneuvers and style banks in Node', () => {
   const lessons = JSON.parse(readFileSync(new URL('./fixtures/good-lift-lessons-chromium.json', import.meta.url), 'utf8'));
   assert.match(lessons.engine, /^Chromium /); assert.equal(lessons.records.length, 16);
-  const telemetry = new Set(['bank', 'pitch', 'rollRate', 'pitchRate', 'trackRate', 'yawRate', 'rollAcceleration']);
+  const telemetry = new Set(['bank', 'pitch', 'rollRate', 'pitchRate', 'trackRate', 'yawRate', 'rollAcceleration', 'leftBrake', 'rightBrake', 'leftBrakeTarget', 'rightBrakeTarget']);
   const normalize = value => JSON.parse(JSON.stringify(value, (key, item) => telemetry.has(key) && typeof item === 'number'
     ? Math.round(item * 1e11) / 1e11 : item));
   for (const record of lessons.records) {

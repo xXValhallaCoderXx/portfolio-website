@@ -3,6 +3,7 @@ import { actionMessage } from './coach-actions.js';
 import { normalizeLearnedLessons } from './trick-learning.js';
 import { multiplierOf } from './score.js';
 import { WING } from './wing-envelope.js';
+import { createControlSummary, summarizeControls } from './brake-controls.js';
 
 export const TRICK_LESSONS = Object.freeze({
   pitch: Object.freeze({ height: 500, entry: 200, abort: 120, kind: 1, label: 'PITCH & CATCH' }),
@@ -15,6 +16,7 @@ const turnOf = input => Number(!!input.right) - Number(!!input.left);
 /** An observer with its own coach. All outputs are requests; no input or flight state is written. */
 export function createTrickLessons({ learned = () => [], onLearned = () => {} } = {}) {
   const coach = createFlightCoach();
+  const observeControls = createControlSummary();
   const state = { active: null, phase: '', learned: [], retryAt: 0, startedAt: 0,
     stable: 0, side: 1, completedAt: -Infinity, awarded: 0, multiplier: 1, cancelled: '' };
   let clock = 0, phaseAt = 0, acceptedFor = 0, idle = 0, levelFor = 0;
@@ -22,6 +24,7 @@ export function createTrickLessons({ learned = () => [], onLearned = () => {} } 
   let message = null;
 
   function reset() {
+    observeControls.reset();
     coach.reset(); clock = phaseAt = acceptedFor = idle = levelFor = 0;
     movesAt = breaksAt = landedAt = lostAt = 0; moveAt = -Infinity; message = null;
     Object.assign(state, { active: null, phase: '', learned: normalizeLearnedLessons(learned()), retryAt: 0,
@@ -36,11 +39,13 @@ export function createTrickLessons({ learned = () => [], onLearned = () => {} } 
   function repeat() { reset(); }
   function phase(next) { state.phase = next; phaseAt = clock; acceptedFor = idle = levelFor = 0; }
   function setup(frame) {
-    const { g, input = {}, watch } = frame, id = state.active;
+    const { g, input: rawInput = {}, watch } = frame, id = state.active;
+    const input = rawInput.controlMode === 'brakes' ? summarizeControls(rawInput) : rawInput;
     const side = sideName(state.side), other = sideName(-state.side);
     let fields;
     if (state.phase === 'level') {
       const level = !turnOf(input) && !input.brake && !input.deepBrake && !input.bar && !input.ears &&
+        (rawInput.controlMode !== 'brakes' || input.bothReleased) &&
         Math.abs(g.bank) < 0.175 && watch.calm >= 1;
       levelFor = level ? levelFor + frame.dt : 0;
       if (levelFor >= 0.1) phase('deep');
@@ -50,7 +55,8 @@ export function createTrickLessons({ learned = () => [], onLearned = () => {} } 
       fields = { action: 'deep-brake', brakeDepth: 'deep',
         hold: id === 'wingover' ? [side, 'brake'] : ['brake'],
         release: id === 'wingover' ? [other, 'bar', 'ears'] : ['left', 'right', 'bar', 'ears'],
-        detail: id === 'pitch' ? 'Double-tap and hold brake, or hold X. Build a deliberate backswing; release when it turns forward.' :
+        detail: id === 'pitch' ? rawInput.controlMode === 'brakes' ? 'Drag straight down into the deep range. Build a deliberate backswing; release when it turns forward.'
+          : 'Double-tap and hold brake, or hold X. Build a deliberate backswing; release when it turns forward.' :
           `Hold ${side} and briefly pull deep brake to energize the swing. Then release brake and keep the turn.` };
       if (acceptedFor >= (id === 'pitch' ? 3 : 0.2)) phase(id === 'pitch' ? 'swing' : 'first-turn');
     } else if (state.phase === 'swing') {
@@ -66,7 +72,7 @@ export function createTrickLessons({ learned = () => [], onLearned = () => {} } 
         detail: 'Reverse now. Hold through the top, then follow the observed return swing.' };
     }
     return fields ? actionMessage({ state: 'lesson', context: TRICK_LESSONS[id].label,
-      phase: state.phase, ...fields }, input) : null;
+      phase: state.phase, ...fields }, rawInput) : null;
   }
   function step(dt, frame) {
     if (!(dt > 0) || !frame?.g || !frame.watch) return message;
@@ -75,7 +81,9 @@ export function createTrickLessons({ learned = () => [], onLearned = () => {} } 
     if (now === clock) return message;
     clock = now;
     if (frame.eligible === false) { cancel('unavailable'); return message = null; }
-    const { g, watch, style, input = {}, air = {} } = frame;
+    const { g, watch, style, input: rawInput = {}, air = {} } = frame;
+    const summarized = observeControls.step(rawInput);
+    const input = rawInput.controlMode === 'brakes' ? summarized : rawInput;
     const reserve = Math.min(frame.clearance ?? Infinity, frame.fogClearance ?? Infinity);
     const interrupted = !!(frame.hazard || frame.warning || frame.collapse > 0 || g.stall > 0 ||
       g.tuck > 0 || g.loop || input.ears || frame.hazardActive || g.wingPhase && g.wingPhase !== WING.flying);
@@ -121,10 +129,10 @@ export function createTrickLessons({ learned = () => [], onLearned = () => {} } 
     if (safety) message = physical;
     else if (state.active) message = physical ?? request ?? actionMessage({ state: 'lesson', context: TRICK_LESSONS[state.active].label,
       phase: 'recover', action: 'release-all', title: 'RECOVER LEVEL TO BANK STYLE',
-      detail: 'Let the wing settle for one steady second.', progress: Math.min(1, watch.calm), progressLabel: 'STEADY FLIGHT · 1s' }, input);
+      detail: 'Let the wing settle for one steady second.', progress: Math.min(1, watch.calm), progressLabel: 'STEADY FLIGHT · 1s' }, rawInput);
     else if (clock - state.completedAt < TRICK_LESSONS.celebrate && !interrupted) message = actionMessage({ state: 'banked',
       context: 'LESSON LEARNED', phase: 'banked', action: 'none', title: `+${state.awarded} STYLE · ×${state.multiplier.toFixed(2)}`,
-      detail: 'Style increases your final score. Follow the lift again.' }, input);
+      detail: 'Style increases your final score. Follow the lift again.' }, rawInput);
     else message = physical ?? frame.lift ?? null;
     if (state.active && message) message = { ...message, lessonId: state.active, canCancelLesson: true };
     return message;

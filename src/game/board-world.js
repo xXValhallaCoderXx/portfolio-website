@@ -4,7 +4,7 @@
 // names a run on it. Pure, like the local board (board.js): nothing here touches the network,
 // storage or the clock. WebCrypto's SHA-256 is the one thing it asks of where it runs, and browsers
 // (on https and localhost) and Node both have it.
-import { encodeLog } from './recorder.js';
+import { encodeLog, isDirectFrame } from './recorder.js';
 import { normalizeScore } from './board.js';
 import { bynameOf } from './meet-bynames.js';
 import { isBlocked } from './meet-initials.js';
@@ -34,6 +34,7 @@ export async function digest(text, digits = 64) {
 // arrows are the bar held straight, and the brake wins over the bar. Logs that differ only where the
 // step cannot tell them apart fly one flight.
 const flown = (bits) => {
+  if (isDirectFrame(bits)) return bits;
   const both = (bits & 3) === 3;
   if ((bits & 12) === 12) return 12 | (both ? 0 : bits & 3);
   const deep = bits & 16;
@@ -50,7 +51,11 @@ const flown = (bits) => {
  * from another device, it is the same run, and the board takes it once.
  */
 export function runId(log) {
-  return digest(encodeLog({ simVersion: log.simVersion, seed: log.seed }, Uint8Array.from(log.bits, flown), log.steps), WORLD_BOARD.id);
+  const frames = Uint32Array.from(log.bits.subarray ? log.bits.subarray(0, log.steps) : log.bits.slice(0, log.steps), flown);
+  // Keep historical digital identities stable across the recording-format upgrade. Direct mode
+  // is part of a flight's identity, including a pair of fully released brakes.
+  const format = frames.some(isDirectFrame) ? 2 : 1;
+  return digest(encodeLog({ simVersion: log.simVersion, seed: log.seed, format }, frames, log.steps), WORLD_BOARD.id);
 }
 
 /**

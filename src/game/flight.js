@@ -32,6 +32,7 @@ function trimmed() {
 export function createFlight(pos = { x: 0, y: 0, z: 0 }) {
   const g = { ...makePhysics(pos), pos, yaw: 0, yawRate: 0, track: 0, trackRate: 0, bank: 0, speed: FLIGHT.speed.trim, sink: FLIGHT.sink.trim,
     vy: 0, turn: 0, lift: 0, liftSide: 0, brake: 0, deepBrake: false, brakeTarget: 0, acro: false, bar: 0, ears: 0,
+    controlMode: 'legacy', leftBrake: 0, rightBrake: 0, leftBrakeTarget: 0, rightBrakeTarget: 0,
     coordination: 0, coordinatedLean: 0, pilotLean: 0, bankTarget: 0, pitch: 0, pitchRate: 0,
     lean: 0, roll: 0, rollRate: 0, stallLoad: 0, stall: 0,
     windX: 0, windZ: 0, felt: false,
@@ -48,6 +49,9 @@ export function releaseFlight(g) {
   g.physical.coordination = g.physical.coordinated = g.physical.bankTarget = 0;
   g.physical.brakeTarget = g.physical.acroSteady = 0;
   g.physical.deepBrake = g.physical.acro = false;
+  g.physical.controlMode = g.controlMode = 'legacy';
+  g.physical.leftBrake = g.physical.rightBrake = g.physical.leftBrakeTarget = g.physical.rightBrakeTarget = 0;
+  g.leftBrake = g.rightBrake = g.leftBrakeTarget = g.rightBrakeTarget = 0;
   resetEnvelope(g.physical);
   g.brake = g.bar = g.ears = g.stall = g.stallLoad = g.tuck = 0;
   g.coordination = g.coordinatedLean = g.pilotLean = g.bankTarget = 0;
@@ -192,6 +196,9 @@ function telemetry(g, controls, air, dt) {
   g.turn = s.steer;
   g.brake = s.brake; g.bar = s.bar; g.ears = s.ears;
   g.deepBrake = s.deepBrake; g.brakeTarget = s.brakeTarget; g.acro = s.acro;
+  g.controlMode = s.controlMode;
+  g.leftBrake = s.leftBrake; g.rightBrake = s.rightBrake;
+  g.leftBrakeTarget = s.leftBrakeTarget; g.rightBrakeTarget = s.rightBrakeTarget;
   g.tension = s.tension;
   g.load = s.tension / (PHYSICS.pilotMass * PHYSICS.gravity);
   g.wingPhase = s.wingPhase; g.recoverySource = s.recoverySource; g.inflation = s.inflation;
@@ -232,6 +239,8 @@ function predict(g, out, pitch, horizon) {
   copyFlight(predicted, g);
   const controls = { turn: g.turn, brake: g.brakeTarget > 0, deepBrake: g.deepBrake,
     bar: g.bar > 0.5, ears: g.ears > 0.5 };
+  if (g.controlMode === 'brakes') Object.assign(controls, { controlMode: 'brakes',
+    leftBrake: g.leftBrakeTarget / PHYSICS.deepBrake, rightBrake: g.rightBrakeTarget / PHYSICS.deepBrake });
   const air = { windX: g.physical.windX, windY: g.physical.windY, windZ: g.physical.windZ };
   out.toPeak = out.toLine = Infinity;
   out.peak = g.pitch; out.bank = g.bank; out.size = Math.abs(g.roll);

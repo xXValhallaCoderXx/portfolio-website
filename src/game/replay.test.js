@@ -82,7 +82,7 @@ test('a recorded run replays to the same total, peak, lights, ending and barogra
     // The step that touches down is in the log, though the run never counts it as flown: the sky is
     // not stepped on it.
     const steps = sheet.steps + (sheet.reason === 'landed' ? 1 : 0);
-    assert.deepEqual({ ...read.log, bits: null }, { simVersion: SIM_VERSION, seed, day: 0, touch: false, initials: '', ...meta, total: sheet.total, peak: sheet.peak, steps, bits: null });
+    assert.deepEqual({ ...read.log, bits: null }, { format: 2, simVersion: SIM_VERSION, seed, day: 0, touch: false, initials: '', ...meta, total: sheet.total, peak: sheet.peak, steps, bits: null });
     const replayed = replayLog(read.log);
     assert.deepEqual(replayed, sheet, `seed ${seed}`);
     seen[sheet.reason] += 1;

@@ -131,7 +131,8 @@ test('ordinary throws are75–90 seconds apart, then35–45 seconds after reachi
 });
 
 test('prediction uses an independent physical wing and the complete sampled wind without changing the live world', () => {
-  for (const controls of [{ turn: 0 }, { turn: -1, brake: true }, { turn: 0.6, bar: true }, { turn: 1, ears: true }]) {
+  for (const controls of [{ turn: 0 }, { turn: -1, brake: true }, { turn: 0.6, bar: true }, { turn: 1, ears: true },
+    { controlMode: 'brakes', leftBrake: .30, rightBrake: .08 }, { controlMode: 'brakes', leftBrake: 0, rightBrake: .30 }]) {
     const world = aloft(4, { y: BEAST.from + 30 });
     Object.assign(world.controls, controls);
     world.sky.sample = (pos, yaw, out) => Object.assign(out, { lift: 3, sink: 0, liftSide: 0.1, windX: 2, windY: 3, windZ: -1, hazardSink: 0, rough: 0.1 });
@@ -145,6 +146,18 @@ test('prediction uses an independent physical wing and the complete sampled wind
       if (n === 0) assert.ok(untilThrown(world, 95) < 95);
     }
   }
+});
+
+test('a bell forecast releases stale direct input after the pilot returns to keys', () => {
+  const world = aloft(4, { y: BEAST.from + 30 });
+  world.sky.sample = (_pos, _yaw, out) => Object.assign(out, { lift: 3, sink: 0, liftSide: 0, windX: 0, windY: 3, windZ: 0, rough: 0 });
+  Object.assign(world.controls, { controlMode: 'brakes', leftBrake: .30, rightBrake: 0 });
+  assert.ok(untilThrown(world) < 20);
+  delete world.controls.controlMode; delete world.controls.leftBrake; delete world.controls.rightBrake;
+  Object.assign(world.controls, { turn: 1, brake: true });
+  assert.ok(untilThrown(world, 95) < 95);
+  const bell = world.bells.state.bells[world.bells.state.warning], ahead = flyAhead(world, bell.lead);
+  assert.deepEqual([bell.aimX, bell.aimY, bell.aimZ], [ahead.x, ahead.y, ahead.z]);
 });
 
 test('the Beast follows an ordinary introduction, is warned3.2 seconds ahead and appears only once', () => {

@@ -8,7 +8,7 @@ import { createCloudbaseRun } from './cloudbase-state.js';
 import { createMeet } from './meet-state.js';
 import { createBells } from './bells.js';
 import { createStyle } from './meet-style.js';
-import { createRunWorld, finishRun, startRun, stepBits } from './run-step.js';
+import { createRunWorld, finishRun, startRun, stepFrame } from './run-step.js';
 import { summariseRun } from './meet-sheet.js';
 import { SIM_VERSION } from './sim-version.js';
 
@@ -44,7 +44,7 @@ export function createReplay({ log }) {
     const end = Math.min(steps, at + Math.max(0, maxSteps));
     let ended = null;
     while (at < end && !ended) {
-      ended = stepBits(world, bits[at]);
+      ended = stepFrame(world, bits[at]);
       at += 1;
     }
     if (ended && at < steps) {

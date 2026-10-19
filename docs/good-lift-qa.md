@@ -1,5 +1,8 @@
 # Good Lift — initial release QA and code review
 
+The [mouse and touch brake update](good-lift-brake-drag-qa.md) adds proportional controls under
+simulation 3 and recording format 2, retaining saved progress.
+
 The later [early-island and raven-direction update](good-lift-raven-flow-qa.md) introduces
 simulation 2 and retains saved progress. Its local preview is <http://localhost:4177/good-lift?sky=1>.
 The initial-release evidence below describes simulation 1.

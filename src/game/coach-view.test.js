@@ -43,6 +43,24 @@ function fixture() {
 }
 const reverse = Object.freeze({ state: 'timing', context: 'Wingover', phase: 'Reverse now', action: 'left', title: 'RELEASE RIGHT, THEN LEFT', detail: 'Swap with the swing.', hold: Object.freeze(['left']), release: Object.freeze(['right']) });
 
+test('direct coach chips describe drags and easing without keyboard or double-tap instructions', () => {
+  const f = fixture(), raw = { controlMode: 'brakes', leftBrake: .3, rightBrake: 0 };
+  f.raw(raw);
+  f.view.update(actionMessage({ action: 'left', hold: ['left', 'brake'], brakeDepth: 'working', release: ['right', 'bar'] }, raw));
+  assert.equal(f.chip('left').children[0].textContent, 'Pulling left brake');
+  assert.equal(f.chip('left').children[1].textContent, 'drag left');
+  assert.equal(f.chip('brake').hidden, true, 'one hand is never labelled as both brakes');
+  const deep = { controlMode: 'brakes', leftBrake: 1, rightBrake: 1 };
+  f.raw(deep);
+  f.view.update(actionMessage({ action: 'brake', brakeDepth: 'working' }, deep));
+  assert.equal(f.chip('brake').children[0].textContent, 'Ease the pull to working range');
+  assert.equal(f.chip('brake').children[1].textContent, 'drag down');
+  f.raw({ controlMode: 'brakes', leftBrake: .6, rightBrake: .6 });
+  f.view.update(actionMessage({ action: 'deep-brake' }, { controlMode: 'brakes', leftBrake: .6, rightBrake: .6 }));
+  assert.equal(f.chip('brake').children[0].textContent, 'Pull both brakes deeper');
+  assert.doesNotMatch(f.chip('brake').children[0].textContent, /tap/);
+});
+
 test('explicit release and hold instructions reflect keyboard input without changing the message or controls', () => {
   const f = fixture(), raw = Object.freeze({ right: true, left: false }); f.raw(raw);
   f.view.update(reverse);

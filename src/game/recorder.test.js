@@ -16,11 +16,11 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789
 // on the recorder's, for building and taking apart links by hand.
 const bytesOf = (text) => [...Buffer.from(text, 'base64url')];
 const textOf = (bytes) => Buffer.from(bytes).toString('base64url');
-const META = Object.freeze({ simVersion: 0, seed: 7, day: 0, touch: false, initials: '', total: 25, peak: 300 });
+const META = Object.freeze({ format: 1, simVersion: 0, seed: 7, day: 0, touch: false, initials: '', total: 25, peak: 300 });
 
 test('the ten-minute deadline fits format 1 even when every fixed step changes input', () => {
   assert.equal(MAX_STEPS, 36_000);
-  assert.equal(LOG_FORMAT, 1);
+  assert.equal(LOG_FORMAT, 2);
   const bits = Uint8Array.from({ length: MAX_STEPS }, (_, i) => i % 32);
   const text = encodeLog({ ...META, simVersion: SIM_VERSION }, bits, bits.length);
   assert.ok(text.length <= MAX_LINK);
@@ -120,7 +120,8 @@ test('a log of five-bit controls survives encoding and decoding whatever the run
       assert.ok(BASE64URL.test(text) && text.length <= MAX_LINK, `${text.length} characters`);
       const read = decodeLog(text);
       assert.equal(read.ok, true, read.why);
-      assert.deepEqual(read.log, { ...meta, steps: bits.length, bits });
+      assert.deepEqual(read.log, { format: LOG_FORMAT, ...meta, steps: bits.length,
+        bits: meta.format === 1 ? bits : Uint32Array.from(bits) });
       // Read back and written again it is the very same text, and Node's own base64url agrees.
       assert.equal(encodeLog(read.log, read.log.bits, read.log.steps), text);
       assert.equal(textOf(bytesOf(text)), text);
@@ -131,15 +132,15 @@ test('a log of five-bit controls survives encoding and decoding whatever the run
   const buffer = madeUp(4, 500, 20);
   assert.equal(encodeLog(META, buffer, 100), encodeLog(META, buffer.subarray(0, 100), 100));
   assert.deepEqual(decodeLog(encodeLog({ simVersion: 2, seed: 9 }, buffer, 10)).log,
-    { simVersion: 2, seed: 9, day: 0, touch: false, initials: '', total: 0, peak: 0, steps: 10, bits: buffer.slice(0, 10) });
+    { format: LOG_FORMAT, simVersion: 2, seed: 9, day: 0, touch: false, initials: '', total: 0, peak: 0, steps: 10, bits: Uint32Array.from(buffer.slice(0, 10)) });
 });
 
 test('a log is written byte for byte as format 1 specifies', () => {
   const bits = [...Array(90).fill(0), ...Array(12).fill(INPUT.right), ...Array(30).fill(INPUT.right | INPUT.bar), INPUT.left | INPUT.right, ...Array(5).fill(INPUT.brake)];
-  const text = encodeLog({ simVersion: 1, seed: 0x6785502f, day: 20756, touch: true, initials: 'REN', total: 487.5, peak: 1412 }, bits, bits.length);
+  const text = encodeLog({ format: 1, simVersion: 1, seed: 0x6785502f, day: 20756, touch: true, initials: 'REN', total: 487.5, peak: 1412 }, bits, bits.length);
   assert.equal(text, 'AQEvUIVnlKIBARIFDsMBhAuKAcAWggPKByOkAQ');
   assert.deepEqual(bytesOf(text), [
-    LOG_FORMAT,
+    1,
     0x01,                   // sim version 1
     0x2f, 0x50, 0x85, 0x67, // the seed, lowest byte first
     0x94, 0xa2, 0x01,       // day 20,756, seven bits a byte, lowest first
@@ -278,7 +279,7 @@ test('a cut-short, padded or tampered link is refused rather than misread', () =
 test('a link whose bytes are not exactly a log of a supported format is refused, each for what is wrong with it', () => {
   // A small log taken apart: format, version, seed, day, flags, initials, 10 plates, 300 m, 6 steps,
   // then 3 steps of nothing held, 2 of right and 1 of the brake.
-  const whole = [LOG_FORMAT, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0xac, 0x02, 6, 0x60, 0x42, 0x24];
+  const whole = [1, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0xac, 0x02, 6, 0x60, 0x42, 0x24];
   assert.equal(textOf(whole), encodeLog(META, [0, 0, 0, 2, 2, 4], 6));
   assert.equal(decodeLog(textOf(whole)).ok, true);
   const swap = (at, count, ...bytes) => textOf(whole.toSpliced(at, count, ...bytes));
@@ -308,7 +309,7 @@ test('a link whose bytes are not exactly a log of a supported format is refused,
   assert.deepEqual([longest.ok, longest.log?.steps, longest.log?.bits.every((bits) => bits === 0)], [true, MAX_STEPS, true]);
   // Bytes that do not fill the last character leave bits over, which a log leaves 0. Set one and
   // the same bytes have a second text; it is refused, though Node's own reader would let it pass.
-  const short = [LOG_FORMAT, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0xac, 0x02, 4, 0x60, 0x22];
+  const short = [1, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0xac, 0x02, 4, 0x60, 0x22];
   const exact = textOf(short);
   assert.deepEqual([exact.length, decodeLog(exact).ok], [23, true]);
   const nudged = exact.slice(0, -1) + String.fromCharCode(exact.charCodeAt(exact.length - 1) + 1);

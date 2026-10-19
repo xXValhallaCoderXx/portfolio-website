@@ -166,6 +166,8 @@ export function createBells() {
   function aim(sky, g, controls, steps) {
     const pos = ahead.pos;
     copyFlight(ahead, g);
+    // Object.assign alone would retain a previous drag's mode after switching back to keys.
+    held.controlMode = undefined; held.leftBrake = held.rightBrake = 0;
     Object.assign(held, controls);
     for (let i = 0; i < steps; i++) {
       sky.sample(pos, ahead.yaw, forces);

@@ -3,9 +3,9 @@
 // very run it was recorded from (replay.js), travels in a challenge link (#vs=) and is the proof a
 // board row keeps of its total. Pure, like the step it feeds.
 //
-// A link, format 1, is these bytes written in base64url without padding:
+// A link is these bytes written in base64url without padding:
 //
-//   u8       the format: 1
+//   u8       the format: 1 (digital) or 2 (digital and proportional brakes)
 //   varint   the sim version the run was flown under (sim-version.js)
 //   u32 LE   the sky's seed
 //   varint   the UTC day of a Daily Sky, or 0 for any other sky
@@ -16,6 +16,9 @@
 //   varint   steps
 //   varint   (steps held << 5) | bits, for each stretch of steps the controls were held the same,
 //            until the stretches add up to `steps`
+// Format 2 replaces that last combined varint with a varint span followed by an action byte:
+// 0..31 are legacy bits; 32 is direct brakes, 33 direct ears and 34 direct bar. Direct actions
+// carry two following u8 brake depths, left then right. Ears and bar require both depths zero.
 //
 // A varint is LEB128: seven bits a byte, the lowest first, the top bit set on every byte but the
 // last. Every log has one text and every text one log: no number takes more bytes than it needs, no
@@ -27,15 +30,21 @@
 
 import { RUN_RULES } from './run-rules.js';
 
-export const LOG_FORMAT = 1;
+export const LOG_FORMAT = 2;
 // Every input through the ten-minute deadline fits, even when it changes every step.
 export const MAX_STEPS = RUN_RULES.maxSteps;
 // The decoder accepts a complete ten-minute trace even when input changes every fixed step.
-export const MAX_LINK = 49_152;
+export const MAX_LINK = 196_608;
 // The controls, as the bits of one fixed step (run-step.js's stepBits): left and right together are
 // the keyboard's speed-bar shortcut. The brake and bar bits together encode big ears. Deep brake has its own bit and also writes the ordinary brake
 // bit, so intent is replayed directly without reconstructing device gesture timing.
 export const INPUT = Object.freeze({ left: 1, right: 2, brake: 4, bar: 8, ears: 12, deepBrake: 16 });
+// Packed canonical frames live in Uint32 buffers. The direct tag preserves even a hands-up
+// direct frame: it does not become the legacy bank-target controller's neutral input.
+export const DIRECT_FRAME = 0x10000;
+const DIRECT_EARS = 0x20000;
+const DIRECT_BAR = 0x40000;
+const DIRECT_MASK = 0x7ffff;
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 // Each character's six bits, by its code; -1 for any character base64url does not use.
@@ -45,7 +54,7 @@ for (let i = 0; i < ALPHABET.length; i++) SEXTET[ALPHABET.charCodeAt(i)] = i;
 const UINT = 0xffffffff;
 const VARINT = 5;
 // The most bytes a log can take before its first stretch: format, version, seed, day, flags,
-// initials, total, peak and steps. A stretch takes at most three (MAX_STEPS << 5 is under 2^21).
+// initials, total, peak and steps.
 const HEAD = 1 + VARINT + 4 + VARINT + VARINT + 3 + VARINT + VARINT + VARINT;
 const NAMED = /^(?:[A-Z]{3})?$/;
 const KG = 2.5;
@@ -68,19 +77,57 @@ export function inputBits(input) {
   return turn | (input.ears ? INPUT.ears : input.deepBrake ? INPUT.deepBrake | INPUT.brake : input.brake ? INPUT.brake : input.bar ? INPUT.bar : 0);
 }
 
+const depth = value => Math.round(Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0)) * 255);
+export function inputFrame(input) {
+  if (input.controlMode !== 'brakes') return inputBits(input);
+  if (input.ears) return DIRECT_FRAME | DIRECT_EARS;
+  const left = depth(input.leftBrake), right = depth(input.rightBrake);
+  return DIRECT_FRAME | left | (right << 8) | (!(left || right) && input.bar ? DIRECT_BAR : 0);
+}
+
+export const isDirectFrame = frame => Number.isInteger(frame) && (frame & DIRECT_FRAME) !== 0;
+function validFrame(frame) {
+  if (!isUint(frame)) return false;
+  if (frame <= 31) return true;
+  if (!isDirectFrame(frame) || (frame & ~DIRECT_MASK) || (frame & DIRECT_EARS && frame & DIRECT_BAR)) return false;
+  return !(frame & (DIRECT_EARS | DIRECT_BAR)) || !(frame & 0xffff);
+}
+
+/** Decodes a frame without allocating when an output object is supplied. */
+export function frameInput(frame, out = {}) {
+  if (isDirectFrame(frame)) {
+    out.controlMode = 'brakes';
+    out.leftBrake = (frame & 255) / 255;
+    out.rightBrake = ((frame >>> 8) & 255) / 255;
+    out.ears = !!(frame & DIRECT_EARS);
+    out.bar = !!(frame & DIRECT_BAR);
+    out.left = out.right = out.brake = out.deepBrake = false;
+  } else {
+    out.controlMode = 'legacy';
+    out.leftBrake = out.rightBrake = 0;
+    out.left = !!(frame & 1); out.right = !!(frame & 2);
+    out.ears = (frame & 12) === 12;
+    out.deepBrake = !out.ears && !!(frame & 16);
+    out.brake = !out.ears && (!!(frame & 4) || out.deepBrake);
+    out.bar = !out.ears && !out.brake && ((frame & 3) === 3 || !!(frame & 8));
+  }
+  out.turn = out.controlMode === 'brakes' ? out.rightBrake - out.leftBrake : out.left && out.right ? 0 : Number(out.right) - Number(out.left);
+  return out;
+}
+
 /**
  * Records a run's controls step by step, into one buffer made here and reused for every run.
  *
  *   reset()      starts a new log
- *   push(bits)   adds one step's controls (inputBits); false once the log is full, MAX_STEPS long,
+ *   push(frame)  adds one step's controls (inputFrame); false once the log is full, MAX_STEPS long,
  *                when the run has outgrown any link and should be ended
  *   steps        steps recorded
- *   bits         the steps recorded, a Uint8Array view onto the recorder's own buffer: encode it
+ *   bits         the steps recorded, a Uint32Array view onto the recorder's own buffer: encode it
  *                (encodeLog) before the next run writes over it
  *   changes      how often the controls changed from one step to the next, from none held
  */
 export function createRecorder() {
-  const buffer = new Uint8Array(MAX_STEPS);
+  const buffer = new Uint32Array(MAX_STEPS);
   let steps = 0;
   let changes = 0;
   let last = 0;
@@ -90,7 +137,8 @@ export function createRecorder() {
     },
     push(bits) {
       if (steps >= MAX_STEPS) return false;
-      const held = bits & 31;
+      const held = isDirectFrame(bits) ? bits : bits & 31;
+      need(validFrame(held), 'the controls', held);
       if (held !== last) changes += 1;
       last = held;
       buffer[steps] = held;
@@ -108,11 +156,12 @@ export function createRecorder() {
  * the sim version and the seed the run was flown under; the Daily Sky's UTC day, or 0 for any other
  * sky; whether it was flown on a touch screen; '' or three letters A to Z; and the total (kg, a
  * multiple of 2.5) and peak (whole metres) it claims. `bits` holds the controls of each of the
- * first `steps` steps, 0 to 31 (a recorder's `bits`). Throws a RangeError for anything the format
- * cannot hold exactly, rather than write a log that says something else.
+ * first `steps` steps (a recorder's `bits`). `format` defaults to 2; pass 1 for a historical
+ * digital-only encoding. Throws a RangeError for anything the format cannot hold exactly.
  */
 export function encodeLog(meta, bits, steps) {
-  const { simVersion, seed, day = 0, touch = false, initials = '', total = 0, peak = 0 } = meta;
+  const { simVersion, seed, day = 0, touch = false, initials = '', total = 0, peak = 0, format = LOG_FORMAT } = meta;
+  need(format === 1 || format === 2, 'the format', format);
   need(isUint(simVersion), 'the sim version', simVersion);
   need(isUint(seed), 'the seed', seed);
   need(isUint(day), 'the day', day);
@@ -120,7 +169,9 @@ export function encodeLog(meta, bits, steps) {
   need(typeof total === 'number' && isUint(total / KG), 'the total', total);
   need(isUint(peak), 'the peak', peak);
   need(Number.isInteger(steps) && steps >= 0 && steps <= MAX_STEPS && bits?.length >= steps, 'the steps', steps);
-  const bytes = new Uint8Array(HEAD + 3 * steps);
+  // A changed direct frame takes four bytes (span=1, action, two depths). Longer spans never
+  // exceed that budget per step. One fixed buffer bounds even a maximally noisy ten-minute run.
+  const bytes = new Uint8Array(HEAD + 4 * steps);
   let size = 0;
   const varint = (value) => {
     while (value > 0x7f) {
@@ -129,7 +180,7 @@ export function encodeLog(meta, bits, steps) {
     }
     bytes[size++] = value;
   };
-  bytes[size++] = LOG_FORMAT;
+  bytes[size++] = format;
   varint(simVersion);
   for (let i = 0; i < 4; i++) bytes[size++] = (seed >>> (8 * i)) & 0xff;
   varint(day);
@@ -140,10 +191,19 @@ export function encodeLog(meta, bits, steps) {
   varint(steps);
   for (let i = 0; i < steps;) {
     const held = bits[i];
-    need(Number.isInteger(held) && held >= 0 && held <= 31, `the controls of step ${i}`, held);
+    need(validFrame(held) && (format === 2 || held <= 31), `the controls of step ${i}`, held);
     let end = i + 1;
     while (end < steps && bits[end] === held) end += 1;
-    varint((end - i) * 32 + held);
+    if (format === 1) varint((end - i) * 32 + held);
+    else {
+      varint(end - i);
+      if (held <= 31) bytes[size++] = held;
+      else {
+        bytes[size++] = held & DIRECT_EARS ? 33 : held & DIRECT_BAR ? 34 : 32;
+        bytes[size++] = held & 255;
+        bytes[size++] = (held >>> 8) & 255;
+      }
+    }
     i = end;
   }
   let text = '';
@@ -160,8 +220,8 @@ export function encodeLog(meta, bits, steps) {
 
 /**
  * Reads a link's text back into the log it was written from: { ok: true, log }, `log` being
- * { simVersion, seed, day, touch, initials, total, peak, steps, bits } as encodeLog was given them
- * (`bits` a Uint8Array of `steps`); or { ok: false, why } for any text that is not exactly a log:
+ * { format, simVersion, seed, day, touch, initials, total, peak, steps, bits } as encodeLog was
+ * given them (`bits` a Uint8Array for format 1, Uint32Array for format 2); or { ok: false, why }:
  *
  *   long       more than MAX_LINK characters, or more than MAX_STEPS steps
  *   format     a log, but not of format 1 or 2: from some other build of the game
@@ -221,7 +281,7 @@ export function decodeLog(text) {
   };
   if (size === 0) return refused('truncated');
   const format = byte();
-  if (format !== LOG_FORMAT) return refused('format');
+  if (format !== 1 && format !== 2) return refused('format');
   const simVersion = varint();
   // Operands are read left to right, so the first byte is the lowest.
   const seed = (byte() | (byte() << 8) | (byte() << 16) | (byte() << 24)) >>> 0;
@@ -242,14 +302,26 @@ export function decodeLog(text) {
     initials = String.fromCharCode(64 + first, 64 + second, 64 + third);
   }
   if (steps > MAX_STEPS) return refused('long');
-  const bits = new Uint8Array(steps);
+  const bits = format === 1 ? new Uint8Array(steps) : new Uint32Array(steps);
   let filled = 0;
   let last = -1;
   while (filled < steps) {
     const value = varint();
     if (why) return refused(why);
-    const held = value % 32;
-    const span = (value - held) / 32;
+    let held, span;
+    if (format === 1) {
+      held = value % 32;
+      span = (value - held) / 32;
+    } else {
+      span = value;
+      const action = byte();
+      if (action <= 31) held = action;
+      else if (action <= 34) {
+        held = DIRECT_FRAME | (action === 33 ? DIRECT_EARS : action === 34 ? DIRECT_BAR : 0) | byte() | (byte() << 8);
+      } else return refused('corrupt');
+      if (why) return refused(why);
+      if (!validFrame(held)) return refused('corrupt');
+    }
     if (span === 0 || held === last || span > steps - filled) return refused('corrupt');
     bits.fill(held, filled, filled + span);
     filled += span;
@@ -257,5 +329,5 @@ export function decodeLog(text) {
   }
   // Nothing may follow the last stretch: no byte, no stray character, no bit.
   if (at !== size || pool !== 0 || text.length !== Math.ceil((size * 8) / 6)) return refused('corrupt');
-  return { ok: true, log: { simVersion, seed, day, touch: flags === 1, initials, total: plates * KG, peak, steps, bits } };
+  return { ok: true, log: { format, simVersion, seed, day, touch: flags === 1, initials, total: plates * KG, peak, steps, bits } };
 }

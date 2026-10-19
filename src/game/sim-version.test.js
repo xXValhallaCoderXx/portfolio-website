@@ -14,9 +14,10 @@ import { BAIT, MEET, MEET_POOL, SCATTER, THUNDER, TRAIL, WIND } from './meet-sta
 import { BLESSING, GATES, RUNE } from './meet-runes.js';
 import { BEAST, BELLS, BELL_POOL } from './bells.js';
 import { ZONES, surfaceAt } from './terrain.js';
+import { BRAKE_CONTROLS } from './brake-controls.js';
 
 // Pin the current release's tables. A physical or scoring change requires a new version and pin.
-const FINGERPRINT = 'a4e8e954';
+const FINGERPRINT = 'b9dd2bdb';
 
 // Everything a run is flown by that is a number rather than code: the wing's tables, every one of
 // the sky's, the step's, the meet's (its plates off the trail and its rune gates and blessings with
@@ -34,7 +35,7 @@ function material() {
     for (let dx = -zone.r; dx <= zone.r; dx += 10) ground.push(Math.round(surfaceAt(zone.x + dx, zone.z + dz) * 100));
   }
   return {
-    FLIGHT, BRAKE, STALL, PITCH, BANDS, WATCH, STYLE, SCORE, PHYSICS, ATMOSPHERE, RUN_RULES,
+    FLIGHT, BRAKE, STALL, PITCH, BANDS, WATCH, STYLE, SCORE, PHYSICS, ATMOSPHERE, RUN_RULES, BRAKE_CONTROLS,
     ...Object.fromEntries(Object.entries(SKY).filter(([name]) => name.startsWith('CLOUD_'))),
     RUN, MEET, TRAIL, MEET_POOL, WIND, THUNDER, BAIT, SCATTER, GATES, BLESSING, RUNE, BELLS, BELL_POOL, BEAST,
     ZONES: ZONES.map(({ x, z, r, h }) => ({ x, z, r, h })),

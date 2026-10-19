@@ -37,7 +37,7 @@ export function runCoachHazard(world) {
       title: 'LEAVE YOUR LINE', detail: 'Turn away from the falling kettlebell.' };
   if (pilot.danger > 0) return { state: 'hazard', context: 'RAVENS', phase: 'leave', action: 'none',
     title: 'KEEP CLEAR OF THE BIRDS', detail: 'The ravens are above your wing. Fly clear of their path.' };
-  if (pilot.gustIn < GUST_NEAR && world.g?.brake > BRAKE.light) return { state: 'hazard', context: 'GUST COMING',
+  if (pilot.gustIn < GUST_NEAR && Math.max(world.g?.brake || 0, world.g?.leftBrake || 0, world.g?.rightBrake || 0) > BRAKE.light) return { state: 'hazard', context: 'GUST COMING',
     phase: 'release', action: 'release-brake', detail: 'Ease the brake before the gust reaches the wing.' };
   return null;
 }
