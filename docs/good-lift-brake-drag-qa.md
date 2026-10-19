@@ -1,5 +1,9 @@
 # Good Lift — proportional mouse and touch brakes
 
+The current [shared flight controls and cleanup receipt](flight-controls-qa.md) extends these
+controls to outdoor flight and removes the old recording-format reader. It supersedes the
+preview and verification below, which describe the original proportional-control candidate.
+
 The subsequent presentation-only travel marker, drag diagram and coach target are covered by
 [the light flight cues receipt](good-lift-flight-cues-qa.md). Its local preview and verification
 supersede the preview below for reviewing those additions; the control implementation remains unchanged.
@@ -29,9 +33,9 @@ tip stalls/spins are outside this change. Coaching, predictions, lessons, style 
 hands and trailing edges understand each side separately.
 
 Simulation **3**, fingerprint **`b9dd2bdb`**. Format **2** records 8-bit hand demands and
-controller mode; live play flies the same quantized inputs. Format 1 stays readable and
-old simulation versions retain the version-mismatch response. Saved progress and historical
-boards keep their shapes and data. Browser/server canonicalization remains shared.
+controller mode; live play flies the same quantized inputs. The current cleanup accepts only
+format 2 and uses its encoding for run IDs. Other formats and simulation-version mismatches
+are rejected. Current saved progress remains intact. Browser/server canonicalization remains shared.
 
 The recorder allocates 144,000 bytes for 36,000 packed frames. A noisy ten-minute test
 produces 192,022 link characters within the 196,608 bound; persistent board logs retain

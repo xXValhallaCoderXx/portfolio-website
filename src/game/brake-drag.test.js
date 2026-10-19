@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBrakeDrag, dragBrakes } from './brake-drag.js';
+import { BRAKE_DRAG, createBrakeDrag, dragBrakes } from './brake-drag.js';
 import { createControlSummary, summarizeControls } from './brake-controls.js';
 
 test('drag directions independently pull the two brakes through their full range', () => {
@@ -16,7 +16,7 @@ test('drag directions independently pull the two brakes through their full range
   assert.deepEqual(dragBrakes(Infinity, 5), { leftBrake: 0, rightBrake: 0 });
 });
 
-test('a single captured pointer owns the drag; release/cancel cannot leave a brake held', () => {
+test('a single captured pointer owns the drag; resetting clears its identity and brake intent', () => {
   const drag = createBrakeDrag(), event = { pointerId: 7, pointerType: 'touch', button: 0, clientX: 100, clientY: 200 };
   assert.equal(drag.start({ ...event, button: 2 }), false);
   assert.equal(drag.start(event), true);
@@ -24,13 +24,46 @@ test('a single captured pointer owns the drag; release/cancel cannot leave a bra
   assert.equal(drag.move({ ...event, pointerId: 8, clientY: 280 }), false);
   drag.move({ ...event, clientY: 280 });
   assert.equal(drag.state.leftBrake, 1);
-  assert.equal(drag.release({ pointerId: 8 }), false);
-  assert.equal(drag.release(event), true);
+  drag.reset();
   assert.equal(drag.state.active, false);
+  assert.equal(drag.state.moved, false);
+  assert.equal(drag.state.pointerId, null);
+  assert.equal(drag.state.leftBrake, 0);
   assert.equal(drag.state.rightBrake, 0);
+  assert.equal(drag.state.dx, 0);
+  assert.equal(drag.state.dy, 0);
   drag.start(event); drag.move({ ...event, clientX: 180 }); drag.reset();
   assert.equal(drag.state.rightBrake, 0);
   assert.equal(drag.move({ ...event, clientY: 280 }), false);
+});
+
+test('click slop tracks cumulative drag ownership without changing either hand demand', () => {
+  for (const pointerType of ['mouse', 'touch', 'pen']) {
+    const drag = createBrakeDrag();
+    const event = { pointerId: 3, pointerType, button: 0, clientX: 100, clientY: 200 };
+    const move = (dx, dy, pointerId = event.pointerId) => drag.move({ ...event, pointerId,
+      clientX: event.clientX + dx, clientY: event.clientY + dy });
+    drag.start(event);
+    assert.equal(drag.state.moved, false);
+    move(BRAKE_DRAG.clickSlop, 0);
+    assert.equal(drag.state.moved, false, 'a stationary click tolerates six pixels of movement');
+    move(BRAKE_DRAG.clickSlop + 1, 0, 9);
+    assert.equal(drag.state.moved, false, 'another pointer cannot claim this drag');
+    move(0, 0);
+    move(5, 4);
+    assert.equal(drag.state.moved, true, 'diagonal distance also distinguishes a drag');
+    for (const [dx, dy] of [[-120, 0], [15, 70], [0, -120], [0, 0]]) {
+      move(dx, dy);
+      assert.equal(drag.state.moved, true, 'returning to hands up still suppresses its click');
+      assert.deepEqual({ leftBrake: drag.state.leftBrake, rightBrake: drag.state.rightBrake },
+        dragBrakes(dx, dy, pointerType), 'navigation ownership never quantizes or changes brake demands');
+    }
+    drag.reset();
+    assert.equal(drag.state.moved, false);
+    drag.start({ ...event, clientX: 150, clientY: 250 });
+    assert.equal(drag.state.moved, false, 'a fresh press has its own click history');
+    assert.equal(drag.state.dx, 0); assert.equal(drag.state.dy, 0);
+  }
 });
 
 test('direct semantics distinguish one hand from bilateral braking and preserve direct neutral', () => {

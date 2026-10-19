@@ -1,6 +1,9 @@
 # Good Lift — light flight cues
 
-Local, uncommitted hands-up refinement based on `e8d53ba`, 19 October 2026. Review preview:
+The current [shared flight controls and cleanup receipt](flight-controls-qa.md) extends these
+cues to outdoor flight. It supersedes this earlier hands-up candidate's preview and verification.
+
+Hands-up refinement based on `e8d53ba`, verified 19 October 2026. Review preview:
 <http://localhost:4191/good-lift?sky=1>. No commit, push or deployment performed.
 
 ## Presentation and compatibility

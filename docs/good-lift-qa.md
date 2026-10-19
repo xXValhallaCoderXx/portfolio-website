@@ -1,5 +1,9 @@
 # Good Lift — initial release QA and code review
 
+Current control behavior and compatibility cleanup are recorded in the
+[shared flight controls receipt](flight-controls-qa.md). This document retains the earlier
+initial-release candidate's evidence; its simulation/version numbers are historical.
+
 The [mouse and touch brake update](good-lift-brake-drag-qa.md) adds proportional controls under
 simulation 3 and recording format 2, retaining saved progress.
 

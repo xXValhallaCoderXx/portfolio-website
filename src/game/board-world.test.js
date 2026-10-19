@@ -29,7 +29,7 @@ test('a run\'s id is a digest of the run alone: its rules, seed and controls, ne
     const brake = bits & 4;
     return (both ? 0 : bits & 3) | brake | (!brake && (both || bits & 8) ? 8 : 0);
   });
-  const bare = encodeLog({ simVersion: SIM_VERSION, seed: 0xc0ffee, format: 1 }, read, BITS.length);
+  const bare = encodeLog({ simVersion: SIM_VERSION, seed: 0xc0ffee }, read, BITS.length);
   assert.equal(id, createHash('sha256').update(bare).digest('hex').slice(0, WORLD_BOARD.id));
   // The same run however its link is dressed: renamed, unnamed, re-claimed, on a phone, any day.
   for (const meta of [{ initials: 'TOR' }, { initials: '' }, { total: 1000, peak: 1 }, { touch: true }, { day: 0 }]) {

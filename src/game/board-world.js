@@ -52,10 +52,8 @@ const flown = (bits) => {
  */
 export function runId(log) {
   const frames = Uint32Array.from(log.bits.subarray ? log.bits.subarray(0, log.steps) : log.bits.slice(0, log.steps), flown);
-  // Keep historical digital identities stable across the recording-format upgrade. Direct mode
-  // is part of a flight's identity, including a pair of fully released brakes.
-  const format = frames.some(isDirectFrame) ? 2 : 1;
-  return digest(encodeLog({ simVersion: log.simVersion, seed: log.seed, format }, frames, log.steps), WORLD_BOARD.id);
+  // Controller mode is part of a flight's identity, including fully released direct brakes.
+  return digest(encodeLog({ simVersion: log.simVersion, seed: log.seed }, frames, log.steps), WORLD_BOARD.id);
 }
 
 /**

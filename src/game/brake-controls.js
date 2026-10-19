@@ -3,6 +3,8 @@
 export const BRAKE_CONTROLS = Object.freeze({ turnOn: 0.08, turnOff: 0.04,
   brakeOn: 0.08, brakeOff: 0.04, deepOn: 0.70, deepOff: 0.65, released: 0.04, working: 2 / 3 });
 const depth = value => Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
+// One fixed-step demand precision for both manual flight modes, recordings and visual targets.
+export const brakeByte = value => Math.round(depth(value) * 255);
 
 export function summarizeControls(input = {}, previous = null) {
   const C = BRAKE_CONTROLS;

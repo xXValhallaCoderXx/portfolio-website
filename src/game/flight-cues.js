@@ -2,14 +2,13 @@
 // coach, input or recording clock is advanced here. All retained vectors/DOM nodes are bounded.
 import { Vector3 } from 'three';
 import { BRAKE_DRAG, dragBrakes } from './brake-drag.js';
-import { BRAKE_CONTROLS } from './brake-controls.js';
+import { BRAKE_CONTROLS, brakeByte } from './brake-controls.js';
 import { actionMessage } from './coach-actions.js';
 
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 const wrap = angle => Math.atan2(Math.sin(angle), Math.cos(angle));
 export const dragTravel = type => type === 'mouse' ? BRAKE_DRAG.mouseTravel : BRAKE_DRAG.touchTravel;
-// Kept identical to the recorder's u8 demands without importing the run-only recorder into the fjord.
-export const cueBrake = value => Math.round(clamp(value, 0, 1) * 255) / 255;
+export const cueBrake = value => brakeByte(value) / 255;
 export const brakeDistance = value => value > 0 ? BRAKE_DRAG.deadzone + (1 - BRAKE_DRAG.deadzone) * value : 0;
 const upperTravel = travel => travel * 0.6;
 const handsUpY = travel => -travel * 0.3;
@@ -115,38 +114,13 @@ export function createTravelCue() {
 
 export const overlapsCue = (a, b, gap = 6) => a.left < b.right + gap && a.right > b.left - gap && a.top < b.bottom + gap && a.bottom > b.top - gap;
 
-export function dragCueLayout(drag, safe, obstacles = [], out = {}) {
-  const travel = dragTravel(drag.pointerType), half = travel + 22, top = upperTravel(travel) + 28, bottom = travel + 24;
-  const rawX = drag.x, rawY = drag.y;
-  let x = rawX, y = rawY;
-  if (drag.pointerType !== 'mouse') {
-    const lowX = safe.left + half, highX = safe.right - half, lowY = safe.top + top;
-    // Reserve finger clearance before considering HUD avoidance. A short viewport can require
-    // drawing the diagram under a HUD edge; HUD layers and target collision checks still win.
-    const highY = Math.min(safe.bottom - bottom, Math.max(lowY, rawY - travel - 48));
-    const boundedX = value => clamp(value, lowX, Math.max(lowX, highX));
-    const boundedY = value => clamp(value, lowY, Math.max(lowY, highY));
-    const preferredX = boundedX(rawX), preferredY = boundedY(rawY - travel - 64);
-    x = preferredX; y = preferredY;
-    let best = Infinity;
-    // A fixed number of HUD rectangles supplies a bounded set of alternatives, with one common
-    // translation for origin, live dot and target. Real pointer coordinates are never rewritten.
-    const xs = new Set([x, boundedX(lowX), boundedX(highX)]), ys = new Set([y, boundedY(lowY), boundedY(highY)]);
-    for (const rect of obstacles) {
-      xs.add(boundedX(rect.left - half - 8)); xs.add(boundedX(rect.right + half + 8));
-      ys.add(boundedY(rect.top - bottom - 8)); ys.add(boundedY(rect.bottom + top + 8));
-    }
-    for (const candidateX of xs) for (const candidateY of ys) {
-      let penalty = 0;
-      for (const rect of obstacles) penalty += Math.max(0, Math.min(candidateX + half, rect.right + 6) - Math.max(candidateX - half, rect.left - 6)) *
-        Math.max(0, Math.min(candidateY + bottom, rect.bottom + 6) - Math.max(candidateY - top, rect.top - 6));
-      const distance = Math.hypot(candidateX - preferredX, candidateY - preferredY);
-      // If a press is too near the top for full clearance, retain the safest available position.
-      const clearance = Math.max(0, candidateY + travel + 48 - rawY);
-      const score = penalty * 1000 + clearance * 100 + distance;
-      if (score < best) { best = score; x = candidateX; y = candidateY; }
-    }
-  }
+export function flightControlLayout(safe, out = {}) {
+  const width = safe.right - safe.left, height = safe.bottom - safe.top;
+  const travel = Math.max(0, Math.min(BRAKE_DRAG.touchTravel, (width - 44) / 2, (height - 52) / 1.6));
+  const half = travel + 22, top = upperTravel(travel) + 28, bottom = travel + 24;
+  // Only the viewport determines this anchor. Pointer origins, input device and coach messages
+  // cannot move it; raw gesture coordinates continue to belong exclusively to the input adapter.
+  const x = safe.right - half, y = clamp(safe.top + height * 0.42, safe.top + top, safe.bottom - bottom);
   Object.assign(out, { x, y, travel, left: x - half, right: x + half, top: y - top, bottom: y + bottom });
   return out;
 }
@@ -177,14 +151,18 @@ export function createFlightCues({ element, stage, camera, reducedMotion = () =>
   function hideDrag() { hide(drag, true); hide(target, true); }
   function clearDrag({ confirm = false } = {}) {
     releasedFor = confirm && displayed ? 0.65 : 0;
-    displayed = false; handsUp.hidden = true; hideDrag();
+    displayed = false; handsUp.hidden = true; hide(target, true);
+    attr(dot, 'cx', 0); attr(dot, 'cy', 0); attr(line, 'x2', 0); attr(line, 'y2', 0);
+    drag.dataset.depth = 'released'; drag.dataset.active = 'false';
   }
-  function reset() { motion.reset(); travel.hidden = true; clearDrag(); }
+  function reset() { motion.reset(); travel.hidden = true; clearDrag(); hideDrag(); }
   function update({ pose, facts, drag: intent, message, input, dt }) {
     if (facts.blocked) { reset(); return; }
     const box = stage.getBoundingClientRect(), width = box.width, height = box.height;
     const safeBox = find('.fj-cue-safe').getBoundingClientRect();
     const safe = { left: safeBox.left - box.left, right: safeBox.right - box.left, top: safeBox.top - box.top, bottom: safeBox.bottom - box.top };
+    flightControlLayout(safe, layout);
+    if (!layout.travel) { reset(); return; }
     obstacles.length = 0;
     for (const node of stage.querySelectorAll(exclusions)) {
       const rect = node.getBoundingClientRect();
@@ -201,16 +179,15 @@ export function createFlightCues({ element, stage, camera, reducedMotion = () =>
         obstacles.push({ ...targetBox });
       }
     }
-    if (intent.active && input.controlMode === 'brakes') {
-      releasedFor = 0;
-      // The input adapter stores viewport coordinates; every element uses this stage-local offset.
-      dragCueLayout({ ...intent, x: intent.x - box.left, y: intent.y - box.top }, safe, obstacles, layout);
+    {
+      const active = intent.active && input.controlMode === 'brakes';
+      if (active) releasedFor = 0;
       const T = layout.travel, U = upperTravel(T), top = U + 28;
       if (size !== T) {
         size = T;
         attr(drag, 'viewBox', `${-T - 22} ${-top} ${2 * T + 44} ${top + T + 24}`);
         drag.style.width = `${2 * T + 44}px`; drag.style.height = `${top + T + 24}px`;
-        const points = depth => brakeRegionPoints(depth, intent.pointerType);
+        const points = depth => brakeRegionPoints(depth, 'touch').map(({ x, y }) => ({ x: x * T / BRAKE_DRAG.touchTravel, y: y * T / BRAKE_DRAG.touchTravel }));
         const path = vertices => vertices.map(({ x, y }, i) => `${i ? 'L' : 'M'}${x} ${y}`).join('') + 'Z';
         const neutral = path(points(0)), working = path(points(BRAKE_CONTROLS.deepOn)), frame = path(points(1));
         attr(find('.fj-drag-frame'), 'd', frame); attr(find('.fj-drag-neutral'), 'd', neutral);
@@ -223,16 +200,29 @@ export function createFlightCues({ element, stage, camera, reducedMotion = () =>
         }
       }
       drag.style.left = `${layout.x - T - 22}px`; drag.style.top = `${layout.y - top}px`;
-      dragCuePoint(intent.dx, intent.dy, intent.pointerType, live);
+      let left = 0, right = 0, scale = T / BRAKE_DRAG.touchTravel;
+      if (active) {
+        dragCuePoint(intent.dx, intent.dy, intent.pointerType, live);
+        scale = T / dragTravel(intent.pointerType);
+        left = cueBrake(intent.leftBrake); right = cueBrake(intent.rightBrake);
+      } else if (input.controlMode !== 'brakes') {
+        // Keyboard/buttons retain their controller. Show the physical hand travel they produce.
+        left = cueBrake(facts.leftBrake); right = cueBrake(facts.rightBrake);
+        brakeDragPoint(left, right, 'touch', live);
+      } else live.dx = live.dy = 0;
+      live.dx *= scale; live.dy *= scale;
       attr(line, 'x2', live.dx); attr(line, 'y2', live.dy);
       attr(dot, 'cx', live.dx); attr(dot, 'cy', live.dy);
-      const demand = Math.max(cueBrake(intent.leftBrake), cueBrake(intent.rightBrake));
+      const demand = Math.max(left, right);
       drag.dataset.depth = demand <= BRAKE_CONTROLS.released ? 'released' : demand > BRAKE_CONTROLS.deepOn ? 'deep' : 'gentle';
-      hide(drag, false); displayed = true;
-      const advised = !facts.recovering && !facts.inverted && !facts.collapse && !facts.stall &&
+      drag.dataset.active = String(active);
+      hide(drag, false); displayed = active;
+      const advised = active && !facts.recovering && !facts.inverted && !facts.collapse && !facts.stall &&
         (!facts.wingPhase || facts.wingPhase === 'flying') ? coachDragTarget(message, intent.pointerType, input, suggestion) : null;
       attr(find('[data-drag="gentle"]'), 'x', advised?.dx > 0 ? -T * 0.4 : T * 0.4);
       if (advised) {
+        const scale = T / dragTravel(intent.pointerType);
+        advised.dx *= scale; advised.dy *= scale;
         const x = layout.x + advised.dx, y = layout.y + advised.dy;
         Object.assign(targetBox, { left: x - 14, right: x + 14, top: y - 14, bottom: y + 14 });
         if (targetBox.left >= safe.left && targetBox.right <= safe.right && targetBox.top >= safe.top && targetBox.bottom <= safe.bottom && !obstacles.some(rect => overlapsCue(targetBox, rect))) {
@@ -255,5 +245,6 @@ export function createFlightCues({ element, stage, camera, reducedMotion = () =>
       }
     }
   }
-  return { update, reset, clearDrag };
+  return { update, reset, clearDrag,
+    overlapsControl: rect => !drag.hasAttribute('hidden') && overlapsCue(layout, rect) };
 }

@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PerspectiveCamera } from 'three';
-import { brakeDragPoint, brakeRegionPoints, coachDragTarget, createTravelCue, cueBrake, dragCueLayout, dragCuePoint, groundTurn, overlapsCue } from './flight-cues.js';
+import { brakeDragPoint, brakeRegionPoints, coachDragTarget, createTravelCue, cueBrake, dragCuePoint, dragTravel, flightControlLayout, groundTurn } from './flight-cues.js';
 import { createFlightView } from './flight-view.js';
 import { createFlight, stepFlight } from './flight.js';
-import { dragBrakes } from './brake-drag.js';
+import { createBrakeDrag, dragBrakes } from './brake-drag.js';
 import { actionMessage } from './coach-actions.js';
 import { createRecorder, frameInput, inputFrame } from './recorder.js';
 import { createFlightCoach } from './flight-coach.js';
@@ -163,6 +163,29 @@ test('the live dot can move upward and remains truthful when long gestures reach
   assert.ok(dragCuePoint(0, -60, 'touch').dy < -12, 'the old upward visual clamp is gone');
 });
 
+test('one fixed display size represents equivalent mouse, touch and pen gestures and coach targets', () => {
+  const displayTravel = 80;
+  for (const type of ['mouse', 'touch', 'pen']) {
+    const scale = displayTravel / dragTravel(type);
+    for (const dx of [-600, -120, -30, 0, 30, 120, 600]) for (const dy of [-600, -100, -10, 0, 60, 120, 600]) {
+      const physical = dragCuePoint(dx / scale, dy / scale, type);
+      const shown = dragCuePoint(dx, dy, 'touch');
+      close(physical.dx * scale, shown.dx); close(physical.dy * scale, shown.dy);
+      const expected = dragBrakes(dx / scale, dy / scale, type);
+      const actual = dragBrakes(physical.dx * scale, physical.dy * scale, 'touch');
+      close(actual.leftBrake, expected.leftBrake); close(actual.rightBrake, expected.rightBrake);
+    }
+    const messages = [circle('left'), circle('right'), easing(),
+      ...['left', 'right', 'brake', 'deep-brake', 'release-all'].map(action => actionMessage({ action }, direct()))];
+    for (const message of messages) {
+      const physical = coachDragTarget(message, type), shown = coachDragTarget(message, 'touch');
+      assert.ok(physical && shown);
+      close(physical.dx * scale, shown.dx); close(physical.dy * scale, shown.dy);
+      assert.equal(actionMessage(message, { ...direct(), ...dragBrakes(shown.dx, shown.dy, 'touch') }).accepted, true);
+    }
+  }
+});
+
 test('targets fade for a range of accepted pulls without requiring the exact suggested point', () => {
   const message = circle('left');
   assert.equal(coachDragTarget(message, 'mouse', direct(0.40, 0.15)).accepted, true);
@@ -186,37 +209,45 @@ test('ambiguous, preparation, urgent, recovery, Bar/Ears and unaccepted suggesti
   assert.ok(coachDragTarget(base), 'an instruction can return immediately after its suppression clears');
 });
 
-test('touch layout uses one safe offset above the finger; mouse origin stays at the press', () => {
-  const safe = { left: 12, right: 308, top: 12, bottom: 728 }, touch = { x: 40, y: 530, pointerType: 'touch' };
-  const obstacles = [{ left: 12, right: 145, top: 12, bottom: 150 }, { left: 16, right: 304, top: 540, bottom: 630 }];
-  const layout = dragCueLayout(touch, safe, obstacles);
-  assert.ok(layout.left >= safe.left && layout.right <= safe.right && layout.top >= safe.top && layout.bottom <= safe.bottom);
-  assert.ok(layout.y + layout.travel <= touch.y - 48, 'deep target clears the initial finger');
-  assert.equal(obstacles.some(rect => overlapsCue(layout, rect)), false);
-  const target = brakeDragPoint(cueBrake(0.5), 0.2, 'touch');
-  const offset = { x: layout.x - touch.x, y: layout.y - touch.y };
-  close(layout.x + target.dx, touch.x + target.dx + offset.x);
-  close(layout.y + target.dy, touch.y + target.dy + offset.y);
-  for (const x of [0, 320]) for (const y of [0, 740]) {
-    const edge = dragCueLayout({ x, y, pointerType: 'touch' }, safe);
-    assert.ok(edge.left >= safe.left && edge.right <= safe.right && edge.top >= safe.top && edge.bottom <= safe.bottom);
+test('the fixed flight control stays at the right inside desktop, phone and landscape safe bounds', () => {
+  for (const [width, height] of [[1280, 800], [390, 844], [320, 740], [844, 390], [1100, 760]]) {
+    const safe = Object.freeze({ left: 12, right: width - 12, top: 12, bottom: height - 12 });
+    const out = {}, layout = flightControlLayout(safe, out);
+    assert.equal(layout, out, 'rendering can reuse one bounded layout object');
+    assert.equal(layout.travel, 80, 'mouse, touch and hybrid use one graphic size');
+    assert.ok(layout.left >= safe.left && layout.right <= safe.right && layout.top >= safe.top && layout.bottom <= safe.bottom);
+    close(layout.right, safe.right);
+    assert.ok(layout.x > (safe.left + safe.right) / 2, 'the anchor is on the right');
+    assert.deepEqual(flightControlLayout({ ...safe }), layout, 'only the safe viewport determines the position');
   }
-  const mouse = dragCueLayout({ ...touch, pointerType: 'mouse' }, safe, obstacles);
-  assert.equal(mouse.x, touch.x); assert.equal(mouse.y, touch.y);
-  const landscapeHud = { left: 10, right: 659, top: 10, bottom: 114.58 };
-  const landscape = dragCueLayout({ x: 633, y: 270, pointerType: 'touch' },
-    { left: 12, right: 832, top: 12, bottom: 378 }, [landscapeHud, { left: 257, right: 587, top: 256, bottom: 368 }]);
-  assert.ok(landscape.y + landscape.travel <= 270 - 48, 'a wide landscape HUD cannot push the deep target onto the finger');
-  const handsUpPoint = coachDragTarget(actionMessage({ action: 'release-all' }, direct()), 'touch');
-  const handsUp = { left: landscape.x - 14, right: landscape.x + 14, top: landscape.y + handsUpPoint.dy - 14, bottom: landscape.y + handsUpPoint.dy + 14 };
-  assert.equal(overlapsCue(handsUp, landscapeHud), false, 'the upper neutral target clears the landscape HUD');
-  assert.equal(overlapsCue({ left: landscape.x - 28, right: landscape.x + 28, top: landscape.top + 4, bottom: landscape.top + 19 }, landscapeHud), false,
-    'the hands-up caption stays readable in landscape');
-  const releaseHud = { ...landscapeHud, bottom: 88.578125 };
-  const release = dragCueLayout({ x: 633, y: 270, pointerType: 'touch' },
-    { left: 12, right: 832, top: 12, bottom: 378 }, [releaseHud, { left: 257, right: 587, top: 231.265625, bottom: 368 }]);
-  assert.equal(overlapsCue({ left: release.x - 14, right: release.x + 14, top: release.y + handsUpPoint.dy - 14, bottom: release.y + handsUpPoint.dy + 14 }, releaseHud), false,
-    'the upper release target clears the measured landscape HUD');
+});
+
+test('the fixed flight control scales uniformly in unusually small safe rectangles', () => {
+  for (const [width, height] of [[150, 160], [240, 124], [60, 80], [44, 52]]) {
+    const safe = { left: 20, right: 20 + width, top: 30, bottom: 30 + height };
+    const layout = flightControlLayout(safe);
+    assert.ok(layout.travel >= 0 && layout.travel < 80);
+    assert.ok(layout.left >= safe.left - 1e-9 && layout.right <= safe.right + 1e-9 && layout.top >= safe.top - 1e-9 && layout.bottom <= safe.bottom + 1e-9);
+    close(layout.right - layout.left, layout.travel * 2 + 44);
+    close(layout.bottom - layout.top, layout.travel * 1.6 + 52);
+    for (const value of Object.values(layout)) assert.ok(Number.isFinite(value));
+  }
+});
+
+test('dragging from different screen positions uses the same relative dot inside the fixed control', () => {
+  const safe = { left: 12, right: 308, top: 12, bottom: 728 }, layout = flightControlLayout(safe);
+  const expected = dragCuePoint(-30, 45, 'touch');
+  for (const pointerType of ['mouse', 'touch', 'pen']) for (const [x, y] of [[0, 0], [160, 360], [320, 740], [300, 30]]) {
+    const adapter = createBrakeDrag(), physicalScale = dragTravel(pointerType) / layout.travel;
+    adapter.start({ button: 0, pointerId: 1, pointerType, clientX: x, clientY: y });
+    adapter.move({ pointerId: 1, clientX: x - 30 * physicalScale, clientY: y + 45 * physicalScale });
+    const shown = dragCuePoint(adapter.state.dx, adapter.state.dy, pointerType);
+    const scale = layout.travel / dragTravel(pointerType);
+    close(layout.x + shown.dx * scale, layout.x + expected.dx);
+    close(layout.y + shown.dy * scale, layout.y + expected.dy);
+    assert.equal(adapter.state.x, x); assert.equal(adapter.state.y, y, 'presentation preserves the true press origin');
+    assert.deepEqual(flightControlLayout(safe), layout, 'the pad stays fixed throughout the gesture');
+  }
 });
 
 test('varied render reads leave physical flight, coach and recorder state identical to unobserved flight', () => {

@@ -31,7 +31,14 @@ test('canonical brake frames quantize each hand once and preserve direct neutral
   assert.equal(frameInput(direct(0.9, 0.9, { ears: true })).leftBrake, 0);
   assert.equal(frameInput(direct(1 / 255, 0, { bar: true })).bar, false, 'even the smallest recorded pull beats the bar');
   assert.equal(frameInput(direct(0, 0, { bar: true })).bar, true);
-  assert.equal(frameInput(direct(NaN, Infinity)).leftBrake, 0);
+  for (const malformed of [NaN, Infinity, -Infinity, null, '0.5', {}, Symbol('brake')]) {
+    const released = frameInput(direct(malformed, malformed, { bar: true }));
+    assert.deepEqual([released.leftBrake, released.rightBrake, released.bar], [0, 0, true]);
+  }
+  const bounded = frameInput(direct(-5, 5));
+  assert.deepEqual([bounded.leftBrake, bounded.rightBrake], [0, 1]);
+  const threshold = frameInput(direct(0.5 / 255, 0.49 / 255));
+  assert.deepEqual([threshold.leftBrake, threshold.rightBrake], [1 / 255, 0]);
 });
 
 test('format 2 retains mixed controller modes, all brake depths and recorder storage beyond eight bits', () => {
@@ -47,10 +54,6 @@ test('format 2 retains mixed controller modes, all brake depths and recorder sto
   assert.deepEqual([...read.log.bits], frames);
   assert.equal(encodeLog(read.log, read.log.bits, read.log.steps), text);
   assert.throws(() => encodeLog({ ...meta, format: 1 }, frames, frames.length), RangeError);
-  const legacy = encodeLog({ ...meta, format: 1 }, [0, 20, 4], 3);
-  const old = decodeLog(legacy).log;
-  assert.equal(old.format, 1);
-  assert.equal(encodeLog(old, old.bits, old.steps), legacy);
 });
 
 test('every step of a noisy ten-minute independent brake run fits the shared browser/server bound', () => {
@@ -128,9 +131,8 @@ test('direct controls cannot bypass boundary or collapse authority and pumping r
   assert.deepEqual([world.controls.leftBrake, world.controls.rightBrake], [0, 0]);
 });
 
-test('run identities ignore log format for digital runs but preserve each direct depth and neutral mode', async () => {
-  const make = (bits, format = 2) => decodeLog(encodeLog({ ...meta, format }, bits, bits.length)).log;
-  assert.equal(await runId(make([0, 20, 4], 1)), await runId(make([0, 20, 4], 2)));
+test('run identities preserve each direct depth and neutral mode', async () => {
+  const make = bits => decodeLog(encodeLog(meta, bits, bits.length)).log;
   assert.notEqual(await runId(make([0])), await runId(make([direct()])));
   assert.notEqual(await runId(make([direct(0.3, 0.7)])), await runId(make([direct(0.3 + 1 / 255, 0.7)])));
 });
