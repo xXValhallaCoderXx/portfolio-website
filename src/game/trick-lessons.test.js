@@ -80,6 +80,20 @@ function fixture(learned = []) {
   return { lessons, done, frame, g, watch, style, step };
 }
 
+test('direct lesson setup waits for both hands up before requesting the deep pull', () => {
+  const f = fixture();
+  f.g.bank = 0; f.watch.calm = 2;
+  f.frame.input = { controlMode: 'brakes', leftBrake: .06, rightBrake: 0 };
+  f.step(1.5);
+  assert.equal(f.lessons.state.active, 'pitch');
+  assert.equal(f.lessons.state.phase, 'level');
+  f.frame.input.leftBrake = 0; f.step(.15);
+  assert.equal(f.lessons.state.phase, 'deep');
+  const message = f.step();
+  assert.match(message.title, /PULL BOTH BRAKES DEEP/);
+  assert.doesNotMatch(message.detail, /Double-tap|hold X/);
+});
+
 test('current height, separate terrain/fog clearance, useful stable lift and warnings gate lesson entry', () => {
   for (const [learned, height, reserve] of [[[], 500, 200], [['pitch'], 750, 250]]) {
     for (const blocked of ['height', 'terrain', 'fog', 'hazard', 'warning', 'gust', 'unstable', 'sink']) {

@@ -5,6 +5,7 @@
 // (swing-gauge.js) and the sounds read it. Kept small and free of page code: the fjord carries it.
 
 import { pitchPeak } from './flight.js';
+import { createControlSummary } from './brake-controls.js';
 
 // A move must exceed ordinary turning and brake transients. Completion requires the observed
 // alternating cycle or a deliberately shaped pitch caught with a fresh brake press. Near-peak
@@ -77,6 +78,7 @@ export function bandOf(bands, angle) {
  *                         turn swapped back from it since, or just before it came
  */
 export function createSwingWatch() {
+  const observeControls = createControlSummary();
   const state = {
     clock: 0, fronts: 0, backs: 0, front: 0, back: 0, frontAt: -Infinity, backAt: -Infinity, building: 0,
     catches: 0, caughtPeak: 0, caughtAt: -Infinity, brakeAt: -Infinity, pumping: 0, tops: 0, top: 0, topSide: 0, topAt: -Infinity, chain: 0, breaks: 0, broke: 0, calm: 0,
@@ -112,6 +114,7 @@ export function createSwingWatch() {
   let rollQuality = 1;
 
   function reset() {
+    observeControls.reset();
     state.clock = state.fronts = state.backs = state.front = state.back = state.building = 0;
     state.catches = state.caughtPeak = state.tops = state.top = state.topSide = state.chain = state.breaks = state.broke = state.calm = 0;
     state.timed = state.timedKind = state.wingTop = state.linking = state.pumping = state.looping = state.loops = 0;
@@ -156,6 +159,10 @@ export function createSwingWatch() {
    * what the pilot asked of it this step (flight.js's), for the hands on time; left out, none are.
    */
   function step(dt, g, struck = false, controls = null) {
+    // Only effective bilateral pulls count as pitch presses. Hysteresis keeps small analog
+    // movements around a threshold from manufacturing extra timing edges.
+    const summarized = observeControls.step(controls ?? {});
+    const effective = controls?.controlMode === 'brakes' ? summarized : controls;
     state.clock += dt;
     const now = state.clock;
     const measuredRate = g.rollRate ?? 0;
@@ -163,7 +170,7 @@ export function createSwingWatch() {
     if (controls && !controls.steered) {
       // A swap of the turn just after the wingover's top it answers, the way back from it. Flown
       // straight a while, the last turn is forgotten, and the next swaps nothing.
-      const turn = Math.sign(controls.turn);
+      const turn = controls.controlMode === 'brakes' ? Number(effective.right) - Number(effective.left) : Math.sign(effective.turn);
       if (turn !== 0 && Math.abs(g.bank) > WATCH.top) drivenAt = now;
       straightFor = turn === 0 ? straightFor + dt : 0;
       if (straightFor > WATCH.straight) way = 0;
@@ -176,7 +183,7 @@ export function createSwingWatch() {
         way = turn;
       }
       // A press just after a pitched swing peaks ahead, or a let-go just after it peaks behind.
-      const brake = !!controls.brake;
+      const brake = !!effective.brake || controls.controlMode === 'brakes' && braked && !effective.bothReleased;
       const pitched = state.building >= 1 && state.front >= WATCH.pumped;
       if (pitched && brake && !braked && state.frontAt > state.backAt && now - state.frontAt <= WATCH.pump) onTime(1, now, now - state.frontAt);
       if (pitched && !brake && braked && state.backAt > state.frontAt && now - state.backAt <= WATCH.pump) onTime(2, now, now - state.backAt);
@@ -215,7 +222,7 @@ export function createSwingWatch() {
     // one that turns back by itself, or tucks, was not.
     if (g.pitchRate < 0 && pitchPeak(g) < -WATCH.surge) surging = true;
     else if (surging && g.pitchRate >= 0) {
-      if (controls?.brake) {
+      if (effective?.brake) {
         state.catches += 1;
         state.caughtPeak = -g.pitch;
         state.caughtAt = now;

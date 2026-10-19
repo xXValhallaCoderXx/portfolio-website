@@ -1,5 +1,6 @@
 // The coach only presents resolved instructions and raw held inputs. It never changes flight.
 import { COACH_CONTROLS, controlHeld } from './coach-actions.js';
+import { summarizeControls } from './brake-controls.js';
 
 const clamp = (x) => Math.max(0, Math.min(1, Number.isFinite(x) ? x : 0));
 const write = (node, value) => { if (node.textContent !== value) node.textContent = value; };
@@ -43,11 +44,13 @@ export function createCoachView({ element, touch, touchMode = () => false, input
   function syncInputs(message, raw) {
     const hold = message?.hold ?? [], release = message?.release ?? [];
     const touchKeys = !!touchMode();
+    const direct = raw.controlMode === 'brakes', effective = direct ? summarizeControls(raw) : raw;
     let shown = false, heldAny = false;
     for (const item of chips) {
       const { name, chip, label, key, button } = item;
-      const pressed = controlHeld(raw, name);
-      const brake = name === 'brake', deep = brake && pressed && !!raw.deepBrake && !raw.ears;
+      const brake = name === 'brake';
+      const pressed = direct && brake ? effective.commonBrake > 0.04 || release.includes('brake') && effective.anyBrake : controlHeld(raw, name);
+      const deep = brake && pressed && (direct ? effective.maxBrake > 0.70 : !!raw.deepBrake) && !raw.ears;
       const requestedDepth = brake ? message?.brakeDepth ?? (message?.action === 'deep-brake' ? 'deep' : '') : '';
       const deepen = requestedDepth === 'deep' && !deep;
       const soften = requestedDepth === 'working' && deep;
@@ -58,12 +61,19 @@ export function createCoachView({ element, touch, touchMode = () => false, input
       if (chip.dataset.advice !== advice) chip.dataset.advice = advice;
       if (chip.dataset.held !== String(pressed)) chip.dataset.held = String(pressed);
       if (show) {
-        const nameLabel = deep ? 'deep brake' : COACH_CONTROLS[name].label;
-        const text = deepen ? pressed ? 'Release, then double-tap + hold' : 'Double-tap + hold brake'
+        const nameLabel = direct && brake ? effective.commonBrake > 0.04 ? deep ? 'both deep brakes' : 'both brakes' : 'the pull'
+          : deep ? 'deep brake' : COACH_CONTROLS[name].label;
+        const text = direct ? soften ? 'Ease the pull to working range'
+          : deepen ? 'Pull both brakes deeper'
+            : advice === 'release' ? pressed ? `Release ${nameLabel}` : `${nameLabel} released`
+              : name === 'left' || name === 'right' ? `${pressed ? 'Pulling' : 'Pull'} ${name} brake`
+                : `${pressed ? 'Holding' : 'Pull'} ${nameLabel}`
+          : deepen ? pressed ? 'Release, then double-tap + hold' : 'Double-tap + hold brake'
           : advice === 'release' ? pressed ? `Release ${nameLabel}` : `${nameLabel} released`
             : pressed ? `Holding ${nameLabel}` : `Hold ${nameLabel}`;
         write(label, text);
-        write(key, deepen ? touchKeys ? '▼ twice' : 'Space twice / X'
+        write(key, direct && ['left', 'right', 'brake'].includes(name) ? name === 'brake' ? 'drag down' : `drag ${name}`
+          : deepen ? touchKeys ? '▼ twice' : 'Space twice / X'
           : deep ? touchKeys ? '▼ deep' : 'X / Space twice' : COACH_CONTROLS[name][touchKeys ? 'touch' : 'keyboard']);
       }
       if (button) {

@@ -685,6 +685,25 @@ test('a flutter, a steer or rough air easing out toward nothing lands on it, so 
   assert.equal(glider.air.rough, 0, 'the roughness of the air');
 });
 
+test('direct brake travel moves only its own hand and trailing edge, then clears for keyboard poses', async () => {
+  const { glider, fly, calmed } = await hangGlider();
+  const draw = (leftBrake, rightBrake, controlMode = 'brakes') => {
+    const args = { flying: true, controlMode, leftBrake, rightBrake };
+    fly(4, args); return calmed(args);
+  };
+  const neutral = draw(0, 0);
+  const left = draw(0.3, 0), right = draw(0, 0.3);
+  assert.ok(left.handLeft < neutral.handLeft - 0.1);
+  assert.ok(Math.abs(left.handRight - neutral.handRight) < 1e-5, JSON.stringify({ left, right, neutral }));
+  assert.ok(right.handRight < neutral.handRight - 0.1);
+  assert.ok(Math.abs(right.handLeft - neutral.handLeft) < 1e-5);
+  assert.ok(Math.abs(left.edgeLeft - neutral.edgeLeft) > 0.05);
+  assert.ok(Math.abs(left.edgeRight - neutral.edgeRight) < 1e-5);
+  const legacy = draw(0.6, 0.6, 'legacy');
+  assert.ok(Math.abs(legacy.handLeft - neutral.handLeft) < 1e-5);
+  assert.ok(Math.abs(legacy.edgeRight - neutral.edgeRight) < 1e-5);
+});
+
 test('nothing it is handed, however wild, puts a number astray or turns an arm past where its skin tears', async () => {
   const { glider, surface } = await hangGlider();
   const turnOf = await turnReader();

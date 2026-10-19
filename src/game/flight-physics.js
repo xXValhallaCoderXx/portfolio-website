@@ -16,6 +16,7 @@ export const PHYSICS = Object.freeze({
   controls: Object.freeze({ bank: 0.66, gain: 1.2, damping: 0.08, relativeDamping: 0.3, relativeRelease: 1.575, differential: 0.55,
     reversal: 3, swingRate: 0.3, swingRateRange: 0.6, swingAngle: 0.7, swingAngleRange: 0.6,
     relativeBank: 0.75, relativeBankRange: 0.35, earsTake: 0.35, earsOpen: 0.7, earsBrake: 0.15, barTime: 0.3 }),
+  directBrakes: Object.freeze({ differentialLift: 0.065, differentialDrag: 0.1, dihedral: 2 }),
   coordination: Object.freeze({ bank: 0.52, gain: 1.6, damping: 0.12, steerTime: 0.15,
     take: 0.15, release: 0.25, turn: 0.2, rolloutBank: 0.08726646259971647,
     pressureTrim: 0.30, lean: 0.22 }),
@@ -82,6 +83,7 @@ export function makePhysics(pos) {
     pilot: { pos, vel: vec() },
     canopy: { pos: vec(), vel: vec(), q: { x: 0, y: 0, z: 0, w: 1 }, omega: vec() },
     physical: { steer: 0, differential: 0, brake: 0, brakeTarget: 0, deepBrake: false, bar: 0, ears: 0,
+      controlMode: 'legacy', leftBrake: 0, rightBrake: 0, leftBrakeTarget: 0, rightBrakeTarget: 0,
       acro: false, acroSteady: 0,
       coordination: 0, coordinated: 0, bankTarget: 0,
       orbit: 0, angle: 0, inverted: false, previousYaw: 0,
@@ -122,30 +124,37 @@ function forces(g, air, dt = 0) {
   const rvz = p.vel.z - c.vel.z - c.omega.x * arm.y + c.omega.y * arm.x;
   s.swingRate = ((dy * rvz - dz * rvy) * forward.x + (dz * rvx - dx * rvz) * forward.y +
     (dx * rvy - dy * rvx) * forward.z) / Math.max(1, dx * dx + dy * dy + dz * dz);
-  const reversingSwing = clamp(-s.angle * s.steer * H.reversal, 0, 1);
-  const energetic = s.acro ? Math.max(clamp((Math.abs(s.swingRate) - H.swingRate) / H.swingRateRange, 0, 1) * reversingSwing,
-    clamp((Math.abs(s.angle) - H.swingAngle) / H.swingAngleRange, 0, 1)) * Math.abs(s.steer) : 0;
-  // Brake and turn load the wing in a coordinated configuration. Its pitch trim, differential
-  // brake response and bank request change together; no force commands a trajectory or climb.
-  // Only explicit deep-brake intent opens energetic authority. Ordinary correction/reversal
-  // keeps the same bank controller even if momentum temporarily exceeds its requested bank.
-  s.coordinated = s.coordination * (1 - energetic);
-  s.bankTarget = s.steer * (H.bank + (K.bank - H.bank) * s.coordinated);
-  const error = Math.atan2(Math.sin(s.bankTarget - bank), Math.cos(s.bankTarget - bank));
-  const gain = H.gain + (K.gain - H.gain) * s.coordinated;
-  const rollDamping = H.damping + (K.damping - H.damping) * s.coordinated;
-  // The line rate comes from the pilot's velocity relative to the canopy attachment. Resist
-  // that swing during ordinary flight, with a little more damping as the steering eases out.
-  // Deep/acro flight keeps its existing momentum and maneuver authority.
-  const relativeDamping = s.acro ? 0 : H.relativeDamping * s.swingRate *
-    (1 + (H.relativeRelease - 1) * (1 - Math.abs(s.steer)));
-  s.differential = clamp(gain * (error * (1 - energetic) + s.steer * H.bank * energetic) -
-    rollDamping * rate * (1 - energetic) - relativeDamping, -H.differential, H.differential);
-  const lineLength = Math.sqrt(dx * dx + dy * dy + dz * dz);
-  const relativeBank = Math.atan2(((-dy * up.z + dz * up.y) * forward.x +
-    (-dz * up.x + dx * up.z) * forward.y + (-dx * up.y + dy * up.x) * forward.z) / lineLength,
-  -(up.x * dx + up.y * dy + up.z * dz) / lineLength);
-  if (s.differential * relativeBank > 0) s.differential *= clamp((H.relativeBank - Math.abs(relativeBank)) / H.relativeBankRange, 0, 1);
+  if (s.controlMode !== 'brakes') {
+    const reversingSwing = clamp(-s.angle * s.steer * H.reversal, 0, 1);
+    const energetic = s.acro ? Math.max(clamp((Math.abs(s.swingRate) - H.swingRate) / H.swingRateRange, 0, 1) * reversingSwing,
+      clamp((Math.abs(s.angle) - H.swingAngle) / H.swingAngleRange, 0, 1)) * Math.abs(s.steer) : 0;
+    // Brake and turn load the wing in a coordinated configuration. Its pitch trim, differential
+    // brake response and bank request change together; no force commands a trajectory or climb.
+    // Only explicit deep-brake intent opens energetic authority. Ordinary correction/reversal
+    // keeps the same bank controller even if momentum temporarily exceeds its requested bank.
+    s.coordinated = s.coordination * (1 - energetic);
+    s.bankTarget = s.steer * (H.bank + (K.bank - H.bank) * s.coordinated);
+    const error = Math.atan2(Math.sin(s.bankTarget - bank), Math.cos(s.bankTarget - bank));
+    const gain = H.gain + (K.gain - H.gain) * s.coordinated;
+    const rollDamping = H.damping + (K.damping - H.damping) * s.coordinated;
+    // The line rate comes from the pilot's velocity relative to the canopy attachment. Resist
+    // that swing during ordinary flight, with a little more damping as the steering eases out.
+    // Deep/acro flight keeps its existing momentum and maneuver authority.
+    const relativeDamping = s.acro ? 0 : H.relativeDamping * s.swingRate *
+      (1 + (H.relativeRelease - 1) * (1 - Math.abs(s.steer)));
+    s.differential = clamp(gain * (error * (1 - energetic) + s.steer * H.bank * energetic) -
+      rollDamping * rate * (1 - energetic) - relativeDamping, -H.differential, H.differential);
+    const lineLength = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const relativeBank = Math.atan2(((-dy * up.z + dz * up.y) * forward.x +
+      (-dz * up.x + dx * up.z) * forward.y + (-dx * up.y + dy * up.x) * forward.z) / lineLength,
+    -(up.x * dx + up.y * dy + up.z * dz) / lineLength);
+    if (s.differential * relativeBank > 0) s.differential *= clamp((H.relativeBank - Math.abs(relativeBank)) / H.relativeBankRange, 0, 1);
+  } else {
+    // Direct brake travel is authoritative. No bank target or automatic opposite-hand
+    // correction is synthesized; the local aerodynamic forces and suspension do the turning.
+    s.coordinated = s.bankTarget = 0;
+    s.differential = s.rightBrake - s.leftBrake;
+  }
   if (dt > 0) {
     const flow = s.flow;
     const avx = c.vel.x - wx, avy = c.vel.y - wy, avz = c.vel.z - wz;
@@ -179,10 +188,17 @@ function forces(g, air, dt = 0) {
       const incidenceNormal = normal + A.rollRelief * rate * side * C.span * A.spanSample;
       const alpha = Math.atan2(-incidenceNormal, along);
       alphaSum += alpha;
-      const differential = Math.max(0, side * s.differential);
-      const brake = s.brake + differential;
+      const direct = s.controlMode === 'brakes';
+      const brake = direct ? side < 0 ? s.leftBrake : s.rightBrake : s.brake + Math.max(0, side * s.differential);
+      const differential = direct ? brake - s.brake : Math.max(0, side * s.differential);
       const incidence = alpha - A.barIncidence * s.bar;
-      let cl = clamp(C.liftZero + C.liftSlope * incidence + A.brakeLift * s.brake - A.differentialLift * side * s.differential, 0, A.maxLift);
+      let cl = direct ? clamp(C.liftZero + C.liftSlope * incidence + A.brakeLift * s.brake -
+        C.directBrakes.differentialLift * differential, 0, A.maxLift) :
+        clamp(C.liftZero + C.liftSlope * incidence + A.brakeLift * s.brake - A.differentialLift * side * s.differential, 0, A.maxLift);
+      // Canopy dihedral turns a sideslip into restoring lift. It is a passive local
+      // aerodynamic response, not a bank target or an unrequested brake correction.
+      if (direct) cl = clamp(cl + side * C.directBrakes.dihedral *
+        (vx * right.x + vy * right.y + vz * right.z) / speed, 0, A.maxLift);
       const separated = Math.max(0, Math.abs(incidence) - A.separation);
       cl *= 1 / (1 + A.separationLoss * separated * separated);
       cl *= 1 - A.earsLift * s.ears;
@@ -190,13 +206,14 @@ function forces(g, air, dt = 0) {
       // reattaches. Without this transition the reduced rigid wing could get trapped in a
       // parachutal equilibrium even after all controls were released.
       if ((s.wingPhase === WING.exit || s.wingPhase === WING.surge || s.wingPhase === WING.opening) &&
-          s.brake < C.envelope.releaseBrake && along > 0 && incidence > C.envelope.attachedAngle)
+          (direct ? Math.max(s.leftBrake, s.rightBrake) : s.brake) < C.envelope.releaseBrake && along > 0 && incidence > C.envelope.attachedAngle)
         cl = Math.max(cl, C.envelope.reattachLift * (1 - A.earsLift * s.ears));
-      let cd = C.dragZero + C.induced * cl * cl + A.brakeDrag * brake * brake + C.steeringDrag * differential + A.earsDrag * s.ears +
+      let cd = C.dragZero + C.induced * cl * cl + A.brakeDrag * brake * brake +
+        (direct ? C.directBrakes.differentialDrag : C.steeringDrag) * differential + A.earsDrag * s.ears +
         A.separationDrag * clamp(separated, 0, 1);
       // Shift the pressure center smoothly to give the inflated wing a stable trim incidence.
       const pitchTrim = A.pressureTrim + K.pressureTrim * s.brake * Math.abs(s.steer) * s.coordinated;
-      let cp = -A.pressureStability * (alpha - pitchTrim) - A.pressureBrake * s.brake;
+      let cp = -A.pressureStability * (alpha - pitchTrim) - A.pressureBrake * (direct ? brake : s.brake);
       // The separated cloth has a broad drag polar and a different pressure centre. It can
       // support a descending reverse glide; no backwards velocity or sink rate is prescribed.
       const E = C.envelope, separatedFlow = s.separation;
@@ -324,12 +341,17 @@ function suspension(g, dt) {
 export function stepPhysics(g, controls, air, dt) {
   const C = PHYSICS;
   const s = g.physical, K = C.coordination;
+  const direct = controls.controlMode === 'brakes' && !controls.locked && !controls.steered;
+  const previousMode = s.controlMode;
+  s.controlMode = direct ? 'brakes' : 'legacy';
+  const left = direct && Number.isFinite(controls.leftBrake) ? clamp(controls.leftBrake, 0, 1) : 0;
+  const right = direct && Number.isFinite(controls.rightBrake) ? clamp(controls.rightBrake, 0, 1) : 0;
   // The host has already replaced manual steering for a strike or boundary intervention.
   const steerWant = clamp(controls.turn || 0, -1, 1);
-  const manual = !!controls.brake || !!controls.deepBrake;
+  const manual = direct ? left > 0 || right > 0 : !!controls.brake || !!controls.deepBrake;
   const earsRequested = controls.ears && !manual;
   const barRequested = controls.bar && !manual && !controls.ears;
-  s.deepBrake = !!controls.deepBrake;
+  s.deepBrake = direct ? Math.max(left, right) * C.deepBrake > C.brake + 1e-9 : !!controls.deepBrake;
   if (controls.locked || controls.steered) { s.acro = false; s.acroSteady = 0; }
   else if (s.deepBrake) { s.acro = true; s.acroSteady = 0; }
   else if (s.acro) {
@@ -339,19 +361,37 @@ export function stepPhysics(g, controls, air, dt) {
     s.acroSteady = steady ? s.acroSteady + dt : 0;
     if (s.acroSteady >= A.steady) { s.acro = false; s.acroSteady = 0; }
   }
-  const available = !controls.locked && !controls.steered && !barRequested && !earsRequested && !g.loop;
-  const requested = available && manual && !s.deepBrake && Math.abs(steerWant) > K.turn;
-  // Keep the coordinated controller through a hands-up rollout, then ease back to normal.
-  // Releasing only the brake while holding a direction returns to the ordinary turn.
-  const rollingOut = available && s.coordination > 0 && Math.abs(steerWant) <= K.turn && Math.abs(g.bank || 0) > K.rolloutBank;
-  const coordinationWant = requested || rollingOut ? 1 : 0;
-  s.coordination += (coordinationWant - s.coordination) * Math.min(1, dt / (coordinationWant ? K.take : K.release));
-  const steerTime = (C.steerTime + (K.steerTime - C.steerTime) * s.coordination) *
-    (steerWant === 0 ? C.steerRelease : 1);
-  s.steer += (steerWant - s.steer) * Math.min(1, dt / steerTime);
-  const brakeWant = controls.locked ? 0 : s.deepBrake ? C.deepBrake : manual ? C.brake : 0;
-  s.brakeTarget = brakeWant;
-  s.brake += (brakeWant - s.brake) * Math.min(1, dt / (brakeWant > s.brake ? C.brakeTake : C.brakeRelease));
+  if (direct) {
+    if (previousMode !== 'brakes') {
+      s.leftBrake = clamp(s.brake + Math.max(0, -s.differential), 0, C.deepBrake);
+      s.rightBrake = clamp(s.brake + Math.max(0, s.differential), 0, C.deepBrake);
+    }
+    s.leftBrakeTarget = left * C.deepBrake;
+    s.rightBrakeTarget = right * C.deepBrake;
+    s.leftBrake += (s.leftBrakeTarget - s.leftBrake) * Math.min(1, dt /
+      (s.leftBrakeTarget > s.leftBrake ? C.brakeTake : C.brakeRelease));
+    s.rightBrake += (s.rightBrakeTarget - s.rightBrake) * Math.min(1, dt /
+      (s.rightBrakeTarget > s.rightBrake ? C.brakeTake : C.brakeRelease));
+    s.brakeTarget = Math.min(s.leftBrakeTarget, s.rightBrakeTarget);
+    s.brake = Math.min(s.leftBrake, s.rightBrake);
+    s.steer = (s.rightBrake - s.leftBrake) / C.deepBrake;
+    s.coordination = 0;
+  } else {
+    const available = !controls.locked && !controls.steered && !barRequested && !earsRequested && !g.loop;
+    const requested = available && manual && !s.deepBrake && Math.abs(steerWant) > K.turn;
+    // Keep the coordinated controller through a hands-up rollout, then ease back to normal.
+    // Releasing only the brake while holding a direction returns to the ordinary turn.
+    const rollingOut = available && s.coordination > 0 && Math.abs(steerWant) <= K.turn && Math.abs(g.bank || 0) > K.rolloutBank;
+    const coordinationWant = requested || rollingOut ? 1 : 0;
+    s.coordination += (coordinationWant - s.coordination) * Math.min(1, dt / (coordinationWant ? K.take : K.release));
+    const steerTime = (C.steerTime + (K.steerTime - C.steerTime) * s.coordination) *
+      (steerWant === 0 ? C.steerRelease : 1);
+    s.steer += (steerWant - s.steer) * Math.min(1, dt / steerTime);
+    const brakeWant = controls.locked ? 0 : s.deepBrake ? C.deepBrake : manual ? C.brake : 0;
+    s.brakeTarget = brakeWant;
+    s.brake += (brakeWant - s.brake) * Math.min(1, dt / (brakeWant > s.brake ? C.brakeTake : C.brakeRelease));
+    s.leftBrakeTarget = s.rightBrakeTarget = brakeWant;
+  }
   const earsWant = !controls.locked && earsRequested ? 1 : 0;
   s.ears += (earsWant - s.ears) * Math.min(1, dt / (manual ? C.controls.earsBrake : earsWant ? C.controls.earsTake : C.controls.earsOpen));
   const barWant = !controls.locked && barRequested ? 1 : 0;
@@ -392,6 +432,10 @@ export function stepPhysics(g, controls, air, dt) {
     quantizeVector(p.pos); quantizeVector(c.pos); quantizeVector(p.vel); quantizeVector(c.vel); quantizeVector(c.omega);
     s.inflation = quantize(s.inflation); s.separation = quantize(s.separation);
     c.q.x = quantize(c.q.x); c.q.y = quantize(c.q.y); c.q.z = quantize(c.q.z); c.q.w = quantize(c.q.w);
+  }
+  if (!direct) {
+    s.leftBrake = s.brake + Math.max(0, -s.differential);
+    s.rightBrake = s.brake + Math.max(0, s.differential);
   }
   return g;
 }

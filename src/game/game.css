@@ -43,6 +43,28 @@
 .fj-thermal-track { display: block; align-self: center; height: 4px; overflow: hidden; border-radius: 2px; background: #564b37; }
 .fj-thermal-track i { display: block; height: 100%; background: #ffe6b0; transform: scaleX(0); transform-origin: left; }
 
+.fj-brake-pair { display: flex; gap: 8px; color: #a7dce5; font-size: 9px; line-height: 1.5; }
+.fj-brake-pair[hidden] { display: none; }
+.fj-brake-pair > span { display: flex; align-items: center; gap: 4px; }
+.fj-brake-pair [role='meter'] { position: relative; display: block; width: 40px; height: 6px; overflow: hidden; border-radius: 2px; background: #264451; }
+.fj-brake-pair [role='meter']::after { content: ''; position: absolute; left: 66.667%; top: 0; bottom: 0; border-left: 1px solid #e4faff; opacity: .8; }
+.fj-brake-pair i { display: block; height: 100%; transform: scaleX(0); transform-origin: left; background: #5ee6ff; }
+.fj-brake-pair [data-depth='deep'] i { background: #d3b3ff; }
+.fj-brake-drag { position: absolute; width: 36px; height: 36px; margin: -18px; border: 1px solid rgba(157,222,238,.65); border-radius: 50%; pointer-events: none; background: rgba(6,15,27,.25); z-index: 1; }
+.fj-brake-drag i { position: absolute; width: 12px; height: 12px; top: 11px; left: 11px; border: 1px solid #baf5ff; border-radius: 50%; background: #387482; }
+.fj-brake-drag[hidden], .fj-drag-tip[hidden] { display: none; }
+.fj-drag-tip { display: none; position: absolute; left: 18px; pointer-events: none; color: #b9d9e7; font-size: 11px; line-height: 1.6; }
+.cloudbase .fj-drag-tip:not([hidden]) { display: inline; }
+.fj-drag-tip small { font-size: 9px; color: #8aa4bb; }
+.brake-dragging .fj-scene { cursor: grabbing; }
+.cloudbase .fj-scene { touch-action: none; user-select: none; }
+.fj-pointer-help { display: none; }
+.cloudbase .fj-pointer-help { display: block; color: #b9d9e7; text-transform: none; letter-spacing: normal; }
+@media (pointer: fine) and (min-width: 561px) {
+  .cloudbase.playing .fj-touch { display: flex; justify-content: flex-end; bottom: 24px; }
+  .cloudbase .fj-touch-steering, .cloudbase .fj-touch [data-input='brake'] { display: none; }
+}
+
 .fj-hud nav {
   position: absolute;
   top: 16px;

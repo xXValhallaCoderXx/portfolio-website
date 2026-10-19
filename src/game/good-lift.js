@@ -9,7 +9,7 @@ import { ORDER, createCloudbase } from './cloudbase.js';
 import { runEffects } from './run-effects.js';
 import { pitchPeak } from './flight.js';
 import { CATCH } from './pilots.js';
-import { createRunWorld, finishRun, startRun, stepBits } from './run-step.js';
+import { createRunWorld, finishRun, startRun, stepFrame } from './run-step.js';
 import { createWindStreaks } from './wind-streaks.js';
 import { MEET, PLATE_KIND, createMeet } from './meet-state.js';
 import { BELLS, BELL_PHASE, BELL_RESULT, createBells } from './bells.js';
@@ -30,7 +30,7 @@ import { verseFor } from './meet-verse.js';
 import { isBlocked } from './meet-initials.js';
 import { SIM_VERSION } from './sim-version.js';
 import { isJudgedEnding } from './run-rules.js';
-import { createRecorder, decodeLog, encodeLog, inputBits } from './recorder.js';
+import { createRecorder, decodeLog, encodeLog, inputFrame } from './recorder.js';
 import { replayLog } from './replay.js';
 import { createReplayWork } from './replay-work.js';
 import { STYLE, createStyle } from './meet-style.js';
@@ -122,7 +122,8 @@ const BRIEF_MARKUP = /* html */ `
   <div class="fj-brief" role="note" aria-label="How Good Lift is flown" hidden>
     <small></small>
     <b>GOOD LIFT</b>
-    <p>Climb in the thermals the ravens circle: hold one direction + normal brake. Brake slows the wing and tightens the circle; rising air provides lift. Deep brake is unnecessary here. Three white lights bank the bar at each 150 m line. Plates add optional bonus kg; the fog rises under you.</p>
+    <p>Hold and drag on the flight view: left or right pulls that brake; down pulls both. Blend a gentle downward and side pull to circle in lift. Release the mouse or lift your finger for hands up. Full pulls can stall.</p>
+    <p>Climb in the thermals the ravens circle. With keys or buttons, hold one direction + normal brake. Brake slows the wing; rising air provides lift. Three white lights bank the bar at each 150 m line. Plates add optional bonus kg; the fog rises under you.</p>
     <dl class="fj-brief-keys">
       <dt>← →</dt><dd>turn</dd>
       <dt>space</dt><dd>brake: hold to slow and tighten a turn; double-tap and hold, or hold X, for deep brake</dd>
@@ -455,7 +456,7 @@ export function createGoodLift(host) {
     saidTimer = setTimeout(() => (saidEl.textContent = `Good Lift. ${label}.${full ? ` ${rival ? line : 'The opener is at 150 metres.'}` : ''}`), 120);
   }
 
-  /** One recorded fixed step with the five fixed control actions. */
+  /** Quantize once, then record and fly precisely the same fixed-step controls. */
   function step(dt, input) {
     // Record resolved brake depth, so replays do not depend on gesture or device timing.
     asked.left = input.left;
@@ -464,10 +465,13 @@ export function createGoodLift(host) {
     asked.brake = input.brake;
     asked.deepBrake = input.deepBrake;
     asked.ears = input.ears;
-    const bits = inputBits(asked);
+    asked.controlMode = input.controlMode;
+    asked.leftBrake = input.leftBrake;
+    asked.rightBrake = input.rightBrake;
+    const bits = inputFrame(asked);
     if (!recorder.push(bits)) whole = false;
     last.collapsed = sky.state.pilot.collapse > 0;
-    const ended = stepBits(world, bits);
+    const ended = stepFrame(world, bits);
     last.outside = !sky.inside(g.pos);
     const { pilot, elapsed } = sky.state;
     const thrown = bells.state;

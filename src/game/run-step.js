@@ -8,6 +8,8 @@ import { CLOUD_GATE, CLOUD_STRIKE, CLOUD_ZONE } from './cloudbase-state.js';
 import { surfaceAt } from './ground.js';
 import { createSwingWatch } from './swing-watch.js';
 import { RUN_RULES } from './run-rules.js';
+import { frameInput } from './recorder.js';
+import { createControlSummary } from './brake-controls.js';
 
 // Seconds a run is stepped by, everywhere. Touching down within `ground` metres of the surface
 // ends a run, ring or not.
@@ -34,7 +36,7 @@ const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
  *   tucks   front tucks this run: surges left uncaught past the wing's line
  *   pump    the brake held into the fold so far (s) and the pumps it has had (`held`, `n`)
  *   steps   fixed steps flown this run
- *   intent  what stepBits last asked of the wing ({ turn, brake, deepBrake, bar, ears }): one object, reused
+ *   intent  what stepFrame/stepBits last asked of the wing, including the direct brake pair
  *   trace   the barogram: `alt`, `fog` and `total` (m, m, kg) for each second flown, `n` of them
  */
 export function createRunWorld({
@@ -57,9 +59,10 @@ export function createRunWorld({
     stalls: 0,
     tucks: 0,
     pump: { held: 0, n: 0 },
+    controlSummary: createControlSummary(),
     steps: 0,
     ended: '',
-    intent: { turn: 0, brake: false, deepBrake: false, bar: false, ears: false },
+    intent: { turn: 0, brake: false, deepBrake: false, bar: false, ears: false, controlMode: 'legacy', leftBrake: 0, rightBrake: 0 },
     trace: {
       alt: new Float32Array(TRACE.length), fog: new Float32Array(TRACE.length), total: new Float32Array(TRACE.length), n: 0,
     },
@@ -91,13 +94,17 @@ export function startRun(world, seed) {
     ridge: 0, lee: 0, thermal: 0, crestHeight: 0, ambientX: 0, ambientZ: 0 });
   Object.assign(world.forces, { lift: 0, sink: 0, liftSide: 0, windX: 0, windY: 0, windZ: 0, hazardSink: 0, rough: 0,
     ridge: 0, lee: 0, thermal: 0, crestHeight: 0, ambientX: 0, ambientZ: 0 });
-  Object.assign(world.controls, { turn: 0, brake: false, deepBrake: false, bar: false, ears: false, locked: false, steered: false, climb: null });
+  Object.assign(world.controls, { turn: 0, brake: false, deepBrake: false, bar: false, ears: false, locked: false, steered: false, climb: null,
+    controlMode: 'legacy', leftBrake: 0, rightBrake: 0 });
   world.hook = 1;
   world.struck = world.stalls = world.tucks = world.steps = 0;
   world.ended = '';
   world.pump.held = world.pump.n = 0;
+  world.controlSummary.reset();
   world.intent.turn = 0;
   world.intent.brake = world.intent.deepBrake = world.intent.bar = world.intent.ears = false;
+  world.intent.controlMode = 'legacy';
+  world.intent.leftBrake = world.intent.rightBrake = 0;
   world.bells?.reset(seed);
   world.meet?.reset();
   world.watch.reset();
@@ -112,24 +119,32 @@ export function startRun(world, seed) {
 }
 
 /**
- * Flies one step of `dt` seconds with the pilot asking for `intent` ({ turn from -1 to 1, brake,
- * deepBrake, bar, ears }). Returns 'fog', 'landed' or 'time' when the run ends on this step, and null while it goes on.
+ * Flies one step with legacy intent ({ turn from -1 to 1, brake, deepBrake, bar, ears }) or
+ * { controlMode: 'brakes', leftBrake, rightBrake, bar, ears }, with normalized independent depths.
+ * Returns 'fog', 'landed' or 'time' on the ending step, and null while the run goes on.
  */
 export function stepRun(world, intent, dt = RUN.step) {
   if (world.ended) return world.ended;
   if (!(dt > 0) || !Number.isFinite(dt) || !world.sky.state.active) return null;
   const { sky, g, controls, air, forces, pump } = world;
+  const direct = intent.controlMode === 'brakes';
+  const effective = direct ? world.controlSummary.step(intent) : intent;
+  if (!direct) world.controlSummary.reset();
   const pilot = sky.state.pilot;
   // A folded wing is pumped open: each time the brake has been held long enough and is let go, the
   // fold is that much shorter, a few times at most. Counted before the fold is read, so a pump that
   // opens the wing gives the hands back on this very step.
   if (pilot.collapse > 0) {
-    if (!intent.ears && (intent.brake || intent.deepBrake)) {
+    if (!effective.ears && (direct ? effective.commonBrake >= 0.5 : effective.brake || effective.deepBrake)) {
       pump.held += dt;
     } else {
       // A hold is a whole number of steps, given half a step to spare as the clock sums them.
-      if (pump.held >= CLOUD_STRIKE.pump.hold - dt / 2 && pump.n < CLOUD_STRIKE.pump.most && sky.reopen(CLOUD_STRIKE.pump.cut)) pump.n += 1;
-      pump.held = 0;
+      const qualified = pump.held >= CLOUD_STRIKE.pump.hold - dt / 2;
+      const released = !direct || effective.bothReleased;
+      if (released && qualified && pump.n < CLOUD_STRIKE.pump.most && sky.reopen(CLOUD_STRIKE.pump.cut)) pump.n += 1;
+      // A continuous pull passes through partial travel while easing. Keep a completed hold
+      // until both hands release; one hand alone can neither qualify nor finish another pump.
+      if (released || effective.ears || !qualified) pump.held = 0;
     }
   } else {
     pump.held = pump.n = 0;
@@ -138,15 +153,18 @@ export function stepRun(world, intent, dt = RUN.step) {
   // of the sky the wind turns the glider back in, whatever else is happening.
   const collapsed = pilot.collapse > 0;
   const outside = !sky.inside(g.pos);
-  let turn = intent.turn;
+  let turn = effective.turn;
   if (collapsed) turn = world.hook * FLIGHT.turn.hook;
   if (outside) turn = clamp(wrapAngle(Math.atan2(CLOUD_ZONE.x - g.pos.x, -(CLOUD_ZONE.z - g.pos.z)) - g.yaw) * 2, -1, 1);
   controls.turn = turn;
-  controls.ears = !!intent.ears;
-  controls.deepBrake = !controls.ears && !!intent.deepBrake;
-  controls.brake = !controls.ears && !!(intent.brake || controls.deepBrake);
+  controls.ears = !!effective.ears;
+  controls.deepBrake = !controls.ears && !!effective.deepBrake;
+  controls.brake = !controls.ears && !!(effective.brake || controls.deepBrake);
   // An ineffective held bar cannot change configuration or rollout while the brake wins.
-  controls.bar = !controls.brake && !controls.ears && !!intent.bar;
+  controls.bar = !controls.brake && !controls.ears && !!effective.bar;
+  controls.controlMode = direct && !collapsed && !outside ? 'brakes' : 'legacy';
+  controls.leftBrake = controls.controlMode === 'brakes' && !controls.ears ? effective.leftBrake : 0;
+  controls.rightBrake = controls.controlMode === 'brakes' && !controls.ears ? effective.rightBrake : 0;
   controls.locked = collapsed;
   // Assisted boundary recovery cannot earn a maneuver.
   controls.steered = outside;
@@ -205,8 +223,8 @@ export function stepRun(world, intent, dt = RUN.step) {
  * at once retains the keyboard's speed-bar shortcut, held straight. Touch controls have a
  * dedicated bar and ears, and the run a log replays never depends on its device. The
  * ears take the bar's own bit, not that chord: both ways with the brake is still the brake. This is
- * the one way live play and replays fly a run; the reference pilots, which steer by degrees, call
- * stepRun. Returns what stepRun returns.
+ * digital entry retained for callers; live play and replay use stepFrame, while reference pilots
+ * that steer by degrees call stepRun. Returns what stepRun returns.
  */
 export function stepBits(world, bits) {
   const { intent } = world;
@@ -219,7 +237,15 @@ export function stepBits(world, bits) {
   intent.deepBrake = !ears && (bits & 16) !== 0;
   intent.brake = !ears && ((bits & 4) !== 0 || intent.deepBrake);
   intent.bar = !ears && !intent.brake && (both || (bits & 8) !== 0);
+  intent.controlMode = 'legacy';
+  intent.leftBrake = intent.rightBrake = 0;
   return stepRun(world, intent, RUN.step);
+}
+
+/** Canonical fixed-step entry for both legacy actions and quantized independent brakes. */
+export function stepFrame(world, frame) {
+  frameInput(frame, world.intent);
+  return stepRun(world, world.intent, RUN.step);
 }
 
 /**

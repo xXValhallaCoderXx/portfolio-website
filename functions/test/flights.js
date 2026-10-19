@@ -4,12 +4,12 @@
 // came to. The tests hold what the function makes of a run up against that sheet. They never pin
 // what a pilot lifts, which every SIM_VERSION changes.
 import { TST, createReferenceKeys } from '../../src/game/pilots.js';
-import { createRunWorld, finishRun, startRun, stepBits } from '../../src/game/run-step.js';
+import { createRunWorld, finishRun, startRun, stepBits, stepFrame } from '../../src/game/run-step.js';
 import { createCloudbaseRun } from '../../src/game/cloudbase-state.js';
 import { createMeet } from '../../src/game/meet-state.js';
 import { createBells } from '../../src/game/bells.js';
 import { summariseRun } from '../../src/game/meet-sheet.js';
-import { INPUT, MAX_STEPS, createRecorder, decodeLog, encodeLog, inputBits } from '../../src/game/recorder.js';
+import { INPUT, MAX_STEPS, createRecorder, decodeLog, encodeLog, inputBits, inputFrame } from '../../src/game/recorder.js';
 import { seedFor } from '../../src/game/daily.js';
 import { SIM_VERSION } from '../../src/game/sim-version.js';
 
@@ -20,6 +20,8 @@ export const PILOTS = Object.freeze({
   collector: () => createReferenceKeys({ ...TST, collect: true }, { hold: 7 }), // TST, fetching every trail of plates
   landing: () => () => INPUT.right | INPUT.bar, // a manual turn onto terrain in the test day's sky
   bar: () => () => INPUT.bar, // straight off the gate on the speed bar, carried by that day's weather
+  analog: () => world => world.steps % 420 < 20 ? 0 : inputFrame({ controlMode: 'brakes',
+    leftBrake: 0.1 + 0.06 * Math.sin(world.steps / 55), rightBrake: 0.1 - 0.06 * Math.sin(world.steps / 55) }),
 });
 
 /**
@@ -36,7 +38,7 @@ export function fly(day, pilot, { initials = 'REN', quit = MAX_STEPS } = {}) {
   while (!reason && recorder.steps < quit) {
     const bits = bitsOf(world);
     recorder.push(bits);
-    reason = stepBits(world, bits);
+    reason = stepFrame(world, bits);
   }
   reason ??= 'quit';
   finishRun(world, reason);

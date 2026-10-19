@@ -127,6 +127,14 @@ test('a named run of the Daily Sky goes on the world board as its replay came to
   assert.deepEqual(asked.body, { ok: true, board: { version: SIM_VERSION, day: DAY, rows: [row] } });
 });
 
+test('the server verifies quantized independent brakes and mixed digital steps against the exact live result', async () => {
+  const flight = fly(DAY, 'analog');
+  const fn = service();
+  const response = await fn.send(flight.text);
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body.board.rows, [await rowOf(flight)]);
+});
+
 test('a run that ended by touching down ranks as one the fog ended, and yesterday\'s sky is still taken today', async () => {
   const { landing: bar, yesterday } = runs();
   assert.equal(bar.sheet.reason, 'landed', 'this actual touchdown must rank');

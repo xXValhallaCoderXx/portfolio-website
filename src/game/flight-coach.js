@@ -2,6 +2,7 @@
 import { actionMessage } from './coach-actions.js';
 import { WATCH } from './swing-watch.js';
 import { pitchPeak, WING } from './flight.js';
+import { createControlSummary } from './brake-controls.js';
 
 const DEG = Math.PI / 180;
 const names = ['', 'PITCH & CATCH', 'WINGOVER', 'INVERSION'];
@@ -15,6 +16,7 @@ const empty = Object.freeze({});
 
 /** Raw inputs and observed physical phases determine one shared text/highlight instruction. */
 export function createFlightCoach() {
+  const observeControls = createControlSummary();
   let message = null, clock = 0, initialized = false, lastDirection = 0, lastDirectionAt = -Infinity;
   let reversedAt = -Infinity, brakeWas = false, brakeAt = -Infinity, brakeEdges = 0;
   let neutralFor = 0, wing = false, pitch = false, pitchShaping = false, recovering = false, inverted = false, surge = false;
@@ -27,6 +29,7 @@ export function createFlightCoach() {
     answeredTopAt = -Infinity;
   }
   function reset() {
+    observeControls.reset();
     clearIntent();
     message = null; initialized = false; clock = neutralFor = brakeEdges = seenMoves = seenBreaks = 0;
     lastDirection = 0; brakeWas = false;
@@ -35,10 +38,12 @@ export function createFlightCoach() {
   }
 
   function step(dt, frame) {
-    const { g, watch, style, gauge = empty, input = empty, maneuverPolicy = 'reactive' } = frame;
+    const { g, watch, style, gauge = empty, input: rawInput = empty, maneuverPolicy = 'reactive' } = frame;
     if (frame.eligible === false || !g || !watch) { reset(); return null; }
     const now = Number.isFinite(watch.clock) ? watch.clock : clock + dt;
     if (now < clock) reset();
+    const summarized = observeControls.step(rawInput);
+    const input = rawInput.controlMode === 'brakes' ? summarized : rawInput;
     clock = now;
     if (!initialized) {
       seenMoves = watch.moves ?? 0; seenBreaks = watch.breaks ?? 0; initialized = true;
@@ -78,7 +83,7 @@ export function createFlightCoach() {
       return undefined;
     }
     function emit(fields) {
-      message = actionMessage({ ...fields, feedback: feedback() ?? fields.feedback }, input);
+      message = actionMessage({ ...fields, feedback: feedback() ?? fields.feedback }, rawInput);
       return message;
     }
     function recover(reason = surge ? 'Catch the forward surge, then let the wing settle.' : 'Let the wing settle before adding another turn.') {

@@ -27,6 +27,27 @@ test('amplitude bands distinguish ordinary turns from deliberate maneuver motion
   assert.equal(bandOf(BANDS.roll, 60 * DEG), 2);
   assert.equal(bandOf(BANDS.roll, 90 * DEG), 4);
 });
+test('direct input hysteresis ignores tiny turn jitter and partial one-hand pitch releases', () => {
+  const f = fixture();
+  Object.assign(f.controls, { controlMode: 'brakes', leftBrake: .1, rightBrake: 0 });
+  f.step();
+  const unchanged = f.watch.state.swappedAt;
+  for (let tick = 0; tick < 30; tick++) {
+    f.controls.leftBrake = tick % 2 ? .061 : .059;
+    f.controls.rightBrake = .06; f.step();
+  }
+  assert.equal(f.watch.state.swappedAt, unchanged);
+  f.controls.leftBrake = f.controls.rightBrake = .3; f.step();
+  const pressedAt = f.watch.state.brakeAt;
+  for (let tick = 0; tick < 30; tick++) {
+    f.controls.leftBrake = tick % 2 ? .061 : .059;
+    f.controls.rightBrake = .3; f.step();
+  }
+  assert.equal(f.watch.state.brakeAt, pressedAt, 'one hand still down cannot create a pitch-release timing edge');
+  f.controls.leftBrake = f.controls.rightBrake = 0; f.step();
+  assert.ok(f.watch.state.brakeAt > pressedAt);
+  assert.equal(f.watch.state.timed, 0); assert.equal(f.watch.state.moves, 0);
+});
 test('a complete alternating wingover cycle emits one move, without recrediting its runup', () => {
   const { watch, cycle, leg } = fixture();
   cycle();

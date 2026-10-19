@@ -6,6 +6,7 @@ import { glideDuration, glidePathClear, movingLiftIntercept } from './glide-math
 import { createLiftActivity, ridgeTangent } from './lift-activity.js';
 import { createSoaringTurn } from './soaring-turn.js';
 import { createRidgeTransfer } from './ridge-transfer.js';
+import { summarizeControls } from './brake-controls.js';
 
 export const LIFT_GUIDE = Object.freeze({
   searchEvery: 0.25, distances: Object.freeze([24, 48, 72, 96]),
@@ -407,7 +408,7 @@ export function createLiftGuide(adapter) {
     currentInput = input;
     const air = facts.air ?? { ...sample(g.pos) };
     // Active flight/recovery coaching has precedence. Do not advertise a route through a swing.
-    if (facts.suspended || facts.eligible === false || input.deepBrake || g.deepBrake || g.acro ||
+    if (facts.suspended || facts.eligible === false || summarizeControls(input).deepBrake || g.deepBrake || g.acro ||
         g.stall > 0 || g.tuck > 0 || g.ears > 0.1 || Math.abs(g.bank || 0) > 0.9 || Math.abs(g.pitch || 0) > 0.7) {
       reset(); return null;
     }

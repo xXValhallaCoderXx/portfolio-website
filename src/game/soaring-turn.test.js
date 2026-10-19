@@ -26,6 +26,28 @@ const controls = dir => ({ turn: dir, brake: true, bar: false, ears: false });
 const raw = dir => ({ left: dir < 0, right: dir > 0, brake: true });
 const wrap = angle => Math.atan2(Math.sin(angle), Math.cos(angle));
 
+test('direct gentle turns forecast the held brake pair and release both to level', () => {
+  for (const dir of [-1, 1]) {
+    const adapter = field(), { g, air } = flying(adapter), turn = createSoaringTurn(adapter);
+    const input = Object.freeze({ controlMode: 'brakes', leftBrake: dir < 0 ? .30 : 0, rightBrake: dir > 0 ? .30 : 0 });
+    const before = structuredClone(g);
+    const result = turn.step(STEP, { g, air, input, clock: 0, activity: 'navigating' });
+    assert.equal(result.supported, true);
+    assert.equal(result.forecast.safe, true);
+    assert.equal(result.message.accepted, true);
+    assert.deepEqual(g, before, 'forecast does not fly the real wing');
+    for (let tick = 1; tick < 240; tick++) {
+      stepFlight(g, input, air, STEP);
+      turn.step(STEP, { g, air, input, clock: tick * STEP, activity: 'navigating' });
+    }
+    const neutral = { controlMode: 'brakes', leftBrake: 0, rightBrake: 0 };
+    const release = turn.step(STEP, { g, air, input: neutral, clock: 4, activity: 'navigating' });
+    assert.equal(release.phase, 'rollout');
+    assert.match(release.message.title, /HANDS UP/);
+    assert.equal(release.message.accepted, true);
+  }
+});
+
 // Establish the actual wing along a real cliff before asking for its return. No position,
 // velocity or weather diagnostic is changed after launch; the same sampler feeds the forecast.
 function ridgeFlight(side, speed) {

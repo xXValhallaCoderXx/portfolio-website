@@ -43,6 +43,13 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
   deliberate descent. Release ears, then brake to reopen faster. Both steering keys together
   remain a keyboard shortcut for the bar. Touch has five fixed buttons: left, right, brake, bar,
   ears. A thumb can slide outside a captured button without dropping its input.
+  Good Lift also accepts a mouse or finger drag anywhere clear of its UI: left/right pulls that
+  brake, down pulls both, and distance sets travel. Release for hands up. Full travel reaches deep
+  brake directly and can stall. The two small meters show each hand; their marks indicate working
+  depth. Blend a gentle downward and side pull to circle in lift, using actual brake forces.
+  Bar/Ears buttons remain
+  available on desktop. A fresh key/button press takes control from a drag; maps, menus and pause
+  clear held input. The fjord's pillar clicks and hero interaction retain their existing behavior.
   Hold brake with one direction for a coordinated soaring turn: it banks less, turns sooner and
   spends less height than the ordinary turn. Releasing keeps its momentum while the wing levels.
   Brake input is manual; neither the coach nor rising air applies it automatically. Ordinary
@@ -212,7 +219,8 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     step by step, and nothing else: every run is recorded (`src/game/recorder.js`) and, as it ends,
     replayed in the page (`replay.js`), and only a run that replays to the very same sheet gets a
     link and a place on the board. The share line carries that link, `/good-lift/daily#vs=…`
-    (a whole run is about 1-2 KB of it). Opening it replays the run before the start screen, which
+    (digital runs compress well; continuously varying brakes can produce much larger links,
+    bounded at 196,608 characters). Opening it replays the run before the start screen, which
     shows what it truly came to (`to beat: … pts · … m · verified`; what a link claims is never
     trusted), then flies the same sky; the sheet gives the verdict, and a race on today's sky puts
     the challenger on the day's board. `SIM_VERSION` (`src/game/sim-version.js`) names the rules a
@@ -413,13 +421,15 @@ Thermal guidance retains source identity and requires three seconds of actual us
 before displaying THERMALLING. Transfers show NEXT LIFT with direction, distance and a request
 to release brake; an unsafe route is never presented as reachable lift.
 
-Initial-release progress uses the single `good-lift` storage key. Replay format 1 carries five
-resolved digital input bits under simulation version 1. The decoder accepts that format only;
-there are no progress migrations or historical-format readers. Malformed data is validated,
-and blocked storage retains progress for the visit. Logs remain bounded to 49,152 characters
+Progress retains the single `good-lift` storage key and its saved shape. Simulation version 3 adds
+proportional brake flight. Replay format 2 records mixed digital input and independent 8-bit brake
+pairs; the live fixed step flies those exact quantized demands. Format 1 remains readable, while
+flights from other simulation versions retain the version-mismatch response. No progress migration
+is needed. Malformed data is validated,
+and blocked storage retains progress for the visit. Logs remain bounded to 196,608 characters
 and persistent board logs to one MiB.
 Current code review, local acceptance and remaining device/release gates are recorded in
-[Good Lift QA](docs/good-lift-qa.md).
+[Good Lift QA](docs/good-lift-qa.md) and [proportional brake QA](docs/good-lift-brake-drag-qa.md).
 `DAILY_EPOCH` in `src/game/good-lift-address.js` is the UTC day of Daily #1:
 on the day Good Lift first ships, set it to that UTC day (and the date `good-lift-address.test.js`
 pins with it), so the first Daily Sky anyone can fly is Daily #1.
@@ -656,7 +666,7 @@ With the deployment account and production board URL configured, publish both ta
 firebase deploy --only functions:board,hosting --project renate-gouveia-portfolio
 ```
 
-Verify the live board reports simulation version 1, then fly and submit a Daily Sky from the released
+Verify the live board reports the current `SIM_VERSION`, then fly and submit a Daily Sky from the released
 client. During a version mismatch, local results remain available and the world-board status
 explains that its flight rules are updating. This change does not require deleting old Firestore
 boards. Repository changes and local QA do not constitute a deployment.

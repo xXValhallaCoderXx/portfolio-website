@@ -1,30 +1,44 @@
 {
   "engine": "Chromium 143.0.7499.4",
-  "generated": "2026-10-18T14:17:59.441Z",
+  "generated": "2026-10-18T23:25:14.332Z",
   "sourceFiles": [
-    "wing-envelope.js",
-    "flight.js",
-    "flight-physics.js",
     "atmosphere.js",
-    "swing-watch.js",
-    "meet-style.js",
-    "flight-coach.js",
-    "trick-lessons.js",
-    "trick-learning.js",
-    "good-lift-store.js",
-    "good-lift-key.js",
+    "board.js",
+    "brake-controls.js",
     "coach-actions.js",
+    "flight-coach.js",
+    "flight-physics.js",
+    "flight.js",
+    "glide-math.js",
+    "good-lift-address.js",
+    "good-lift-key.js",
+    "good-lift-store.js",
+    "ground.js",
+    "lift-activity.js",
+    "lift-guide.js",
+    "meet-bynames.js",
+    "meet-initials.js",
+    "meet-style.js",
     "recorder.js",
+    "ridge-transfer.js",
+    "run-rules.js",
     "score.js",
-    "sim-version.js"
+    "sim-version.js",
+    "soaring-turn.js",
+    "swing-watch.js",
+    "thermal-centering.js",
+    "trick-learning.js",
+    "trick-lessons.js",
+    "wing-envelope.js",
+    "wing-kit.js"
   ],
-  "sourceDigest": "bd3af2fe2dba338232afd76481e2fcf0f38b5782bcfe9c102d19a3a3e91bbda8",
+  "sourceDigest": "8e15be37e92238eff6e5cdf202153fa4ad7c5886dd5ab8b50ecc32b7be56ffdb",
   "records": [
     {
       "kind": "pitch",
       "side": -1,
       "delay": 0,
-      "simVersion": 2,
+      "simVersion": 3,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -36,7 +50,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQIAAAAAAAAAAAAM6AfJCoWlAYA9tBqgIeQigBI",
+      "link": "AgMAAAAAAAAAAAAM6AfJCpQFBfQBAGkUhQEAiwEESAA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -82,6 +96,11 @@
             "deepBrake": false,
             "bar": 0,
             "ears": 0,
+            "controlMode": "legacy",
+            "leftBrake": 0.00004333899153191696,
+            "rightBrake": 7.961781709133227e-7,
+            "leftBrakeTarget": 0,
+            "rightBrakeTarget": 0,
             "acro": true,
             "acroSteady": 0.9833333333333347,
             "coordination": 1.957649707928452e-18,
@@ -244,6 +263,11 @@
           "acro": true,
           "bar": 0,
           "ears": 0,
+          "controlMode": "legacy",
+          "leftBrake": 0.00004333899153191696,
+          "rightBrake": 7.961781709133227e-7,
+          "leftBrakeTarget": 0,
+          "rightBrakeTarget": 0,
           "coordination": 1.957649707928452e-18,
           "coordinatedLean": -5.716978570487237e-31,
           "pilotLean": -1.2577352855071923e-31,
@@ -346,7 +370,7 @@
       "kind": "pitch",
       "side": -1,
       "delay": 0.1,
-      "simVersion": 2,
+      "simVersion": 3,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -358,7 +382,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQIAAAAAAAAAAAAM6AfhC8WmAaA-1BvgIKQjgDQ",
+      "link": "AgMAAAAAAAAAAAAM6AfhC5oFBfkBAG4UgwEAjQEE0AEA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -404,6 +428,11 @@
             "deepBrake": false,
             "bar": 0,
             "ears": 0,
+            "controlMode": "legacy",
+            "leftBrake": 0.0002866839591496349,
+            "rightBrake": 1.3563157529540481e-17,
+            "leftBrakeTarget": 0,
+            "rightBrakeTarget": 0,
             "acro": true,
             "acroSteady": 0.9833333333333347,
             "coordination": 8.262364891068972e-23,
@@ -566,6 +595,11 @@
           "acro": true,
           "bar": 0,
           "ears": 0,
+          "controlMode": "legacy",
+          "leftBrake": 0.0002866839591496349,
+          "rightBrake": 1.3563157529540481e-17,
+          "leftBrakeTarget": 0,
+          "rightBrakeTarget": 0,
           "coordination": 8.262364891068972e-23,
           "coordinatedLean": -8.591821677739957e-38,
           "pilotLean": -1.8902007691027907e-38,
@@ -668,7 +702,7 @@
       "kind": "pitch",
       "side": -1,
       "delay": 0.2,
-      "simVersion": 2,
+      "simVersion": 3,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -680,7 +714,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQIAAAAAAAAAAAAM6AfxC4WoAcA_9BygIIQk4DM",
+      "link": "AgMAAAAAAAAAAAAM6AfxC6AFBf4BAHMUgQEAkAEEzwEA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -726,6 +760,11 @@
             "deepBrake": false,
             "bar": 0,
             "ears": 0,
+            "controlMode": "legacy",
+            "leftBrake": 0.00029134000154556496,
+            "rightBrake": 1.627578912456387e-17,
+            "leftBrakeTarget": 0,
+            "rightBrakeTarget": 0,
             "acro": true,
             "acroSteady": 0.9833333333333347,
             "coordination": 4.144499933940318e-23,
@@ -888,6 +927,11 @@
           "acro": true,
           "bar": 0,
           "ears": 0,
+          "controlMode": "legacy",
+          "leftBrake": 0.00029134000154556496,
+          "rightBrake": 1.627578912456387e-17,
+          "leftBrakeTarget": 0,
+          "rightBrakeTarget": 0,
           "coordination": 4.144499933940318e-23,
           "coordinatedLean": -2.929212767666784e-38,
           "pilotLean": -6.444268088866925e-39,
@@ -990,7 +1034,7 @@
       "kind": "pitch",
       "side": -1,
       "delay": 0.3,
-      "simVersion": 2,
+      "simVersion": 3,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -1002,7 +1046,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQIAAAAAAAAAAAAM6Af-C8WpAcBAlB6gIKQkgDM",
+      "link": "AgMAAAAAAAAAAAAM6Af-C6YFBYICAHgUgQEAkQEEzAEA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -1048,6 +1092,11 @@
             "deepBrake": false,
             "bar": 0,
             "ears": 0,
+            "controlMode": "legacy",
+            "leftBrake": 0.00027678398333450335,
+            "rightBrake": 2.812456364687025e-17,
+            "leftBrakeTarget": 0,
+            "rightBrakeTarget": 0,
             "acro": true,
             "acroSteady": 0.9833333333333347,
             "coordination": 2.739635573517805e-23,
@@ -1210,6 +1259,11 @@
           "acro": true,
           "bar": 0,
           "ears": 0,
+          "controlMode": "legacy",
+          "leftBrake": 0.00027678398333450335,
+          "rightBrake": 2.812456364687025e-17,
+          "leftBrakeTarget": 0,
+          "rightBrakeTarget": 0,
           "coordination": 2.739635573517805e-23,
           "coordinatedLean": -1.450530058795487e-38,
           "pilotLean": -3.1911661293500716e-39,
@@ -1312,7 +1366,7 @@
       "kind": "pitch",
       "side": 1,
       "delay": 0,
-      "simVersion": 2,
+      "simVersion": 3,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -1324,7 +1378,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQIAAAAAAAAAAAAM6AfJCoalAYA9tBqgIeQigBI",
+      "link": "AgMAAAAAAAAAAAAM6AfJCpQFBvQBAGkUhQEAiwEESAA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -1370,6 +1424,11 @@
             "deepBrake": false,
             "bar": 0,
             "ears": 0,
+            "controlMode": "legacy",
+            "leftBrake": 7.961781709133227e-7,
+            "rightBrake": 0.00004333899153191696,
+            "leftBrakeTarget": 0,
+            "rightBrakeTarget": 0,
             "acro": true,
             "acroSteady": 0.9833333333333347,
             "coordination": 1.957649707928452e-18,
@@ -1532,6 +1591,11 @@
           "acro": true,
           "bar": 0,
           "ears": 0,
+          "controlMode": "legacy",
+          "leftBrake": 7.961781709133227e-7,
+          "rightBrake": 0.00004333899153191696,
+          "leftBrakeTarget": 0,
+          "rightBrakeTarget": 0,
           "coordination": 1.957649707928452e-18,
           "coordinatedLean": 5.716978570487237e-31,
           "pilotLean": 1.2577352855071923e-31,
@@ -1634,7 +1698,7 @@
       "kind": "pitch",
       "side": 1,
       "delay": 0.1,
-      "simVersion": 2,
+      "simVersion": 3,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -1646,7 +1710,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQIAAAAAAAAAAAAM6AfhC8amAaA-1BvgIKQjgDQ",
+      "link": "AgMAAAAAAAAAAAAM6AfhC5oFBvkBAG4UgwEAjQEE0AEA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -1692,6 +1756,11 @@
             "deepBrake": false,
             "bar": 0,
             "ears": 0,
+            "controlMode": "legacy",
+            "leftBrake": 1.3563157529540481e-17,
+            "rightBrake": 0.0002866839591496349,
+            "leftBrakeTarget": 0,
+            "rightBrakeTarget": 0,
             "acro": true,
             "acroSteady": 0.9833333333333347,
             "coordination": 8.262364891068972e-23,
@@ -1854,6 +1923,11 @@
           "acro": true,
           "bar": 0,
           "ears": 0,
+          "controlMode": "legacy",
+          "leftBrake": 1.3563157529540481e-17,
+          "rightBrake": 0.0002866839591496349,
+          "leftBrakeTarget": 0,
+          "rightBrakeTarget": 0,
           "coordination": 8.262364891068972e-23,
           "coordinatedLean": 8.591821677739957e-38,
           "pilotLean": 1.8902007691027907e-38,
@@ -1956,7 +2030,7 @@
       "kind": "pitch",
       "side": 1,
       "delay": 0.2,
-      "simVersion": 2,
+      "simVersion": 3,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -1968,7 +2042,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQIAAAAAAAAAAAAM6AfxC4aoAcA_9BygIIQk4DM",
+      "link": "AgMAAAAAAAAAAAAM6AfxC6AFBv4BAHMUgQEAkAEEzwEA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -2014,6 +2088,11 @@
             "deepBrake": false,
             "bar": 0,
             "ears": 0,
+            "controlMode": "legacy",
+            "leftBrake": 1.627578912456387e-17,
+            "rightBrake": 0.00029134000154556496,
+            "leftBrakeTarget": 0,
+            "rightBrakeTarget": 0,
             "acro": true,
             "acroSteady": 0.9833333333333347,
             "coordination": 4.144499933940318e-23,
@@ -2176,6 +2255,11 @@
           "acro": true,
           "bar": 0,
           "ears": 0,
+          "controlMode": "legacy",
+          "leftBrake": 1.627578912456387e-17,
+          "rightBrake": 0.00029134000154556496,
+          "leftBrakeTarget": 0,
+          "rightBrakeTarget": 0,
           "coordination": 4.144499933940318e-23,
           "coordinatedLean": 2.929212767666784e-38,
           "pilotLean": 6.444268088866925e-39,
@@ -2278,7 +2362,7 @@
       "kind": "pitch",
       "side": 1,
       "delay": 0.3,
-      "simVersion": 2,
+      "simVersion": 3,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -2290,7 +2374,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQIAAAAAAAAAAAAM6Af-C8apAcBAlB6gIKQkgDM",
+      "link": "AgMAAAAAAAAAAAAM6Af-C6YFBoICAHgUgQEAkQEEzAEA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -2336,6 +2420,11 @@
             "deepBrake": false,
             "bar": 0,
             "ears": 0,
+            "controlMode": "legacy",
+            "leftBrake": 2.812456364687025e-17,
+            "rightBrake": 0.00027678398333450335,
+            "leftBrakeTarget": 0,
+            "rightBrakeTarget": 0,
             "acro": true,
             "acroSteady": 0.9833333333333347,
             "coordination": 2.739635573517805e-23,
@@ -2498,6 +2587,11 @@
           "acro": true,
           "bar": 0,
           "ears": 0,
+          "controlMode": "legacy",
+          "leftBrake": 2.812456364687025e-17,
+          "rightBrake": 0.00027678398333450335,
+          "leftBrakeTarget": 0,
+          "rightBrakeTarget": 0,
           "coordination": 2.739635573517805e-23,
           "coordinatedLean": 1.450530058795487e-38,
           "pilotLean": 3.1911661293500716e-39,
@@ -2600,7 +2694,7 @@
       "kind": "wingover",
       "side": -1,
       "delay": 0,
-      "simVersion": 2,
+      "simVersion": 3,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -2612,7 +2706,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQIAAAAAAAAAAAAE6AfrDYWlAYA99QPhQKI8gSaAFeQJgBMk",
+      "link": "AgMAAAAAAAAAAAAE6AfrDZQFBfQBAA8VgwIB8QECmAEBVAAnBEwAAQQ",
       "snapshot": {
         "g": {
           "pilot": {
@@ -2658,6 +2752,11 @@
             "deepBrake": false,
             "bar": 0,
             "ears": 0,
+            "controlMode": "legacy",
+            "leftBrake": 0.04761938345695576,
+            "rightBrake": 0.0768817743249526,
+            "leftBrakeTarget": 0.4,
+            "rightBrakeTarget": 0.4,
             "acro": true,
             "acroSteady": 0.9833333333333347,
             "coordination": 0.0002718599277669077,
@@ -2820,6 +2919,11 @@
           "acro": true,
           "bar": 0,
           "ears": 0,
+          "controlMode": "legacy",
+          "leftBrake": 0.04761938345695576,
+          "rightBrake": 0.0768817743249526,
+          "leftBrakeTarget": 0.4,
+          "rightBrakeTarget": 0.4,
           "coordination": 0.0002718599277669077,
           "coordinatedLean": -2.602040811347363e-8,
           "pilotLean": -5.7244897849641985e-9,
@@ -2923,7 +3027,7 @@
       "kind": "wingover",
       "side": -1,
       "delay": 0.1,
-      "simVersion": 2,
+      "simVersion": 3,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -2935,7 +3039,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQIAAAAAAAAAAAAE6AeVDsWmAaA-tQXhQII_4SfgFoQLgBI",
+      "link": "AgMAAAAAAAAAAAAE6AeVDpoFBfkBABUVgwIB_AECnwEBWwAsBEgA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -2981,6 +3085,11 @@
             "deepBrake": false,
             "bar": 0,
             "ears": 0,
+            "controlMode": "legacy",
+            "leftBrake": 7.931657559429888e-7,
+            "rightBrake": 0.02752748181637304,
+            "leftBrakeTarget": 0,
+            "rightBrakeTarget": 0,
             "acro": true,
             "acroSteady": 0.9833333333333347,
             "coordination": 0.0001797087924683303,
@@ -3143,6 +3252,11 @@
           "acro": true,
           "bar": 0,
           "ears": 0,
+          "controlMode": "legacy",
+          "leftBrake": 7.931657559429888e-7,
+          "rightBrake": 0.02752748181637304,
+          "leftBrakeTarget": 0,
+          "rightBrakeTarget": 0,
           "coordination": 0.0001797087924683303,
           "coordinatedLean": -1.2885122880067566e-8,
           "pilotLean": -2.8347270336148645e-9,
@@ -3246,7 +3360,7 @@
       "kind": "wingover",
       "side": -1,
       "delay": 0.2,
-      "simVersion": 2,
+      "simVersion": 3,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -3258,7 +3372,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQIAAAAAAAAAAAAI6AfWDoWoAcA_9QbhQKJCgSqAGKQMgBY",
+      "link": "AgMAAAAAAAAAAAAI6AfWDqAFBf4BABsVgwIBiQICqAEBYAAxBFgA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -3304,6 +3418,11 @@
             "deepBrake": false,
             "bar": 0,
             "ears": 0,
+            "controlMode": "legacy",
+            "leftBrake": 4.297714771939963e-8,
+            "rightBrake": 0.024993621322443167,
+            "leftBrakeTarget": 0,
+            "rightBrakeTarget": 0,
             "acro": true,
             "acroSteady": 0.9833333333333347,
             "coordination": 0.00003431292883585547,
@@ -3466,6 +3585,11 @@
           "acro": true,
           "bar": 0,
           "ears": 0,
+          "controlMode": "legacy",
+          "leftBrake": 4.297714771939963e-8,
+          "rightBrake": 0.024993621322443167,
+          "leftBrakeTarget": 0,
+          "rightBrakeTarget": 0,
           "coordination": 0.00003431292883585547,
           "coordinatedLean": -8.686306180454042e-10,
           "pilotLean": -1.9109873596998892e-10,
@@ -3569,7 +3693,7 @@
       "kind": "wingover",
       "side": -1,
       "delay": 0.3,
-      "simVersion": 2,
+      "simVersion": 3,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -3581,7 +3705,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQIAAAAAAAAAAAAM6AeWD8WpAcBAtQjhQOJFwS3AF4QO4Bk",
+      "link": "AgMAAAAAAAAAAAAM6AeWD6YFBYICACEVgwIBlwICtgEBXgA4BGcA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -3627,6 +3751,11 @@
             "deepBrake": false,
             "bar": 0,
             "ears": 0,
+            "controlMode": "legacy",
+            "leftBrake": 2.792752686961092e-9,
+            "rightBrake": 0.012720269885546536,
+            "leftBrakeTarget": 0,
+            "rightBrakeTarget": 0,
             "acro": true,
             "acroSteady": 0.9833333333333347,
             "coordination": 0.000011377699356092716,
@@ -3789,6 +3918,11 @@
           "acro": true,
           "bar": 0,
           "ears": 0,
+          "controlMode": "legacy",
+          "leftBrake": 2.792752686961092e-9,
+          "rightBrake": 0.012720269885546536,
+          "leftBrakeTarget": 0,
+          "rightBrakeTarget": 0,
           "coordination": 0.000011377699356092716,
           "coordinatedLean": -1.235415637923871e-10,
           "pilotLean": -2.7179144034325162e-11,
@@ -3892,7 +4026,7 @@
       "kind": "wingover",
       "side": 1,
       "delay": 0,
-      "simVersion": 2,
+      "simVersion": 3,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -3904,7 +4038,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQIAAAAAAAAAAAAE6AfrDYalAYA99gPiQKE8giaAFeQJgBMk",
+      "link": "AgMAAAAAAAAAAAAE6AfrDZQFBvQBAA8WgwIC8QEBmAECVAAnBEwAAQQ",
       "snapshot": {
         "g": {
           "pilot": {
@@ -3950,6 +4084,11 @@
             "deepBrake": false,
             "bar": 0,
             "ears": 0,
+            "controlMode": "legacy",
+            "leftBrake": 0.0768817743249526,
+            "rightBrake": 0.04761938345695576,
+            "leftBrakeTarget": 0.4,
+            "rightBrakeTarget": 0.4,
             "acro": true,
             "acroSteady": 0.9833333333333347,
             "coordination": 0.0002718599277669077,
@@ -4112,6 +4251,11 @@
           "acro": true,
           "bar": 0,
           "ears": 0,
+          "controlMode": "legacy",
+          "leftBrake": 0.0768817743249526,
+          "rightBrake": 0.04761938345695576,
+          "leftBrakeTarget": 0.4,
+          "rightBrakeTarget": 0.4,
           "coordination": 0.0002718599277669077,
           "coordinatedLean": 2.602040811347363e-8,
           "pilotLean": 5.7244897849641985e-9,
@@ -4215,7 +4359,7 @@
       "kind": "wingover",
       "side": 1,
       "delay": 0.1,
-      "simVersion": 2,
+      "simVersion": 3,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -4227,7 +4371,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQIAAAAAAAAAAAAE6AeVDsamAaA-tgXiQIE_4ifgFoQLgBI",
+      "link": "AgMAAAAAAAAAAAAE6AeVDpoFBvkBABUWgwIC_AEBnwECWwAsBEgA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -4273,6 +4417,11 @@
             "deepBrake": false,
             "bar": 0,
             "ears": 0,
+            "controlMode": "legacy",
+            "leftBrake": 0.02752748181637304,
+            "rightBrake": 7.931657559429888e-7,
+            "leftBrakeTarget": 0,
+            "rightBrakeTarget": 0,
             "acro": true,
             "acroSteady": 0.9833333333333347,
             "coordination": 0.0001797087924683303,
@@ -4435,6 +4584,11 @@
           "acro": true,
           "bar": 0,
           "ears": 0,
+          "controlMode": "legacy",
+          "leftBrake": 0.02752748181637304,
+          "rightBrake": 7.931657559429888e-7,
+          "leftBrakeTarget": 0,
+          "rightBrakeTarget": 0,
           "coordination": 0.0001797087924683303,
           "coordinatedLean": 1.2885122880067566e-8,
           "pilotLean": 2.8347270336148645e-9,
@@ -4538,7 +4692,7 @@
       "kind": "wingover",
       "side": 1,
       "delay": 0.2,
-      "simVersion": 2,
+      "simVersion": 3,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -4550,7 +4704,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQIAAAAAAAAAAAAI6AfWDoaoAcA_9gbiQKFCgiqAGKQMgBY",
+      "link": "AgMAAAAAAAAAAAAI6AfWDqAFBv4BABsWgwICiQIBqAECYAAxBFgA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -4596,6 +4750,11 @@
             "deepBrake": false,
             "bar": 0,
             "ears": 0,
+            "controlMode": "legacy",
+            "leftBrake": 0.024993621322443167,
+            "rightBrake": 4.297714771939963e-8,
+            "leftBrakeTarget": 0,
+            "rightBrakeTarget": 0,
             "acro": true,
             "acroSteady": 0.9833333333333347,
             "coordination": 0.00003431292883585547,
@@ -4758,6 +4917,11 @@
           "acro": true,
           "bar": 0,
           "ears": 0,
+          "controlMode": "legacy",
+          "leftBrake": 0.024993621322443167,
+          "rightBrake": 4.297714771939963e-8,
+          "leftBrakeTarget": 0,
+          "rightBrakeTarget": 0,
           "coordination": 0.00003431292883585547,
           "coordinatedLean": 8.686306180454042e-10,
           "pilotLean": 1.9109873596998892e-10,
@@ -4861,7 +5025,7 @@
       "kind": "wingover",
       "side": 1,
       "delay": 0.3,
-      "simVersion": 2,
+      "simVersion": 3,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -4873,7 +5037,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AQIAAAAAAAAAAAAM6AeWD8apAcBAtgjiQOFFwi3AF4QO4Bk",
+      "link": "AgMAAAAAAAAAAAAM6AeWD6YFBoICACEWgwIClwIBtgECXgA4BGcA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -4919,6 +5083,11 @@
             "deepBrake": false,
             "bar": 0,
             "ears": 0,
+            "controlMode": "legacy",
+            "leftBrake": 0.012720269885546536,
+            "rightBrake": 2.792752686961092e-9,
+            "leftBrakeTarget": 0,
+            "rightBrakeTarget": 0,
             "acro": true,
             "acroSteady": 0.9833333333333347,
             "coordination": 0.000011377699356092716,
@@ -5081,6 +5250,11 @@
           "acro": true,
           "bar": 0,
           "ears": 0,
+          "controlMode": "legacy",
+          "leftBrake": 0.012720269885546536,
+          "rightBrake": 2.792752686961092e-9,
+          "leftBrakeTarget": 0,
+          "rightBrakeTarget": 0,
           "coordination": 0.000011377699356092716,
           "coordinatedLean": 1.235415637923871e-10,
           "pilotLean": 2.7179144034325162e-11,

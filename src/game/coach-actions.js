@@ -1,4 +1,5 @@
 // Semantic instructions shared by the coach and its input highlights. Nothing here presses a key.
+import { summarizeControls } from './brake-controls.js';
 export const COACH_CONTROLS = Object.freeze({
   left: Object.freeze({ label: 'left', keyboard: '← / A', touch: '◀' }),
   right: Object.freeze({ label: 'right', keyboard: '→ / D', touch: '▶' }),
@@ -20,11 +21,82 @@ const defaults = {
   none: { title: '', hold: [], release: [] },
 };
 const controls = (names) => [...new Set(names)].filter(name => Object.hasOwn(COACH_CONTROLS, name));
-export const controlHeld = (input, name) => name === 'bar' ? !!(input.bar || input.left && input.right)
-  : name === 'brake' ? !!(input.brake || input.deepBrake) : !!input[name];
+export const controlHeld = (input, name) => {
+  if (input.controlMode === 'brakes') {
+    const summary = summarizeControls(input);
+    // A release instruction checks either hand, even though a bilateral catch requires both.
+    return name === 'brake' ? summary.anyBrake : !!summary[name];
+  }
+  return name === 'bar' ? !!(input.bar || input.left && input.right)
+    : name === 'brake' ? !!(input.brake || input.deepBrake) : !!input[name];
+};
+
+function directMessage(fields, input) {
+  const summary = summarizeControls(input), action = fields.action ?? 'none';
+  const base = defaults[action] ?? defaults.none;
+  let hold = controls(fields.hold ?? base.hold), release = controls(fields.release ?? base.release);
+  let brakeDepth = fields.brakeDepth ?? (action === 'deep-brake' ? 'deep' : undefined);
+  const side = hold.includes('left') ? 'left' : hold.includes('right') ? 'right' : null;
+  const thermal = fields.context === 'thermal';
+  const easing = action === 'straight' && (hold.includes('brake') || fields.dragAction === 'ease');
+  const easeSide = side && release.includes('brake');
+  if (side) {
+    hold = hold.filter(name => name !== 'brake');
+    if (easeSide) { release = release.filter(name => name !== 'brake'); brakeDepth = 'working'; }
+  } else if (easing) {
+    if (!thermal) {
+      hold = hold.filter(name => name !== 'brake');
+      release = controls([...release, 'brake']);
+    }
+    brakeDepth = undefined;
+  }
+  const depth = side ? summary.maxBrake : summary.commonBrake;
+  const requestedBrake = !!side && !!brakeDepth || hold.includes('brake');
+  const deep = depth > 0.70;
+  let title = fields.title ?? base.title, detail = fields.detail ?? '';
+  if (side) {
+    title = thermal ? `PULL DOWN + ${side.toUpperCase()} · CIRCLE`
+      : `${easeSide ? 'EASE' : 'PULL'} ${side.toUpperCase()}${brakeDepth === 'deep' ? ' DEEP' : ''}${easeSide ? ' · KEEP THE TURN' : ' BRAKE'}`;
+    detail = thermal ? `Drag down and ${side}; keep some brake on both. Follow the ravens in this direction.`
+      : brakeDepth === 'deep' ? `Pull farther toward ${side} to build the swing. Follow the next release cue.`
+        : `Pull toward ${side}; use a smaller pull for a gentler turn.`;
+  } else if (easing) {
+    title = thermal ? 'EASE SIDE PULL · KEEP BOTH BRAKES' : 'EASE THE PULL · WIDEN THE CIRCLE';
+    detail = thermal ? 'Ease the side pull and keep a gentle downward pull on both brakes to widen the circle.'
+      : 'Return the handle toward its origin, or release, to widen the circle. Follow the ravens when you pull again.';
+  } else if (hold.includes('brake')) {
+    title = brakeDepth === 'deep' ? 'PULL BOTH BRAKES DEEP' : deep ? 'EASE BOTH TO WORKING BRAKE' : 'PULL BOTH BRAKES';
+    detail = brakeDepth === 'deep' ? 'Drag straight down into the deep range. Follow the release cue as the wing moves.'
+      : deep ? 'Move toward the handle origin until both indicators return to the working range.'
+        : 'Drag straight down into the working range so both brakes pull together.';
+  } else if (release.includes('brake') || action === 'release-all' || action === 'release-turns') {
+    title = 'HANDS UP · RELEASE THE PULL';
+    detail = 'Release the mouse or lift your finger so both brakes come up. ' + detail;
+  }
+  if (requestedBrake && input.ears) {
+    title = 'RELEASE EARS, THEN PULL';
+    if (!release.includes('ears')) release.push('ears');
+  }
+  if (['recover', 'hazard'].includes(fields.state)) {
+    // Keep the physical phase and environmental warning; the drag instruction supplements it.
+    if (fields.title && fields.state === 'hazard') title = fields.title;
+    if (fields.detail && !detail.includes(fields.detail)) detail += ` ${fields.detail}`;
+  }
+  const releasing = release.filter(name => controlHeld(input, name));
+  const held = hold.every(name => name === 'brake' ? summary.commonBrake >= (thermal && easing ? 0.10 : 0.5) : controlHeld(input, name));
+  const differential = Math.abs(summary.rightBrake - summary.leftBrake);
+  const correctDepth = thermal && (side || easing) ? summary.commonBrake >= 0.10 &&
+    summary.maxBrake <= (easing ? 0.35 : 0.65) && (easing ? differential <= 0.08 : differential >= 0.15 && differential <= 0.45)
+    : !requestedBrake || (brakeDepth === 'deep' ? depth > 0.70
+      : side ? depth >= 0.15 && depth <= 0.45 : depth >= 0.5 && summary.maxBrake <= 0.70);
+  return { ...fields, action, title, detail, hold, release, controlMode: 'brakes', brakeDepth,
+    ...(easing ? { dragAction: 'ease' } : {}),
+    accepted: releasing.length === 0 && held && correctDepth };
+}
 
 /** Keep the requested action separate from the player's current input and accepted state. */
 export function actionMessage(fields, input = {}) {
+  if (input.controlMode === 'brakes') return directMessage(fields, input);
   const action = fields.action ?? 'none';
   const brakeDepth = fields.brakeDepth ?? (action === 'deep-brake' ? 'deep' : undefined);
   const base = defaults[action] ?? defaults.none;
