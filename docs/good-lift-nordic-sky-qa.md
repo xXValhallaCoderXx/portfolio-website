@@ -1,5 +1,9 @@
 # Readable thermals and Nordic sky — local QA
 
+The original generated islands described here were replaced on 20 October 2026.
+See the [authored-island QA receipt](authored-islands-qa.md) for the current assets and checks.
+This receipt preserves the original candidate's evidence; its generator was retired.
+
 The follow-up [earlier islands and raven-led thermalling receipt](good-lift-raven-flow-qa.md)
 documents the lower island reveal and simulation 2 traffic rule. This receipt describes the
 original presentation update under simulation 1.

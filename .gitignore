@@ -2,7 +2,7 @@ node_modules/
 dist/
 .artifacts/
 
-# The world board's function: its packages, and the bundle tools/build-functions.mjs makes of it.
+# The world board's function: its packages, and the bundle tools/build-functions.ts makes of it.
 functions/node_modules/
 functions/lib/
 

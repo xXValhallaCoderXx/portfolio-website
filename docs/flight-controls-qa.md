@@ -1,5 +1,8 @@
 # Shared flight controls and cleanup
 
+The [architecture refactor receipt](architecture-refactor-qa.md) records the current TypeScript
+structure, production preview and verification. The candidate details below are historical.
+
 Local, uncommitted candidate based on `330e9cd`, 19 October 2026. Previews:
 [outdoor flight](http://localhost:4191/fly) and
 [Good Lift](http://localhost:4191/good-lift?sky=1). No commit, push or deployment performed.

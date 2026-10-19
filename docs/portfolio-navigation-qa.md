@@ -1,5 +1,8 @@
 # Portfolio navigation and job-page QA
 
+The [architecture refactor receipt](architecture-refactor-qa.md) records the current TypeScript
+structure, production preview and verification. The candidate details below are historical.
+
 Date: 2026-10-19. Local working-tree candidate based on
 `02fc7bccb97e266904f85fd815d54469bf1c7941`.
 

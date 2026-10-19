@@ -116,19 +116,19 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     320 m radius, allowing time for useful soaring and transfers.
   - **Centring.** A hunted thermal lifts hardest at its very middle, so a circle drifted off it
     climbs harder on the side nearest the core than across from it. In a run the vario's beep
-    keeps rising in pitch and pace all the way up a core (`src/game/vario.js`). As the lift surges
+    keeps rising in pitch and pace all the way up a core (`src/features/flight/presentation/vario.ts`). As the lift surges
     on the near side, a soft swell is heard from the core's side and the vario readout flares
-    (`run-surge.js`, which feels for it with the thermal's own waxing and wearing out taken away).
+    (`run-surge.ts`, which feels for it with the thermal's own waxing and wearing out taken away).
     Straighten for a beat in the surge and turn again as it fades, and the circle moves onto the
     core. Approach remains quiet; sustained useful circling qualifies the thermalling coach.
   - **Turning in.** Flying at the flock's middle and turning there puts the core on the rim of
     the first circle. Pass the core instead on the side the flock turns to, a few metres off its
     middle, and turn as the lift stops building: a low thump from the core's side, the vario
-    readout flaring cyan and that wingtip lifting say the moment (`run-entry.js`), and the first
+    readout flaring cyan and that wingtip lifting say the moment (`run-entry.ts`), and the first
     circle goes round the core. These airflow and sound cues remain while approach coaching stays quiet.
   - **Music.** Once through the rune gate, and only there, quiet background music plays: the two
     tracks in `public/music/`, one after the other, each brought to the same low level
-    (`src/game/music.js`, where each track's measured loudness is kept). It plays on between runs
+    (`src/features/good-lift/presentation/music.ts`, where each track's measured loudness is kept). It plays on between runs
     and stops as you leave for the fjord or the page. It has its own switch, `[ music: on ]` or B,
     apart from the sounds' (`[ sound: on ]` or L), and switched off it stays off on the next visit.
     The fjord and the page never play or fetch any of it.
@@ -179,7 +179,7 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     nearest part of the bolt. For half a second every hidden thermal's motes show as if close by:
     a glimpse of where the lift is. Visitors who ask for less motion get one soft swell, with no
     flicker and no flash of the sky. It is the view's alone, on random numbers of its own that the
-    run never reads (`src/game/run-lightning.js`); `fjord.lightning.fire()` strikes at once.
+    run never reads (`src/features/good-lift/presentation/run-lightning.ts`); `fjord.lightning.fire()` strikes at once.
   - **The glide ring.** A ring round the pilot shows how far the wing can glide hands up before the
     fog catches it: the fog walked forward at its own speed (which races after the horn), the wing
     sinking at trim, and the breeze carrying the ring downwind. It hangs where that glide meets the
@@ -187,7 +187,7 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     drawn only over the fog. Cyan says go: a flock lies inside it. Amber, broken into dashes, says
     climb first: none does (the flock being ridden is not counted). Out of lift it is drawn in
     full, in lift faintly, and while all the fog is within reach not at all. The ring remains visible
-    during quiet travel without opening a coaching card (`src/game/run-glide.js`; `fjord.glide.state`).
+    during quiet travel without opening a coaching card (`src/features/good-lift/presentation/run-glide.ts`; `fjord.glide.state`).
   - **The meet sheet.** When a run ends, the sheet shows the SCORE (`SCORE 646 · 512.5 kg × 1.26
     style`), the peak and the best score, the tricks landed, the reps flown and how many were to
     depth, the climb drawn over the rising fog, a row of lights for every lift (a filled white disc
@@ -197,16 +197,16 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     switches, so it carries the music's (`[ music: on ]`, or B).
   - **The skald, the byname and the medals.** Under the ending, a skald's verse speaks to the
     pilot about the run in kennings (the wing a wind-steed, a thermal the ravens' stair, the fog
-    Niflheim's breath): one of a handful of hand-written lines (`src/game/meet-verse.js`), chosen
+    Niflheim's breath): one of a handful of hand-written lines (`src/domains/good-lift/meet-verse.ts`), chosen
     by what the run did and, among lines that fit as well, by its own numbers, so the same run
     always gets the same line. A run the sky judged also earns its pilot a byname, shown with the
-    initials on the sheet and the board (`meet-bynames.js`): the first it qualifies for of the
+    initials on the sheet and the board (`meet-bynames.ts`): the first it qualifies for of the
     Unbroken (every light white over four lines or more), the Unstruck (no strike, with three
     kettlebells or more thrown), the Centred (three reps or more, all to depth), Bell-dodger
     (every kettlebell dodged, three or more), Horn-lifter (a good lift under the horn) and
     Cloud-shy (no second in cloud on a climb past 750 m). As the sheet opens, three bots fly the
     same sky in the page, each in its own world, a few milliseconds at a time while the page is
-    idle (`meet-bots.js`): TST, the pilot holding its line on the light brake, and the collector.
+    idle (`meet-bots.ts`): TST, the pilot holding its line on the light brake, and the collector.
     What they score sets the sky's medals, lightest bronze and heaviest gold (a bot flies no tricks,
     so its score is its total), and a run takes one for each bot it outscores (score, then peak, as
     the board ranks): one line, such as `medals: bronze 115 pts · silver 145 pts (TST) · gold 360
@@ -216,14 +216,14 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     none of those is flown twice, and the store keeps the Daily Sky's for the day. Each slice asks
     some 4 ms of the page, and on a page busy every frame they still land in seconds.
   - **Replays and challenges.** A run is its seed and its resolved flight controls
-    step by step, and nothing else: every run is recorded (`src/game/recorder.js`) and, as it ends,
-    replayed in the page (`replay.js`), and only a run that replays to the very same sheet gets a
+    step by step, and nothing else: every run is recorded (`src/domains/good-lift/recorder.ts`) and, as it ends,
+    replayed in the page (`replay.ts`), and only a run that replays to the very same sheet gets a
     link and a place on the board. The share line carries that link, `/good-lift/daily#vs=…`
     (digital runs compress well; continuously varying brakes can produce much larger links,
     bounded at 196,608 characters). Opening it replays the run before the start screen, which
     shows what it truly came to (`to beat: … pts · … m · verified`; what a link claims is never
     trusted), then flies the same sky; the sheet gives the verdict, and a race on today's sky puts
-    the challenger on the day's board. `SIM_VERSION` (`src/game/sim-version.js`) names the rules a
+    the challenger on the day's board. `SIM_VERSION` (`src/domains/good-lift/sim-version.ts`) names the rules a
     run was flown under: a test fingerprints every tuning table, so changing how a run flies without
     a new version fails `npm test`, and a link from other rules is refused rather than misread.
     The initial release uses one coupled canopy/pilot solver for both manual flight modes.
@@ -240,12 +240,12 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     best runs, ranked by score, then peak, then the earlier run, under three initials and the
     run's byname, with TST pinned among them where it ranks as the bot to beat (never stored as
     anyone's run). Initials are written in the runes of the Elder Futhark over their letters (ᚱᛖᚾ
-    over REN, `meet-initials.js`), in a 7 KB cut of Noto Sans Runic that comes with the game
+    over REN, `meet-initials.ts`), in a 7 KB cut of Noto Sans Runic that comes with the game
     (`public/fonts/`, under the SIL Open Font License beside it) and loads only once a rune is drawn,
     and a short blocklist of offensive three-letter words is refused
     as they are typed, and shown as no initials if a challenge link carries them. Good Lift keeps
-    all of this under its own `good-lift` key (`src/game/good-lift-key.js`,
-    `good-lift-store.js`, `board.js`), apart from the fjord's progress. The lightweight page reset
+    all of this under its own `good-lift` key (`src/domains/progression/good-lift-key.ts`,
+    `good-lift-store.ts`, `board.ts`), apart from the fjord's progress. The lightweight page reset
     reads the same key, without loading the game store.
   - **The world board.** Where the build names the online board's function (see
     [Online board](#online-board)), the board tab shows the world's best runs of the day beside
@@ -258,34 +258,34 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
   - **The kit.** Every kilo ever banked here (the tonnage) unlocks looks, never lift, and there is
     no shop: chalk at 1 t, then the Raven wing at 2.5 t, Calibrated at 5 t, Sheetless at 10 t,
     Flyte at 20 t and Hird at 40 t. A clean meet earns the Valkyrie wing and the 1,000 lb club the
-    Gjermundbu helmet (`KIT` in `good-lift-store.js`). The sheet names new kit as it opens, and its
+    Gjermundbu helmet (`KIT` in `good-lift-store.ts`). The sheet names new kit as it opens, and its
     `[ kit ]` tab shows the tonnage, the next rung and how far off it is, and every piece:
     unlocked, or what it asks for. There the visitor picks a wing (radio buttons) and switches the
     chalk and the helmet (check boxes); the glider wears the change at once (`setKit` on the
     engine), and Good Lift writes down only what has been earned (and, as a run ends, takes off
     anything kept that has not been). The chalk switches itself on the first time it is earned; a
     wing or the helmet waits to be put on.
-    - The choice is kept under its own `good-lift-kit` key (`src/game/wing-kit.js`, which imports
+    - The choice is kept under its own `good-lift-kit` key (`src/domains/progression/wing-kit.ts`, which imports
       nothing), so the engine dresses the glider as the page opens: the kit is worn over the fjord,
       in the game and in the hero. Reset progress clears it with the rest.
-    - A livery (`src/game/livery.js`) is a flat picture laid over the wing by a second set of
+    - A livery (`src/adapters/rendering/livery.ts`) is a flat picture laid over the wing by a second set of
       texture coordinates worked out from its resting shape (`wing.glb`'s own are scrambled):
       across the span from the pilot's left tip, measured along the arc, and down the chord from
       the leading edge at every station, out to the narrow tips. The picture is the colour and the
       glow both. Each is painted in the page until the owner's own is at
       `public/liveries/<id>.png` (see below). The standard wing is the file's own material, never
       touched, and only the livery worn is held on the graphics card: one taken off is let go.
-    - The helmet (`src/game/helmet.js`) is `public/models/helmet.glb` once there is one, and until
+    - The helmet (`src/adapters/rendering/helmet.ts`) is `public/models/helmet.glb` once there is one, and until
       then a low-poly one made in code: a rounded iron cap with a ridge, a brow band and a band over
       the crown, rivets, a short spike and the spectacle guard, no horns, about 1,200 triangles. It
       is fitted over the vertices skinned to the pilot's `Head` bone and held by that bone, so it
       turns with the head.
-    - Chalk (`src/game/meet-chalk.js`) is a small white puff from the pilot's hands as a plate or a
+    - Chalk (`src/features/good-lift/presentation/meet-chalk.ts`) is a small white puff from the pilot's hands as a plate or a
       rep loads, from a fixed pool of grains, and never shows for a visitor who asks for less
       motion.
     - The page fetches the livery and the helmet with `import()` the first time either is worn, so
-      for a visitor who wears neither it never carries them, and `split.test.js` checks it. The
-      game's kit tab brings `livery.js` with it, to paint its swatches. From the console,
+      for a visitor who wears neither it never carries them, and `split.test.ts` checks it. The
+      game's kit tab brings `livery.ts` with it, to paint its swatches. From the console,
       `fjord.wear({ wing: 'hird', helmet: true, chalk: true })` tries anything on without keeping
       it, until the next run ends and puts the kit kept back on; `fjord.kit` is what is worn and
       `fjord.chalk.puff(x, y, z)` starts a puff.
@@ -298,78 +298,39 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
   loads for them only if they choose to fly.
 - In an upright window the hero is two bands, the scene above the words, so the glider is never
   behind the headline. In any small window the top bar is one row and the hero says less. The
-  rules are together at the end of `src/styles.css`, under "small windows".
+  rules are together at the end of `src/styles/styles.css`, under "small windows".
 - On a touch screen the flight shows as little as it can: a line of readouts, a map button and a
   menu, and round buttons to fly with. Key names are left out of every button there.
 
 - Any other address is a missing page, and gets an emergency of its own: the wing collapses and the
   visitor either throws the reserve in time and lands in a tree, or does not and is fished out of
   the fjord by the longship. The way home is on screen from the first moment. The story is in
-  `src/game/lost.js`.
+  `src/features/flight/presentation/lost.ts`.
 
 The host must serve `index.html` for every address (a single-page-app rewrite), or direct links to
 the flight, to a project and to missing pages will show the host's own error page instead.
 
 ## Where things live
 
-- `src/content.js`: everything a visitor reads. The page and the flight both draw from it.
-- `src/App.jsx`: the top bar, the hero, and which of the page, a project or the flight is showing.
-- `src/components/Route.jsx`, `src/route.css`: the flight path and its waypoints.
-  `Sections.jsx` is what each waypoint holds, and what a landing in the flight shows.
-- `src/components/demos/`, `src/components/sketches/`, `src/demos.css`: the playable previews on
-  the projects and the sketches in the field reports.
-- `src/components/Experience.jsx`, `src/experience.css`: the shared career reader. It adapts to
-  its container width and reads roles, reports and sketch names from `EXPERIENCE` in `src/content.js`.
-- `src/components/ProjectDetail.jsx`, `src/project.css`: the shared project reports; `ProjectPage`
-  adds standalone page navigation. Layouts adapt to the available page or window width. Gallery
-  images, captions and contribution highlights live in `PROJECTS` in `src/content.js`. Replace
-  a screen's `src` and `alt` and remove `placeholder` when its real screenshot is available;
-  highlights use percentages of the uncropped image. Runtime images belong in `public/projects/`.
-- `src/game/`: the flight. `game.js` runs it: input, HUD, map, sound and the arch's portal; `terrain.js` is the
-  world; `scenery.js` is the sky, buildings and glider; `achievements.js` is progress and belts;
-  `landing.js` scores a landing, `approach.js` is the wind at each place (and the breeze the
-  streaks draw over the fjord) and `gateway.js` the arch. `flight.js` is how the glider flies:
-  airspeed and sink, the brake, the speed bar, the stall and gusts, with no 3D code, so tests fly
-  it; `stall-effects.js` is what a stall does to the wing and camera and what the brake meter
-  shows; `fjord-hints.js` picks free flight's line of advice; `wind-streaks.js` draws the wind;
-  `vario.js` is the variometer's beep.
-  `hints.js` holds what every hint shares. `lost.js` is the missing page and `ridge.js` the small
-  live view of rune ridge on the page.
-- `src/game/good-lift.js` and everything it imports: Good Lift, loaded through one `import()` in
-  `game.js`. `run-step.js` is one fixed step of a run (the wing, the sky, the meet and the
-  kettlebells, in one order) that the game and the tests share; `cloudbase-state.js` is the run's
-  sky (seeded thermals, ravens, storm clouds, wind, gusts and fog); `meet-state.js` is the meet
-  (plates, lines, lights, the horn), `meet-runes.js` the rune stones and their blessings and
-  `bells.js` Hrungnir's kettlebells. None of these has 3D code, so `npm test` flies them.
-  `cloudbase.js`, `ravens.js` and `meet-view.js` draw a run, with `meet-stones.js` for the rune
-  stones, `meet-beast.js` for the Beast's look, its lightning in `run-lightning.js` and the glide
-  ring in `run-glide.js`;
-  `run-effects.js` is what it does to the wing, the picture and the camera; `run-surge.js` feels
-  for the lift surging as a circle closes on a core. `flight-coach.js` and `trick-lessons.js`
-  provide the flight instructions, with environment warnings from `coach-run.js`.
-  `daily.js` is the Daily Sky; `meet-card.js` works out the meet
-  sheet (feats, the share line, the barogram) and `src/components/GoodLiftResult.jsx` draws it,
-  shipped with the game, with its kit tab in `GoodLiftKit.jsx`; `good-lift.css` styles its readouts
-  and the sheet, and `meet-chalk.js` draws the kit's chalk. `meet-bots.js` flies
-  the sheet's bots and sets the medals, `meet-bynames.js` names a run's pilot, `meet-verse.js` is
-  the skald and `meet-initials.js` writes initials in runes and keeps the blocklist; all four are
-  pure, so `npm test` checks them. `board-online.js` is the page's side of the world board (the
-  device token, a run sent, a day's board fetched) and `board-world.js` what it shares with the
-  function in `functions/`: a world row and a run's id.
-- `src/game/wing-kit.js`, `livery.js` and `helmet.js`: the kit the visitor flies in, read by the
-  engine and worn by the glider (`scenery.js`'s `setKit`) wherever they fly. The first is a leaf
-  the page carries; the page loads the other two only once worn (the game's kit tab brings
-  `livery.js` for its swatches).
-  `good-lift-address.js` reads the game's addresses and imports nothing, so the page can use it.
-  `npm run check:split` checks the built page carries none of the game, and `split.test.js` checks
-  the same of the source.
-- `src/game/ground.js`: the height of the land, with no 3D code, so a run can be flown without
-  three.js (in the tests, and by the world board's function). `terrain.js` builds the fjord on it.
-- `functions/`: the world board's Firebase function. `src/runs.js` is all it does, pure and tested
-  with a fake store (`functions/test/`, part of `npm test`); `src/index.js` wires it to HTTP and
-  Firestore. `tools/build-functions.mjs` bundles it with the game's pure modules into
-  `functions/lib/` (git-ignored), and `firestore.rules` refuses every client.
-- `public/poster.jpg`: the still shown in the hero before the live scene loads.
+The application uses strict TypeScript. See [the architecture guide](docs/architecture.md) for
+ownership, dependency rules, service contracts and verification commands.
+
+- `src/app/`: application composition, navigation/history services and page-level hooks.
+- `src/components/atoms/`, `molecules/`, `hooks/`: reusable UI primitives and interaction hooks.
+- `src/features/home/`, `projects/`, `experience/`: feature pages, components and local services.
+- `src/features/flight/`: the outdoor flight lifecycle, session service and presentation.
+- `src/features/good-lift/`: the lazy game session, result/kit components and presentation.
+- `src/domains/portfolio/`: content and portfolio lookup rules shared by pages and flight.
+- `src/domains/flight/`, `coaching/`, `good-lift/`, `progression/`: deterministic rules and plain
+  models. These cannot import React, Three.js, UI or environment adapters.
+- `src/adapters/browser/`, `audio/`, `crypto/`, `rendering/`: storage, scheduling, media,
+  hashing, WebAudio and Three.js implementations. Browser I/O stays outside domains.
+- `src/styles/`: shared styling; flight and Good Lift keep their own lazy styles.
+- `functions/`: the Firebase world-board HTTP/Firestore adapter and replay validation. The
+  function build includes domain code and the small crypto adapter, without browser rendering.
+- Tests live beside their owner; `src/test/fixtures/` contains frozen browser evidence and
+  `src/test/helpers/` holds shared acceptance harnesses. Fixtures are never regenerated by tests.
+- `public/`: runtime assets, including models, project media, fonts and the hero poster.
 
 ## 3D models
 
@@ -379,12 +340,29 @@ Put a raw `.glb` export in `models-raw/`, then shrink it into `public/models/`:
 npm run models
 ```
 
+This is a manual authoring step. The browser loads the optimized files in `public/models/`;
+neither application startup nor `npm run build` runs the optimizer.
+
 A model's file name is the name the scene loads it by, so keep them short and stable (`hall.glb`,
-`pine-tree.glb`). Where each one stands is set in the `FURNITURE` table in `src/game/scenery.js`.
+`pine-tree.glb`). Where each one stands is set in the `FURNITURE` table in `src/adapters/rendering/scenery.ts`.
 `concepts/` holds the images the models were generated from.
 
 The optimizer maps the new generator filenames to `windsock.glb`, `gateway.glb`, `raven.glb`
 and `clouds.glb`. To process just these sources, run `npm run models -- windsock gateway raven clouds`.
+
+The authored floating islands use these source names:
+
+| Raw source in `models-raw/` | Runtime asset in `public/models/` |
+| --- | --- |
+| `rocky+alpine+island+3d+model.glb` | `island-alpine.glb` |
+| `ruined+fortress+3d+model.glb` | `island-ruins.glb` |
+| `rocky+island+ruins+3d+model.glb` | `island-split.glb` |
+
+Run `npm run models -- island-alpine island-ruins island-split` after replacing those sources.
+Use Y-up exports with transforms applied; normalization centres X/Z, places the bottom at Y=0
+and sets the longest side to one unit. Each runtime asset must have only one raw source.
+See the [authored-island QA receipt](docs/authored-islands-qa.md) for the current models.
+
 The windsock and gateway load with the fjord. The raven, the storm cloud and the kettlebell load
 as the glider closes on the arch, or the first time Good Lift starts, with simple stand-ins drawn
 until they arrive. The kettlebells glow in a copy of the forge prop's material, so the forge's own
@@ -392,14 +370,14 @@ bell is never changed, and Good Lift's rune stones are the fjord's `rune-stone.g
 their own. One slot is waiting for a model: `kettlebell-beast.glb`, Hrungnir's 48 kg Beast, a bell
 of cracked stone bound in iron with runes on the handle, standing on its base and facing +z like
 the others. Until it exists the Beast is the kettlebell cut again in a stone painted in code
-(`src/game/meet-beast.js`) and the request for the file fails quietly; once it is in
+(`src/features/good-lift/presentation/meet-beast.ts`) and the request for the file fails quietly; once it is in
 `public/models/`, the game draws it instead, glowing as the bells do. The raven's file has a
-skeleton but no animation, so its wingbeat is posed in code (`src/game/ravens.js`); it is drawn
+skeleton but no animation, so its wingbeat is posed in code (`src/features/good-lift/presentation/ravens.ts`); it is drawn
 about three and a half times life size and lit a little, because a real raven at 200 m against
 a night sky is four dark pixels.
 Run `npm test` for the scoring, progress, gateway, flight and Good Lift checks. The deploy
 workflow runs it, and `npm run check:split`, before every deploy. The Good Lift tests include
-reference pilots (`src/game/pilots.js`) and recorded button inputs that fly actual seeded weather.
+reference pilots (`src/domains/good-lift/pilots.ts`) and recorded button inputs that fly actual seeded weather.
 Acceptance covers stable turns, energy loss, shared wind, safe launch, drifting-core scoring,
 five-to-eight-minute skilled sessions and the exact ten-minute deadline. Browser-recorded goldens
 must replay to identical judged sheets in Node. Changing flight rules requires a new `SIM_VERSION`,
@@ -430,8 +408,8 @@ and blocked storage retains progress for the visit. Logs remain bounded to 196,6
 and persistent board logs to one MiB.
 Current code review, local acceptance and remaining device/release gates are recorded in
 [Good Lift QA](docs/good-lift-qa.md) and [proportional brake QA](docs/good-lift-brake-drag-qa.md).
-`DAILY_EPOCH` in `src/game/good-lift-address.js` is the UTC day of Daily #1:
-on the day Good Lift first ships, set it to that UTC day (and the date `good-lift-address.test.js`
+`DAILY_EPOCH` in `src/domains/good-lift/good-lift-address.ts` is the UTC day of Daily #1:
+on the day Good Lift first ships, set it to that UTC day (and the date `good-lift-address.test.ts`
 pins with it), so the first Daily Sky anyone can fly is Daily #1.
 
 The kit's art, when it is made, needs no code:
@@ -535,7 +513,7 @@ release workflow warrants it.
 The world board is the best runs of each Daily Sky from every browser whose pilot opts in, shown on
 the meet sheet's board tab beside this browser's own. One Firebase function, `board`
 (`functions/`), takes each run as its log, flies it again through the very step the game flies
-(`src/game/replay.js`) and ranks only what that replay comes to. It keeps each day's top 100 in one
+(`src/domains/good-lift/replay.ts`) and ranks only what that replay comes to. It keeps each day's top 100 in one
 Firestore document, at most one run from each device: its best. The page reaches it with plain
 `fetch` at the address the build is given as `VITE_BOARD_URL`. While that is unset, as it is until
 the setup below is done, the world board is off: nothing is fetched and the game is as it was.
@@ -591,12 +569,12 @@ Mac and on an iPhone against the deployed function before relying on it.
    Blaze (pay-as-you-go) plan. Then in the Google Cloud console, under Billing → Budgets & alerts,
    create a $5 budget for the project with email alerts at 50%, 90% and 100%. A budget only warns:
    what caps the spend is the function's three instances at most (`maxInstances` in
-   `functions/src/index.js`). Inside the free quotas (2 million function requests a month; 50,000
+   `functions/src/index.ts`). Inside the free quotas (2 million function requests a month; 50,000
    Firestore reads and 20,000 writes a day) it should cost nothing.
 2. **Firestore.** In the Firebase console, Firestore Database → Create database: Native mode
    (Standard edition), the `(default)` database, production rules (every client refused, as
    `firestore.rules` says), and a location near most visitors. The location cannot be changed
-   later. The function runs in `us-central1` (`REGION` in `functions/src/index.js`): pick that, or
+   later. The function runs in `us-central1` (`REGION` in `functions/src/index.ts`): pick that, or
    change `REGION` to the database's region (`europe-west1`, `asia-southeast1`, …) before the first
    deploy, so each transaction is a short hop. Then, under Firestore's Time-to-live, add a policy on
    the collection group `boards` and the field `expires`, so each day's board is deleted once it is

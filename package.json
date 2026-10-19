@@ -7,10 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test src/game/*.test.js functions/test/*.test.js",
-    "build:functions": "node tools/build-functions.mjs",
-    "models": "node tools/optimize-models.mjs",
-    "check:split": "node tools/check-split.mjs"
+    "test": "tsx tools/test.ts",
+    "build:functions": "tsx tools/build-functions.ts",
+    "models": "tsx tools/optimize-models.ts",
+    "check:split": "tsx tools/check-split.ts",
+    "test:core": "tsx tools/test.ts core",
+    "test:opening": "tsx tools/test.ts opening",
+    "typecheck": "tsc -p tsconfig.browser.json && tsc -p tsconfig.worker.json && tsc -p tsconfig.node.json && tsc -p tsconfig.json",
+    "check:architecture": "tsx tools/check-architecture.ts",
+    "verify": "npm run typecheck && npm run check:architecture && npm test && npm run build && npm run build:functions && npm run check:split"
   },
   "dependencies": {
     "react": "^19.3.0",
@@ -21,8 +26,14 @@
     "@gltf-transform/core": "^4.5.1",
     "@gltf-transform/extensions": "^4.5.1",
     "@gltf-transform/functions": "^4.5.1",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.1.2",
     "meshoptimizer": "^1.3.0",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
     "vite": "^8.3.4"
   }
 }

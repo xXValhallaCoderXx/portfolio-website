@@ -1,6 +1,6 @@
 {
   "name": "good-lift-board",
-  "description": "Good Lift's world board: one Firebase function that replays each run before it ranks it. Built into lib/ by tools/build-functions.mjs at the repository's root.",
+  "description": "Good Lift's world board: one Firebase function that replays each run before it ranks it. Built into lib/ by tools/build-functions.ts at the repository's root.",
   "private": true,
   "type": "module",
   "main": "lib/index.js",
