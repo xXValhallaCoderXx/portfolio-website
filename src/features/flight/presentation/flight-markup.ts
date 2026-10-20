@@ -31,16 +31,16 @@ export const FLIGHT_MARKUP = /* html */ `
     <button class="primary fj-resume" data-do="resume">▶ resume flight</button>
     <p class="fj-pause-summary" data-pause-summary></p>
     <div class="fj-menu-content">
-      <h2>CONTROLS · DRAG ANYWHERE</h2>${controlGuide}
+      <h2>MOUSE / TOUCH · DRAG TO FLY</h2>${controlGuide}
       <dl class="fj-control-rows">
-        <div><dt>◀ ▶ side</dt><dd>turn; a smaller pull turns gently</dd></div>
-        <div><dt>▼ down</dt><dd>both brakes: slow down, check a surge</dd></div>
-        <div><dt>deeper</dt><dd>purple is deep brake and can stall</dd></div>
-        <div><dt>▲ hands up</dt><dd>slide up, release the mouse or lift your finger</dd></div>
+        <div><dt>Turn</dt><dd>drag left or right; a smaller pull turns gently</dd></div>
+        <div><dt>Brake</dt><dd>drag down to pull both brakes and slow down</dd></div>
+        <div><dt>Deep brake</dt><dd>drag farther down into purple; a deep pull can stall</dd></div>
+        <div><dt>Let go</dt><dd>slide up, release the mouse or lift your finger</dd></div>
       </dl>
       <details><summary>thermals &amp; climbing</summary><p>Blend a gentle downward and side pull to circle in rising air. Ease the side pull to widen. Brake slows the wing; rising air provides lift.</p><p class="fj-keys-fjord">Land inside a lit ring to read that part of the page. Select a pillar or map destination for automatic travel.</p><p class="fj-keys-goal fj-keys-run" hidden>Bank the bar every 150 m. Raven warnings, gusts and storms begin above 500 m; kettlebells join at 700 m and the Beast at 1,000 m. The fog builds after five minutes; a surviving flight completes at ten.</p></details>
       <details><summary>tricks &amp; recovery</summary><p>Safe lessons introduce pitch and catch at 500 m, then wingovers at 750 m. Follow the coach, recover level to bank style, or choose Back to lift to leave a lesson. Full pulls can stall; follow the release cue.</p><button data-do="repeat-lessons" hidden>Repeat trick lessons</button></details>
-      <div class="fj-keys-more"><button data-do="sound">sound: on</button><button data-do="fullscreen">fullscreen</button></div>
+      <div class="fj-keys-more"><button data-do="sound">sound: on</button></div>
     </div>
     <footer class="fj-menu-footer"><button data-do="cloudbase" hidden>Good Lift</button><button data-do="quit-cloudbase" hidden>end run</button><button data-do="exit">back to the page</button></footer>
   </section>

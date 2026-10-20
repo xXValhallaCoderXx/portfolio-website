@@ -217,7 +217,7 @@ test('ambiguous, preparation, urgent, recovery, Bar/Ears and unaccepted suggesti
   assert.ok(coachDragTarget(base), 'an instruction can return immediately after its suppression clears');
 });
 
-test('wide views dock the flight control clear of the pilot while phones retain their centred anchor', () => {
+test('desktop controls stay low and centred, with a corner fallback for short landscape views', () => {
   for (const [width, height] of [[1280, 800], [390, 844], [320, 740], [844, 390], [1100, 760], [752, 892], [600, 800]]) {
     const safe = Object.freeze({ left: 12, right: width - 12, top: 12, bottom: height - 12 });
     const out = {}, layout = flightControlLayout(safe, out);
@@ -226,8 +226,11 @@ test('wide views dock the flight control clear of the pilot while phones retain 
     assert.ok(layout.left >= safe.left && layout.right <= safe.right && layout.top >= safe.top && layout.bottom <= safe.bottom);
     const centre = (safe.left + safe.right) / 2;
     if (safe.right - safe.left > 560) {
-      close(layout.right, safe.right); close(layout.bottom, safe.bottom);
-      assert.ok(layout.left > centre + (safe.right - safe.left) * .10, 'the diagram clears the central pilot corridor');
+      close(layout.bottom, safe.bottom, 1e-9);
+      if (height <= 500) {
+        close(layout.right, safe.right);
+        assert.ok(layout.left > centre + (safe.right - safe.left) * .10, 'short views keep the diagram beside the pilot');
+      } else close(layout.x, centre);
     } else close(layout.x, centre);
     assert.ok(layout.y > safe.top + (safe.bottom - safe.top) * .70, 'the anchor stays in the lower screen');
     assert.deepEqual(flightControlLayout({ ...safe }), layout, 'only the safe viewport determines the position');

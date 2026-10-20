@@ -136,10 +136,11 @@ export function flightControlLayout(safe: CueBounds, output: Partial<ControlLayo
   const compact = width > height && height <= 500;
   const travel = Math.max(0, Math.min(compact ? 60 : BRAKE_DRAG.touchTravel, (width - 44) / 2, (height - 52) / 1.6));
   const half = travel + 22, top = upperTravel(travel) + 28, bottom = travel + 24;
-  // Wider views leave the centre clear for the pilot. Phones keep their lower-centre diagram.
+  // Keep the diagram centred and low, below the pilot. Short landscape views use the corner
+  // because there is no room below the pilot; phones retain their lower-centre diagram.
   // Pointer origins, input device and coach messages never move this viewport anchor.
   const docked = width > 560;
-  const x = docked ? safe.right - half : safe.left + width / 2;
+  const x = docked && compact ? safe.right - half : safe.left + width / 2;
   const y = docked ? safe.bottom - bottom : clamp(safe.top + height * 0.80, safe.top + top, safe.bottom - bottom);
   Object.assign(out, { x, y, travel, left: x - half, right: x + half, top: y - top, bottom: y + bottom });
   return out;
