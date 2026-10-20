@@ -1,0 +1,350 @@
+/* The meet sheet keeps its next-flight actions visible while the selected sheet scrolls. */
+.window.good-lift-result {
+  width: min(1040px, calc(100vw - 40px));
+  height: min(780px, 90svh);
+  max-height: calc(100svh - 32px);
+  background: #050a13;
+  overflow: hidden;
+}
+
+.good-lift-result button {
+  min-height: 44px;
+}
+
+.good-lift-result > header {
+  flex: 0 0 auto;
+  min-height: 36px;
+  box-sizing: border-box;
+  padding: 6px 16px;
+}
+
+.good-lift-result > header i {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+}
+
+.good-lift-result > header span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.good-lift-result .good-lift-result-layout {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.good-lift-result .good-lift-result-summary {
+  min-width: 0;
+  max-height: 42svh;
+  padding: 14px 16px 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.good-lift-result .good-lift-result-summary > p {
+  margin: 0 0 8px;
+}
+
+.good-lift-result .good-lift-result-summary > .shout {
+  margin-bottom: 6px;
+  font-size: 26px;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+}
+
+.good-lift-result .good-lift-result-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 10px 0 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.good-lift-result .good-lift-result-metrics > div {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid #1f3350;
+  border-radius: 8px;
+  background: #0b1424;
+}
+
+.good-lift-result .good-lift-result-metrics dt {
+  color: #8aa0b8;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.good-lift-result .good-lift-result-metrics dd {
+  margin: 0;
+  font-size: clamp(14px, 4.2vw, 17px);
+  font-weight: 800;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.good-lift-result .good-lift-result-metrics > div:nth-child(odd) dd {
+  color: var(--cyan);
+}
+
+.good-lift-result .good-lift-result-metrics dd span {
+  color: #9fb2c6;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.good-lift-result .good-lift-result-summary > .good-lift-cost {
+  color: #8aa0b8;
+  font-size: 11px;
+}
+
+.good-lift-result .good-lift-result-detail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.good-lift-result .good-lift-tabs {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 4px 16px 0;
+  border: 1px solid #24405f;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #050a13;
+}
+
+.good-lift-result .good-lift-tabs > button {
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #b9c8d8;
+  font-size: 13px;
+}
+
+.good-lift-result .good-lift-tabs > button + button {
+  border-left: 1px solid #24405f;
+}
+
+.good-lift-result .good-lift-tabs > button[aria-selected='true'] {
+  background: var(--blue);
+  color: #04101f;
+  font-weight: 700;
+}
+
+.good-lift-result button:focus-visible,
+.good-lift-result [role='tabpanel']:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: -3px;
+}
+
+.good-lift-result .good-lift-result-panels {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 16px 20px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #24405f #050a13;
+}
+
+.good-lift-result .good-lift-result-panels > [role='tabpanel'] {
+  min-width: 0;
+}
+
+.good-lift-result .good-lift-result-panels p {
+  margin: 0 0 10px;
+}
+
+.good-lift-result .good-lift-result-panels .good-lift-result-verse-detail {
+  display: none;
+}
+
+.good-lift-result .good-lift-feats {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.good-lift-result .good-lift-feats > li {
+  gap: 3px;
+  padding: 9px 11px;
+  border-radius: 8px;
+}
+
+.good-lift-result .good-lift-result-actions {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 16px max(16px, env(safe-area-inset-bottom));
+  border-top: 1px solid #16233a;
+  background: #050a13;
+}
+
+.good-lift-result .good-lift-result-actions > .primary {
+  grid-column: 1 / -1;
+  min-height: 52px;
+  border: 0;
+  color: #04101f;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.good-lift-result .good-lift-result-actions button {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.good-lift-result .good-lift-result-actions kbd {
+  display: none;
+}
+
+.good-lift-result .good-lift-result-today {
+  color: var(--text);
+}
+
+.good-lift-result .good-lift-result-more {
+  position: relative;
+  min-width: 0;
+}
+
+.good-lift-result .good-lift-result-more > button {
+  border-color: #24405f;
+  color: #b9c8d8;
+}
+
+.good-lift-result .good-lift-result-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: min(260px, calc(100vw - 32px));
+  padding: 6px;
+  border: 1px solid #24405f;
+  border-radius: 12px;
+  background: #0b1424;
+  box-shadow: 0 8px 32px #0008;
+}
+
+.good-lift-result .good-lift-result-menu > button {
+  padding: 8px 10px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.good-lift-result .good-lift-result-menu > button:hover,
+.good-lift-result .good-lift-result-menu > button:focus-visible {
+  background: #15324c;
+}
+
+@media (max-width: 767px), (max-height: 480px) {
+  .window.good-lift-result {
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border: 0;
+    transform: none;
+  }
+}
+
+@media (min-width: 768px), (min-width: 720px) and (max-height: 480px) {
+  .good-lift-result .good-lift-result-layout {
+    grid-template-columns: minmax(316px, 32%) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .good-lift-result .good-lift-result-summary {
+    grid-column: 1;
+    grid-row: 1;
+    max-height: none;
+  }
+
+  .good-lift-result .good-lift-result-summary > .shout {
+    font-size: 22px;
+  }
+
+  .good-lift-result .good-lift-result-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .good-lift-result .good-lift-result-detail {
+    grid-column: 2;
+    grid-row: 1 / -1;
+    padding-top: 10px;
+    border-left: 1px solid #16233a;
+  }
+
+  .good-lift-result .good-lift-result-actions {
+    grid-column: 1;
+    grid-row: 2;
+    border-top: 0;
+  }
+
+  .good-lift-result .good-lift-result-menu {
+    left: 0;
+    right: auto;
+  }
+
+  .good-lift-result .good-lift-feats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 720px) and (max-height: 480px) {
+  .good-lift-result .good-lift-result-summary {
+    padding-top: 8px;
+  }
+
+  .good-lift-result .good-lift-result-summary > .good-lift-verse {
+    display: none;
+  }
+
+  .good-lift-result .good-lift-result-metrics > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 6px 9px;
+  }
+
+  .good-lift-result .good-lift-result-metrics dd {
+    font-size: 16px;
+  }
+
+  .good-lift-result .good-lift-result-panels .good-lift-result-verse-detail {
+    display: block;
+  }
+
+  .good-lift-result .good-lift-result-actions {
+    padding-top: 8px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .good-lift-result .good-lift-result-actions > .primary {
+    min-height: 48px;
+  }
+}

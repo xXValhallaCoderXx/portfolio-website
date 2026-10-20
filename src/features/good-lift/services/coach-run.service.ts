@@ -38,8 +38,8 @@ export function runCoachHazard(world: HazardObservation) {
   const bells = world.bells?.state;
   const bell = bells && bells.warning >= 0 ? bells.bells[bells.warning] : null;
   if (bell?.result === BELL_RESULT.pending) return bell.circling && !(world.g?.ears! > 0.01 || world.controls?.ears)
-    ? { state: 'hazard', context: 'KETTLEBELL', phase: 'dodge', action: 'none', hold: ['bar'], release: ['brake'],
-      title: 'PUSH THE BAR', detail: 'Accelerate out of its fall line, or straighten your turn.' }
+    ? { state: 'hazard', context: 'KETTLEBELL', phase: 'dodge', action: 'release-all', hold: [], release: ['left', 'right', 'brake', 'bar', 'ears'],
+      title: 'LET GO · HANDS UP', detail: 'Release the pull to leave the falling kettlebell’s line.' }
     : { state: 'hazard', context: 'KETTLEBELL', phase: 'dodge', action: 'none',
       title: 'LEAVE YOUR LINE', detail: 'Turn away from the falling kettlebell.' };
   if (pilot.danger > 0) return { state: 'hazard', context: 'RAVENS', phase: 'leave', action: 'none',

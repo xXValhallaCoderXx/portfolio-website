@@ -3,7 +3,7 @@ import type { FlightState } from '../../../domains/flight/models.ts';
 import { varioTone } from '../presentation/vario.ts';
 export interface FlightAudioState { ctx: AudioContext; master: GainNode; noise: AudioBuffer; wind: GainNode; windFilter: BiquadFilterNode; osc: OscillatorNode; beep: GainNode; rumble: GainNode; flap: BiquadFilterNode; luff: GainNode; beat: OscillatorNode; tips: GainNode; nextBeep: number; next: Record<string, number> }
 export type AudioVoice<Args extends unknown[]> = (ctx: AudioContext, at: number, ...args: Args) => void;
-export interface FlightAudioPort { stage: HTMLElement; g: FlightState; effects: { floor: number; veil: number; luff: number }; vario: { readonly value: number }; readonly mode: string; readonly mapOpen: boolean; isAirborne(): boolean; runSounds(): void }
+export interface FlightAudioPort { stage: HTMLElement; g: FlightState; effects: { floor: number; veil: number; luff: number }; vario: { readonly value: number }; readonly mode: string; readonly paused: boolean; isAirborne(): boolean; runSounds(): void }
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 /** Browser sound resources and synthesis; simulation only supplies sampled values. */
@@ -93,9 +93,9 @@ export function createFlightAudio(port: FlightAudioPort) {
   }
 
   // Plays a one-off sound unless it played less than `gap` seconds ago. Nothing new starts while
-  // the map has the run paused, or with the sound switched off.
+  // an overlay has the run paused, or with the sound switched off.
   function play<Args extends unknown[]>(name: string, gap: number, voice: (ctx: AudioContext, at: number, ...args: Args) => void, ...args: Args) {
-    if (!audio || !soundOn || port.mapOpen || audio.ctx.state !== 'running') return;
+    if (!audio || !soundOn || port.paused || audio.ctx.state !== 'running') return;
     const now = audio.ctx.currentTime;
     if (now < (audio.next[name] ?? 0)) return;
     audio.next[name] = now + gap;
@@ -277,9 +277,9 @@ export function createFlightAudio(port: FlightAudioPort) {
   function updateAudio() {
     if (!audio) return;
     const now = audio.ctx.currentTime;
-    const flying = port.isAirborne() && !port.mapOpen;
-    const running = port.mode === 'cloudbase' && !port.mapOpen;
-    const rush = port.mode === 'lost' ? Math.min(0.14, 0.01 + Math.abs(g.vy) * 0.005) : 0.01;
+    const flying = port.isAirborne() && !port.paused;
+    const running = port.mode === 'cloudbase' && !port.paused;
+    const rush = port.paused ? 0 : port.mode === 'lost' ? Math.min(0.14, 0.01 + Math.abs(g.vy) * 0.005) : 0.01;
     // The wind in the lines follows the airspeed: louder and brighter on the bar, dull on the brake,
     // and quicker to while the wing swings, so it rises at every bottom of a swing.
     const swinging = Math.abs(g.roll) > 0.3 || Math.abs(g.pitch) > 0.4;

@@ -7,6 +7,7 @@ import { multiplierOf, scoreOf } from '../../../domains/good-lift/score.ts';
 import { bynameOf } from '../../../domains/good-lift/meet-bynames.ts';
 import { isBlocked, runesOf } from '../../../domains/good-lift/meet-initials.ts';
 import GoodLiftKit,{ KitNews } from './GoodLiftKit.tsx';
+import '../result-layout.css';
 
 // How a run can end, as the meet sheet says it.
 const ENDINGS: Record<string, string> = {
@@ -273,9 +274,15 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
   const heading = useRef<HTMLHeadingElement>(null);
   const words = useRef<HTMLTextAreaElement>(null);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
+  const moreButton = useRef<HTMLButtonElement>(null);
+  const moreMenu = useRef<HTMLDivElement>(null);
+  const menuItems = useRef<(HTMLButtonElement | null)[]>([]);
+  const menuStart = useRef(0);
+  const panelScroll = useRef<HTMLDivElement>(null);
   const id = useId();
   const [tab, setTab] = useState('result');
   const [shared, setShared] = useState('');
+  const [moreOpen, setMoreOpen] = useState(false);
   // The initials as typed; they are kept (onInitials) once they are three letters the board will
   // show, or none.
   const [initials, setInitials] = useState(result.initials ?? '');
@@ -295,7 +302,45 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
   useEffect(() => {
     heading.current?.focus();
     setShared('');
+    setTab('result');
+    setMoreOpen(false);
   }, [result.at, result.seed]);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    menuItems.current[menuStart.current]?.focus();
+    const closeOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !moreMenu.current?.contains(event.target)) setMoreOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, [moreOpen]);
+
+  useEffect(() => {
+    if (panelScroll.current) panelScroll.current.scrollTop = 0;
+  }, [tab, result.at, result.seed]);
+
+  const closeMore = () => {
+    setMoreOpen(false);
+    moreButton.current?.focus();
+  };
+
+  const onMenuKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    const index = menuItems.current.findIndex((item) => item === document.activeElement);
+    let next;
+    if (event.key === 'ArrowDown') next = (index + 1) % 4;
+    else if (event.key === 'ArrowUp') next = (index + 3) % 4;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = 3;
+    else if (event.key === 'Escape' || event.key === 'Tab') {
+      event.preventDefault();
+      closeMore();
+      return;
+    } else return;
+    event.preventDefault();
+    menuItems.current[next]?.focus();
+  };
 
   // R, M and L go on to the game; B switches the music here, so the sheet's switch says what it
   // is; Escape goes back to the fjord; every other key stays here. In a text field they are all
@@ -306,7 +351,8 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
     if (!['KeyR', 'KeyM', 'KeyL'].includes(event.code) || typing) event.stopPropagation();
     if (event.type === 'keydown' && event.key === 'Escape') {
       event.preventDefault();
-      onFjord();
+      if (moreOpen) closeMore();
+      else onFjord();
     }
   };
   const onTabKey = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
@@ -375,243 +421,258 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
         <i />
         <span>~/fjord/good-lift — meet sheet</span>
       </header>
-      <div className="fjord-panel-body">
-        <h2 className="shout" id={`${id}-heading`} ref={heading} tabIndex={-1}>
-          <span>&gt;</span> GOOD_LIFT
-        </h2>
-        <p className="dim" id={`${id}-ending`}>
-          {ENDINGS[result.reason] ?? 'Run complete.'}
-        </p>
-        {result.verse && <p className="dim good-lift-verse">{result.verse}</p>}
-        <p className="good-lift-total" id={`${id}-total`}>
-          SCORE <strong>{points(result)}</strong> · {kilos(result.total)} kg
-          {result.stats.style > 0 && (
-            <>
-              {' × '}
-              <span className="good-lift-style">{multiplierOf(result.stats.style).toFixed(2)} style</span>
-            </>
+      <div className="good-lift-result-layout">
+        <div className="good-lift-result-summary">
+          <h2 className="shout" id={`${id}-heading`} ref={heading} tabIndex={-1}>
+            <span>&gt;</span> GOOD_LIFT
+          </h2>
+          <p className="dim" id={`${id}-ending`}>
+            {ENDINGS[result.reason] ?? 'Run complete.'}
+          </p>
+          {result.verse && <p className="dim good-lift-verse">{result.verse}</p>}
+          <dl className="good-lift-result-metrics" id={`${id}-total`}>
+            <div><dt>score</dt><dd>{points(result)}<span> pts</span></dd></div>
+            <div><dt>lifted</dt><dd>{kilos(result.total)}<span> kg</span></dd></div>
+            <div><dt>peak</dt><dd>{metres(result.peak)}<span> m</span></dd></div>
+            <div><dt>best</dt><dd>{(best.score ?? scoreOf(best)).toLocaleString('en-GB')}<span> pts</span></dd></div>
+          </dl>
+          {((result.pilot ?? result.initials) || bynameOf(result.byname)) && (
+            <p className="good-lift-who">
+              <Pilot who={result.pilot ?? result.initials} via="me" byname={result.byname} told />
+            </p>
           )}
-          {' · '}peak <strong>{metres(result.peak)} m</strong>
-          {' · '}best {(best.score ?? scoreOf(best)).toLocaleString('en-GB')} pts
-        </p>
-        {((result.pilot ?? result.initials) || bynameOf(result.byname)) && (
-          <p className="good-lift-who">
-            <Pilot who={result.pilot ?? result.initials} via="me" byname={result.byname} told />
+          <p className="good-lift-cost">
+            {result.label}
+            {result.newBest ? ' · a new best' : ''}
+            {' · '}
+            {result.stats.strikes ? `${result.stats.strikes} strike${result.stats.strikes === 1 ? '' : 's'}` : 'no strikes'}
+            {' · '}
+            <span role="status">{result.verifying ? 'Flight saved · preparing your challenge link…' : result.verified ? 'Flight saved · challenge ready.' : 'Flight saved on this device.'}</span>
           </p>
-        )}
-        <p className="good-lift-cost">
-          {result.label}
-          {result.newBest ? ' · a new best' : ''}
-          {' · '}
-          {result.stats.strikes ? `${result.stats.strikes} strike${result.stats.strikes === 1 ? '' : 's'}` : 'no strikes'}
-          {result.stats.stalls > 0 && ` · ${result.stats.stalls} stall${result.stats.stalls === 1 ? '' : 's'}`}
-          {result.stats.cloud > 0 && ` · ${result.stats.cloud} s in cloud`}
-          {result.stats.thrown > 0 && ` · ${result.stats.thrown - result.stats.hits} of ${result.stats.thrown} kettlebells dodged`}
-          {result.stats.reps > 0 && ` · ${result.stats.reps} rep${result.stats.reps === 1 ? '' : 's'}, ${result.stats.deep || 'none'} to depth`}
-        </p>
-        <SkyLine result={result} />
-        {trickSaid(result.stats) && <p className="dim good-lift-tricks">{trickSaid(result.stats)}</p>}
-        <Medals bots={landed} />
-        <p className="good-lift-hide" role="status">
-          {said}
-        </p>
-
-        {rival && (
-          <p className="good-lift-verdict">
-            vs {rival.who || 'a pilot'} · {points(rival)} pts · {metres(rival.peak)} m — {verdict(result, rival)}
-          </p>
-        )}
-        {fresh.size > 0 && (
-          <p className="good-lift-fresh">
-            new feat{fresh.size === 1 ? '' : 's'}: {FEATS.filter((feat) => fresh.has(feat.id)).map((feat) => feat.name).join(' · ')}
-          </p>
-        )}
-        <KitNews sheet={result.kit} />
-
-        <p className="dim" role="status">
-          {result.verifying ? 'Flight saved · preparing your challenge link…' : result.verified ? 'Flight saved · challenge ready.' : 'Flight saved on this device.'}
-        </p>
-
-        <div className="good-lift-tabs" role="tablist" aria-label="Meet sheet">
-          {TABS.map((item, index) => (
-            <button
-              key={item.key}
-              ref={(element) => {
-                buttons.current[index] = element;
-              }}
-              type="button"
-              role="tab"
-              id={`${id}-tab-${item.key}`}
-              aria-selected={tab === item.key}
-              aria-controls={`${id}-panel-${item.key}`}
-              tabIndex={tab === item.key ? 0 : -1}
-              onClick={() => setTab(item.key)}
-              onKeyDown={(event) => onTabKey(event, index)}
-            >
-              [ {item.label} ]
-            </button>
-          ))}
+          <p className="good-lift-hide" role="status">{said}</p>
         </div>
 
-        <div role="tabpanel" id={`${id}-panel-result`} aria-labelledby={`${id}-tab-result`} hidden={tab !== 'result'}>
-          <Barogram result={result} />
-          {result.lifts.length > 0 ? (
-            <table className="good-lift-lights">
-              <caption className="good-lift-hide">Each lift, its three lights and the call</caption>
-              <thead>
-                <tr>
-                  <th scope="col">line</th>
-                  {JUDGES.map((judge) => (
-                    <th scope="col" key={judge}>
-                      {judge}
-                    </th>
-                  ))}
-                  <th scope="col">bar</th>
-                  <th scope="col">call</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.lifts.map((lift, index: number) => (
-                  <tr key={index} className={lift.good ? 'good' : 'none'}>
-                    <th scope="row">{lift.line ? `${metres(lift.line)} m` : 'the mist'}</th>
-                    {JUDGES.map((judge, bit) => (
-                      <td key={judge}>
-                        <Light judge={judge} red={(lift.red >> bit) & 1} />
-                      </td>
-                    ))}
-                    <td>{kilos(lift.kg)} kg</td>
-                    <td>
-                      {lift.good ? 'GOOD' : 'NO LIFT'}
-                      {lift.good && lift.double && <b className="good-lift-double"> ×2</b>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="dim">// no line reached: the first is at 150 m.</p>
-          )}
-
-          <ul className="good-lift-feats" aria-label="Feats">
-            {FEATS.map((feat) => (
-              <li key={feat.id} className={`${earned.has(feat.id) ? 'earned' : ''}${fresh.has(feat.id) ? ' fresh' : ''}`}>
-                <b>
-                  {earned.has(feat.id) ? '✓ ' : ''}
-                  {feat.name}
-                  <span className="good-lift-hide">{earned.has(feat.id) ? ', earned' : ', not yet earned'}</span>
-                </b>
-                {fresh.has(feat.id) && <em> new</em>}
-                <span>
-                  {feat.text}
-                  {('streak' in feat ? feat.streak ?? 0 : 0) && !earned.has(feat.id) ? ` (${Math.min(result.feats?.streak ?? 0, ('streak' in feat ? feat.streak ?? 0 : 0))} of ${('streak' in feat ? feat.streak ?? 0 : 0)})` : ''}
-                </span>
-              </li>
+        <div className="good-lift-result-detail">
+          <div className="good-lift-tabs" role="tablist" aria-label="Meet sheet">
+            {TABS.map((item, index) => (
+              <button
+                key={item.key}
+                ref={(element) => {
+                  buttons.current[index] = element;
+                }}
+                type="button"
+                role="tab"
+                id={`${id}-tab-${item.key}`}
+                aria-selected={tab === item.key}
+                aria-controls={`${id}-panel-${item.key}`}
+                tabIndex={tab === item.key ? 0 : -1}
+                onClick={() => setTab(item.key)}
+                onKeyDown={(event) => onTabKey(event, index)}
+              >
+                {item.label}
+              </button>
             ))}
-          </ul>
+          </div>
 
-          <div className="good-lift-share">
-            <textarea ref={words} readOnly value={text} rows={text.includes('\n') ? 3 : 2} aria-label="The line to share this run by" />
-            <p>
-              <button type="button" onClick={share}>
-                [ share ]
-              </button>{' '}
-              <span className="dim" role="status">
-                {shared}
-              </span>
-            </p>
+          <div className="fjord-panel-body good-lift-result-panels" ref={panelScroll}>
+            <div role="tabpanel" id={`${id}-panel-result`} aria-labelledby={`${id}-tab-result`} hidden={tab !== 'result'} tabIndex={0}>
+              {result.verse && <p className="dim good-lift-verse good-lift-result-verse-detail">{result.verse}</p>}
+              <Barogram result={result} />
+              {result.lifts.length > 0 ? (
+                <table className="good-lift-lights">
+                  <caption className="good-lift-hide">Each lift, its three lights and the call</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">line</th>
+                      {JUDGES.map((judge) => (
+                        <th scope="col" key={judge}>
+                          {judge}
+                        </th>
+                      ))}
+                      <th scope="col">bar</th>
+                      <th scope="col">call</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.lifts.map((lift, index: number) => (
+                      <tr key={index} className={lift.good ? 'good' : 'none'}>
+                        <th scope="row">{lift.line ? `${metres(lift.line)} m` : 'the mist'}</th>
+                        {JUDGES.map((judge, bit) => (
+                          <td key={judge}>
+                            <Light judge={judge} red={(lift.red >> bit) & 1} />
+                          </td>
+                        ))}
+                        <td>{kilos(lift.kg)} kg</td>
+                        <td>
+                          {lift.good ? 'GOOD' : 'NO LIFT'}
+                          {lift.good && lift.double && <b className="good-lift-double"> ×2</b>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="dim">// no line reached: the first is at 150 m.</p>
+              )}
+
+              <Medals bots={landed} />
+              {result.stats.style > 0 && <p className="good-lift-style">× {multiplierOf(result.stats.style).toFixed(2)} style</p>}
+              {(result.stats.stalls > 0 || result.stats.cloud > 0 || result.stats.thrown > 0 || result.stats.reps > 0) && (
+                <p className="good-lift-cost">
+                  {[
+                    result.stats.stalls > 0 && `${result.stats.stalls} stall${result.stats.stalls === 1 ? '' : 's'}`,
+                    result.stats.cloud > 0 && `${result.stats.cloud} s in cloud`,
+                    result.stats.thrown > 0 && `${result.stats.thrown - result.stats.hits} of ${result.stats.thrown} kettlebells dodged`,
+                    result.stats.reps > 0 && `${result.stats.reps} rep${result.stats.reps === 1 ? '' : 's'}, ${result.stats.deep || 'none'} to depth`,
+                  ].filter(Boolean).join(' · ')}
+                </p>
+              )}
+              <SkyLine result={result} />
+              {trickSaid(result.stats) && <p className="dim good-lift-tricks">{trickSaid(result.stats)}</p>}
+              {rival && <p className="good-lift-verdict">vs {rival.who || 'a pilot'} · {points(rival)} pts · {metres(rival.peak)} m — {verdict(result, rival)}</p>}
+              {fresh.size > 0 && <p className="good-lift-fresh">new feat{fresh.size === 1 ? '' : 's'}: {FEATS.filter((feat) => fresh.has(feat.id)).map((feat) => feat.name).join(' · ')}</p>}
+              <KitNews sheet={result.kit} />
+
+              <ul className="good-lift-feats" aria-label="Feats">
+                {FEATS.map((feat) => (
+                  <li key={feat.id} className={`${earned.has(feat.id) ? 'earned' : ''}${fresh.has(feat.id) ? ' fresh' : ''}`}>
+                    <b>
+                      {earned.has(feat.id) ? '✓ ' : ''}
+                      {feat.name}
+                      <span className="good-lift-hide">{earned.has(feat.id) ? ', earned' : ', not yet earned'}</span>
+                    </b>
+                    {fresh.has(feat.id) && <em> new</em>}
+                    <span>
+                      {feat.text}
+                      {('streak' in feat ? feat.streak ?? 0 : 0) && !earned.has(feat.id) ? ` (${Math.min(result.feats?.streak ?? 0, ('streak' in feat ? feat.streak ?? 0 : 0))} of ${('streak' in feat ? feat.streak ?? 0 : 0)})` : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="good-lift-share">
+                <textarea ref={words} readOnly value={text} rows={text.includes('\n') ? 3 : 2} aria-label="The line to share this run by" />
+                <p>
+                  <button type="button" onClick={share}>
+                    [ share ]
+                  </button>{' '}
+                  <span className="dim" role="status">
+                    {shared}
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div role="tabpanel" id={`${id}-panel-board`} aria-labelledby={`${id}-tab-board`} hidden={tab !== 'board'} tabIndex={0}>
+              {result.board ? (
+                <>
+                  {worldFor ? (
+                    <div className="good-lift-boards">
+                      <section aria-labelledby={`${id}-here`}>
+                        <h3 className="good-lift-board-head" id={`${id}-here`}>
+                          this browser
+                        </h3>
+                        {here}
+                      </section>
+                      <WorldBoard world={worldFor} tst={landed?.tst ?? null} id={id} onWithdraw={onWithdraw} />
+                    </div>
+                  ) : (
+                    here
+                  )}
+                  <p className="dim">
+                    // this browser's best runs of {result.label}, and TST, the bot to beat
+                    {result.online ? (worldFor ? "; with them, the world's best of the day." : '.') : '; a shared board comes later.'}
+                  </p>
+                  <label className="good-lift-initials">
+                    initials{' '}
+                    <input
+                      value={initials}
+                      maxLength={3}
+                      autoComplete="off"
+                      spellCheck={false}
+                      aria-describedby={`${id}-initials`}
+                      aria-invalid={blocked || undefined}
+                      onChange={(event) => {
+                        const typed = event.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+                        setInitials(typed);
+                        if (typed.length === 0 || (typed.length === 3 && !isBlocked(typed))) {
+                          onInitials?.(typed);
+                          // Typed under the line that says what they do, they opt in; none opt out.
+                          if (result.online || !typed) setOptedIn(!!typed);
+                        }
+                      }}
+                    />
+                    <span className="good-lift-typed" aria-hidden="true">
+                      {runesOf(initials).join('')}
+                    </span>
+                  </label>{' '}
+                  <span className="dim" id={`${id}-initials`} role="status">
+                    {blocked
+                      ? '// not those three: the board will not show them'
+                      : !result.online
+                        ? '// three letters to name your next runs'
+                        : named && !optedIn
+                          ? '// these name your runs here only; opt in to put your best of each day on the world board'
+                          : '// three letters name your next runs and put your best of each day on the world board; none keeps them here'}
+                  </span>
+                  {asking && named && (
+                    <>
+                      {' '}
+                      <button
+                        type="button"
+                        className="good-lift-opt-in"
+                        aria-disabled={optedIn || undefined}
+                        onClick={() => {
+                          if (optedIn) return;
+                          onInitials?.(initials);
+                          setOptedIn(true);
+                        }}
+                      >
+                        {optedIn ? '[ opted in ]' : '[ opt in ]'}
+                      </button>
+                    </>
+                  )}
+                </>
+              ) : (
+                <p className="dim">// only the Daily Sky keeps a board: practice is yours alone.</p>
+              )}
+            </div>
+
+            <div role="tabpanel" id={`${id}-panel-kit`} aria-labelledby={`${id}-tab-kit`} hidden={tab !== 'kit'} tabIndex={0}>
+              <GoodLiftKit sheet={result.kit} onKit={onKit} />
+            </div>
           </div>
         </div>
-
-        <div role="tabpanel" id={`${id}-panel-board`} aria-labelledby={`${id}-tab-board`} hidden={tab !== 'board'}>
-          {result.board ? (
-            <>
-              {worldFor ? (
-                <div className="good-lift-boards">
-                  <section aria-labelledby={`${id}-here`}>
-                    <h3 className="good-lift-board-head" id={`${id}-here`}>
-                      this browser
-                    </h3>
-                    {here}
-                  </section>
-                  <WorldBoard world={worldFor} tst={landed?.tst ?? null} id={id} onWithdraw={onWithdraw} />
-                </div>
-              ) : (
-                here
-              )}
-              <p className="dim">
-                // this browser's best runs of {result.label}, and TST, the bot to beat
-                {result.online ? (worldFor ? "; with them, the world's best of the day." : '.') : '; a shared board comes later.'}
-              </p>
-              <label className="good-lift-initials">
-                initials{' '}
-                <input
-                  value={initials}
-                  maxLength={3}
-                  autoComplete="off"
-                  spellCheck={false}
-                  aria-describedby={`${id}-initials`}
-                  aria-invalid={blocked || undefined}
-                  onChange={(event) => {
-                    const typed = event.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
-                    setInitials(typed);
-                    if (typed.length === 0 || (typed.length === 3 && !isBlocked(typed))) {
-                      onInitials?.(typed);
-                      // Typed under the line that says what they do, they opt in; none opt out.
-                      if (result.online || !typed) setOptedIn(!!typed);
-                    }
-                  }}
-                />
-                <span className="good-lift-typed" aria-hidden="true">
-                  {runesOf(initials).join('')}
-                </span>
-              </label>{' '}
-              <span className="dim" id={`${id}-initials`} role="status">
-                {blocked
-                  ? '// not those three: the board will not show them'
-                  : !result.online
-                    ? '// three letters to name your next runs'
-                    : named && !optedIn
-                      ? '// these name your runs here only; opt in to put your best of each day on the world board'
-                      : '// three letters name your next runs and put your best of each day on the world board; none keeps them here'}
-              </span>
-              {asking && named && (
-                <>
-                  {' '}
-                  <button
-                    type="button"
-                    className="good-lift-opt-in"
-                    aria-disabled={optedIn || undefined}
-                    onClick={() => {
-                      if (optedIn) return;
-                      onInitials?.(initials);
-                      setOptedIn(true);
-                    }}
-                  >
-                    {optedIn ? '[ opted in ]' : '[ opt in ]'}
-                  </button>
-                </>
-              )}
-            </>
-          ) : (
-            <p className="dim">// only the Daily Sky keeps a board: practice is yours alone.</p>
-          )}
-        </div>
-
-        <div role="tabpanel" id={`${id}-panel-kit`} aria-labelledby={`${id}-tab-kit`} hidden={tab !== 'kit'}>
-          <GoodLiftKit sheet={result.kit} onKit={onKit} />
-        </div>
+        <footer className="good-lift-result-actions">
+          <button type="button" className="primary" onClick={onRetry}>
+            ▶ again
+          </button>
+          <button type="button" className="good-lift-result-today" onClick={() => onSky('daily')}>today's sky</button>
+          <div className="good-lift-result-more" ref={moreMenu} onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setMoreOpen(false);
+          }}>
+            <button type="button" ref={moreButton} aria-haspopup="menu" aria-expanded={moreOpen} aria-controls={`${id}-more`} onClick={() => {
+              menuStart.current = 0;
+              setMoreOpen(!moreOpen);
+            }} onKeyDown={(event) => {
+              if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (moreOpen) menuItems.current[event.key === 'ArrowUp' ? 3 : 0]?.focus();
+                else {
+                  menuStart.current = event.key === 'ArrowUp' ? 3 : 0;
+                  setMoreOpen(true);
+                }
+              }
+            }}>more ⋯</button>
+            {moreOpen && <div className="good-lift-result-menu" id={`${id}-more`} role="menu" aria-label="More run actions" onKeyDown={onMenuKey}>
+              <button type="button" role="menuitem" tabIndex={-1} ref={(element) => { menuItems.current[0] = element; }} onClick={() => { setMoreOpen(false); onSky('practice'); }}>new sky</button>
+              <button type="button" role="menuitem" tabIndex={-1} ref={(element) => { menuItems.current[1] = element; }} onClick={onFjord}>back to the fjord</button>
+              <button type="button" role="menuitem" tabIndex={-1} ref={(element) => { menuItems.current[2] = element; }} onClick={onPage}>back to the portfolio</button>
+              <button type="button" role="menuitemcheckbox" aria-checked={musicOn} tabIndex={-1} ref={(element) => { menuItems.current[3] = element; }} onClick={switchMusic}>music: {musicOn ? 'on' : 'off'}</button>
+            </div>}
+          </div>
+        </footer>
       </div>
-      <footer>
-        <button className="primary" onClick={onRetry}>
-          [ <kbd>r: </kbd>again ]
-        </button>
-        <button onClick={() => onSky(result.kind === 'daily' ? 'practice' : 'daily')}>{result.kind === 'daily' ? '[ new sky ]' : "[ today's sky ]"}</button>
-        <button onClick={onFjord}>[ back to the fjord ]</button>
-        <button onClick={onPage}>[ back to the portfolio ]</button>
-        <button onClick={switchMusic}>
-          [ <kbd>b: </kbd>music: {musicOn ? 'on' : 'off'} ]
-        </button>
-      </footer>
     </section>
   );
 }

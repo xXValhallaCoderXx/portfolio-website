@@ -4,16 +4,20 @@ import type { FlightState, FlightInput, AirSample } from '../../../domains/fligh
 import type { CoachFields } from '../../../domains/coaching/models.ts';
 import { THERMAL_AIR } from '../presentation/thermal-air.ts';
 import { windReadout } from '../presentation/wind-feedback.ts';
+import { flightMessageOwner } from '../presentation/flight-message.ts';
 import type { FlightZone } from './flight-navigation.service.ts';
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
+interface RunReadouts {
+ nextLine: number; bar: number; total: number; fogClearance: number; status: string; styleMultiplier: number; horn: boolean;
+}
 interface FlightHudPort {
  stage: HTMLElement; g: FlightState; input: FlightInput; air: AirSample;
  vario: { readonly value: number }; thermalAir: { readonly fill: number; readonly value: number; readonly trend: string };
  progress: ReturnType<typeof readProgress>; zoneLabels: { zone: FlightZone; el: HTMLElement }[]; autoHaste: number;
  readonly mode: string; readonly auto: FlightZone | null; readonly mapOpen: boolean; readonly keysOpen: boolean; readonly briefing: boolean; readonly hasDragged: boolean; readonly portal: boolean; readonly held: boolean; readonly coachMessage: CoachFields | null;
- isAirborne(): boolean; compact(): boolean; runHud(quiet: boolean): string;
+ isAirborne(): boolean; compact(): boolean; runHud(quiet: boolean): string; runReadouts?(): RunReadouts | null;
  nearestZone(onlyUnvisited: boolean): { zone: FlightZone; dist: number } | null; hintText(): string; drawMap(): void;
 }
 /** DOM readouts only sample the session; all flight and coaching state remains owned upstream. */
@@ -23,72 +27,98 @@ export function createFlightHud(port: FlightHudPort) {
  const hud = (name: string) => $(`[data-hud="${name}"]`);
  const brakePair = $('.fj-brake-pair'), brakeTracks = [...stage.querySelectorAll<HTMLElement>('[data-brake-side]')], dragTip = $('.fj-drag-tip');
  const thermalTrack = $('.fj-thermal-track'), thermalFill = thermalTrack.querySelector('i')!, thermalTrend = $('[data-thermal-trend]');
-  function updateHud() {
-    const direct = port.isAirborne() && input.controlMode === 'brakes' && !port.auto;
-    brakePair.hidden = !direct || port.mapOpen || port.keysOpen || port.briefing;
-    for (const track of brakeTracks) {
-      const amount = direct ? clamp((g[`${track.dataset.brakeSide as 'left' | 'right'}Brake`] ?? 0) / 0.6, 0, 1) : 0;
-      track.querySelector('i')!.style.transform = `scaleX(${amount.toFixed(3)})`;
-      track.setAttribute('aria-valuenow', String(Math.round(amount * 100)));
-      track.dataset.depth = amount > 0.70 ? 'deep' : 'working';
-    }
-    dragTip.hidden = !port.isAirborne() || !!port.auto || port.hasDragged || port.briefing || port.portal || port.held || port.mapOpen || port.keysOpen || !!port.coachMessage?.warning;
-    if (!dragTip.hidden) {
-      const instruments = $('.fj-hud > dl');
-      dragTip.style.top = `${instruments.offsetTop + instruments.offsetHeight + 10}px`;
-    }
-    hud('alt').textContent = `${Math.max(0, Math.round(g.pos.y))} m`;
-    hud('wind').textContent = windReadout(air, g.yaw);
-    const climb = Math.abs(vario.value) < 0.05 ? 0 : vario.value;
-    const bars = Math.min(4, Math.round(Math.abs(climb) / 1.5));
-    hud('vario').textContent = `${climb >= 0 ? '+' : '−'}${Math.abs(climb).toFixed(1)} m/s ${(climb >= 0 ? '▲' : '▼').repeat(bars)}`;
-    hud('vario').classList.toggle('up', climb > 0.2);
-    thermalFill.style.transform = `scaleX(${thermalAir.fill.toFixed(3)})`;
-    thermalTrend.textContent = thermalAir.trend;
-    thermalTrack.setAttribute('aria-valuenow', Math.min(THERMAL_AIR.scale, thermalAir.value).toFixed(1));
-    thermalTrack.setAttribute('aria-valuetext', `${thermalAir.value.toFixed(1)} metres per second of thermal air, ${thermalAir.trend.toLowerCase()}`);
-    if (port.mode === 'lost') {
-      hud('speed').textContent = `${Math.round(Math.abs(g.vy) * 3.6)} km/h down`;
-      hud('next').textContent = 'nowhere · 404';
-      hud('belt').textContent = `${beltFor(progress)} · ${progress.unlocked.length}/${ACHIEVEMENTS.length}`;
-      $('.fj-hint').textContent = '';
-      return;
-    }
-    if (port.mode === 'cloudbase') {
-      // The run writes its own readouts, and says nothing while the map is open.
-      $('.fj-hint').textContent = port.runHud(port.mapOpen);
-      // The notifications, with the judges' lights at their head, run down the middle of the screen.
-      // Wherever they would cross the readouts (which can wrap on small phones) they start below
-      // the readouts' real height, and below the buttons wherever they would cross those. A screen
-      // wide enough to keep them apart keeps them at the top, clear of the title card a run opens
-      // with.
-      const readouts = $('.fj-hud dl').getBoundingClientRect();
-      const buttons = $('.fj-hud nav').getBoundingClientRect();
-      const toasts = $('.fj-toasts');
-      const column = toasts.getBoundingClientRect();
-      if (port.compact() || column.left < readouts.right + 8) toasts.style.top = `${Math.ceil(readouts.bottom + 8)}px`;
-      else if (column.right > buttons.left - 8) toasts.style.top = `${Math.ceil(buttons.bottom + 8)}px`;
-      else toasts.style.removeProperty('top');
-      if (port.mapOpen) port.drawMap();
-      return;
-    }
-    $('.fj-toasts').style.removeProperty('top');
-    if (port.mode === 'flying' && g.stall > 0) hud('alt').textContent = `${Math.max(0, Math.round(g.pos.y))} m · stalled`;
-    const pace = port.auto ? ` · auto ×${port.autoHaste}` : g.brake > 0.05 ? ' · brake' : '';
-    hud('speed').textContent = `${Math.round(g.speed * 3.6)} km/h${port.mode === 'flying' ? pace : ''}`;
-    const next = (port.nearestZone(true) ?? port.nearestZone(false))!;
-    const bearing = wrapAngle(Math.atan2(next.zone.x - g.pos.x, -(next.zone.z - g.pos.z)) - g.yaw);
-    const arrow = ARROWS[((Math.round(bearing / (Math.PI / 4)) % 8) + 8) % 8];
-    hud('next').textContent = `${next.zone.label} ${arrow} ${Math.round(next.dist)} m`;
-    hud('belt').textContent = `${beltFor(progress)} · ${progress.unlocked.length}/${ACHIEVEMENTS.length}`;
-    for (const { zone, el } of zoneLabels) {
-      const dist = Math.round(Math.hypot(zone.x - g.pos.x, zone.z - g.pos.z));
-      el.children[1].textContent = `${zone.place} · ${dist} m${progress.visited.includes(zone.id) ? ' · visited' : ''}`;
-      el.children[2].textContent = zone === port.auto ? 'flying there' : '▶ fly here';
-    }
-    $('.fj-hint').textContent = port.hintText();
-    if (port.mapOpen) port.drawMap();
-  }
-
- return { update: updateHud };
+ const label = $('[data-alt-label]'), altitudeProgress = $('.fj-alt-progress'), status = $('[data-flight-status]');
+ const styleReadout = document.createElement('span'); styleReadout.dataset.styleReadout = ''; styleReadout.hidden = true; $('.fj-telemetry').append(styleReadout);
+ function metric(name: string, value: string, unit: string) {
+   const node = hud(name), text = `${value} ${unit}`;
+   if (node.textContent === text && node.querySelector('.fj-metric-unit')) return;
+   const suffix = document.createElement('span'); suffix.className = 'fj-metric-unit'; suffix.textContent = ` ${unit}`;
+   node.replaceChildren(document.createTextNode(value), suffix);
+ }
+ function messages() {
+   const blocked = !port.isAirborne() || port.mapOpen || port.keysOpen || port.briefing || port.portal || port.held;
+   const message = port.coachMessage;
+   const urgent = !!message?.warning || ['recover', 'hazard', 'timing', 'timed', 'descent'].includes(message?.state ?? '');
+   const judges = !!stage.querySelector('.fj-lights:not([hidden])');
+   const owner = flightMessageOwner({ blocked, urgent, coach: !!message, judges,
+     notice: !!stage.querySelector('.fj-toast'), hint: !!$('.fj-hint').textContent, intro: !port.hasDragged && !port.auto });
+   stage.dataset.messageOwner = owner;
+   dragTip.hidden = owner !== 'intro';
+   const said = stage.querySelector('.fj-said');
+   said?.setAttribute('aria-live', owner === 'judges' ? 'polite' : 'off');
+   $('.fj-toasts').setAttribute('aria-hidden', String(owner !== 'judges' && owner !== 'notice'));
+ }
+ function updateHud() {
+   const blocked = port.mapOpen || port.keysOpen || port.briefing || port.portal || port.held;
+   const direct = port.isAirborne() && input.controlMode === 'brakes' && !port.auto;
+   brakePair.hidden = !direct || blocked || Math.max(g.leftBrake ?? 0, g.rightBrake ?? 0) < .04;
+   for (const track of brakeTracks) {
+     const amount = direct ? clamp((g[`${track.dataset.brakeSide as 'left' | 'right'}Brake`] ?? 0) / 0.6, 0, 1) : 0;
+     track.querySelector('i')!.style.transform = `scaleX(${amount.toFixed(3)})`;
+     track.setAttribute('aria-valuenow', String(Math.round(amount * 100)));
+     track.dataset.depth = amount > 0.70 ? 'deep' : 'working';
+   }
+   metric('alt', String(Math.max(0, Math.round(g.pos.y))), 'm');
+   hud('wind').textContent = windReadout(air, g.yaw);
+   const climb = Math.abs(vario.value) < 0.05 ? 0 : vario.value;
+   metric('vario', `${climb >= 0 ? '+' : '−'}${Math.abs(climb).toFixed(1)}`, `m/s ${climb >= 0 ? '▲' : '▼'}`);
+   hud('vario').classList.toggle('up', climb > 0.2);
+   thermalFill.style.transform = `scaleX(${thermalAir.fill.toFixed(3)})`;
+   thermalTrend.textContent = thermalAir.trend;
+   thermalTrack.setAttribute('aria-valuenow', Math.min(THERMAL_AIR.scale, thermalAir.value).toFixed(1));
+   thermalTrack.setAttribute('aria-valuetext', `${thermalAir.value.toFixed(1)} metres per second of thermal air, ${thermalAir.trend.toLowerCase()}`);
+   label.textContent = 'ALT'; altitudeProgress.hidden = true; status.hidden = true; styleReadout.hidden = true;
+   if (port.mode === 'lost') {
+     hud('speed').textContent = `${Math.round(Math.abs(g.vy) * 3.6)} km/h down`;
+     hud('destination').textContent = '404'; hud('next').textContent = 'nowhere · 404';
+     hud('belt').textContent = `${beltFor(progress)} · ${progress.unlocked.length}/${ACHIEVEMENTS.length}`;
+     $('.fj-hint').textContent = '';
+   } else if (port.mode === 'cloudbase') {
+     $('.fj-hint').textContent = port.runHud(blocked);
+     const run = port.runReadouts?.();
+     if (run) {
+       label.textContent = `ALT → ${run.nextLine}`;
+       metric('alt', String(Math.max(0, Math.floor(g.pos.y))), 'm');
+       metric('bar', String(Math.round(run.bar * 10) / 10), run.horn ? 'kg ×2' : 'kg');
+       hud('belt').textContent = `total ${Math.round(run.total * 10) / 10} kg`;
+       hud('next').textContent = `fog ${run.fogClearance} m ↓`;
+       hud('next').classList.toggle('fj-fog-close', run.fogClearance < 80);
+       status.textContent = run.status; status.hidden = !run.status;
+       styleReadout.textContent = `style ×${run.styleMultiplier.toFixed(2)}`; styleReadout.hidden = run.styleMultiplier <= 1;
+       altitudeProgress.hidden = false;
+       const previousLine = Math.max(0, run.nextLine - 150);
+       const fill = clamp((g.pos.y - previousLine) / Math.max(1, run.nextLine - previousLine), 0, 1);
+       altitudeProgress.querySelector<HTMLElement>('i')!.style.transform = `scaleX(${fill})`;
+       altitudeProgress.setAttribute('aria-valuenow', String(Math.round(fill * 100)));
+       altitudeProgress.setAttribute('aria-valuetext', `${Math.max(0, Math.round(g.pos.y))} metres; next banking line ${run.nextLine} metres`);
+     }
+   } else {
+     hud('next').classList.remove('fj-fog-close');
+     status.textContent = g.stall > 0 ? 'stalled' : ''; status.hidden = !status.textContent;
+     const pace = port.auto ? ` · auto ×${port.autoHaste}` : g.brake > 0.05 ? ' · brake' : '';
+     hud('speed').textContent = `${Math.round(g.speed * 3.6)} km/h${port.mode === 'flying' ? pace : ''}`;
+     const next = port.nearestZone(true) ?? port.nearestZone(false);
+     if (next) {
+       const bearing = wrapAngle(Math.atan2(next.zone.x - g.pos.x, -(next.zone.z - g.pos.z)) - g.yaw);
+       const arrow = ARROWS[((Math.round(bearing / (Math.PI / 4)) % 8) + 8) % 8];
+       hud('destination').textContent = next.zone.label;
+       hud('next').textContent = `${arrow} ${Math.round(next.dist)} m`;
+     }
+     hud('belt').textContent = `${beltFor(progress)} · ${progress.unlocked.length}/${ACHIEVEMENTS.length}`;
+     for (const { zone, el } of zoneLabels) {
+       const dist = Math.round(Math.hypot(zone.x - g.pos.x, zone.z - g.pos.z));
+       el.children[1].textContent = `${zone.place} · ${dist} m${progress.visited.includes(zone.id) ? ' · visited' : ''}`;
+       el.children[2].textContent = zone === port.auto ? 'flying there' : '▶ fly here';
+     }
+     $('.fj-hint').textContent = port.hintText();
+   }
+   $('.fj-toasts').style.removeProperty('top');
+   const telemetry = $('.fj-telemetry').getBoundingClientRect();
+   const messageTop = `${Math.ceil(telemetry.bottom - stage.getBoundingClientRect().top + 12)}px`;
+   stage.style.setProperty('--coach-top', messageTop);
+   stage.style.setProperty('--message-top', messageTop);
+   messages();
+   if (port.mapOpen) port.drawMap();
+ }
+ return { update: updateHud, presentMessages: messages };
 }

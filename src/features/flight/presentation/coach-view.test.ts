@@ -22,17 +22,18 @@ class Node {
   setAttribute(name: string, value: string) { this.writes++; this.attributes.set(name, value); }
   getAttribute(name: string) { return this.attributes.get(name) ?? null; }
 }
-function fixture() {
+function fixture(warning = false, canAnnounce = () => true) {
   const document = { createElement: () => new Node(document) };
   const element = new Node(document), parts: Record<string, Node> = {};
   for (const name of ['action', 'reason', 'controls', 'feedback', 'progress', 'announce', 'cancel']) {
     parts[name] = new Node(document); element.selectors.set(`[data-coach="${name}"]`, parts[name]);
   }
+  if (warning) { parts.warning = new Node(document); element.selectors.set('[data-coach="warning"]', parts.warning); }
   parts.kicker = new Node(document); element.selectors.set('.fj-coach-kicker', parts.kicker);
   parts.caption = new Node(document); parts.fill = new Node(document);
   parts.progress.selectors.set('span', parts.caption); parts.progress.selectors.set('i > b', parts.fill);
   let raw: FlightInput = {}, time = 0;
-  const view = createCoachView({ element, input: () => raw, now: () => time });
+  const view = createCoachView({ element, input: () => raw, now: () => time, canAnnounce });
   const chip = (name: string) => parts.controls.children.find((child) => child.dataset.control === name)!;
   return { view, element, parts, chip, raw: (value: FlightInput) => { raw = value; }, time: (value: number) => { time = value; } };
 }
@@ -278,4 +279,27 @@ test('lesson escape is shown on the active card and disappears for banked, cance
   assert.equal(f.parts.cancel.hidden, true);
   f.view.update({ ...reverse, canCancelLesson: true }); f.view.reset();
   assert.equal(f.parts.cancel.hidden, true);
+});
+
+
+test('the warning strip precedes the action without duplicating feedback and clears on reset', () => {
+  const f = fixture(true);
+  f.view.update({ ...reverse, warning: true, warningLabel: 'FOG CLOSE', feedback: 'Keep climbing.' });
+  assert.equal(f.parts.warning.hidden, false);
+  assert.equal(f.parts.warning.textContent, '⚠ FOG CLOSE · Keep climbing.');
+  assert.equal(f.parts.action.textContent, reverse.title);
+  assert.equal(f.parts.feedback.hidden, true);
+  f.view.update(reverse);
+  assert.equal(f.parts.warning.hidden, true);
+  f.view.reset(); assert.equal(f.parts.warning.textContent, '');
+});
+test('a modal or judges result suppresses coach announcements until the current instruction owns the slot', () => {
+  let canSpeak = false;
+  const f = fixture(true, () => canSpeak);
+  f.view.update({ ...reverse, state: 'recover' });
+  assert.equal(f.parts.announce.textContent, '');
+  canSpeak = true; f.view.update({ ...reverse, state: 'recover' });
+  assert.match(f.parts.announce.textContent, /RELEASE RIGHT, THEN LEFT/);
+  canSpeak = false; f.view.update({ ...reverse, state: 'recover' });
+  assert.equal(f.parts.announce.textContent, '');
 });
