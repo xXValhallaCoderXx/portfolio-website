@@ -17,9 +17,10 @@ const attribute = (node: { getAttribute(name: string): string | null; setAttribu
 const hide = (node: { hidden: string | boolean }, value: boolean) => { if (node.hidden !== value) node.hidden = value; };
 
 /** `now` is a presentation clock, injectable for announcement tests; no simulation clock advances. */
-export function createCoachView<T extends CoachNode<T>>({ element, input = () => ({}), now = () => performance.now() }: { element: T; input?: () => FlightInput; now?: () => number }) {
+export function createCoachView<T extends CoachNode<T>>({ element, input = () => ({}), now = () => performance.now(), canAnnounce = () => true }: { element: T; input?: () => FlightInput; now?: () => number; canAnnounce?: () => boolean }) {
   const query = (root: T, selector: string): T => { const node = root.querySelector(selector); if (!node) throw new Error(`Coach view is missing ${selector}`); return node as T; };
   const kicker = query(element, '.fj-coach-kicker');
+  const warningStrip = element.querySelector('[data-coach="warning"]') as T | null;
   const action = query(element, '[data-coach="action"]');
   const reason = query(element, '[data-coach="reason"]');
   const controls = query(element, '[data-coach="controls"]');
@@ -103,7 +104,11 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
     const context = activity || message.heading || message.context || 'Flight coach', phase = message.phase || '';
     const title = message.title || '', detail = message.detail || '';
     const warningLabel = message.warning ? message.warningLabel || '' : '';
-    const secondary = [warningLabel, message.feedback || ''].filter(Boolean).join(' · ');
+    const secondary = warningStrip && message.warning ? '' : [warningLabel, message.feedback || ''].filter(Boolean).join(' · ');
+    if (warningStrip) {
+      write(warningStrip, message.warning ? `⚠ ${warningLabel || 'FLIGHT SAFETY'}${message.feedback ? ` · ${message.feedback}` : ''}` : '');
+      hide(warningStrip, !message.warning);
+    }
     write(kicker, activity || (phase ? `${context} · ${phase}` : context));
     write(action, title); write(reason, detail); hide(reason, !detail);
     write(feedback, secondary); hide(feedback, !secondary);
@@ -132,11 +137,12 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
     const identity = `${state}|${context}|${phase}|${intent}|${message.brakeDepth || ''}|${(message.hold ?? []).join(',')}|${(message.release ?? []).join(',')}|${message.warning ? warningLabel || 'warning' : ''}`;
     if (identity !== semantic) {
       semantic = identity;
-      pending = `${context}. ${phase ? `${phase}. ` : ''}${title}${detail ? `. ${detail}` : ''}${message.warning && secondary ? `. ${secondary}` : ''}`;
+      pending = `${context}. ${phase ? `${phase}. ` : ''}${title}${detail ? `. ${detail}` : ''}${message.warning ? `. ${[warningLabel, message.feedback || ''].filter(Boolean).join(' · ')}` : ''}`;
     }
     const clock = now();
     const urgent = !!message.warning || state === 'recover' || state === 'hazard' || state === 'timing';
-    if (pending && (urgent || clock - announcedAt >= 800)) {
+    if (!canAnnounce()) write(announce, '');
+    if (pending && canAnnounce() && (urgent || clock - announcedAt >= 800)) {
       write(announce, pending); pending = ''; announcedAt = clock;
     }
   }
@@ -146,6 +152,7 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
     element.hidden = true; visible = false; semantic = pending = ''; announcedAt = -Infinity;
     element.dataset.state = element.dataset.action = element.dataset.warning = '';
     for (const node of [kicker, action, reason, feedback, progressLabel, announce]) write(node, '');
+    if (warningStrip) { write(warningStrip, ''); hide(warningStrip, true); }
     reason.hidden = feedback.hidden = progress.hidden = controls.hidden = released.hidden = true;
     progressFill.style.transform = ''; fill = '';
     for (const { chip } of chips) chip.hidden = true;

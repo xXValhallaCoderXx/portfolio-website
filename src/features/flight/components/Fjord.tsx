@@ -58,15 +58,15 @@ function LandingPanel({ panel, onTakeOff, onNext, onMap, onOpenPage, sectionBodi
       </div>
       <footer>
         <button onClick={onTakeOff}>
-          [ <kbd>space: </kbd>take off ]
+          [ take off ]
         </button>
         {panel.next && (
           <button onClick={onNext}>
-            [ <kbd>n: </kbd>fly me to {panel.next.label} ]
+            [ fly me to {panel.next.label} ]
           </button>
         )}
         <button onClick={onMap}>
-          [ <kbd>m: </kbd>map ]
+          [ map ]
         </button>
         {section && <button onClick={onOpenPage}>[ open on page ]</button>}
       </footer>
@@ -98,7 +98,7 @@ function MissingPage({ path, stage, onThrow, onSkip, onHome, onFly, onRetry }: {
       {(stage === 'gliding' || stage === 'falling') && (
         <p>
           <button className="primary" onClick={onThrow} disabled={stage !== 'falling'}>
-            [ <kbd>r: </kbd>throw reserve ]
+            [ throw reserve ]
           </button>{' '}
           <span className="dim">before 40 m</span>
         </p>
@@ -125,7 +125,7 @@ function MissingPage({ path, stage, onThrow, onSkip, onHome, onFly, onRetry }: {
       {!ending && (
         <p className="fjord-lost-skip">
           <button onClick={onSkip}>
-            [ <kbd>esc: </kbd>skip ]
+            [ skip ]
           </button>
           <button className="link" onClick={() => onHome(null)}>
             take me home →
@@ -139,8 +139,12 @@ function MissingPage({ path, stage, onThrow, onSkip, onHome, onFly, onRetry }: {
 /** Shared manual controls apply to both flight modes and every pointer device. */
 function FlightControlHelp({ navigation = false }: { navigation?: boolean }) {
   return <>
-    <p className="dim">Hold and drag anywhere. Pull sideways to turn, down for both brakes. Purple is deep brake. Slide up or release for hands up.</p>
-    {navigation && <p className="dim">Tap or click a lit pillar for automatic travel · <span className="for-keys">m map · h controls</span></p>}
+    <ol className="fjord-intro-controls">
+      <li><span aria-hidden="true">↔</span><div><strong>TURN</strong><span>drag left or right</span></div></li>
+      <li><span aria-hidden="true">↓</span><div><strong>BRAKE</strong><span>drag down · <em>purple</em> is deep and can stall</span></div></li>
+      <li><span aria-hidden="true">↑</span><div><strong>HANDS UP</strong><span>slide up, or just let go</span></div></li>
+    </ol>
+    {navigation && <p className="dim">Select a lit pillar for automatic travel, or open the map to pick a destination.</p>}
   </>;
 }
 
@@ -202,8 +206,8 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
             <span>&gt;</span> GOOD_LIFT
           </h2>
           <p>
-            // A powerlifting meet in the sky{address.kind === 'daily' ? ` · Daily #${dailyNumber(dayOf(Date.now()))}` : ''}. Climb through a line
-            every 150 m, where three judges light the lift. Read the wind, build clean maneuvers, and climb as the challenge grows.
+            Climb through a line every 150 m. Three judges light each lift.
+            {address.kind === 'daily' ? ` Daily #${dailyNumber(dayOf(Date.now()))}.` : ''}
           </p>
           {address.bad && <p className="dim">// that sky could not be read, so here is today's.</p>}
           {address.kind === 'vs' &&
@@ -219,15 +223,15 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
                 {rival.peak.toLocaleString('en-GB')} m · verified
               </p>
             ))}
-          <p>
+          <FlightControlHelp />
+          <p className="fjord-start-actions">
             <button className="primary" onClick={onArm}>
               [ <span className="for-keys">click</span>
               <span className="for-touch">tap</span> to start ]
             </button>{' '}
             <button onClick={() => onExit(null)}>[ back to the page ]</button>
           </p>
-          <FlightControlHelp />
-          <p className="dim">build wingovers with the swing, shape a pitch and catch it, or carry the momentum into an inversion. Recover level to bank style; the flight coach shows your progress.</p>
+          <p className="dim fjord-start-note">Thermals, plates, kettlebells and tricks: the coach introduces each one in flight.</p>
         </div>
       )}
       {flying && live && !armed && !lost && !address && (

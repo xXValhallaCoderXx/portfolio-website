@@ -143,10 +143,18 @@ test('the Good Lift adapter reads the live sky without advancing or changing it'
   assert.equal(JSON.stringify(sky.state), before);
 });
 
-test('kettlebell advice never requests the unavailable speed bar with ears deployed', () => {
+test('circling kettlebell advice releases the pull without requesting an unavailable speed bar', () => {
   const world = { g: { ears: 0 }, controls: { ears: false }, sky: { state: { pilot: { cloud: 0, danger: 0 } } },
     bells: { state: { warning: 0, bells: [{ result: BELL_RESULT.pending, circling: true }] } } };
-  assert.deepEqual(runCoachHazard(world)!.hold, ['bar']);
+  const hazard = runCoachHazard(world)!;
+  assert.equal(hazard.action, 'release-all');
+  assert.equal(hazard.title, 'LET GO · HANDS UP');
+  assert.deepEqual(hazard.hold, []);
+  const pulling = actionMessage(hazard, direct(.5, .2));
+  assert.equal(pulling.accepted, false);
+  assert.ok(pulling.release.includes('left') && pulling.release.includes('right') && pulling.release.includes('brake'));
+  assert.equal(pulling.hold.includes('bar'), false);
+  assert.equal(actionMessage(hazard, direct(0, 0)).accepted, true);
   world.controls.ears = true;
   assert.equal(runCoachHazard(world)!.title, 'LEAVE YOUR LINE');
   world.controls.ears = false; world.g.ears = 0.5;

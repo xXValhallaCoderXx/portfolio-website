@@ -21,6 +21,7 @@ import { scoreLanding, createLandingLeg } from '../../../domains/flight/landing.
 import { FJORD_THERMALS, sampleFjordAir, fjordWindAt } from '../../../domains/flight/atmosphere.ts';
 import { createFlightView } from '../presentation/flight-view.ts';
 import { createFlightCues } from '../presentation/flight-cues.ts';
+import { createFlightOverlay } from '../presentation/flight-overlay.ts';
 import { createFlightCoach } from '../../../domains/coaching/flight-coach.ts';
 import { createLiftGuide } from '../../../domains/coaching/lift-guide.ts';
 import { createCoachView } from '../presentation/coach-view.ts';
@@ -100,6 +101,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   };
   const hud = (name: string) => $(`[data-hud="${name}"]`);
   const listeners = new AbortController();
+  const overlayFocus = createFlightOverlay(stage, listeners.signal);
   function on<K extends keyof (WindowEventMap & DocumentEventMap)>(target: EventTarget, type: K, handler: (event: (WindowEventMap & DocumentEventMap)[K]) => void) {
     target.addEventListener(type, handler as EventListener, { signal: listeners.signal });
   }
@@ -211,6 +213,8 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   let cloudRequest = 0;
   let mapOpen = false;
   let keysOpen = false;
+  let resetConfirmOpen = false;
+  let overlayChanged = false;
   // A run's briefing is up, the flight waiting at the gate until the pilot is ready (good-lift.js),
   // and the key that ended it, which does nothing until it is let go.
   let briefing = false;
@@ -242,6 +246,20 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   // For looking at a run from the console: a seed to fly again, and the flight held still.
   let pinnedSeed: number|null = null;
   let held = false;
+  const overlayOpen = () => mapOpen || keysOpen;
+  const flightPaused = () => overlayOpen() || held || portal || briefing;
+  function syncFlightOverlay(restore = true) {
+    overlayChanged = true;
+    const kind = briefing ? 'briefing' : keysOpen ? 'menu' : mapOpen ? 'map' : '';
+    stage.classList.toggle('flight-paused', !!kind);
+    if (kind) {
+      stage.dataset.overlay = kind;
+      overlayFocus.activate(briefing ? $('.fj-brief') : keysOpen ? $('.fj-keys') : resetConfirmOpen ? $('.fj-reset-confirm') : $('.fj-map'));
+    } else {
+      delete stage.dataset.overlay;
+      overlayFocus.deactivate(restore);
+    }
+  }
 
   const progress = readProgress();
   progress.visited.forEach((id) => places.setVisited(id));
@@ -309,13 +327,16 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
 
   // The pilot is ready: the briefed run flies from here, its title card going as it does.
   function endBriefing() {
+    if (!briefing) return;
     briefing = false;
     clearInput();
     run?.endBrief();
+    syncFlightOverlay(false);
   }
 
   function finishCloudbase(reason: string, show = true) {
     briefing = false;
+    syncFlightOverlay(false);
     // The run engine already stops its clock when fog catches; UI finalization still follows.
     if (mode !== 'cloudbase') return null;
     // Fog, touchdown and the time limit judge the carried bar; leaving forfeits it.
@@ -395,7 +416,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     requireRun().begin(flownSky.seed, flownSky);
     vario.reset(g.vy);
     resetCoach();
-    // A device's first runs are briefed: the flight waits at the gate for any key or tap.
+    // A device's first runs wait at the gate for the explicit Fly action.
     briefing = requireRun().briefing;
     portal = false;
     mode = 'cloudbase';
@@ -405,6 +426,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     syncCloudbaseEntry();
     startAudio();
     snapCamera();
+    syncFlightOverlay(false);
     return Promise.resolve(true);
   }
 
@@ -927,7 +949,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     for (const { el, at, range } of labels) {
       const dist = at.distanceTo(camera.position);
       projected.copy(at).project(camera);
-      const show = mode === 'flying' && !mapOpen && dist < range && projected.z < 1 && Math.abs(projected.x) < 1.05;
+      const show = mode === 'flying' && !overlayOpen() && dist < range && projected.z < 1 && Math.abs(projected.x) < 1.05;
       el.style.display = show ? '' : 'none';
       if (!show) continue;
       const x = (projected.x * 0.5 + 0.5) * view.width;
@@ -970,7 +992,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     return best;
   }
 
-  on($('.fj-scene'), 'pointermove', (event) => setHot(mode === 'flying' && !mapOpen && !brakeDrag.state.active ? pillarAt(event.clientX, event.clientY) : null));
+  on($('.fj-scene'), 'pointermove', (event) => setHot(mode === 'flying' && !overlayOpen() && !brakeDrag.state.active ? pillarAt(event.clientX, event.clientY) : null));
   on($('.fj-scene'), 'pointerleave', () => setHot(null));
   on($('.fj-scene'), 'click', (event) => {
     if (skipFlightClick) { skipFlightClick = false; return; }
@@ -995,7 +1017,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     onResultUpdate: (result) => {
       if (disposed || mode !== 'cloudbase-ended' || cloudResult?.at !== result.at || cloudResult.seed !== result.seed) return;
       cloudResult = result;
-      if (!mapOpen) hooks.onResult?.({ ...result });
+      if (!overlayOpen()) hooks.onResult?.({ ...result });
     },
     compact: () => touch || view.width <= 560,
     best: () => progress.cloudbase.bestAltitude,
@@ -1008,7 +1030,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   const fjordMoment = { auto: '', arch: false, nearArch: false, outside: false, nearRing: false, unvisited: false, agl: 0, airtime: 0, touch: false };
 
   function hintText() {
-    if (!isAirborne() || mapOpen) return '';
+    if (!isAirborne() || overlayOpen()) return '';
     const near = nearestZone(false)!;
     fjordMoment.auto = auto ? auto.label : '';
     fjordMoment.arch = !progress.cloudbase.discovered && airtime < 4 && landingLeg.eligible;
@@ -1041,7 +1063,8 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     fog: () => mode === 'cloudbase' ? requireRun().coachEnvironment.fog() : null,
     cloudDepth: (pos: Vector3) => mode === 'cloudbase' ? requireRun().coachEnvironment.cloudDepth(pos) : 0,
   });
-  const coachView = createCoachView({ element: $('.fj-coach'), input: () => input });
+  const coachView = createCoachView({ element: $('.fj-coach'), input: () => input,
+    canAnnounce: () => stage.dataset.messageOwner === 'coach' && !overlayOpen() && !briefing });
   let coachMessage: ReturnType<typeof resolveCoachMessage> | null = null;
   function resetCoach() {
     thermalAir.reset();
@@ -1082,7 +1105,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     coachMessage = resolveCoachMessage(primary, { warning, notice }, coachInput);
   }
   function updateCoach() {
-    const eligible = isAirborne() && !mapOpen && !auto && !controls.steered && !briefing;
+    const eligible = isAirborne() && !overlayOpen() && !auto && !controls.steered && !briefing;
     coachView.update(eligible ? coachMessage : null);
     if (eligible) hintEl.hidden = mode === 'cloudbase' || !!coachMessage;
     else hintEl.hidden = false;
@@ -1090,13 +1113,13 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     // Available on the first turn; thermalling qualification still belongs to lift-activity.js.
     thermalAirEl.hidden = !showThermalAir({ airborne: isAirborne(), manual: !auto && !controls.steered,
       circling: summarizeControls(input).left || summarizeControls(input).right || Math.abs(g.trackRate) > 0.015,
-      lift: Math.max(air.thermal ?? 0, thermalAir.value), map: mapOpen, briefing, portal, instruction: coachMessage });
+      lift: Math.max(air.thermal ?? 0, thermalAir.value), map: overlayOpen(), briefing, portal, instruction: coachMessage });
   }
 
   const hudView = createFlightHud({ stage, g, input, air, vario, thermalAir, progress, zoneLabels, autoHaste: HASTE,
     get mode() { return mode; }, get auto() { return auto; }, get mapOpen() { return mapOpen; }, get keysOpen() { return keysOpen; },
     get briefing() { return briefing; }, get hasDragged() { return hasDragged; }, get portal() { return portal; }, get held() { return held; }, get coachMessage() { return coachMessage; },
-    isAirborne, compact: () => host.compact(), runHud: quiet => requireRun().hud(quiet), nearestZone, hintText, drawMap });
+    isAirborne, compact: () => host.compact(), runHud: quiet => requireRun().hud(quiet), runReadouts: () => run?.readouts ?? null, nearestZone, hintText, drawMap });
   const updateHud = () => hudView.update();
 
 
@@ -1207,32 +1230,58 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     mapCtx.restore();
   }
 
-  // The list of controls drops down under its button and stays until it is put away. It covers
-  // nothing that matters and stops nothing: the flight goes on underneath.
-  function showKeys(open = !keysOpen) {
-    if (open) clearInput();
+  // The menu and map pause the same flight and share a single modal focus boundary.
+  function showKeys(open = !keysOpen, sync = true) {
+    if (open && (briefing || mode === 'intro' || mode === 'lost')) return;
+    if (open) {
+      clearInput();
+      setHot(null);
+      closeMap(false);
+      const summary = stage.querySelector<HTMLElement>('[data-pause-summary]');
+      if (summary) {
+        const climb = Math.abs(vario.value) < .05 ? 0 : vario.value;
+        const bar = mode === 'cloudbase' ? ` · ${hud('bar').textContent}` : '';
+        summary.textContent = `${Math.max(0, Math.floor(g.pos.y))} m · ${climb >= 0 ? '+' : '−'}${Math.abs(climb).toFixed(1)} m/s · ${Math.round(g.speed * 3.6)} km/h${bar}`;
+      }
+    }
     keysOpen = open;
     $('.fj-keys').hidden = !open;
     $('[data-do="keys"]').setAttribute('aria-expanded', String(open));
+    if (sync) syncFlightOverlay();
   }
 
   // The map covers the landing panel while it is open, and hands it back when it closes.
   function openMap() {
-    if (mode === 'intro' || mode === 'lost') return;
+    if (mode === 'intro' || mode === 'lost' || briefing) return;
     clearInput();
+    setHot(null);
+    showKeys(false, false);
     mapOpen = true;
     $('.fj-map').hidden = false;
     if (panel) hooks.onPanel?.(null);
     if (cloudResult) hooks.onResult?.(null);
     drawMap();
+    syncFlightOverlay();
   }
 
-  function closeMap() {
+  function closeMap(sync = true) {
     if (!mapOpen) return;
     mapOpen = false;
+    resetConfirmOpen = false;
+    const confirmation = stage.querySelector<HTMLElement>('.fj-reset-confirm');
+    if (confirmation) confirmation.hidden = true;
     $('.fj-map').hidden = true;
     if (panel) hooks.onPanel?.(panel);
     if (cloudResult) hooks.onResult?.(cloudResult);
+    if (sync) syncFlightOverlay();
+  }
+
+  function confirmReset(open: boolean) {
+    if (!mapOpen) return;
+    resetConfirmOpen = open;
+    $('.fj-reset-confirm').hidden = !open;
+    syncFlightOverlay();
+    $(open ? '[data-do="reset-cancel"]' : '.fj-map [data-do="reset"]').focus({ preventScroll: true });
   }
 
   on(mapCanvas, 'click', (event: { clientX: number; clientY: number; }) => {
@@ -1259,7 +1308,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
 
   // ---------------------------------------------------------------- sound
 
-  const flightAudio = createFlightAudio({ stage, g, effects, vario, isAirborne, get mode() { return mode; }, get mapOpen() { return mapOpen; }, runSounds: () => run?.sounds() });
+  const flightAudio = createFlightAudio({ stage, g, effects, vario, isAirborne, get mode() { return mode; }, get paused() { return flightPaused(); }, runSounds: () => run?.sounds() });
   const { playStall, playRefill, slump, chime, snap, swoosh } = flightAudio;
   const startAudio = () => flightAudio.start();
   const updateAudio = () => flightAudio.update();
@@ -1358,13 +1407,12 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     if (event.code === 'KeyB' && !event.repeat && inGame()) run?.toggleMusic();
     // Through the arch, nothing is asked of the flight until Good Lift begins.
     if (portal) return;
-    // Briefed, the run waits for any key to fly, and that key is no control until it is let go,
-    // however long it is held; Esc leaves, with no run flown to count.
+    // Only an explicit Fly action, Enter or Space starts the briefed flight.
     if (briefing) {
-      event.preventDefault();
       if (event.repeat) return;
-      if (event.code === 'Escape') leaveGame();
-      else {
+      if (event.code === 'Escape') { event.preventDefault(); exitFlight(); }
+      else if (['Enter', 'Space'].includes(event.code) && !(event.target instanceof Element && event.target.closest('[data-brief-action], [data-do="fly"], [data-do="brief-exit"]'))) {
+        event.preventDefault();
         swallowed = event.code;
         endBriefing();
       }
@@ -1383,10 +1431,23 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
       else if (event.code === 'KeyL' && !event.repeat) toggleSound();
       return;
     }
+    if (overlayOpen()) {
+      if (event.repeat) return;
+      if (event.code === 'Escape') {
+        event.preventDefault();
+        if (resetConfirmOpen) confirmReset(false);
+        else if (mapOpen) closeMap();
+        else showKeys(false);
+      } else if (event.code === 'KeyM') mapOpen ? closeMap() : openMap();
+      else if (event.code === 'KeyH') showKeys();
+      else if (event.code === 'KeyL') toggleSound();
+      else if (event.code === 'KeyF') toggleFullscreen();
+      return;
+    }
     if (mode === 'cloudbase-ended') {
-      if (event.code === 'Escape') mapOpen ? closeMap() : leaveGame();
+      if (event.code === 'Escape') leaveGame();
       else if (event.code === 'KeyR' && !event.repeat) retryCloudbase();
-      else if (event.code === 'KeyM' && !event.repeat) mapOpen ? closeMap() : openMap();
+      else if (event.code === 'KeyM' && !event.repeat) openMap();
       else if (event.code === 'KeyL' && !event.repeat) toggleSound();
       return;
     }
@@ -1412,13 +1473,14 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     swallowed = null;
   });
   on(window, 'pagehide', () => finishCloudbase('quit', false));
-  on(stage, 'pointerdown', (event) => {
+  on(stage, 'pointerdown', () => {
     run?.nudgeMusic();
-    // Or any tap; on the briefing itself, which scrolls on a short screen, a tap and not a drag.
-    if (briefing && !(event.target instanceof Element && event.target.closest('.fj-brief'))) endBriefing();
   });
   on(stage, 'click', (event) => {
-    if (briefing && event.target instanceof Element && event.target.closest('.fj-brief')) endBriefing();
+    if (!briefing || !(event.target instanceof Element)) return;
+    const button = event.target.closest<HTMLElement>('[data-brief-action]');
+    if (button?.dataset.briefAction === 'fly') endBriefing();
+    else if (button?.dataset.briefAction === 'exit') exitFlight();
   });
   // Out of sight, Good Lift's music waits for the page to come back.
   on(document, 'visibilitychange', () => { run?.hideMusic(document.hidden); if (document.hidden) clearInput(); });
@@ -1426,6 +1488,9 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   const actions = {
     map: () => (mapOpen ? closeMap() : openMap()),
     keys: () => showKeys(),
+    resume: () => showKeys(false),
+    fly: () => endBriefing(),
+    'brief-exit': () => { if (briefing) exitFlight(); },
     sound: toggleSound,
     fullscreen: toggleFullscreen,
     exit: exitFlight,
@@ -1434,7 +1499,10 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     'back-to-lift': () => run?.cancelLesson(),
     'repeat-lessons': () => { run?.repeatLessons(); showKeys(false); toast('Trick lessons will repeat when safe.'); },
     fjord: () => { closeMap(); leaveGame(); },
-    reset: () => {
+    reset: () => confirmReset(true),
+    'reset-cancel': () => confirmReset(false),
+    'reset-confirm': () => {
+      if (!mapOpen || !resetConfirmOpen) return;
       run?.cancelReplays();
       finishCloudbase('quit', false);
       Object.assign(progress, emptyProgress());
@@ -1467,7 +1535,9 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
 
   function frame(now: number) {
     request = requestAnimationFrame(frame);
-    const elapsed = Math.min(0.25, (now - last) / 1000);
+    const elapsed = overlayChanged ? 0 : Math.min(0.25, (now - last) / 1000);
+    if (overlayChanged) backlog = 0;
+    overlayChanged = false;
     last = now;
     // Scrolled out of view as a backdrop, there is nothing to draw.
     if (!visible && mode === 'intro') return;
@@ -1477,16 +1547,19 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     // Fixed steps keep the flight model identical on slow and fast machines. Flying
     // itself to a place runs the flight several times faster than the clock. A Cloudbase run is
     // never hurried: at three times the speed a raven arrives with no warning at all.
-    haste = isAirborne() && !mapOpen && auto ? HASTE : 1;
+    const paused = flightPaused();
+    const flightElapsed = paused ? 0 : elapsed;
+    haste = isAirborne() && !paused && auto ? HASTE : 1;
     time += elapsed;
     // A good lift holds the flight still for a heartbeat: no steps are fed while it lasts, and none
     // are made up afterwards. The step itself never changes.
     const stopped = effects.stop > 0;
-    effects.stop = Math.max(0, effects.stop - elapsed);
-    backlog += stopped ? 0 : elapsed * haste;
+    effects.stop = Math.max(0, effects.stop - flightElapsed);
+    // Paused wall time is discarded, including the fractional step left at the opening edge.
+    backlog = paused ? 0 : backlog + (stopped ? 0 : elapsed * haste);
     while (backlog >= STEP) {
       backlog -= STEP;
-      if (isAirborne() && !mapOpen && !held && !portal && !briefing) { flightView.capture(); simulate(STEP); }
+      if (isAirborne() && !flightPaused()) { flightView.capture(); simulate(STEP); }
     }
 
     // What the run is doing to the wing and the picture, eased by the real clock. Outside a run
@@ -1517,7 +1590,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     effects.heave -= effects.heave * Math.min(1, elapsed * 3);
     if (Math.abs(effects.heave) < 0.001) effects.heave = 0;
     effects.fold = Math.max(effects.foldLeft, effects.foldRight);
-    effects.shake = !isAirborne() || calm || mapOpen || held ? 0 : Math.max(effects.want.shake, effects.stall.shake);
+    effects.shake = !isAirborne() || calm || paused ? 0 : Math.max(effects.want.shake, effects.stall.shake);
     if (inRun) {
       effects.veil += (effects.want.veil - effects.veil) * Math.min(1, elapsed * (effects.want.veil > effects.veil ? 6 : 2.5));
       // Below a trace the veil is put right out, so no see-through layer is left over the picture.
@@ -1549,12 +1622,12 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
       glider.group.quaternion.premultiply(roll.setFromAxisAngle(camera.getWorldDirection(ahead), lean));
     }
     const airborne = isAirborne();
-    if (airborne) vario.step(g.vy, mapOpen || held || portal || briefing ? 0 : elapsed);
+    if (airborne) vario.step(g.vy, flightElapsed);
     else vario.reset(g.vy);
-    if (airborne) thermalAir.step(air.thermal ?? 0, mapOpen || held || portal || briefing ? 0 : elapsed);
+    if (airborne) thermalAir.step(air.thermal ?? 0, flightElapsed);
     else thermalAir.reset();
     const poseDetail = {
-      dt: elapsed,
+      dt: airborne ? flightElapsed : elapsed,
       time,
       bank: g.bank + lean,
       pace: airborne ? g.speed - FLIGHT.speed.trim : 0,
@@ -1584,13 +1657,16 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
       // Gentler for whoever asks for less motion, and still there.
       heave: calm ? effects.heave * 0.5 : effects.heave,
     };
-    renderedFlight = airborne ? flightView.sample(mapOpen || held || portal || briefing ? 1 : backlog / STEP) : null;
+    renderedFlight = airborne ? flightView.sample(paused ? 1 : backlog / STEP) : null;
     if (airborne) glider.posePhysical(renderedFlight!, poseDetail);
     else glider.pose(poseDetail);
     updateCoach();
-    updateCamera(elapsed);
-    const instruments = $('.fj-hud > dl').getBoundingClientRect();
-    stage.style.setProperty('--coach-top', `${instruments.bottom - stage.getBoundingClientRect().top + 12}px`);
+    hudView.presentMessages();
+    updateCamera(paused ? 0 : elapsed);
+    const instruments = (stage.querySelector<HTMLElement>('.fj-telemetry') ?? $('.fj-hud > dl')).getBoundingClientRect();
+    const messageTop = `${instruments.bottom - stage.getBoundingClientRect().top + 12}px`;
+    stage.style.setProperty('--coach-top', messageTop);
+    stage.style.setProperty('--message-top', messageTop);
     flightCues.update({ pose: renderedFlight, dt: elapsed, drag: brakeDrag.state, message: coachMessage, input,
       facts: { blocked: !isAirborne() || mapOpen || keysOpen || held || portal || briefing || document.hidden ||
           !!auto || controls.steered || controls.locked || controls.climb != null,
@@ -1608,8 +1684,8 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     gateway.update(time);
     // Over the fjord a sparse breeze that moves nothing, as the windsocks show it; a run draws all
     // of its own wind. Paused with the flight, and drawn brighter once the glow has been dropped.
-    if (inRun) requireRun().draw(mapOpen || held ? 0 : elapsed, mapOpen);
-    streaks.update(mapOpen || held ? 0 : elapsed, g.pos, camera.position, fjordWindAt, mode === 'flying' ? 0.65 : 0, 3, null, !useBloom);
+    if (inRun) requireRun().draw(flightElapsed, overlayOpen() || briefing);
+    streaks.update(flightElapsed, g.pos, camera.position, fjordWindAt, mode === 'flying' ? 0.65 : 0, 3, null, !useBloom);
     placeLabels();
     updateAudio();
     hudClock += elapsed;
@@ -1656,6 +1732,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     get style() { return run?.style.state ?? null; },
     // A run's briefing: whether it is up, and the key that ends it, as a pilot ready to fly.
     get briefing() { return briefing; },
+    get paused() { return flightPaused(); },
     endBrief: () => briefing && endBriefing(),
     get entry() { return run?.entry.state ?? null; },
     // What the run's hint was last chosen from: its facts, as the readouts last wrote them.

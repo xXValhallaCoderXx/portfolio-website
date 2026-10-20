@@ -259,10 +259,10 @@ export function createGoodLift(host: GoodLiftHost) {
   const gatesEl = $('.fj-gates');
   // Each stone's label: where it was last put on screen, and the rune it names.
   const labels = ([...gatesEl.children] as HTMLElement[]).map((el) => ({ el, name: el.children[0], gist: el.children[1], shown: false, x: NaN, y: NaN, rune: RUNE.none as number }));
-  for (const sound of stage.querySelectorAll<HTMLElement>('.fj-hud nav > [data-do="sound"], .fj-keys-more > [data-do="sound"]')) sound.insertAdjacentHTML('afterend', MUSIC_BUTTON);
+  for (const sound of stage.querySelectorAll<HTMLElement>('.fj-keys-more > [data-do="sound"]')) sound.insertAdjacentHTML('afterend', MUSIC_BUTTON);
   const musicButtons = [...stage.querySelectorAll<HTMLElement>('[data-do="music"]')];
   for (const button of musicButtons) button.addEventListener('click', () => toggleMusic());
-  const ownEls = [...rows.querySelectorAll<HTMLElement>('.fj-run'), styleEl, hornEl, lightsEl, saidEl, chevronEl, gatesEl, titleEl, ...musicButtons];
+  const ownEls = [...rows.querySelectorAll<HTMLElement>('.fj-run'), briefEl, styleEl, hornEl, lightsEl, saidEl, chevronEl, gatesEl, titleEl, ...musicButtons];
   let lightsTimer: ReturnType<typeof setTimeout>;
   let saidTimer: ReturnType<typeof setTimeout>;
   let titleTimer: ReturnType<typeof setTimeout>;
@@ -816,23 +816,33 @@ export function createGoodLift(host: GoodLiftHost) {
     hearThunder();
   }
 
-  /** Writes the run's readouts and returns the hint line to show, or '' (`quiet` says show none). */
-  function hud(quiet: boolean) {
+  /** Numeric run facts for responsive instruments, sampled without advancing the run. */
+  function readouts() {
     const { pilot, fogHeight } = sky.state;
     const lift = meet.state;
-    // The altitude is the one readout every screen shows, so it carries what has hit the wing, and
-    // otherwise the next line to reach.
-    const plight = pilot.collapse > 0 ? 'collapsed' : g.stall > 0 ? 'stalled' : pilot.cloud > 0.25 ? 'in cloud' : `next ${metres(lift.next)}`;
-    host.hud('alt').textContent = `${Math.floor(g.pos.y)} m · ${plight}`;
-    const clearance = Math.max(0, Math.floor(g.pos.y - fogHeight));
-    host.hud('next').textContent = `${host.compact() ? '' : `peak ${Math.floor(sky.state.peak)} m · `}fog ${clearance} m below`;
+    return {
+      nextLine: lift.next,
+      bar: lift.bar + MEET.bar,
+      total: lift.total,
+      fogClearance: Math.max(0, Math.floor(g.pos.y - fogHeight)),
+      status: pilot.collapse > 0 ? 'collapsed' : g.stall > 0 ? 'stalled' : pilot.cloud > 0.25 ? 'in cloud' : '',
+      styleMultiplier: multiplierOf(style.state.total),
+      horn: lift.horn,
+    };
+  }
+
+  /** Writes the run's readouts and returns the hint line to show, or '' (`quiet` says show none). */
+  function hud(quiet: boolean) {
+    const current = readouts();
+    const lift = meet.state;
+    host.hud('alt').textContent = `${Math.floor(g.pos.y)} m`;
+    host.hud('next').textContent = `${host.compact() ? '' : `peak ${Math.floor(sky.state.peak)} m · `}fog ${current.fogClearance} m below`;
     host.hud('speed').textContent = `${Math.round(g.speed * 3.6)} km/h`;
-    host.hud('belt').textContent = `total ${kg(lift.total)} kg`;
-    // The bar as it would be lifted at the next line, the empty bar included; where the belt is
-    // not shown, the total rides with it.
-    const bar = `${kg(lift.bar + MEET.bar)}${lift.horn ? ' kg ×2' : ' kg'}`;
+    host.hud('belt').textContent = `${kg(current.total)} kg`;
+    // The bar includes its empty weight. Labels and secondary metrics have their own cells.
+    const bar = `${kg(current.bar)}${current.horn ? ' kg ×2' : ' kg'}`;
     const compact = host.compact();
-    barCell.textContent = compact ? `bar ${bar} · total ${kg(lift.total)} kg` : bar;
+    barCell.textContent = bar;
     barCell.classList.toggle('doubled', lift.horn);
     // The style, once a set of tricks has landed, with what it multiplies the total by (score.js):
     // written as it changes, or as the readouts change form (a phone turned, a window narrowed).
@@ -1307,6 +1317,7 @@ export function createGoodLift(host: GoodLiftHost) {
     nudgeMusic: () => music.nudge(),
     /** Whether the run is still being briefed, the flight waiting at the gate; and the pilot ready. */
     get briefing() { return briefed !== null; },
+    get readouts() { return readouts(); },
     endBrief,
     /** The page went out of sight, or came back: the music waits for it. */
     hideMusic: (hidden: boolean) => music.hide(hidden),

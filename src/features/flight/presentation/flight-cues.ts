@@ -136,10 +136,11 @@ export function flightControlLayout(safe: CueBounds, output: Partial<ControlLayo
   const compact = width > height && height <= 500;
   const travel = Math.max(0, Math.min(compact ? 60 : BRAKE_DRAG.touchTravel, (width - 44) / 2, (height - 52) / 1.6));
   const half = travel + 22, top = upperTravel(travel) + 28, bottom = travel + 24;
-  // Only the viewport determines this anchor. Pointer origins, input device and coach messages
-  // cannot move it; raw gesture coordinates continue to belong exclusively to the input adapter.
-  const x = safe.left + width / 2;
-  const y = clamp(safe.top + height * (width <= 560 ? 0.80 : 0.76), safe.top + top, safe.bottom - bottom);
+  // Wider views leave the centre clear for the pilot. Phones keep their lower-centre diagram.
+  // Pointer origins, input device and coach messages never move this viewport anchor.
+  const docked = width > 560;
+  const x = docked ? safe.right - half : safe.left + width / 2;
+  const y = docked ? safe.bottom - bottom : clamp(safe.top + height * 0.80, safe.top + top, safe.bottom - bottom);
   Object.assign(out, { x, y, travel, left: x - half, right: x + half, top: y - top, bottom: y + bottom });
   return out;
 }
@@ -164,7 +165,7 @@ export function createFlightCues({ element, stage, camera, reducedMotion = () =>
   const handsUp = find('.fj-hands-up');
   const motion = createTravelCue(), layout: ControlLayout = { ...emptyBounds(), x: 0, y: 0, travel: 0 }, suggestion: CoachTarget = { dx: 0, dy: 0, leftBrake: 0, rightBrake: 0, handsUp: false, accepted: false }, live: CuePoint = { dx: 0, dy: 0 }, markerBox = emptyBounds(), targetBox = emptyBounds();
   const obstacles: CueBounds[] = [];
-  const exclusions = '.fj-hud > dl, .fj-hud nav, .fj-coach, .fj-lights, .fj-gauge, .fj-cue, .fj-hint, .fj-toasts > *, .fj-title, .fj-style';
+  const exclusions = '.fj-hud > dl, .fj-telemetry, .fj-hud nav, .fj-coach, .fj-lights, .fj-gauge, .fj-cue, .fj-hint, .fj-toasts > *, .fj-title, .fj-style';
   let size = 0, displayed = false, releasedFor = 0;
   const attr = (node: Element, name: string, value: string|number) => { const text = String(value); if (node.getAttribute(name) !== text) node.setAttribute(name, text); };
   const hide = (node: Element, value: boolean) => node.toggleAttribute('hidden', value);
