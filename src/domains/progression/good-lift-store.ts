@@ -2,7 +2,7 @@ import type { KitReward } from './models.ts';
 export interface GoodLiftStore {
   scoreVersion: number;
   best: { total: number; peak: number; score: number }; tonnage: number; runs: number;
-  feats: string[]; learnedLessons: string[]; daily: {last: number; streak: number};
+  feats: string[]; learnedLessons: string[]; foundationLessons: string[]; daily: {last: number; streak: number};
   initials: string; optIn: boolean; board: ReturnType<typeof emptyBoard>; bots: ReturnType<typeof normalizeBots>;
 }
 export interface KitProgress { tonnage: number; feats: readonly string[]; best: {total: number} }
@@ -39,6 +39,7 @@ import { normalizeKit } from './wing-kit.ts';
 import { isJudgedEnding } from '../good-lift/run-rules.ts';
 import { GAME_STORE } from './good-lift-key.ts';
 import { normalizeLearnedLessons } from './trick-learning.ts';
+import { normalizeFoundationLessons } from './foundation-learning.ts';
 
 /** The localStorage key Good Lift keeps everything under; the page's reset clears it by name. */
 export { GAME_STORE };
@@ -150,7 +151,7 @@ export function kitSheet(store: KitProgress, worn: unknown, fresh: string[] = []
  * null: one day's, as a later day's takes its place.
  */
 export function emptyStore(): GoodLiftStore {
-  return { scoreVersion: SIM_VERSION, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], learnedLessons: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: emptyBoard(), bots: null };
+  return { scoreVersion: SIM_VERSION, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], learnedLessons: [], foundationLessons: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: emptyBoard(), bots: null };
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -185,6 +186,7 @@ export function normalizeStore(raw: unknown): GoodLiftStore {
     if (isCount(raw.runs)) store.runs = raw.runs;
     if (Array.isArray(raw.feats)) store.feats = [...new Set(raw.feats.filter((id): id is string => typeof id === 'string' && FEAT_IDS.includes(id)))];
     store.learnedLessons = normalizeLearnedLessons(raw.learnedLessons);
+    store.foundationLessons = normalizeFoundationLessons(raw.foundationLessons);
     const { last, streak } = isRecord(raw.daily) ? raw.daily : {};
     if (isCount(last) && isCount(streak) && (last === 0) === (streak === 0)) store.daily = { last, streak };
     if (typeof raw.initials === 'string' && INITIALS.test(raw.initials) && !isBlocked(raw.initials)) store.initials = raw.initials;

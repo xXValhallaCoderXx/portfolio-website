@@ -1,6 +1,7 @@
 import type { CoachFields } from '../../../domains/coaching/models.ts';
 import type { FlightInput } from '../../../domains/flight/models.ts';
 import type { BrakeDevice } from '../../../domains/flight/brake-input.ts';
+import type { TrainingInputFeedback } from './training-input-feedback.ts';
 // The coach only presents resolved instructions and raw held inputs. It never changes flight.
 import { summarizeControls } from '../../../domains/flight/brake-controls.ts';
 
@@ -35,7 +36,7 @@ const attribute = (node: { getAttribute(name: string): string | null; setAttribu
 const hide = (node: { hidden: string | boolean }, value: boolean) => { if (node.hidden !== value) node.hidden = value; };
 
 /** `now` is a presentation clock, injectable for announcement tests; no simulation clock advances. */
-export function createCoachView<T extends CoachNode<T>>({ element, input = () => ({}), device = () => 'mouse', now = () => performance.now(), canAnnounce = () => true }: { element: T; input?: () => FlightInput; device?: () => BrakeDevice; now?: () => number; canAnnounce?: () => boolean }) {
+export function createCoachView<T extends CoachNode<T>>({ element, input = () => ({}), device = () => 'mouse', now = () => performance.now(), canAnnounce = () => true, brakeFeedback = () => null }: { element: T; input?: () => FlightInput; device?: () => BrakeDevice; now?: () => number; canAnnounce?: () => boolean; brakeFeedback?: () => Readonly<TrainingInputFeedback> | null }) {
   const query = (root: T, selector: string): T => { const node = root.querySelector(selector); if (!node) throw new Error(`Coach view is missing ${selector}`); return node as T; };
   const kicker = query(element, '.fj-coach-kicker');
   const warningStrip = element.querySelector('[data-coach="warning"]') as T | null;
@@ -117,6 +118,7 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
       visible = false; semantic = pending = '';
       write(announce, '');
       write(acknowledgement, ''); hide(acknowledgement, true);
+      element.dataset.brakeFeedback = acknowledgement.dataset.brakeFeedback = '';
       return;
     }
     if (!visible) { element.hidden = false; visible = true; }
@@ -137,7 +139,11 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
       !message.action.startsWith('prepare-') && !message.warning;
     const acceptance = message.action === 'release-all' || message.action === 'release-turns' || message.action === 'straight' && !message.hold?.length
       ? 'Good · keep this line' : 'Good · keep that pull';
-    write(acknowledgement, accepted ? acceptance : ''); hide(acknowledgement, !accepted);
+    const position = message.lessonId === 'steering' && !message.warning ? brakeFeedback() : null;
+    const positionVisible = !!position && position.status !== 'idle';
+    element.dataset.brakeFeedback = acknowledgement.dataset.brakeFeedback = positionVisible ? position.status : '';
+    write(acknowledgement, positionVisible ? position.label : accepted ? acceptance : '');
+    hide(acknowledgement, !positionVisible && !accepted);
     write(feedback, secondary); hide(feedback, !secondary);
     const state = message.state || '';
     if (element.dataset.state !== state) element.dataset.state = state;
@@ -177,6 +183,7 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
     if (cancel) hide(cancel, true);
     element.hidden = true; visible = false; semantic = pending = ''; announcedAt = -Infinity;
     element.dataset.state = element.dataset.action = element.dataset.warning = '';
+    element.dataset.brakeFeedback = acknowledgement.dataset.brakeFeedback = '';
     for (const node of [kicker, action, reason, feedback, acknowledgement, progressLabel, announce]) write(node, '');
     if (warningStrip) { write(warningStrip, ''); hide(warningStrip, true); }
     reason.hidden = feedback.hidden = acknowledgement.hidden = progress.hidden = controls.hidden = released.hidden = true;

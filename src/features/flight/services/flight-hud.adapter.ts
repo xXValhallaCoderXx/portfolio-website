@@ -5,6 +5,7 @@ import type { CoachFields } from '../../../domains/coaching/models.ts';
 import { THERMAL_AIR } from '../presentation/thermal-air.ts';
 import { windReadout } from '../presentation/wind-feedback.ts';
 import { flightMessageOwner, flightSecondaryOwner } from '../presentation/flight-message.ts';
+import { TRAINING_LESSON_INFO, type TrainingLessonId } from '../../../domains/coaching/training-catalog.ts';
 import type { FlightZone } from './flight-navigation.service.ts';
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -112,7 +113,7 @@ export function createFlightHud(port: FlightHudPort) {
      }
    } else if (port.mode === 'training') {
      const practice = port.trainingReadouts?.();
-     const lesson = practice?.lesson === 'pitch' ? 'PITCH & CATCH' : practice?.lesson === 'spiral' ? 'SPIRAL 360' : (practice?.lesson ?? '').toUpperCase();
+     const lesson = TRAINING_LESSON_INFO[practice?.lesson as TrainingLessonId]?.label ?? (practice?.lesson ?? '').toUpperCase();
      label.textContent = 'TRAINING';
      hud('destination').textContent = lesson;
      hud('speed').textContent = `${Math.round(g.speed * 3.6)} km/h`;

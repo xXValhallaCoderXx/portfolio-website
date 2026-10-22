@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createTrainingSession, TRAINING, TRAINING_LESSONS, type LessonId } from './training-session.ts';
+import { createTrainingSession, TRAINING, TRICK_TRAINING_LESSONS, type TrainingLessonId, type LessonId } from './training-session.ts';
 import { TRICK_LESSONS } from './trick-lessons.ts';
 import { createFlight, stepFlight } from '../flight/flight.ts';
 import { brakeByte, summarizeControls } from '../flight/brake-controls.ts';
@@ -9,7 +9,7 @@ import { emptyStore } from '../progression/good-lift-store.ts';
 import { clearStore, learnTrickLesson, readStore, writeStore } from '../../adapters/browser/good-lift-storage.service.ts';
 
 const dt = 1 / 60;
-function follow(lesson: LessonId, side = 1, delay = 0, onLearned: (id: LessonId) => void = () => {}) {
+function follow(lesson: LessonId, side = 1, delay = 0, onLearned: (id: TrainingLessonId) => void = () => {}) {
   const training = createTrainingSession({ onLearned });
   training.begin(lesson, side);
   let input: FlightInput = { leftBrake: 0, rightBrake: 0 };
@@ -28,9 +28,9 @@ function follow(lesson: LessonId, side = 1, delay = 0, onLearned: (id: LessonId)
   return { training, phases, moves };
 }
 
-for (const lesson of TRAINING_LESSONS) for (const side of [-1, 1]) for (const delay of [0, .15, .3])
+for (const lesson of TRICK_TRAINING_LESSONS) for (const side of [-1, 1]) for (const delay of [0, .15, .3])
   test(`selected ${lesson}, side ${side}, ${delay}s response: observed move and three-second recovery`, () => {
-    const learned: LessonId[] = [];
+    const learned: TrainingLessonId[] = [];
     const { training, phases, moves } = follow(lesson, side, delay, id => learned.push(id));
     assert.equal(training.state.status, 'complete', JSON.stringify(training.state));
     assert.ok(moves.has(TRICK_LESSONS[lesson].kind));
@@ -77,7 +77,7 @@ test('idle or ignored guidance never times out, restarts or selects a different 
   training.step(0, { leftBrake: 1 }); assert.equal(training.state.elapsed, elapsed);
 });
 
-for (const lesson of TRAINING_LESSONS) test(`${lesson} enforces entry and abort height reserves`, () => {
+for (const lesson of TRICK_TRAINING_LESSONS) test(`${lesson} enforces entry and abort height reserves`, () => {
   let floor = TRAINING.origin.y - TRICK_LESSONS[lesson].entry + 1;
   const training = createTrainingSession({ heightAt: () => floor });
   training.begin(lesson);
@@ -117,7 +117,7 @@ test('Retry and Next are explicit neutral respawns; leaving clears the training 
   assert.deepEqual(training.g.pos, TRAINING.origin); assert.equal(training.watch.state.clock, 0);
   assert.equal(training.style.state.total, 0); assert.equal(training.controls.leftBrake, 0);
   training.next(); assert.equal(training.state.lesson, 'wingover'); assert.equal(training.state.side, -1);
-  training.begin('loop'); training.next(); assert.equal(training.state.lesson, 'pitch');
+  training.begin('loop'); training.next(); assert.equal(training.state.lesson, 'steering');
   training.leave(); assert.equal(training.state.status, 'idle'); assert.equal(training.message, null);
 });
 

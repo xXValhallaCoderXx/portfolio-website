@@ -1,5 +1,6 @@
 import type { ModelLoader, SkyContext } from './rendering.types.ts';
 import { isMesh } from './mesh.ts';
+import { createTrainingLandscape } from './training-landscape.ts';
 import * as THREE from 'three';
 export interface SkyBlend { sea: number; aurora: number; high: number }
 interface Formation { kind: number; id: number; x: number; y: number; z: number; size: number; turn: number; from: number; to?: number }
@@ -58,6 +59,7 @@ export function createNordicSky({ loadModel = null }: { loadModel?: ModelLoader 
   const geometry = <T extends THREE.BufferGeometry>(value: T) => { geometries.add(value); return value; };
   const material = <T extends THREE.Material>(value: T) => { materials.add(value); return value; };
   let disposed = false, lastTime: number|null = null, lastSeed: number | null = null;
+  let trainingLandscape: ReturnType<typeof createTrainingLandscape> | null = null;
   let formations = islandFormations(), motionTime = 0;
   const layers = skyBlend(0);
   const random = dice(0x73746172);
@@ -232,6 +234,7 @@ export function createNordicSky({ loadModel = null }: { loadModel?: ModelLoader 
       scenery.visible = moon.visible = halo.visible = false; lastTime = null; return;
     }
     const active = context.mode === 'cloudbase' || context.mode === 'training';
+    const practice = context.mode === 'training';
     const altitude = context.altitude ?? context.camera?.position?.y ?? 0;
     if (lastTime != null && time < lastTime) {
       for (const hero of heroes) hero.opacity = 0;
@@ -248,6 +251,15 @@ export function createNordicSky({ loadModel = null }: { loadModel?: ModelLoader 
     aurora.uniforms.strength.value = active ? 0.65 + layers.aurora * 0.6 : 1;
     curtains.position.y = active ? layers.aurora * 350 : 0;
     scenery.visible = active; moon.visible = halo.visible = active;
+    if (practice && !trainingLandscape) {
+      trainingLandscape = createTrainingLandscape();
+      trainingLandscape.group.name = 'Training landscape';
+      scenery.add(trainingLandscape.group);
+    }
+    if (trainingLandscape) {
+      trainingLandscape.group.visible = practice;
+      if (practice) trainingLandscape.update({ opacity: layers.sea, lowDetail: context.lowDetail });
+    }
     stars.geometry.setDrawRange(0, context.lowDetail ? 800 : 1400);
     curtains.children.forEach((ribbon, i) => { ribbon.visible = !context.lowDetail || i % 2 === 0; });
     if (!active) {
@@ -269,7 +281,7 @@ export function createNordicSky({ loadModel = null }: { loadModel?: ModelLoader 
     }
     for (const mountain of mountains) {
       mountain.material.opacity = layers.sea * (1 - blend(1000, 1500, fog));
-      mountain.visible = mountain.material.opacity > 0.01;
+      mountain.visible = !practice && mountain.material.opacity > 0.01;
     }
     if (altitude >= 400) requestClouds();
     const visibility = (p: Formation) => blend(p.from, p.to ?? p.from + 240, altitude) *
@@ -311,6 +323,7 @@ export function createNordicSky({ loadModel = null }: { loadModel?: ModelLoader 
   }
   function dispose() {
     if (disposed) return; disposed = true;
+    trainingLandscape?.dispose();
     group.removeFromParent();
     for (const item of geometries) item.dispose();
     for (const item of materials) item.dispose();

@@ -1,3 +1,13 @@
+import type { CoachFields } from '../../../domains/coaching/models.ts';
+import type { FlightState } from '../../../domains/flight/models.ts';
+
+/** Normal flight retains hazards and physical safety, while maneuver teaching stays in Training. */
+export function essentialFlightMessage<T extends CoachFields>(message: T | null,
+  wing: Pick<FlightState, 'stallLoad' | 'stall' | 'tuck' | 'wingPhase'>): T | null {
+  const physicalSafety = wing.stallLoad > .65 || wing.stall > 0 || wing.tuck > 0 || wing.wingPhase !== 'flying';
+  return message?.warning || message?.state === 'hazard' || physicalSafety && message?.owner === 'safety' ? message : null;
+}
+
 /** Presentation priority only: choosing a visible card cannot change an instruction or a run. */
 export interface FlightMessageFacts {
   blocked: boolean; urgent: boolean; coach: boolean; judges: boolean; notice: boolean; hint: boolean; intro: boolean;

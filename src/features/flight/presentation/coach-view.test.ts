@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { coachGesture, createCoachView } from './coach-view.ts';
 import { actionMessage } from '../../../domains/coaching/coach-actions.ts';
 import { keyboardBrakes } from '../../../domains/flight/brake-input.ts';
+import type { TrainingInputFeedback } from './training-input-feedback.ts';
 
 test('device captions expose reachable normal, thermal, wingover and loop demands', () => {
   const target = (left: number, right: number) => ({ brakeTargets: { left, right, tolerance: 0.07 } });
@@ -56,7 +57,7 @@ class Node {
   setAttribute(name: string, value: string) { this.writes++; this.attributes.set(name, value); }
   getAttribute(name: string) { return this.attributes.get(name) ?? null; }
 }
-function fixture(warning = false, canAnnounce = () => true) {
+function fixture(warning = false, canAnnounce = () => true, brakeFeedback: () => Readonly<TrainingInputFeedback> | null = () => null) {
   const document = { createElement: () => new Node(document) };
   const element = new Node(document), parts: Record<string, Node> = {};
   for (const name of ['action', 'reason', 'controls', 'feedback', 'acknowledgement', 'progress', 'announce', 'cancel']) {
@@ -67,11 +68,40 @@ function fixture(warning = false, canAnnounce = () => true) {
   parts.caption = new Node(document); parts.fill = new Node(document);
   parts.progress.selectors.set('span', parts.caption); parts.progress.selectors.set('i > b', parts.fill);
   let raw: FlightInput = {}, time = 0;
-  const view = createCoachView({ element, input: () => raw, now: () => time, canAnnounce });
+  const view = createCoachView({ element, input: () => raw, now: () => time, canAnnounce, brakeFeedback });
   const chip = (name: string) => parts.controls.children.find((child) => child.dataset.control === name)!;
   return { view, element, parts, chip, raw: (value: FlightInput) => { raw = value; }, time: (value: number) => { time = value; } };
 }
 const reverse = Object.freeze({ state: 'timing', context: 'Wingover', phase: 'Reverse now', action: 'left', title: 'RELEASE RIGHT, THEN LEFT', detail: 'Swap with the swing.', hold: Object.freeze(['left']), release: Object.freeze(['right']) });
+
+test('Steering position feedback shares the acknowledgement row and preserves measured lesson progress', () => {
+  const position: TrainingInputFeedback = { status: 'hold', label: 'HOLD HERE · correct brake position', position: 1, bing: false };
+  const f = fixture(false, () => true, () => position);
+  const demand = { state: 'lesson', lessonId: 'steering', phase: 'turn-first', action: 'left', title: 'TURN LEFT',
+    brakeTargets: { left: .3, right: 0, tolerance: .07 }, progress: .25, progressLabel: 'TURN THE COURSE · 15°' };
+  f.view.update(demand);
+  assert.equal(f.parts.acknowledgement.textContent, position.label);
+  assert.equal(f.parts.acknowledgement.hidden, false);
+  assert.equal(f.parts.acknowledgement.dataset.brakeFeedback, 'hold');
+  assert.equal(f.element.dataset.brakeFeedback, 'hold', 'the same accepted state reaches the handle target bands');
+  assert.equal(f.parts.caption.textContent, 'TURN THE COURSE · 15°');
+  assert.equal(f.parts.fill.style.transform, 'scaleX(0.25)');
+  const announcement = f.parts.announce.textContent;
+  position.status = 'ease'; position.label = 'EASE OFF · pull is too deep';
+  f.view.update(demand);
+  assert.equal(f.parts.acknowledgement.dataset.brakeFeedback, 'ease');
+  assert.equal(f.element.dataset.brakeFeedback, 'ease');
+  assert.equal(f.parts.acknowledgement.textContent, position.label);
+  assert.equal(f.parts.announce.textContent, announcement, 'position updates do not repeat screen-reader instructions');
+  f.view.update({ ...demand, lessonId: 'thermal' });
+  assert.equal(f.parts.acknowledgement.hidden, true, 'other lessons cannot inherit Steering feedback');
+  assert.equal(f.element.dataset.brakeFeedback, '');
+  f.view.update(demand); f.view.update(null);
+  assert.equal(f.element.dataset.brakeFeedback, '', 'hiding the coach clears the handle highlight');
+  f.view.update(demand); f.view.reset();
+  assert.equal(f.parts.acknowledgement.dataset.brakeFeedback, '');
+  assert.equal(f.element.dataset.brakeFeedback, '');
+});
 
 test('coach chips describe drags and easing without keyboard or double-tap instructions', () => {
   const f = fixture(), raw = { controlMode: 'brakes' as const, leftBrake: .3, rightBrake: 0 };

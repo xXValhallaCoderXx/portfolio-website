@@ -21,24 +21,22 @@ export const FLIGHT_MARKUP = /* html */ `
       <span class="fj-brake-pair" hidden><span>L <span data-brake-side="left" role="meter" aria-label="Left brake" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></span></span><span>R <span data-brake-side="right" role="meter" aria-label="Right brake" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></span></span></span>
     </div>
   </div>
-  <section class="fj-keys" role="dialog" aria-modal="true" aria-labelledby="fj-pause-title" tabindex="-1" hidden>
+  <section class="fj-keys fj-arcade-pause" role="dialog" aria-modal="true" aria-labelledby="fj-pause-title" tabindex="-1" hidden>
     <header class="fj-pause-heading"><div><b id="fj-pause-title" class="fj-paused-badge">❚❚ PAUSED</b><span>the sky waits for you</span></div><button data-do="resume" aria-label="Resume flight">×</button></header>
     <button class="primary fj-resume" data-do="resume">▶ resume flight</button>
     <p class="fj-pause-summary" data-pause-summary></p>
     <div class="fj-menu-content">
-      <h2>TWO BRAKES · ONE WING</h2>
-      <dl class="fj-control-rows">
-        <div><dt>Touch</dt><dd>pull either side handle down; use both thumbs to brake together. Lift a thumb to release that hand.</dd></div>
-        <div><dt>Keyboard</dt><dd>A / D or ← / → turn gently. Space, S or ↓ pulls both brakes. Add a direction to circle.</dd></div>
-        <div><dt>Acro</dt><dd>Q / E builds wingovers. Shift + a direction pulls fully for a loop; Shift + Space pulls both fully.</dd></div>
-        <div><dt>Mouse</dt><dd>drag anywhere: sideways turns, down pulls both brakes; let go to release. Full pulls can stall.</dd></div>
-      </dl>
+      <div class="fj-pause-quick fj-keys-more"><button class="fj-training-entry" data-do="training">Train ›<small>choose a guided lesson</small></button><button data-do="sound">sound: on</button></div>
+      <section class="fj-pause-guide" aria-labelledby="fj-pause-guide-title"><h2 id="fj-pause-guide-title">HOW TO FLY <span>· TWO BRAKES · ONE WING</span></h2>
+        <div class="fj-pause-basics"><div><b>↶ PULL ONE</b><span>turn that way</span></div><div><b>↓ PULL BOTH</b><span>brake together</span></div><div><b>↑ LET GO</b><span>hands up</span></div></div>
+        <details><summary>keyboard controls</summary><dl class="fj-control-rows"><div><dt>A / D · ← / →</dt><dd>turn gently</dd></div><div><dt>Space · S · ↓</dt><dd>pull both to working brake</dd></div><div><dt>Q / E</dt><dd>pull one hand into the swing range</dd></div><div><dt>Shift + direction</dt><dd>build a full side pull for a loop</dd></div><div><dt>Shift + Space</dt><dd>both full · can stall</dd></div></dl></details>
+        <details><summary>touch &amp; mouse controls</summary><p>Touch: pull either side handle down. Use both thumbs to brake together; lift a thumb to release that hand.</p><p>Mouse: press and drag anywhere. Sideways turns; down pulls both brakes. Let go to release. Full pulls can stall.</p></details>
+      </section>
+      <p class="fj-score-flow">TRICK + TRICK → LEVEL <b>3 s</b> → <b>BANKED</b></p>
       <details><summary>thermals &amp; climbing</summary><p>Keep a little brake on both hands and pull the inside hand farther to circle in rising air. Ease the difference to widen. On keyboard, W holds both gently; W + A / D circles, then W alone widens. Brake slows the wing; rising air provides lift.</p><p class="fj-keys-fjord">Land inside a lit ring to read that part of the page. Select a pillar or map destination for automatic travel.</p><p class="fj-keys-goal fj-keys-run" hidden>Bank the bar every 150 m. Raven warnings, gusts and storms begin above 500 m; kettlebells join at 700 m and the Beast at 1,000 m. Fog rises slowly below; a surviving flight completes at ten.</p></details>
-      <details><summary>tricks &amp; recovery</summary><p>Link pitch, Spiral 360, wingover and loop moves for acro points. Add different moves for variety, then recover level for three seconds to bank. Training starts high and guides one trick at a time. Full pulls can stall; release to recover.</p></details>
-      <button class="fj-training-entry" data-do="training">Training</button>
-      <div class="fj-keys-more"><button data-do="sound">sound: on</button></div>
+      <details><summary>tricks &amp; recovery</summary><p>Link pitch, Spiral 360, wingover and loop moves for acro points. Add different moves for variety, then recover level for three seconds to bank. Training starts high and guides one lesson at a time. Full pulls can stall; release to recover.</p></details>
     </div>
-    <footer class="fj-menu-footer"><button data-do="cloudbase" hidden>Good Lift</button><button data-do="back-to-game" hidden>back to game</button><button data-do="training-choose" hidden>choose lesson</button><button data-do="quit-cloudbase" hidden>end run</button><button data-do="exit">back to the page</button></footer>
+    <footer class="fj-menu-footer"><button data-do="cloudbase" hidden>Game</button><button data-do="back-to-game" hidden>back to game</button><button data-do="training-choose" hidden>choose lesson</button><button data-do="quit-cloudbase" hidden>end run</button><button data-do="exit">back to the page</button></footer>
   </section>
   <div class="fj-toasts"></div>
   <div class="fj-hint"></div>
@@ -50,7 +48,7 @@ export const FLIGHT_MARKUP = /* html */ `
     <header><i></i><i></i><i></i><span id="fj-map-title">~/fjord/map</span></header>
     <div class="fj-map-heading"><span>pick a place to fly to</span><b class="fj-paused-badge">❚❚ PAUSED</b></div>
     <div class="fj-map-content"><canvas class="fj-map-canvas" width="300" height="420" aria-label="Map of the fjord and flight destinations"></canvas>
-      <p class="fj-map-legend"><span>▲ you</span><span>∩ Good Lift</span></p><div class="fj-map-list"></div></div>
+      <p class="fj-map-legend"><span>▲ you</span><span>∩ rune arch</span></p><div class="fj-map-list"></div></div>
     <footer><button class="primary" data-do="map">close</button><button data-do="fjord" hidden>back to the fjord</button><button class="fj-reset-button" data-do="reset">reset progress… <span>(asks first)</span></button></footer>
     <section class="fj-reset-confirm" aria-labelledby="fj-reset-title" hidden><h2 id="fj-reset-title">Reset all progress?</h2><p>This clears your portfolio visits and achievements, Good Lift records, and unlocked kit on this device.</p><button data-do="reset-cancel" class="primary">keep my progress</button><button data-do="reset-confirm">reset progress</button></section>
   </section>

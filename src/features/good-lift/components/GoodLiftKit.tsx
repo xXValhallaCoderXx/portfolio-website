@@ -68,6 +68,7 @@ export function KitNews({ sheet }: { sheet?: KitSheet }) {
 export default function GoodLiftKit({ sheet, onKit }: { sheet?: KitSheet; onKit?: (change: Partial<KitChoice>) => KitChoice | undefined }) {
   const id = useId();
   const [worn, setWorn] = useState(() => sheet?.worn ?? emptyKit());
+  const [part, setPart] = useState<'wing' | 'harness'>('wing');
   useEffect(() => {
     if (sheet?.worn) setWorn(sheet.worn);
   }, [sheet]);
@@ -85,16 +86,15 @@ export default function GoodLiftKit({ sheet, onKit }: { sheet?: KitSheet; onKit?
 
   return (
     <div className="good-lift-kit">
-      <p className="good-lift-tonnage">
-        lifetime <strong>{kilos(sheet.tonnage)} kg</strong> banked
-        {next ? ` · next: ${pieceName(next)} at ${weight(next.kg!)}, ${kilos(next.left)} kg to go` : ' · every rung of the ladder is open'}
-      </p>
-      <p className="good-lift-ladder" aria-hidden="true">
-        <i style={{ '--done': done.toFixed(3) } as CSSProperties} />
-      </p>
-
-      <fieldset className="good-lift-choice">
-        <legend>wing</legend>
+      <div className="good-lift-kit-progress">
+        <p className="good-lift-tonnage"><span>LIFETIME BANKED</span><strong>{kilos(sheet.tonnage)} <small>kg</small></strong></p>
+        <p className="good-lift-kit-next">{next ? `${kilos(next.left)} kg to ${pieceName(next)}` : 'Every rung of the ladder is open'}</p>
+        <p className="good-lift-ladder" aria-hidden="true"><i style={{ '--done': done.toFixed(3) } as CSSProperties} /></p>
+        {next && <p className="good-lift-kit-goal">Next unlock at {weight(next.kg!)}</p>}
+      </div>
+      <div className="good-lift-hangar-heading"><h3>HANGAR</h3><div role="group" aria-label="Kit part"><button type="button" aria-pressed={part === 'wing'} onClick={() => setPart('wing')}>Wing</button><button type="button" aria-pressed={part === 'harness'} onClick={() => setPart('harness')}>Harness</button></div></div>
+      <fieldset className="good-lift-choice good-lift-hangar" hidden={part !== 'wing'}>
+        <legend className="good-lift-hide">wing</legend>
         {wings.map((key) => {
           const item = piece(key);
           return (
@@ -105,15 +105,14 @@ export default function GoodLiftKit({ sheet, onKit }: { sheet?: KitSheet; onKit?
                 {nameOf(key)}
                 {fresh.has(key) && <em> new</em>}
               </b>{' '}
-              <span>{key === 'standard' ? lookOf(key) : state(item)}</span>
+              <span>{worn.wing === key ? 'Equipped · ' : item.earned ? 'Equip · ' : 'Locked · '}{key === 'standard' ? lookOf(key) : state(item)}</span>
             </label>
           );
         })}
       </fieldset>
 
-      <fieldset className="good-lift-choice">
-        <legend>cocoon harness</legend>
-        <p className="dim">// each colour unlocks for wing and harness together. Mix them as you like.</p>
+      <fieldset className="good-lift-choice good-lift-hangar" hidden={part !== 'harness'}>
+        <legend className="good-lift-hide">cocoon harness</legend>
         {wings.map((key) => {
           const item = piece(key);
           const theme = HARNESSES[key as keyof typeof HARNESSES];
@@ -123,13 +122,14 @@ export default function GoodLiftKit({ sheet, onKit }: { sheet?: KitSheet; onKit?
               <input type="radio" name={`${id}-harness`} value={key} checked={worn.harness === key} disabled={!item.earned} onChange={() => choose({ harness: key })} />
               <span className={`good-lift-swatch harness${theme ? '' : ' standard'}`} style={theme ? { '--body': theme.body, '--trim': theme.trim } as CSSProperties : undefined} aria-hidden="true" />
               <b>{nameOf(key)}{fresh.has(key) && <em> new</em>}</b>{' '}
-              <span>{item.earned ? `unlocked · ${look}` : asks(item, sheet)}</span>
+              <span>{worn.harness === key ? 'Equipped · ' : item.earned ? 'Equip · ' : 'Locked · '}{item.earned ? look : asks(item, sheet)}</span>
             </label>
           );
         })}
       </fieldset>
 
-      <fieldset className="good-lift-choice">
+      <p className="good-lift-kit-mix">Each colour unlocks for wing and harness together. Mix them as you like.</p>
+      <fieldset className="good-lift-choice good-lift-gear">
         <legend>gear</legend>
         {['chalk', 'gjermundbu'].map((key) => {
           const item = piece(key);

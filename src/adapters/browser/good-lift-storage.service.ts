@@ -1,6 +1,7 @@
 import { GAME_STORE } from '../../domains/progression/good-lift-key.ts';
 import { emptyStore, normalizeStore, recordRun as recordDomainRun, type GoodLiftStore, type RecordedRun, type RecordOptions } from '../../domains/progression/good-lift-store.ts';
 import { normalizeLearnedLessons } from '../../domains/progression/trick-learning.ts';
+import { FOUNDATION_LESSON_IDS, normalizeFoundationLessons } from '../../domains/progression/foundation-learning.ts';
 import { deviceStorage, type StoragePort } from './storage.port.ts';
 // The store as this visit last wrote it, and whether that write reached storage. While storage is
 // missing, blocked or refusing writes (full, or a private window with no room), the visit carries
@@ -87,6 +88,19 @@ export function learnTrickLesson(id: string, storage: StoragePort | null | undef
 
 export function repeatTrickLessons(storage: StoragePort | null | undefined = deviceStorage()) {
   updateStore(store => { store.learnedLessons = []; }, storage);
+}
+
+/** Foundation learning never forges trick prerequisites or changes ranked progression. */
+export function learnFoundationLesson(id: string, storage: StoragePort | null | undefined = deviceStorage()) {
+  return updateStore(store => {
+    const before = store.foundationLessons.length;
+    store.foundationLessons = normalizeFoundationLessons([...store.foundationLessons, id]);
+    return store.foundationLessons.length > before;
+  }, storage);
+}
+
+export function learnTrainingLesson(id: string, storage: StoragePort | null | undefined = deviceStorage()) {
+  return FOUNDATION_LESSON_IDS.some(known => known === id) ? learnFoundationLesson(id, storage) : learnTrickLesson(id, storage);
 }
 
 

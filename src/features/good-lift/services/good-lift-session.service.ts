@@ -7,7 +7,7 @@ import type { RunLog } from '../../../domains/good-lift/recorder.ts';
 import type { FlightInput } from '../../../domains/flight/models.ts';
 import type { ReplayResult } from './replay-work.service.ts';
 import type { RunSheet, ChallengeOutcome, BoardRow } from '../good-lift.models.ts';
-import { clearStore, learnTrickLesson, readStore, recordRun, updateStore } from '../../../adapters/browser/good-lift-storage.service.ts';
+import { clearStore, learnTrainingLesson, readStore, recordRun, updateStore } from '../../../adapters/browser/good-lift-storage.service.ts';
 import { readKit, writeKit } from '../../../adapters/browser/kit-storage.service.ts';
 import type { GoodLiftHost, RunResult, BotResult, WorldResult, ResolvedSky, KitChoice, GameAddress } from '../good-lift.models.ts';
 import { createRunVoices } from './run-audio.adapter.ts';
@@ -34,10 +34,14 @@ import { DAY_MS, dailyNumber, dayOf, gameHref } from '../../../domains/good-lift
 import { earnFeats, keepEarned, kitAfterRun, kitSheet, setInitials as nameRuns } from '../../../domains/progression/good-lift-store.ts';
 import { createFlightCoach } from '../../../domains/coaching/flight-coach.ts';
 import { createTrainingSession } from '../../../domains/good-lift/training-session.ts';
+import { createTrainingAir } from '../presentation/training-air.ts';
 
 /** The same lazy entry, with no ranked world, recorder or reward controller instantiated. */
-export function createGoodLiftTraining(host: Pick<GoodLiftHost, 'g' | 'controls' | 'air'>) {
-  return createTrainingSession({ ...host, onLearned: id => { learnTrickLesson(id); } });
+export function createGoodLiftTraining(host: Pick<GoodLiftHost, 'g' | 'controls' | 'air' | 'scene'>) {
+  const session = createTrainingSession({ ...host, onLearned: id => { learnTrainingLesson(id); } });
+  const view = createTrainingAir({ scene: host.scene, position: host.g.pos, sources: () => session.sources,
+    clock: () => session.state.elapsed, sampleAir: (position, output) => session.sampleAir(position, output) });
+  return Object.assign(session, { draw: view.draw, dispose: view.dispose });
 }
 import { createChalk } from '../presentation/meet-chalk.ts';
 import { addRow, boardKey, outranks, rowsFor } from '../../../domains/good-lift/board.ts';

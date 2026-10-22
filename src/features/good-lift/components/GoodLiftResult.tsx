@@ -17,9 +17,9 @@ const ENDINGS: Record<string, string> = {
   quit: 'Run ended; the bar was forfeit.',
 };
 const TABS = [
-  { key: 'result', label: 'result' },
-  { key: 'board', label: 'board' },
-  { key: 'kit', label: 'kit' },
+  { key: 'result', label: 'Result' },
+  { key: 'board', label: 'Board' },
+  { key: 'kit', label: 'Kit' },
 ];
 /** One judge's light: a filled white disc or a hollow red ring, and the word for whoever cannot see either. */
 function Light({ judge, red }: { judge: string; red: number | boolean }) {
@@ -265,9 +265,9 @@ function Barogram({ result }: { result: RunResult }) {
  * `result.optIn` whether the initials are the pilot's opt-in to it (initials set before it was
  * offered are not, until the pilot says so here), and `onWithdraw` takes this browser's run off it.
  */
-export default function GoodLiftResult({ result, music = null, bots = null, world = null, onRetry, onSky, onFjord, onPage, onInitials, onMusic, onWithdraw, onKit }: {
+export default function GoodLiftResult({ result, music = null, bots = null, world = null, onRetry, onSky, onFjord, onPage, onInitials, onMusic, onWithdraw, onKit, onTraining }: {
   result: RunResult; music?: boolean | null; bots?: BotResult | null; world?: WorldResult | null;
-  onRetry(): void; onSky(kind: GameKind): void; onFjord(): void; onPage(): void;
+  onRetry(): void; onSky(kind: GameKind): void; onFjord(): void; onPage(): void; onTraining?(): void;
   onInitials?(text: string): string | undefined; onMusic?(): boolean | undefined;
   onWithdraw?(): Promise<boolean>; onKit?(choice: Partial<KitChoice>): KitChoice | undefined;
 }) {
@@ -419,19 +419,19 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
         <i />
         <i />
         <i />
-        <span>~/fjord/good-lift — meet sheet</span>
+        <span>MEET OVER · {result.label}</span>
       </header>
       <div className="good-lift-result-layout">
         <div className="good-lift-result-summary">
           <h2 className="shout" id={`${id}-heading`} ref={heading} tabIndex={-1}>
-            <span>&gt;</span> GOOD_LIFT
+            FLIGHT COMPLETE
           </h2>
           <p className="dim" id={`${id}-ending`}>
             {ENDINGS[result.reason] ?? 'Run complete.'}
           </p>
           {result.verse && <p className="dim good-lift-verse">{result.verse}</p>}
           <dl className="good-lift-result-metrics" id={`${id}-total`}>
-            <div><dt>score</dt><dd>{points(result)}<span> pts</span></dd></div>
+            <div className="good-lift-score-hero"><dt>score</dt><dd>{points(result)}<span> PTS</span></dd>{result.newBest && <b className="good-lift-new-best">NEW BEST!</b>}</div>
             <div><dt>lifted</dt><dd>{kilos(result.total)}<span> kg</span></dd></div>
             <div><dt>peak</dt><dd>{metres(result.peak)}<span> m</span></dd></div>
             <div><dt>best</dt><dd>{(best.score ?? scoreOf(best)).toLocaleString('en-GB')}<span> pts</span></dd></div>
@@ -565,6 +565,7 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
             </div>
 
             <div role="tabpanel" id={`${id}-panel-board`} aria-labelledby={`${id}-tab-board`} hidden={tab !== 'board'} tabIndex={0}>
+              <h3 className="good-lift-section-title">HIGH SCORES <span>{result.label}</span></h3>
               {result.board ? (
                 <>
                   {worldFor ? (
@@ -587,6 +588,7 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
                   <label className="good-lift-initials">
                     initials{' '}
                     <input
+                      aria-label="Three initials for the board"
                       value={initials}
                       maxLength={3}
                       autoComplete="off"
@@ -644,10 +646,11 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
             </div>
           </div>
         </div>
-        <footer className="good-lift-result-actions">
+        <footer className={`good-lift-result-actions${onTraining ? ' has-training' : ''}`}>
           <button type="button" className="primary" onClick={onRetry}>
             ▶ again
           </button>
+          {onTraining && <button type="button" className="good-lift-result-train" onClick={onTraining}>Train ›</button>}
           <button type="button" className="good-lift-result-today" onClick={() => onSky('daily')}>today's sky</button>
           <div className="good-lift-result-more" ref={moreMenu} onBlur={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget)) setMoreOpen(false);

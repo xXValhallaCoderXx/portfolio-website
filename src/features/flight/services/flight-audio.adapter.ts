@@ -229,6 +229,17 @@ export function createFlightAudio(port: FlightAudioPort) {
     }
   }
 
+  // Reaching a lesson's brake position: one quiet bell, separate from acro timing sounds.
+  function bing(ctx: AudioContext, at: number) {
+    const note = ctx.createOscillator(), ring = ctx.createGain();
+    note.type = 'sine'; note.frequency.value = 1046.5;
+    ring.gain.setValueAtTime(0, at);
+    ring.gain.linearRampToValueAtTime(.035, at + .008);
+    ring.gain.exponentialRampToValueAtTime(.001, at + .14);
+    note.connect(ring).connect(audio!.master);
+    note.start(at); note.stop(at + .15);
+  }
+
   // A swing caught: the lines coming taut under the brake, a short dry snap with a low knock in it.
   function snap(ctx: AudioContext, at: number) {
     const crack = ctx.createBufferSource();
@@ -313,5 +324,5 @@ export function createFlightAudio(port: FlightAudioPort) {
   }
 
 
- return { start: startAudio, play, panned, slump, refill, playStall, playRefill, tock, chime, snap, swoosh, update: updateAudio, toggle: toggleSound, get audio() { return audio; }, dispose() { void audio?.ctx.close(); } };
+ return { start: startAudio, play, panned, slump, refill, playStall, playRefill, tock, chime, bing, snap, swoosh, update: updateAudio, toggle: toggleSound, get audio() { return audio; }, dispose() { void audio?.ctx.close(); } };
 }

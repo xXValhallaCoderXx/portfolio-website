@@ -50,6 +50,9 @@
 .fj-coach-released { color: var(--flight-muted); font-size: 10px; }
 .fj-coach [data-coach='feedback'] { color: #83efc0; font-size: 11px; }
 .fj-coach [data-coach='acknowledgement'] { color: #83efc0; font-size: 11px; }
+.fj-coach [data-coach='acknowledgement'][data-brake-feedback='pull'] { color: var(--flight-muted); }
+.fj-coach [data-coach='acknowledgement'][data-brake-feedback='hold'] { font-weight: 700; }
+.fj-coach [data-coach='acknowledgement'][data-brake-feedback='ease'] { color: #f5c066; font-weight: 700; }
 .fj-coach [data-coach='progress'] > span { display: block; padding: 0 12px 7px; color: var(--flight-muted); font-size: 10px; }
 .fj-coach [data-coach='progress'] i { display: block; height: 3px; background: #16233a; overflow: hidden; }
 .fj-coach [data-coach='progress'] i b { display: block; height: 100%; background: var(--flight-cyan); transform-origin: left; }
@@ -99,6 +102,7 @@
 .fj-handle-rail > .fj-handle-full { background: #f2913d; }
 .fj-handle-rail > .fj-handle-target { z-index: 2; left: 4px; right: 4px; height: 10px; margin-top: -5px; border: 1px dashed #baf5ff; border-radius: 5px; background: #baf5ff22; }
 .fj-handle-target[data-accepted='true'] { opacity: .45; }
+.training .fj-coach[data-brake-feedback='hold'] ~ .fj-brake-handles .fj-handle-target[data-accepted='true'] { opacity: 1; border-style: solid; border-color: #83efc0; background: #83efc055; box-shadow: 0 0 8px #83efc066; }
 .fj-handle-rail > button { position: absolute; z-index: 3; top: -1px; left: -1px; display: grid; place-items: center; box-sizing: border-box; width: 64px; min-width: 64px; height: 64px; min-height: 64px; margin: 0; padding: 0; border: 1px solid #5ee6ff88; border-radius: 20px; color: #baf5ff; background: #081725ed; box-shadow: 0 3px 12px #0004; cursor: grab; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; font: inherit; font-size: 25px; line-height: 1; }
 .fj-handle-rail > button:focus-visible { outline: 2px solid #e8f1fa; outline-offset: 3px; }
 .fj-brake-handle[data-depth='swing'] button, .fj-brake-handle[data-depth='full'] button { border-color: #c9b6ff; color: #d3b3ff; }
@@ -187,7 +191,7 @@
 .fj-training-result > div { display: grid; gap: 8px; margin-top: 20px; }
 .fj-training-result button { min-height: 46px; padding: 10px; border: 1px solid var(--flight-rule); border-radius: 10px; background: transparent; color: var(--flight-text); font: inherit; cursor: pointer; }
 .fj-training-result button.primary { background: var(--flight-blue); border-color: var(--flight-blue); color: #04101f; font-weight: 700; }
-.training .fj-keys-fjord, .training .fj-keys-run, .training .fj-thermal-air, .training .fj-labels { display: none; }
+.training .fj-keys-fjord, .training .fj-keys-run, .training .fj-labels { display: none; }
 .training .fj-bar-metric, .training [data-do='map'] { display: none; }
 .fjord-stage button:focus-visible, .fjord-stage summary:focus-visible, .fj-launch button:focus-visible { outline: 2px solid var(--flight-cyan); outline-offset: 3px; }
 .flight-paused .fj-labels { visibility: hidden; pointer-events: none; }
@@ -381,3 +385,159 @@
 .fjord-start .fjord-start-note { order: 0; }
 @media (max-width: 600px) { .fjord-start { inset: 0; width: 100%; height: 100%; border: 0; border-radius: 0; padding: max(24px, env(safe-area-inset-top)) 24px max(16px, env(safe-area-inset-bottom)); justify-content: flex-start; } .fjord-start-actions { margin-top: auto !important; order: 2; } }
 @media (max-height: 560px) and (min-width: 601px) { .fjord-start { height: calc(100% - 24px); inset: 12px; gap: 8px; padding: 16px 24px; } .fjord-intro-controls { flex-direction: row; gap: 6px; } .fjord-intro-controls li { flex: 1; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px; } .fjord-intro-controls li > span { flex: 0; font-size: 22px; } .fjord-intro-controls div > span { font-size: 11px; } .fjord-start h2.shout { font-size: 24px; } .fjord-start-actions { flex-direction: row; } .fjord-start-actions > button { flex: 1; } }
+
+/* Arcade menus share one compact presentation on desktop and phone. */
+.fj-arcade, .fj-arcade-pause { --flight-green: #3ee6b0; background: radial-gradient(ellipse at 20% 0%, #13342c99, transparent 55%), repeating-linear-gradient(0deg, #ffffff02 0 1px, transparent 1px 4px), #050a13f5; }
+.fj-launch.fj-arcade { display: flex; width: min(680px, calc(100% - 40px)); height: min(890px, calc(100% - 40px)); padding: 22px 24px 12px; gap: 16px; justify-content: flex-start; overflow: hidden; border: 1px solid #2a4962; border-radius: 20px; }
+.fj-launch.fj-launch-training { width: min(880px, calc(100% - 40px)); }
+.fj-launch-heading { display: flex; flex: 0 0 auto; align-items: center; gap: 12px; }
+.fj-launch-heading > div { flex: 1; min-width: 0; }
+.fj-launch-heading small { display: block; color: #9fb2c6; font-size: 10px; font-weight: 700; letter-spacing: .1em; }
+.fj-launch-heading h1 { margin: 6px 0 0; color: #e8f1fa; font-size: clamp(29px, 5vw, 42px); font-weight: 800; line-height: 1.1; letter-spacing: .05em; text-shadow: 0 3px #153950, 0 0 24px #29c7e333; }
+.fj-launch-heading p { margin: 6px 0 0; color: #9fb2c6; font-size: 12px; }
+.fj-launch-training .fj-launch-heading h1 { color: #3ee6b0; text-shadow: 0 3px #0b4a38, 0 0 22px #3ee6b033; }
+.fj-launch-wing { flex: 0 0 92px; color: #e8f1fa; }
+.fj-launch .fj-launch-back { flex: 0 0 44px; width: 44px; padding: 0; border-width: 2px; font-size: 28px; box-shadow: 0 3px #071020; }
+.fj-launch-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; overscroll-behavior: contain; padding: 1px 4px 6px; margin: 0 -4px; scrollbar-width: thin; scrollbar-color: #24405f #050a13; }
+.fj-arcade .fj-brief-objective { font-size: 13px; line-height: 1.5; }
+.fj-hub-card { padding: 18px; border: 2px solid #2a5c94; border-radius: 16px; background: #0b1424d9; box-shadow: 0 4px #071020; }
+.fj-hub-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.fj-hub-card h2, .fj-hub-controls h2 { margin: 0; color: #8cc6ff; font-size: 15px; font-weight: 800; letter-spacing: .08em; }
+.fj-hub-card-heading > span { padding: 3px 6px; border: 1px solid #2a5c94; border-radius: 4px; color: #8cc6ff; font-size: 9px; font-weight: 700; letter-spacing: .1em; }
+.fj-hub-card > p { margin: 10px 0 16px; font-size: 13px; color: #d6e2ef; line-height: 1.65; }
+.fj-hub-card > button { width: 100%; }
+.fj-arcade button.primary { box-shadow: 0 5px #1c65a6, 0 8px 22px #3b9eff22; text-transform: uppercase; letter-spacing: .1em; }
+.fj-hub-training { border-color: #23574d; }
+.fj-hub-training h2 { color: #3ee6b0; }
+.fj-hub-training .fj-hub-card-heading > span { color: #3ee6b0; border-color: #23574d; }
+.fj-arcade .fj-train-action, .fj-arcade button.fj-train-fly { min-height: 52px; border: 1px solid #3ee6b0; color: #04140f; background: #3ee6b0; font-size: 15px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; box-shadow: 0 5px #1e9b74, 0 8px 22px #3ee6b022; }
+.fj-hub-moves { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; margin: 0 0 14px; color: #3ee6b0; }
+.fj-hub-moves > span { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 8px; letter-spacing: .04em; }
+.fj-hub-controls h2 { display: flex; justify-content: space-between; align-items: baseline; color: #9fb2c6; font-size: 10px; }
+.fj-hub-controls h2 > span { font-size: 8px; font-weight: 400; letter-spacing: .04em; }
+.fj-hub-controls ol { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+.fj-hub-controls li { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 2px; border: 1px solid #1c3148; border-radius: 10px; background: #07101e99; }
+.fj-hub-controls li strong { margin-top: 3px; font-size: 9px; letter-spacing: .05em; }
+.fj-hub-controls li > span { color: #9fb2c6; font-size: 9px; }
+.fj-hub-target { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 16px; padding: 12px; border: 1px solid #24405f; border-radius: 10px; color: #9fb2c6; font-size: 10px; }
+.fj-hub-target strong { color: #f2c94c; font-size: 24px; }
+.fj-hub-target strong small { font-size: 10px; }
+.fj-arcade .fj-brief-actions { flex: 0 0 auto; margin-top: 0; padding-top: 2px; gap: 8px; }
+.fj-arcade .fj-brief-actions > button:not(.primary) { min-height: 44px; font-size: 12px; }
+.fj-lesson-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; min-width: 0; margin: 0 0 2px; padding: 0; border: 0; }
+.fj-lesson-tile { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; min-height: 84px; box-sizing: border-box; padding: 10px; border: 2px solid #24405f; border-radius: 12px; box-shadow: 0 4px #071020; background: #0b1424d9; color: #9fb2c6; cursor: pointer; }
+.fj-lesson-tile.selected { border-color: #3ee6b0; background: #3ee6b01c; box-shadow: 0 4px #1e9b74; color: #3ee6b0; }
+.fj-lesson-tile > input { position: absolute; top: 10px; right: 9px; margin: 0; accent-color: #3ee6b0; }
+.fj-lesson-tile:focus-within { outline: 2px solid #e8f1fa; outline-offset: 3px; }
+.fj-lesson-tile strong { color: #e8f1fa; font-size: 11px; line-height: 1.3; }
+.fj-lesson-tile small { font-size: 8px; letter-spacing: .1em; font-weight: 700; }
+.fj-selected-lesson { min-width: 0; padding: 14px; border: 2px solid #23574d; border-radius: 16px; background: #091221ed; }
+.fj-lesson-title { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.fj-lesson-title h2 { margin: 0; font-size: 18px; line-height: 1.4; }
+.fj-lesson-title > span { flex: 0 0 auto; color: #3ee6b0; font-size: 8px; font-weight: 700; letter-spacing: .1em; }
+.fj-selected-lesson > p { margin: 6px 0 12px; color: #d6e2ef; font-size: 12px; line-height: 1.5; }
+.fj-demo-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #3ee6b0; font-size: 8px; font-weight: 700; letter-spacing: .08em; }
+.fj-demo-heading > div { display: flex; gap: 4px; }
+.fj-launch .fj-demo-heading button { min-height: 44px; padding: 4px 8px; border-color: #24405f; color: #9fb2c6; font-size: 10px; }
+.fj-demo-visual { display: flex; align-items: center; gap: 10px; min-height: 90px; border: 1px solid #162f34; border-radius: 10px; background: repeating-linear-gradient(90deg, #3ee6b009 0 1px, transparent 1px 18px), #050a1399; overflow: hidden; color: #3ee6b0; }
+.fj-demo-path { flex: 1; min-width: 0; width: 100%; height: 90px; }
+.fj-demo-hands { flex: 0 0 132px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding-right: 8px; }
+.fj-lesson-demo kbd { padding: 3px 5px; border: 1px solid #3a5574; border-bottom-width: 3px; border-radius: 5px; background: #13233a; color: #e8f1fa; font-family: inherit; font-size: 8px; text-align: center; }
+.fj-lesson-steps { display: flex; flex-direction: column; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; }
+.fj-lesson-steps li { display: grid; grid-template-columns: 22px minmax(0, 1fr) 30px 100px; align-items: center; gap: 8px; padding: 8px; border: 1px solid #16233a; border-radius: 9px; background: #050a1399; font-size: 11px; line-height: 1.45; }
+.fj-lesson-steps li[data-active='true'] { border-color: #3ee6b066; background: #3ee6b00b; }
+.fj-lesson-steps li > b { display: grid; width: 22px; height: 22px; place-items: center; border-radius: 50%; background: #3ee6b0; color: #04140f; font-size: 11px; }
+.fj-lesson-steps li > svg { width: 30px; height: 34px; }
+.fj-demo-static { margin-top: 7px !important; color: #9fb2c6; font-size: 9px; }
+.fj-arcade-pause { gap: 12px; padding: 22px; border-radius: 20px; }
+.fj-arcade-pause .fj-pause-heading > div { flex-direction: column; align-items: flex-start; gap: 4px; }
+.fj-arcade-pause .fj-paused-badge { padding: 0; color: #29c7e3; background: transparent; font-size: 24px; font-weight: 800; text-shadow: 0 2px #127a8c; }
+.fj-arcade-pause .fj-resume { text-transform: uppercase; letter-spacing: .1em; box-shadow: 0 4px #1c65a6; }
+.fj-arcade-pause .fj-menu-content { display: flex; flex-direction: column; gap: 12px; padding: 2px 4px 6px; margin: 0 -4px; }
+.fj-arcade-pause .fj-pause-quick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.fj-arcade-pause .fj-pause-quick > button { min-width: 0; font-size: 10px; white-space: normal; }
+.fj-arcade-pause .fj-training-entry { min-height: 48px; margin: 0; border-color: #3ee6b0; background: #3ee6b018; color: #3ee6b0 !important; font-weight: 800; text-transform: uppercase; }
+.fj-arcade-pause .fj-training-entry small { display: block; margin-top: 2px; color: #9fb2c6; font-size: 8px; text-transform: none; font-weight: 400; }
+.fj-pause-guide { padding: 12px; border: 1px solid #24405f; border-radius: 12px; background: #0b142499; }
+.fj-pause-guide h2 { margin-top: 0; }
+.fj-pause-basics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin: 12px 0; }
+.fj-pause-basics > div { display: flex; flex-direction: column; gap: 5px; align-items: center; font-size: 10px; }
+.fj-pause-basics > div > span { color: #9fb2c6; font-size: 9px; text-align: center; }
+.fj-score-flow { margin: 0; padding: 14px; border: 1px solid #24405f; border-radius: 10px; color: #9fb2c6; font-size: 11px; text-align: center; }
+.fj-score-flow b { color: #3ee6b0; }
+.fj-arcade-pause .fj-menu-footer { flex-wrap: wrap; }
+.fj-arcade-pause .fj-menu-footer > button { flex: 1 1 120px; font-size: 10px; text-transform: uppercase; }
+.fj-arcade-pause .fj-menu-footer > [data-do='cloudbase'] { border-color: #3b9eff; color: #8cc6ff; }
+@media (min-width: 760px) and (min-height: 650px) {
+  .fj-launch-training .fj-launch-scroll { display: grid; grid-template-columns: minmax(180px, .75fr) minmax(0, 1.65fr); gap: 14px; align-content: start; }
+  .fj-launch-training .fj-brief-objective { grid-column: 1 / -1; }
+  .fj-launch-training .fj-lesson-picker { grid-column: 1; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-row: 2 / 4; align-self: start; gap: 9px; }
+  .fj-launch-training .fj-lesson-tile { min-height: 90px; }
+  .fj-launch-training .fj-lesson-tile > svg { width: 52px; height: 22px; }
+  .fj-launch-training .fj-selected-lesson { grid-column: 2; }
+  .fj-launch-training .fj-brief-note { grid-column: 2; }
+  .fj-launch-training .fj-lesson-steps li { grid-template-columns: 22px minmax(0, 1fr) 30px; }
+  .fj-launch-training .fj-lesson-steps kbd { grid-column: 2 / -1; justify-self: start; }
+}
+@media (max-width: 600px) {
+  .fj-launch.fj-arcade { inset: 0; width: 100%; height: 100%; border: 0; border-radius: 0; padding: max(18px, env(safe-area-inset-top)) 18px max(12px, env(safe-area-inset-bottom)); gap: 14px; }
+  .fj-launch-heading h1 { font-size: 30px; }
+  .fj-launch-wing { flex-basis: 76px; width: 76px; }
+  .fj-hub-card { padding: 16px; }
+  .fj-lesson-picker { gap: 8px; }
+  .fj-lesson-tile { min-height: 90px; padding: 9px 7px; }
+  .fj-lesson-tile strong { font-size: 10px; }
+  .fj-lesson-tile > svg { width: 48px; }
+  .fj-selected-lesson { padding: 12px; }
+  .fj-lesson-title h2 { font-size: 17px; }
+  .fj-lesson-steps li { grid-template-columns: 20px minmax(0, 1fr) 25px; gap: 7px; padding: 7px; }
+  .fj-lesson-steps kbd { grid-column: 2 / -1; justify-self: start; }
+  .fj-demo-hands { flex-basis: 112px; }
+  .fj-arcade-pause { padding: 18px; }
+}
+@media (max-height: 540px) and (min-width: 620px) {
+  .fj-launch.fj-arcade { width: min(1000px, calc(100% - 24px)); height: calc(100% - 24px); inset: 12px; padding: 12px 18px 8px; gap: 8px; }
+  .fj-launch-heading h1 { font-size: 24px; }
+  .fj-launch-heading p, .fj-launch-wing { display: none; }
+  .fj-launch-heading small { font-size: 8px; }
+  .fj-launch-game .fj-launch-scroll { display: grid; grid-template-columns: 1fr 1fr; align-content: start; gap: 10px; }
+  .fj-hub-card { padding: 12px; }
+  .fj-hub-card > p { margin: 6px 0 10px; font-size: 11px; }
+  .fj-hub-card h2 { font-size: 12px; }
+  .fj-hub-moves { margin-bottom: 8px; }
+  .fj-hub-controls { grid-column: 1 / -1; }
+  .fj-hub-controls ol { margin-top: 7px; }
+  .fj-hub-controls li { flex-direction: row; justify-content: center; gap: 8px; }
+  .fj-hub-controls li > svg { width: 27px; height: 28px; }
+  .fj-launch-training .fj-launch-scroll { display: grid; grid-template-columns: 220px minmax(0, 1fr); align-content: start; gap: 10px; }
+  .fj-launch-training .fj-brief-objective { grid-column: 1 / -1; font-size: 11px; }
+  .fj-launch-training .fj-lesson-picker { grid-column: 1; grid-template-columns: repeat(2, minmax(0, 1fr)); align-self: start; }
+  .fj-launch-training .fj-lesson-tile { min-height: 80px; padding: 6px; }
+  .fj-launch-training .fj-lesson-tile strong { font-size: 9px; }
+  .fj-launch-training .fj-selected-lesson { grid-column: 2; padding: 10px; }
+  .fj-launch-training .fj-brief-note { grid-column: 1 / -1; }
+  .fj-launch-training .fj-selected-lesson > p { font-size: 10px; margin-bottom: 4px; }
+  .fj-launch-training .fj-demo-heading { font-size: 7px; }
+  .fj-launch-training .fj-demo-visual, .fj-launch-training .fj-demo-path { height: 70px; min-height: 70px; }
+  .fj-launch-training .fj-lesson-steps { margin-top: 7px; gap: 4px; }
+  .fj-launch-training .fj-lesson-steps li { grid-template-columns: 20px minmax(0, 1fr); font-size: 10px; }
+  .fj-launch-training .fj-lesson-steps li > svg { display: none; }
+  .fj-launch-training .fj-lesson-steps kbd { grid-column: 2; justify-self: start; }
+  .fj-launch.fj-arcade .fj-brief-actions { flex-direction: row; align-items: center; }
+  .fj-launch.fj-arcade .fj-brief-actions > button { flex: 1; }
+  .fj-launch.fj-arcade .fj-brief-actions > button.primary { flex: 2; min-height: 46px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fj-arcade *, .fj-arcade-pause * { scroll-behavior: auto; }
+}
+
+.fj-launch .fj-demo-heading button:disabled { cursor: default; opacity: .45; }
+@media (max-height: 540px) and (min-width: 620px) {
+  .fj-keys.fj-arcade-pause { display: grid; grid-template-columns: minmax(240px, .9fr) minmax(0, 1.25fr); grid-template-rows: auto auto auto minmax(0, 1fr) auto; width: min(980px, calc(100% - 24px)); padding: 18px; gap: 10px 20px; }
+  .fj-arcade-pause .fj-pause-heading { grid-column: 1; grid-row: 1; }
+  .fj-arcade-pause .fj-resume { grid-column: 1; grid-row: 2; }
+  .fj-arcade-pause .fj-pause-summary { grid-column: 1; grid-row: 3; font-size: 9px; }
+  .fj-arcade-pause .fj-menu-content { grid-column: 2; grid-row: 1 / -1; }
+  .fj-arcade-pause .fj-menu-footer { grid-column: 1; grid-row: 5; }
+  .fj-arcade-pause .fj-menu-footer > button { flex-basis: 90px; }
+}

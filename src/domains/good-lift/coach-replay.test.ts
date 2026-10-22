@@ -41,7 +41,7 @@ const physicalControls = (input: FlightInput): FlightInput => ({ turn: Number(in
   brake: input.brake, deepBrake: input.deepBrake, bar: input.bar, ears: input.ears });
 
 test('browser inputs replay identically with real coaching, live-air searches and varied render reads', () => {
-  assert.equal(SIM_VERSION, 4, 'accessible acro and slower fog have their own replay rules version');
+  assert.equal(SIM_VERSION, 5, 'spiral combos and additive acro scoring have their own replay rules version');
   assert.match(receipt.engine, /^Chromium /);
   for (const seed of [1, 2]) {
     const record = receipt.records.find((run) => run.seed === seed && run.scenario === 'soaring');

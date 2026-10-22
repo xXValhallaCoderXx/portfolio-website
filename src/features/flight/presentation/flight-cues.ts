@@ -167,7 +167,7 @@ export function createFlightCues({ element, stage, camera, reducedMotion = () =>
   const obstacles: CueBounds[] = [];
   const exclusions = '.fj-hud > dl, .fj-telemetry, .fj-hud nav, .fj-coach, .fj-lights, .fj-gauge, .fj-cue, .fj-hint, .fj-toasts > *, .fj-title, .fj-style';
   function reset() { motion.reset(); travel.hidden = true; if (handles) handles.hidden = true; handleBounds.length = 0; }
-  function update({ pose, facts, message, input, dt }: { pose: CuePose | null; facts: CueFacts; message: CueMessage | null; input: FlightInput; dt: number }) {
+  function update({ pose, facts, message, input, dt, quiet = false }: { pose: CuePose | null; facts: CueFacts; message: CueMessage | null; input: FlightInput; dt: number; quiet?: boolean }) {
     if (facts.blocked) { reset(); return; }
     const box = stage.getBoundingClientRect(), width = box.width, height = box.height;
     const safeBox = find('.fj-cue-safe').getBoundingClientRect();
@@ -203,8 +203,9 @@ export function createFlightCues({ element, stage, camera, reducedMotion = () =>
         handleBounds.push(bounds); obstacles.push(bounds);
       }
     }
-    const at = motion.sample(pose, facts, camera, width, height, dt, reducedMotion());
     travel.hidden = true;
+    if (quiet) { motion.reset(); return; }
+    const at = motion.sample(pose, facts, camera, width, height, dt, reducedMotion());
     if (at) {
       Object.assign(markerBox, { left: at.x - 44, right: at.x + 44, top: at.y - 8, bottom: at.y + 66 });
       if (markerBox.left >= safe.left && markerBox.right <= safe.right && markerBox.top >= safe.top && markerBox.bottom <= safe.bottom && !obstacles.some(rect => overlapsCue(markerBox, rect))) {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ROUGH_LANDINGS, SECTIONS } from '../../../domains/portfolio/content.ts';
 import type { ComponentType } from 'react';
 import type { SectionId } from '../../../domains/portfolio/portfolio.types.ts';
@@ -153,11 +153,13 @@ function FlightControlHelp({ navigation = false }: { navigation?: boolean }) {
  * `armed` keeps the ordinary fjord behind its first start action. Good Lift prepares its sky first
  * and always asks for one explicit Fly action before sound or a run begins. `lost` is the address of a
  * missing page; it plays the emergency instead of a flight. `game` is a Good Lift address (see
- * good-lift-address.js): the game beyond the arch is played on the sky it asks for. Flying through
- * the arch asks the page for it with `onPortal`, and `onFjord` asks to leave it for the fjord.
+ * good-lift-address.js): Game opens the sky it asks for through `onPortal`, and `onFjord` returns
+ * to Free Fly. The rune arch is scenery.
  */
 export default function Fjord({ flying, armed, target, lost, game: address, warping, onArm, onExit, onFly, onPortal, onFjord, onProgress, sectionBodies }: FjordProps) {
   const { stage, game, live, panel, result, music, bots, world, sky, preparedSky, startSky, lostStage, retrySky, skipMissingPage, retryMissingPage } = useFjordFlight({ flying, armed, target, lost, game: address, warping, onArm, onExit, onFly, onPortal, onFjord, onProgress, sectionBodies });
+  const returnAddress = useRef<GameAddress>({ kind: 'daily', sky: null, vs: null, bad: null });
+  useEffect(() => { if (address && address.kind !== 'training') returnAddress.current = address; }, [address]);
 
   // The meet sheet comes with the game beyond the arch, never with the page: a run's result is
   // only ever shown once the game has loaded it.
@@ -179,7 +181,13 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
       )}
       {flying && !lost && address && sky !== '' && (live || sky === 'failed') && (
         <GoodLiftLaunch sky={preparedSky} address={address} state={sky} stage={stage}
-          onFly={startSky} onRetry={retrySky} onExit={() => address.kind === 'training' ? game.current?.backToGame() : onExit(null)} />
+          onFly={startSky} onRetry={retrySky}
+          onTraining={() => onPortal({ kind: 'training', sky: null, vs: null, bad: null })}
+          onExit={() => {
+            if (address.kind !== 'training') onExit(null);
+            else if (game.current) game.current.backToGame();
+            else onPortal(returnAddress.current);
+          }} />
       )}
       {flying && live && !armed && !lost && !address && (
         <div className="fjord-start">
@@ -213,6 +221,7 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
           result={result}
           onRetry={() => game.current?.retryCloudbase()}
           onSky={(kind) => onPortal({ kind, sky: null, vs: null, bad: null })}
+          onTraining={() => onPortal({ kind: 'training', sky: null, vs: null, bad: null })}
           onFjord={() => onFjord()}
           onPage={() => onExit(null)}
           onInitials={(text) => game.current?.setInitials(text)}

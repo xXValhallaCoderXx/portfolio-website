@@ -4,7 +4,7 @@ import type { SectionId } from '../../../domains/portfolio/portfolio.types.ts';
 import type { createGame } from '../services/flight-session.service.ts';
 import type { RunResult, BotResult, WorldResult, ResolvedSky } from '../../good-lift/good-lift.models.ts';
 import type { FlightPanel } from '../flight.models.ts';
-import type { LessonId } from '../../../domains/good-lift/trick-lessons.ts';
+import type { TrainingLessonId } from '../../../domains/good-lift/training-session.ts';
 type FlightEngine = ReturnType<typeof createGame>;
 
 // The live backdrop is only worth its download where it will run well and is wanted.
@@ -161,7 +161,7 @@ export function useFjordFlight({ flying, armed, target, lost, game: address, war
     // `lostStage` is left out on purpose: it changes as the emergency plays and must not restart it.
   }, [flying, armed, target, lost, address, load]);
 
-  const startSky = (key?: string, lesson?: LessonId) => {
+  const startSky = (key?: string, lesson?: TrainingLessonId) => {
     if (!preparedSky || !game.current?.startPreparedSky(key, preparedSky, lesson)) return;
     setSky('');
     setPreparedSky(null);

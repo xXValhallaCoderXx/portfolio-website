@@ -137,3 +137,45 @@ test('failed and late model loads leave scenery usable and release only resource
   await late.ready;
   assert.equal(late.group.children.length, 0);
 });
+
+test('Training uses a reusable mountain landscape while other flight modes retain their scenery', () => {
+  const sky = createNordicSky();
+  frames(sky, context(1100));
+  assert.equal(sky.group.getObjectByName('Training landscape'), undefined, 'ordinary flight does not allocate practice scenery');
+  const ctx = context(1100, { mode: 'training' });
+  frames(sky, ctx, 2, 3);
+  const landscape = named(sky.group, 'Training landscape');
+  assert.equal(landscape.visible, true);
+  assert.equal(named(sky.group, 'mountains 0').visible, false);
+  assert.equal(named(sky.group, 'mountains 1').visible, false);
+  const resources = new Set<THREE.BufferGeometry | THREE.Material>();
+  const positions = new Map<THREE.Object3D, THREE.Vector3>();
+  landscape.traverse(part => {
+    positions.set(part, part.position.clone());
+    if (part instanceof THREE.Mesh || part instanceof THREE.LineSegments) {
+      resources.add(part.geometry);
+      for (const material of Array.isArray(part.material) ? part.material : [part.material]) resources.add(material);
+    }
+  });
+  assert.ok(resources.size > 0);
+  const childCount = landscape.children.length;
+  for (let cycle = 0; cycle < 5; cycle++) {
+    sky.update(6 + cycle * 2, context(1100));
+    assert.equal(landscape.visible, false);
+    assert.equal(named(sky.group, 'mountains 0').visible, true);
+    sky.update(7 + cycle * 2, { ...ctx, lowDetail: true, reducedMotion: true,
+      camera: { position: new THREE.Vector3(200, 1100, -150) } });
+    assert.equal(named(sky.group, 'Training landscape'), landscape);
+    assert.equal(landscape.children.length, childCount);
+    for (const [part, position] of positions) assert.deepEqual(part.position, position, 'mountains keep world parallax');
+  }
+  sky.update(20, { mode: 'flying', altitude: 100 });
+  assert.equal(landscape.visible, false);
+  assert.equal(named(sky.group, 'altitude scenery').visible, false);
+  sky.update(21);
+  assert.equal(named(sky.group, 'altitude scenery').visible, false);
+  const disposed = new Map([...resources].map(resource => [resource, 0]));
+  for (const resource of resources) resource.addEventListener('dispose', () => disposed.set(resource, disposed.get(resource)! + 1));
+  sky.dispose(); sky.dispose();
+  for (const count of disposed.values()) assert.equal(count, 1);
+});

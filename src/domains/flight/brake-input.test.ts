@@ -63,3 +63,80 @@ test('handle and keyboard demands retain the same fixed-step replay precision', 
     assert.deepEqual(frameInput(sample(input.state.leftBrake)), frameInput(sample(target)));
   }
 });
+
+test('Shift builds each keyboard pull from its ordinary depth over 0.45 simulation seconds', () => {
+  const input = createBrakeInput();
+  input.keyDown('ShiftLeft'); input.keyDown('KeyA');
+  assert.equal(input.state.leftBrake, .3, 'key events set the ordinary starting demand');
+  assert.equal(input.state.rightBrake, 0);
+  for (const dt of [0, -1, NaN, Infinity]) input.step(dt);
+  assert.equal(input.state.leftBrake, .3, 'no elapsed simulation means no buildup');
+  input.step(.1125); assert.ok(Math.abs(input.state.leftBrake - .409375) < 1e-12);
+  input.keyDown('KeyA'); input.keyDown('ShiftLeft');
+  assert.ok(Math.abs(input.state.leftBrake - .409375) < 1e-12, 'repeat events do not advance or restart the curve');
+  input.step(.1125); assert.ok(Math.abs(input.state.leftBrake - .65) < 1e-12);
+  input.step(.225); assert.equal(input.state.leftBrake, 1);
+  input.step(5); assert.equal(input.state.leftBrake, 1);
+  input.keyUp('ShiftLeft'); assert.equal(input.state.leftBrake, .3, 'Shift release immediately restores ordinary control');
+  input.keyUp('KeyA'); assert.equal(input.state.leftBrake, 0);
+  input.keyDown('KeyE'); input.keyDown('ShiftRight');
+  assert.equal(input.state.rightBrake, .82, 'the stronger ordinary Q/E pull remains the starting depth');
+  input.step(.225); assert.ok(Math.abs(input.state.rightBrake - .91) < 1e-12);
+});
+
+test('new full-pull hands have independent clocks and release or reversal clears their old buildup', () => {
+  const input = createBrakeInput(); input.keyDown('KeyA'); input.keyDown('ShiftLeft');
+  input.step(.225); const held = input.state.leftBrake;
+  input.keyDown('KeyD');
+  assert.equal(input.state.leftBrake, held, 'adding a hand does not disturb the hand already pulling');
+  assert.equal(input.state.rightBrake, .6, 'the added hand starts at its ordinary bilateral depth');
+  input.step(.225); assert.equal(input.state.leftBrake, 1);
+  assert.ok(Math.abs(input.state.rightBrake - .8) < 1e-12);
+  input.keyUp('KeyA'); assert.equal(input.state.leftBrake, 0);
+  input.keyDown('KeyA'); assert.equal(input.state.leftBrake, .6, 'a released hand starts a fresh pull');
+  input.keyUp('KeyA'); input.keyUp('KeyD');
+  assert.equal(input.state.leftBrake, 0); assert.equal(input.state.rightBrake, 0);
+  input.keyDown('KeyD'); assert.equal(input.state.rightBrake, .3, 'reversing or reengaging cannot reuse full depth');
+  input.step(.225); assert.ok(Math.abs(input.state.rightBrake - .65) < 1e-12);
+  input.keyDown('ShiftRight'); input.keyUp('ShiftLeft'); input.step(.225);
+  assert.equal(input.state.rightBrake, 1, 'either Shift key keeps the existing pull alive');
+  input.keyUp('ShiftRight'); assert.equal(input.state.rightBrake, .3);
+});
+
+test('ordinary keyboard, mouse and thumb controls stay immediate and source changes discard Shift buildup', () => {
+  const input = createBrakeInput();
+  input.keyDown('Space'); assert.equal(input.state.leftBrake, .6); assert.equal(input.state.rightBrake, .6);
+  input.step(.225); assert.equal(input.state.leftBrake, .6);
+  input.keyUp('Space'); input.keyDown('KeyA'); input.keyDown('ShiftLeft'); input.step(.225);
+  input.startMouse(); input.moveMouse(1, .2); input.step(.225);
+  assert.equal(input.state.leftBrake, 1); assert.equal(input.state.rightBrake, .2);
+  input.endMouse(); assert.equal(input.keyUp('ShiftLeft'), false);
+  input.keyDown('KeyA'); input.keyDown('ShiftLeft');
+  assert.equal(input.state.leftBrake, .3, 'mouse ownership discarded the preceding ramp');
+  input.step(.225); input.startHand('right', pointer(1)); input.moveHand(pointer(1, 240)); input.step(.225);
+  assert.equal(input.state.leftBrake, 0); assert.equal(input.state.rightBrake, 1, 'touch full pull has no keyboard ramp');
+  input.endHand(1); input.keyDown('KeyA'); input.keyDown('ShiftLeft'); input.step(.225); input.reset();
+  input.step(5); assert.equal(input.state.leftBrake, 0); assert.equal(input.state.source, null);
+  input.keyDown('ShiftLeft'); input.keyDown('KeyA'); input.step(.225);
+  assert.ok(Math.abs(input.state.leftBrake - .65) < 1e-12, 'pause/restart reset has no retained buildup');
+});
+
+test('only fixed-step samples advance the issued and recorded Shift curve regardless of event repeats', () => {
+  const clean = createBrakeInput(), repeated = createBrakeInput();
+  for (const input of [clean, repeated]) { input.keyDown('KeyD'); input.keyDown('ShiftLeft'); }
+  const sample = (input: ReturnType<typeof createBrakeInput>) => inputFrame({ controlMode: 'brakes', ...input.state });
+  const frames = [];
+  for (let tick = 0; tick < 27; tick++) {
+    for (let read = 0; read < 10; read++) {
+      repeated.keyDown('KeyD'); repeated.keyDown('ShiftLeft');
+      assert.equal(repeated.state.rightBrake, clean.state.rightBrake, 'events and reads cannot consume ramp time');
+    }
+    clean.step(1 / 60); repeated.step(1 / 60);
+    assert.deepEqual(sample(repeated), sample(clean)); frames.push(sample(clean));
+  }
+  const chunked = createBrakeInput(); chunked.keyDown('KeyD'); chunked.keyDown('ShiftLeft'); chunked.step(.45);
+  assert.equal(repeated.state.rightBrake, chunked.state.rightBrake);
+  assert.equal(frameInput(frames.at(-1)!).rightBrake, 1);
+  assert.ok(frameInput(frames[0]!).rightBrake! < .31, 'the first recorded sample contains the issued progressive depth');
+  assert.ok(frameInput(frames[13]!).rightBrake! > .65 && frameInput(frames[13]!).rightBrake! < .7);
+});

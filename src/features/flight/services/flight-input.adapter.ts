@@ -11,8 +11,11 @@ interface ControlsPort {
 /** Events store intent only. The fixed-step boundary quantizes both physical brakes. */
 export function connectFlightControls({ canvas, stage, handles, input, drag, controller, signal, canStart, beforeStart, onActive, releaseMouse }: ControlsPort) {
   const buttons = [...handles.querySelectorAll<HTMLElement>('[data-brake-handle]')];
-  const sync = () => {
+  const syncInput = () => {
     input.controlMode = 'brakes'; input.leftBrake = controller.state.leftBrake; input.rightBrake = controller.state.rightBrake;
+  };
+  const sync = () => {
+    syncInput();
     stage.dataset.flightDevice = controller.state.device;
     stage.classList.toggle('brake-dragging', controller.state.source === 'mouse' || controller.state.source === 'handles');
   };
@@ -76,6 +79,10 @@ export function connectFlightControls({ canvas, stage, handles, input, drag, con
   window.addEventListener('resize', () => { if (controller.state.source === 'handles') reset(); }, { signal });
   signal.addEventListener('abort', reset, { once: true });
   return { reset,
+    step(dt: number) {
+      if (controller.state.source !== 'keyboard') return;
+      controller.step(dt); syncInput();
+    },
     keyDown(event: KeyboardEvent) {
       if (!canStart() || !FLIGHT_KEYS.has(event.code)) return false;
       event.preventDefault();

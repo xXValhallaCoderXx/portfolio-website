@@ -348,3 +348,94 @@
     min-height: 48px;
   }
 }
+
+/* The meet sheet, high scores and hangar use the same arcade hierarchy as the game hub. */
+.window.good-lift-result { border: 1px solid #2a4962; border-radius: 20px; background: radial-gradient(ellipse at 10% 0%, #14352b88, transparent 45%), #050a13fa; }
+.good-lift-result > header { min-height: 46px; border-bottom: 1px solid #1c3148; background: transparent; color: #9fb2c6; font-size: 10px; letter-spacing: .08em; }
+.good-lift-result > header i { display: none; }
+.good-lift-result .good-lift-result-summary > .shout { font-size: 17px; letter-spacing: .08em; color: #9fb2c6; text-shadow: none; }
+.good-lift-result .good-lift-result-summary > .good-lift-verse { font-size: 11px; line-height: 1.6; }
+.good-lift-result .good-lift-result-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.good-lift-result .good-lift-result-metrics > .good-lift-score-hero { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 0 0 4px; border: 0; background: transparent; }
+.good-lift-result .good-lift-score-hero > dt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.good-lift-result .good-lift-score-hero > dd { color: #e8f1fa !important; font-size: clamp(46px, 9vw, 68px); font-weight: 800; line-height: 1.2; letter-spacing: -.06em; text-shadow: 0 4px #153950, 0 0 24px #29c7e322; }
+.good-lift-result .good-lift-score-hero > dd > span { font-size: 13px; letter-spacing: .08em; }
+.good-lift-new-best { padding: 6px 8px; border-radius: 6px; background: #f2c94c; box-shadow: 0 3px #a8862a; color: #241a00; font-size: 9px; white-space: nowrap; transform: rotate(-4deg); }
+.good-lift-result .good-lift-result-metrics > div:not(:first-child) { display: flex; flex-direction: column-reverse; padding: 9px 7px; border-color: #1f3350; text-align: center; }
+.good-lift-result .good-lift-result-metrics > div:not(:first-child) > dd { font-size: 17px; color: #d6e2ef; }
+.good-lift-result .good-lift-result-metrics dt { font-size: 8px; letter-spacing: .13em; }
+.good-lift-result .good-lift-tabs { gap: 5px; border: 0; border-radius: 0; background: transparent; }
+.good-lift-result .good-lift-tabs > button { border: 1px solid #24405f; border-radius: 9px; background: #0b1424; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.good-lift-result .good-lift-tabs > button[aria-selected='true'] { border-color: #29c7e3; background: #29c7e3; box-shadow: 0 3px #127a8c; color: #04101f; }
+.good-lift-result .good-lift-result-panels { padding-top: 16px; }
+.good-lift-section-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 0 0 14px; color: #e8f1fa; font-size: 15px; letter-spacing: .08em; }
+.good-lift-section-title > span { color: #9fb2c6; font-size: 9px; font-weight: 400; letter-spacing: 0; }
+.good-lift-result .good-lift-result-actions { background: #050a13ed; }
+.good-lift-result .good-lift-result-actions > .primary { min-height: 56px; box-shadow: 0 5px #1c65a6, 0 8px 22px #3b9eff22; text-transform: uppercase; letter-spacing: .1em; }
+.good-lift-result .good-lift-lights { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-size: 11px; }
+.good-lift-result .good-lift-lights thead th { padding-bottom: 2px; color: #9fb2c6; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+.good-lift-result .good-lift-lights tbody > tr > * { padding: 10px 5px; border-top: 1px solid #24405f; border-bottom: 1px solid #24405f; background: #0b1424; }
+.good-lift-result .good-lift-lights tbody > tr > *:first-child { border-left: 1px solid #24405f; border-radius: 9px 0 0 9px; }
+.good-lift-result .good-lift-lights tbody > tr > *:last-child { border-right: 1px solid #24405f; border-radius: 0 9px 9px 0; color: #3ee6b0; font-size: 9px; }
+.good-lift-result .good-lift-lights tbody > tr.none > *:last-child { color: #ff8391; }
+.good-lift-result .good-lift-feats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.good-lift-result .good-lift-feats > li { border: 1px solid #1f3350; background: #0b1424bb; }
+.good-lift-result .good-lift-feats > li.earned { border-color: #6b5a22; background: #f2c94c0a; }
+.good-lift-result .good-lift-feats > li > b { color: #9fb2c6; font-size: 10px; }
+.good-lift-result .good-lift-feats > li.earned > b { color: #f2c94c; }
+.good-lift-result .good-lift-feats > li > span { font-size: 9px; line-height: 1.5; }
+.good-lift-result .good-lift-board { display: grid; gap: 8px; max-width: none; padding: 0 0 0 2em; margin: 0 0 16px; font-size: 12px; }
+.good-lift-result .good-lift-board li { padding: 13px 10px; border: 1px solid #24405f; border-radius: 10px; background: #0b1424; }
+.good-lift-result .good-lift-board li > b { display: block; margin-bottom: 8px; }
+.good-lift-result .good-lift-board li > b + span { margin-left: 0; color: #e8f1fa; font-size: 22px; font-weight: 800; }
+.good-lift-result .good-lift-board li > span { font-size: 11px; }
+.good-lift-result .good-lift-board li.mine { border: 2px solid #29c7e3; background: #29c7e30d; }
+.good-lift-result .good-lift-board li.bot { border-style: dashed; }
+.good-lift-result .good-lift-board-head { margin-bottom: 10px; color: #8cc6ff; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.good-lift-result .good-lift-initials { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; color: #29c7e3; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.good-lift-result .good-lift-initials > input { width: 5.5ch; min-height: 48px; padding: 4px 10px; border: 2px solid #29c7e3; border-radius: 9px; background: #0b1424; color: #e8f1fa; font-size: 23px; font-weight: 800; letter-spacing: .15em; }
+.good-lift-result .good-lift-kit-progress { margin-bottom: 16px; padding: 14px; border: 1px solid #24405f; border-radius: 12px; background: #0b1424; }
+.good-lift-result .good-lift-tonnage { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px !important; }
+.good-lift-tonnage > span { color: #9fb2c6; font-size: 9px; letter-spacing: .1em; }
+.good-lift-tonnage > strong { color: #e8f1fa; font-size: 25px; line-height: 1.4; }
+.good-lift-tonnage > strong > small { color: #9fb2c6; font-size: 11px; }
+.good-lift-result .good-lift-kit-next { margin: 0 0 12px; color: #3ee6b0; font-size: 10px; }
+.good-lift-result .good-lift-ladder { max-width: none; height: 7px; margin: 0 0 5px; overflow: hidden; border-radius: 6px; background: #1c3148; }
+.good-lift-result .good-lift-kit-goal { margin: 0; color: #9fb2c6; font-size: 9px; text-align: right; }
+.good-lift-hangar-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 12px; }
+.good-lift-hangar-heading > h3 { margin: 0; font-size: 14px; letter-spacing: .1em; }
+.good-lift-hangar-heading > div { display: flex; gap: 4px; padding: 3px; border: 1px solid #24405f; border-radius: 9px; }
+.good-lift-result .good-lift-hangar-heading button { min-height: 44px; padding: 6px 10px; border: 0; border-radius: 6px; color: #9fb2c6; background: transparent; font-size: 10px; text-transform: uppercase; }
+.good-lift-result .good-lift-hangar-heading button[aria-pressed='true'] { color: #04101f; background: #29c7e3; font-weight: 700; }
+.good-lift-result .good-lift-hangar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; max-width: none; padding: 0; border: 0; }
+.good-lift-result .good-lift-hangar[hidden] { display: none; }
+.good-lift-result .good-lift-hangar > label { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 18px; gap: 7px; padding: 10px; border: 2px solid #24405f; border-radius: 12px; background: #0b1424; box-shadow: 0 3px #071020; }
+.good-lift-result .good-lift-hangar > label.worn { border-color: #29c7e3; background: #29c7e312; box-shadow: 0 3px #127a8c; }
+.good-lift-result .good-lift-hangar > label > input { grid-column: 2; grid-row: 2; justify-self: end; }
+.good-lift-result .good-lift-hangar .good-lift-swatch { grid-column: 1 / -1; grid-row: 1; width: 100%; height: 30px; border: 0; border-radius: 6px; }
+.good-lift-result .good-lift-hangar > label > b { grid-column: 1; grid-row: 2; font-size: 11px; }
+.good-lift-result .good-lift-hangar > label > span:not(.good-lift-swatch) { grid-column: 1 / -1; font-size: 9px; line-height: 1.5; }
+.good-lift-result .good-lift-hangar > label.locked { border-color: #1c2d43; }
+.good-lift-result .good-lift-kit-mix { margin: 0 0 16px; color: #9fb2c6; font-size: 10px; }
+.good-lift-result .good-lift-gear { max-width: none; border-color: #24405f; border-radius: 10px; }
+.good-lift-result .good-lift-kit > .dim { margin-top: 10px; font-size: 10px; }
+@media (max-width: 767px), (max-height: 480px) {
+  .window.good-lift-result { border: 0; border-radius: 0; }
+  .good-lift-result .good-lift-result-summary { max-height: 39svh; }
+  .good-lift-result .good-lift-result-summary > .good-lift-verse { display: none; }
+}
+@media (min-width: 768px) {
+  .good-lift-result .good-lift-result-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .good-lift-result .good-lift-result-metrics > div:not(:first-child) > dd { font-size: 15px; }
+}
+@media (max-height: 480px) and (min-width: 720px) {
+  .good-lift-result .good-lift-result-summary { max-height: none; }
+  .good-lift-result .good-lift-result-metrics > .good-lift-score-hero { padding: 0; }
+  .good-lift-result .good-lift-score-hero > dd { font-size: 40px; }
+  .good-lift-result .good-lift-result-metrics > div:not(:first-child) { padding: 5px; }
+  .good-lift-result .good-lift-result-summary > .shout { font-size: 14px; }
+}
+
+.good-lift-result .good-lift-result-actions.has-training { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.good-lift-result .good-lift-result-actions > .good-lift-result-train { color: #3ee6b0; border-color: #23574d; background: #3ee6b00d; }
+.window.good-lift-result { box-shadow: 0 0 0 100vmax #050a1399, 0 16px 64px #0008; }
