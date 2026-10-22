@@ -4,7 +4,7 @@ import type { FlightState, FlightInput, AirSample } from '../../../domains/fligh
 import type { CoachFields } from '../../../domains/coaching/models.ts';
 import { THERMAL_AIR } from '../presentation/thermal-air.ts';
 import { windReadout } from '../presentation/wind-feedback.ts';
-import { flightMessageOwner } from '../presentation/flight-message.ts';
+import { flightMessageOwner, flightSecondaryOwner } from '../presentation/flight-message.ts';
 import type { FlightZone } from './flight-navigation.service.ts';
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -18,6 +18,7 @@ interface FlightHudPort {
  progress: ReturnType<typeof readProgress>; zoneLabels: { zone: FlightZone; el: HTMLElement }[]; autoHaste: number;
  readonly mode: string; readonly auto: FlightZone | null; readonly mapOpen: boolean; readonly keysOpen: boolean; readonly briefing: boolean; readonly hasDragged: boolean; readonly portal: boolean; readonly held: boolean; readonly coachMessage: CoachFields | null;
  isAirborne(): boolean; compact(): boolean; runHud(quiet: boolean): string; runReadouts?(): RunReadouts | null;
+ clearComboFeedback?(): void;
  nearestZone(onlyUnvisited: boolean): { zone: FlightZone; dist: number } | null; hintText(): string; drawMap(): void;
 }
 /** DOM readouts only sample the session; all flight and coaching state remains owned upstream. */
@@ -36,17 +37,31 @@ export function createFlightHud(port: FlightHudPort) {
    node.replaceChildren(document.createTextNode(value), suffix);
  }
  function messages() {
-   const blocked = !port.isAirborne() || port.mapOpen || port.keysOpen || port.briefing || port.portal || port.held;
+   const blocked = !port.isAirborne() || port.mapOpen || port.keysOpen || port.briefing || port.portal || port.held || document.hidden;
    const message = port.coachMessage;
-   const urgent = !!message?.warning || ['recover', 'hazard', 'timing', 'timed', 'descent'].includes(message?.state ?? '');
+   const urgent = !!message?.warning || !!message?.urgent;
    const judges = !!stage.querySelector('.fj-lights:not([hidden])');
    const owner = flightMessageOwner({ blocked, urgent, coach: !!message, judges,
      notice: !!stage.querySelector('.fj-toast'), hint: !!$('.fj-hint').textContent, intro: !port.hasDragged && !port.auto });
    stage.dataset.messageOwner = owner;
+   const secondary = flightSecondaryOwner({ blocked, urgent, judges });
+   stage.dataset.secondaryOwner = secondary;
+   const comboLayout = blocked || urgent || judges ? 'hidden' : owner === 'coach' ? 'coach' : 'standalone';
+   stage.dataset.comboLayout = comboLayout;
+   stage.dataset.comboSuppressed = String(comboLayout === 'hidden');
+   if (comboLayout === 'hidden') port.clearComboFeedback?.();
    dragTip.hidden = owner !== 'intro';
    const said = stage.querySelector('.fj-said');
-   said?.setAttribute('aria-live', owner === 'judges' ? 'polite' : 'off');
-   $('.fj-toasts').setAttribute('aria-hidden', String(owner !== 'judges' && owner !== 'notice'));
+   said?.setAttribute('aria-live', secondary === 'judges' ? 'polite' : 'off');
+   $('.fj-toasts').setAttribute('aria-hidden', String(secondary !== 'judges' && owner !== 'notice'));
+ }
+ function layoutMessages() {
+   const telemetry = $('.fj-telemetry').getBoundingClientRect();
+   const top = Math.ceil(telemetry.bottom - stage.getBoundingClientRect().top + 12);
+   stage.style.setProperty('--coach-top', `${top}px`);
+   stage.style.setProperty('--message-top', `${top}px`);
+   const coachHeight = stage.dataset.messageOwner === 'coach' ? $('.fj-coach').getBoundingClientRect().height : 0;
+   stage.style.setProperty('--secondary-top', `${top + (coachHeight ? coachHeight + 8 : 0)}px`);
  }
  function updateHud() {
    const blocked = port.mapOpen || port.keysOpen || port.briefing || port.portal || port.held;
@@ -113,12 +128,9 @@ export function createFlightHud(port: FlightHudPort) {
      $('.fj-hint').textContent = port.hintText();
    }
    $('.fj-toasts').style.removeProperty('top');
-   const telemetry = $('.fj-telemetry').getBoundingClientRect();
-   const messageTop = `${Math.ceil(telemetry.bottom - stage.getBoundingClientRect().top + 12)}px`;
-   stage.style.setProperty('--coach-top', messageTop);
-   stage.style.setProperty('--message-top', messageTop);
    messages();
+   layoutMessages();
    if (port.mapOpen) port.drawMap();
  }
- return { update: updateHud, presentMessages: messages };
+ return { update: updateHud, presentMessages: messages, layoutMessages };
 }

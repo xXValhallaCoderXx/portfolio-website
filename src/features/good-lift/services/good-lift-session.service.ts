@@ -1,4 +1,4 @@
-import { BAR_ROW, STYLE_ROW, STYLE_LINE, MARKUP, GATE_MARKUP, MUSIC_BUTTON, BRIEF_MARKUP, LIGHTS } from '../presentation/run-markup.ts';
+import { BAR_ROW, STYLE_ROW, STYLE_LINE, MARKUP, GATE_MARKUP, MUSIC_BUTTON, LIGHTS } from '../presentation/run-markup.ts';
 import type { RankedScore, BotScores } from '../../../domains/good-lift/board.types.ts';
 import type { BotScore } from '../../../domains/good-lift/meet-bots.ts';
 import { browserBotScheduler } from '../../../adapters/browser/bot-scheduler.ts';
@@ -45,8 +45,8 @@ import { isJudgedEnding } from '../../../domains/good-lift/run-rules.ts';
 import { createRecorder, decodeLog, encodeLog, inputFrame } from '../../../domains/good-lift/recorder.ts';
 import { replayLog } from '../../../domains/good-lift/replay.ts';
 import { createReplayWork } from './replay-work.service.ts';
-import { STYLE, createStyle } from '../../../domains/good-lift/meet-style.ts';
-import { styleLine } from '../presentation/style-line.ts';
+import { createStyle } from '../../../domains/good-lift/meet-style.ts';
+import { createComboPresenter } from '../presentation/combo-feedback.ts';
 import { summariseRun } from '../../../domains/good-lift/meet-sheet.ts';
 import { createMusic } from '../presentation/music.ts';
 import { createSurge } from '../../../domains/good-lift/run-surge.ts';
@@ -101,14 +101,9 @@ export const GATE_LABELS = Object.freeze([
 const LABEL = Object.freeze({ rise: 4.5, range: 160 });
 // How a kettlebell came out, as the meet sheet names the Beast's (by BELL_RESULT).
 const OUTCOMES = Object.freeze(['falling', 'hit', 'close', 'dodged', 'shielded', 'hidden', 'glanced']);
-// Seconds a set of tricks landed, and one lost, is stamped over the gauge.
-const STAMP = Object.freeze({ landed: 1.6, lost: 1.4 });
 // Seconds the title card stays up as a run starts: the first of a visit in full, and shorter on
 // every run after it, which gets no typed line.
 const TITLE = Object.freeze({ full: 3.6, short: 2.2 });
-// The briefing explains the drag controls over the gate for a device's first `runs` runs.
-// Flight waits there until the player dismisses it.
-const BRIEF = Object.freeze({ runs: 3 });
 
 /**
  * Makes the run controller, once. `host` is what the engine shares:
@@ -145,9 +140,6 @@ export function createGoodLift(host: GoodLiftHost) {
     return element;
   };
 
-  const startingKit = keepEarned(readKit(), readStore());
-  if (!sameKit(startingKit, readKit())) writeKit(startingKit);
-  if (!sameKit(startingKit, host.kit())) host.wear(startingKit);
   const sound = host.sound;
   const { caw, thud, whoosh, rush, ting, twice, sparkle, lurch, flap, swish, arpeggio, dud, thunk, thump, swell, grunt, growl, whistle, ricochet, chime, rubble, clatter, gale, lure, judges, horn, thunder } = createRunVoices(sound);
   const sky = createCloudbaseRun();
@@ -200,14 +192,8 @@ export function createGoodLift(host: GoodLiftHost) {
     wind: 0, bait: 0, sprays: 0, lost: 0, glanced: 0, gates: 0, crumbled: 0,
     surging: false, tucks: 0, pumps: 0,
   };
-  // The run's style as last answered (meet-style.js): sets landed and lost, the elements in the set in
-  // hand and its name, the style shown and in which form, and when a set last landed or was lost,
-  // with the stamp over the gauge and when it comes down, and what the line over the gauge last
-  // showed (the stamp, or the points of the set in hand).
-  const styled = {
-    landed: 0, lost: 0, elements: 0, total: -1, compact: null as boolean | null, inHand: '', trick: '', points: 0,
-    stamp: '', stampUntil: -Infinity, stamped: null as string | null, text: '',
-  };
+  // The banked style readout's last value and responsive form; combo events have their own presenter.
+  const styled = { total: -1, compact: null as boolean | null };
   // The blessing the readouts show, by RUNE.
   let shownRune: number = RUNE.none;
   // How the last step left things, for the engine: whether a raven had the wing as it began, and
@@ -245,9 +231,10 @@ export function createGoodLift(host: GoodLiftHost) {
   const varioCell = host.hud('vario');
   const styleCell = host.hud('style');
   $('.fj-coach').insertAdjacentHTML('beforebegin', STYLE_LINE);
-  $('.fj-toasts').insertAdjacentHTML('beforebegin', BRIEF_MARKUP);
-  const briefEl = $('.fj-brief');
   const styleEl = $('.fj-style');
+  const comboAnnounceEl = $('.fj-combo-announcement');
+  const combo = createComboPresenter({ element: styleEl, label: $('[data-combo="label"]', styleEl),
+    detail: $('[data-combo="detail"]', styleEl), announce: comboAnnounceEl });
   const hornEl = $('.fj-horn');
   const lightsEl = $('.fj-lights');
   const lightEls = lightsEl.querySelectorAll('i');
@@ -263,7 +250,7 @@ export function createGoodLift(host: GoodLiftHost) {
   for (const sound of stage.querySelectorAll<HTMLElement>('.fj-keys-more > [data-do="sound"]')) sound.insertAdjacentHTML('afterend', MUSIC_BUTTON);
   const musicButtons = [...stage.querySelectorAll<HTMLElement>('[data-do="music"]')];
   for (const button of musicButtons) button.addEventListener('click', () => toggleMusic());
-  const ownEls = [...rows.querySelectorAll<HTMLElement>('.fj-run'), briefEl, styleEl, hornEl, lightsEl, saidEl, chevronEl, gatesEl, titleEl, ...musicButtons];
+  const ownEls = [...rows.querySelectorAll<HTMLElement>('.fj-run'), styleEl, comboAnnounceEl, hornEl, lightsEl, saidEl, chevronEl, gatesEl, titleEl, ...musicButtons];
   let lightsTimer: ReturnType<typeof setTimeout>;
   let saidTimer: ReturnType<typeof setTimeout>;
   let titleTimer: ReturnType<typeof setTimeout>;
@@ -279,6 +266,10 @@ export function createGoodLift(host: GoodLiftHost) {
    * is what that sky is ({ kind, day, target }, daily.js), for the title card.
    */
   function begin(seed: number, sky: ResolvedSky | null = null) {
+    // Normalizing earned kit can write storage, so it belongs to the explicit start, never preload.
+    const startingKit = keepEarned(readKit(), readStore());
+    if (!sameKit(startingKit, readKit())) writeKit(startingKit);
+    if (!sameKit(startingKit, host.kit())) host.wear(startingKit);
     // The bots never take a frame from a run: those still flying wait for the next sheet. Nor does
     // the world board's answer for the last one, which has no sheet left to show it.
     bots.pause();
@@ -295,12 +286,8 @@ export function createGoodLift(host: GoodLiftHost) {
     seen.chainAt = -Infinity;
     seen.tucks = seen.pumps = 0;
     seen.surging = false;
-    Object.assign(styled, {
-      landed: 0, lost: 0, elements: 0, total: -1, compact: null as boolean | null, inHand: '', trick: '', points: 0,
-      stamp: '', stampUntil: -Infinity, stamped: null as string | null, text: '',
-    });
-    styleEl.textContent = '';
-    styleEl.className = 'fj-style';
+    Object.assign(styled, { total: -1, compact: null as boolean | null });
+    combo.reset();
     rows.toggleAttribute('data-style', false);
     surge.reset();
     entry.reset();
@@ -318,14 +305,8 @@ export function createGoodLift(host: GoodLiftHost) {
     hideLights();
     hornEl.classList.remove('on');
     showChevron(false);
-    // A device's first runs are briefed first, the flight waiting at the gate; the rest open with
-    // the title card at once.
-    briefed = null;
-    if (readStore().runs < BRIEF.runs) showBrief(seed, sky);
-    else {
-      briefEl.hidden = true;
-      showTitle(seed, sky);
-    }
+    // The shared ready screen has already received an explicit Fly action.
+    showTitle(seed, sky);
     // The music joins the engine's sound (made by now, a click having asked for it) and plays on
     // from run to run. On a phone the game keeps to its ambient sound, which the silent switch
     // silences: a media element playing would otherwise take every sound of the game past it
@@ -344,8 +325,6 @@ export function createGoodLift(host: GoodLiftHost) {
    * its bots, and the world board's answer for the last sheet is not waited for.
    */
   function leave(now = false) {
-    briefed = null;
-    briefEl.hidden = true;
     music.stop(now);
     labelMusic(false);
     bots.pause();
@@ -370,28 +349,10 @@ export function createGoodLift(host: GoodLiftHost) {
     return music.on;
   }
 
-  // Which sky a run is on, as its title card and its briefing name it.
+  // Which sky a run is on, as its title card names it.
   const skyLabel = (seed: number, sky: ResolvedSky | null) => (sky?.kind === 'daily'
     ? `Daily #${dailyNumber(sky.day)} · ${new Date(sky.day * DAY_MS).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}`
     : `${sky?.kind === 'practice' ? 'practice · ' : ''}sky ${skyId(seed)}`);
-
-  // The briefing a device's first runs open with (BRIEF), the flight waiting at the gate until the
-  // pilot is ready (game.js holds it), and then the title card as it goes.
-  let briefed: { seed: number; sky: ResolvedSky | null } | null = null;
-  function showBrief(seed: number, sky: ResolvedSky | null) {
-    briefed = { seed, sky };
-    $('small', briefEl).textContent = skyLabel(seed, sky);
-    briefEl.hidden = false;
-  }
-  function endBrief() {
-    if (!briefed) return;
-    const { seed, sky } = briefed;
-    briefed = null;
-    briefEl.hidden = true;
-    // The run starts now, for the board's tie-break too, not as the card came up.
-    startedAt = Date.now();
-    showTitle(seed, sky);
-  }
 
   // The card a run opens with: which sky it is, GOOD LIFT slammed in over a barbell, and (the first
   // time a visit) a typed line saying what to lift, or who there is to beat.
@@ -511,60 +472,17 @@ export function createGoodLift(host: GoodLiftHost) {
     seen.pumps = pumps;
   }
 
-  // What a set of tricks is called: its wingovers, its loops, its pitched swing, or, mixed, its tricks.
-  function setName({ elements, rolls, loops }: { elements: number; rolls: number; loops: number }) {
-    if (rolls === elements) return `wingover ×${rolls}`;
-    if (loops === elements) return `loop ×${loops}`;
-    return rolls > 0 || loops > 0 ? `tricks ×${elements}` : `pitch ×${elements}`;
-  }
+  // Observe fixed-step scoring once. The HUD presents it only after current message arbitration.
+  function answerStyle(_elapsed: number) { combo.observe(style.state, world.watch.state.moveKind); }
 
-  // Answers what the style did this step (meet-style.js): an element scored in a set in hand, a rush
-  // of air a step higher for each linked (a lone element, as a dodge turned back makes, is no set
-  // yet, and passes unheard and unshown); a set landed, stamped over the gauge, flared on its
-  // readout, rung and said; and one lost, stamped struck through, with a falling pair of notes after
-  // the fold's own sound.
-  function answerStyle(elapsed: number) {
-    const s = style.state;
-    const inHand = s.elements >= STYLE.inHand;
-    if (s.elements > styled.elements) {
-      styled.inHand = setName(s);
-      if (inHand && s.links > 0) sound.play('swish', 0.08, swish, s.links);
-    }
-    if (s.landed > styled.landed) {
-      styled.trick = styled.inHand;
-      styled.points = s.said;
-      styled.stamp = 'landed';
-      styled.stampUntil = elapsed + STAMP.landed;
-      styled.stamped = null;
-      sound.play('landed', 0.5, arpeggio);
-      flare(styleCell, 'lifted');
-      if (lightsEl.hidden) {
-        clearTimeout(saidTimer);
-        saidEl.textContent = '';
-        saidTimer = setTimeout(() => (saidEl.textContent = `Move banked: ${styled.trick}, plus ${styled.points} style.`), 120);
-      }
-    }
-    if (s.lost > styled.lost) {
-      styled.points = s.said;
-      styled.stamp = 'lost';
-      styled.stampUntil = elapsed + STAMP.lost;
-      styled.stamped = null;
-      sound.play('dud', 0.5, dud);
-    }
-    styled.elements = s.elements;
-    styled.landed = s.landed;
-    styled.lost = s.lost;
-    // The line over the gauge: a stamp while it is up, or else the set in hand and what it is worth;
-    // written only as one of them changes.
-    const stamped = elapsed < styled.stampUntil ? styled.stamp : '';
-    const pending = !stamped && inHand ? s.pending : -1;
-    const text = styleLine(stamped, styled.points, styled.inHand, pending, s.links);
-    if (stamped !== styled.stamped || text !== styled.text) {
-      styled.stamped = stamped;
-      styled.text = text;
-      styleEl.textContent = text;
-      styleEl.className = stamped ? `fj-style ${stamped}` : 'fj-style';
-    }
+  function presentStyle(quiet: boolean) {
+    const layout = stage.dataset.comboLayout;
+    const event = combo.present({ layout: quiet || layout !== 'coach' && layout !== 'standalone' ? 'hidden' : layout,
+      suppressed: stage.dataset.comboSuppressed === 'true' });
+    if (!event) return;
+    if (event.phase === 'move' || event.phase === 'multiplier') sound.play('swish', 0.08, swish, event.links);
+    else if (event.phase === 'banked') sound.play('landed', 0.5, arpeggio);
+    else sound.play('dud', 0.5, dud);
   }
 
   // Answers what the meet did this step: a plate or a circle loaded, a trail laid, a strike's
@@ -834,6 +752,7 @@ export function createGoodLift(host: GoodLiftHost) {
 
   /** Writes the run's readouts and returns the hint line to show, or '' (`quiet` says show none). */
   function hud(quiet: boolean) {
+    presentStyle(quiet);
     const current = readouts();
     const lift = meet.state;
     host.hud('alt').textContent = `${Math.floor(g.pos.y)} m`;
@@ -885,8 +804,6 @@ export function createGoodLift(host: GoodLiftHost) {
    * retry mid-run, leaving the page) is not recorded at all.
    */
   function finish(reason = 'quit', flown: ResolvedSky | null = null, record = true): RunResult {
-    briefed = null;
-    briefEl.hidden = true;
     finishRun(world, reason);
     // The sheet, read the way a replay reads it: live play and replays can only differ if the
     // runs themselves did.
@@ -1316,10 +1233,7 @@ export function createGoodLift(host: GoodLiftHost) {
     begin, step, want, draw, sounds, hud, finish, dispose, last, setInitials, leave, toggleMusic, removeWorldRun, chooseKit,
     /** A touch or a key: a play of the music the browser refused is tried again. */
     nudgeMusic: () => music.nudge(),
-    /** Whether the run is still being briefed, the flight waiting at the gate; and the pilot ready. */
-    get briefing() { return briefed !== null; },
     get readouts() { return readouts(); },
-    endBrief,
     /** The page went out of sight, or came back: the music waits for it. */
     hideMusic: (hidden: boolean) => music.hide(hidden),
     get musicState() { return { on: music.on, playing: music.playing, track: music.track, blocked: music.blocked }; },
@@ -1359,6 +1273,7 @@ export function createGoodLift(host: GoodLiftHost) {
       lessons.repeat();
     },
     clearProgress: () => clearStore(),
+    clearComboFeedback: () => combo.clear(),
     get lessons() { return lessons.state; },
     get coachHazard() { return runCoachHazard(world); },
     get coachWarning() { return runCoachWarning(world); },

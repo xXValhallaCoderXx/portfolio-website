@@ -15,6 +15,7 @@ import { interruptsLift, resolveCoachMessage } from '../../domains/coaching/coac
 import { surfaceAt } from '../../domains/flight/ground.ts';
 import { swingGauge } from '../../features/flight/presentation/swing-gauge.ts';
 import { copyFlight } from '../../domains/flight/flight.ts';
+import { createCoachIntent } from '../../domains/coaching/coach-intent.ts';
 
 export type HeldControls = ReturnType<typeof released>;
 const released = () => ({ left: false, right: false, brake: false, deepBrake: false, bar: false, ears: false });
@@ -32,6 +33,7 @@ export function followInstruction(message: CoachMessage, input: HeldControls) {
 export function createVisiblePilot(seed: number, delay = 0.3, options: Parameters<typeof createTrickLessons>[0] = {}) {
   const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle() }), seed) as RunWorld & { style: ReturnType<typeof createStyle>; bells: ReturnType<typeof createBells> };
   const guide = createLiftGuide(createRunCoachEnvironment(world.sky)), lessons = createTrickLessons(options), gauge = {};
+  const intent = createCoachIntent();
   let input = released(), pending: { at:number;input:HeldControls } | null = null, message: CoachMessage | null = null;
   const stats = { minimumClearance: Infinity, assisted: false as boolean | undefined, shown: 0, transfers: 0, firstThermal: null as number | null, maxQualification: 0 };
   function step(manual: HeldControls | null = null) {
@@ -54,7 +56,7 @@ export function createVisiblePilot(seed: number, delay = 0.3, options: Parameter
     stats.maxQualification = Math.max(stats.maxQualification, guide.activity.acquireSeconds);
     if (primary?.activity === 'thermalling') stats.firstThermal ??= sky.state.elapsed;
     if (interruptsLift(primary)) guide.reset();
-    message = resolveCoachMessage(primary, { warning }, input);
+    message = intent.resolve(resolveCoachMessage(primary, { warning }, input), input, world.sky.state.elapsed);
     if (message) {
       stats.shown++; if (message.heading === 'NEXT LIFT') stats.transfers++;
       if (!manual && !pending) {

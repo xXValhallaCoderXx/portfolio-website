@@ -9,7 +9,7 @@ export const BAR_ROW = /* html */ '<div class="fj-run fj-bar-metric"><dt>bar</dt
 // the line above the swing gauge saying the set in hand, and stamping it landed or lost.
 export const STYLE_ROW = /* html */ '<dt class="fj-run fj-trick">style</dt><dd class="fj-run fj-trick" data-hud="style"></dd>';
 
-export const STYLE_LINE = /* html */ '<p class="fj-style" aria-hidden="true"></p>';
+export const STYLE_LINE = /* html */ '<p class="fj-style" aria-hidden="true" hidden><strong data-combo="label"></strong><span data-combo="detail"></span></p><p class="fj-combo-announcement fj-visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>';
 
 export const MARKUP = /* html */ `
   <div class="fj-horn" aria-hidden="true"></div>
@@ -27,45 +27,6 @@ export const GATE_MARKUP = /* html */ `<div class="fj-gates" aria-hidden="true">
 
 // The music's switch, beside the sounds' in the menu, shown only in the game.
 export const MUSIC_BUTTON = /* html */ '<button data-do="music" hidden>[ music: on ]</button>';
-
-export const BRIEF_MARKUP = /* html */ `
-  <div class="fj-brief" role="dialog" aria-modal="true" aria-labelledby="fj-brief-title" tabindex="-1" hidden>
-    <small></small>
-    <b id="fj-brief-title">GOOD_LIFT</b>
-    <p class="fj-brief-objective">Climb through a line every 150 m. Three judges light each lift.</p>
-    <ol class="fj-brief-controls">
-      <li>
-        <svg viewBox="0 0 56 56" width="56" height="56" aria-hidden="true">
-          <polygon points="28,6 50,28 28,50 6,28" fill="none" stroke="currentColor" opacity=".45" />
-          <circle cx="28" cy="28" r="4" fill="currentColor" />
-          <path d="M20 28H8m4-4-4 4 4 4m24-4h12m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-        <div><strong>Turn</strong><span>pull either side handle · A / D on keyboard</span></div>
-      </li>
-      <li>
-        <svg viewBox="0 0 56 56" width="56" height="56" aria-hidden="true">
-          <polygon points="8,28 28,48 48,28" fill="#9b7bff" fill-opacity=".35" stroke="#9b7bff" stroke-opacity=".8" />
-          <polygon points="16,28 28,40 40,28" fill="#0f2434" stroke="currentColor" stroke-opacity=".6" />
-          <circle cx="28" cy="16" r="4" fill="currentColor" />
-          <path d="M28 21v15m-5-5 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-        <div><strong>Brake</strong><span>pull both handles · Space on keyboard · <em>purple</em> builds a swing</span></div>
-      </li>
-      <li>
-        <svg viewBox="0 0 56 56" width="56" height="56" aria-hidden="true">
-          <polygon points="28,8 42,22 28,36 14,22" fill="#e8f1fa" fill-opacity=".08" stroke="#e8f1fa" stroke-opacity=".6" />
-          <circle cx="28" cy="42" r="4" fill="currentColor" />
-          <path d="M28 37V14m-5 5 5-5 5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-        <div><strong>Hands up</strong><span>lift your thumbs, release the keys or let go of the mouse</span></div>
-      </li>
-    </ol>
-    <p class="fj-brief-note">Thermals, plates, kettlebells and tricks: the coach introduces each one in flight.</p>
-    <div class="fj-brief-actions">
-      <button type="button" class="primary" data-brief-action="fly">▶ Fly</button>
-      <button type="button" data-brief-action="exit">Back to the page</button>
-    </div>
-  </div>`;
 
 // The lights head the column the notifications stack in, which the engine keeps clear of the
 // readouts, so a milestone reached on a line never covers them.

@@ -14,6 +14,7 @@ import { createRunCoachEnvironment, runCoachHazard, runCoachWarning } from '../.
 import { coachDragTarget } from '../../features/flight/presentation/flight-cues.ts';
 import { surfaceAt } from '../../domains/flight/ground.ts';
 import { directBrakes } from './test-direct-flight.ts';
+import { createCoachIntent } from '../../domains/coaching/coach-intent.ts';
 
 /** Literal visible handle targets and keyboard demands, never a hidden route or source target. */
 export function followDirectInstruction(message: CoachMessage, input: FlightInput): FlightInput {
@@ -40,6 +41,7 @@ export function followDirectInstruction(message: CoachMessage, input: FlightInpu
 export function createVisibleDirectPilot(seed: number, delay = 0.3) {
   const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle() }), seed);
   const guide = createLiftGuide(createRunCoachEnvironment(world.sky));
+  const intent = createCoachIntent();
   // Measure access to acro height independently of spending it on an automatic lesson.
   const lessons = createTrickLessons({ learned: () => ['pitch', 'wingover', 'loop'] });
   let input: FlightInput = directBrakes(), pending: { at: number; input: FlightInput } | null = null;
@@ -65,7 +67,7 @@ export function createVisibleDirectPilot(seed: number, delay = 0.3) {
       hazardActive: sky.state.pilot.danger > 0 || sky.state.pilot.cloud > 0 || sky.state.pilot.gustIn < 6 || world.bells!.state.warning >= 0 });
     if (primary?.activity === 'thermalling') stats.firstThermal ??= sky.state.elapsed;
     if (interruptsLift(primary)) guide.reset();
-    message = resolveCoachMessage(primary, { warning }, world.intent);
+    message = intent.resolve(resolveCoachMessage(primary, { warning }, world.intent), world.intent, sky.state.elapsed);
     if (message) {
       stats.shown++;
       if (!pending) {

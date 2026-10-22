@@ -1,30 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createStyle } from '../../../domains/good-lift/meet-style.ts';
-import { styleLine } from './style-line.ts';
+import { styleLine, type ComboFacts } from './style-line.ts';
 
-test('an under-band catch refreshes the combo multiplier while retaining pending points', () => {
-  const style = createStyle();
-  const watch = { clock: 0, moves: 0, moveKind: 1, moveBand: 1, moveSize: 1, breaks: 0, broke: 0, calm: 0 };
-  const move = (band: number) => {
-    Object.assign(watch, { clock: watch.clock + 1 / 60, moves: watch.moves + 1, moveBand: band });
-    style.step(1 / 60, { watch: { state: watch } });
-  };
-  move(1); move(1); move(1);
-  const before = styleLine('', 0, 'pitch ×3', style.state.pending, style.state.links);
-  const pending = style.state.pending;
-  assert.equal(before, 'pitch ×3 · ×1.5 · 35 pending');
-  move(0);
-  assert.equal(style.state.links, 0);
-  assert.equal(style.state.pending, pending);
-  const after = styleLine('', 0, 'pitch ×3', style.state.pending, style.state.links);
-  assert.equal(after, 'pitch ×3 · ×1 · 35 pending');
-  assert.notEqual(after, before, 'rendered text changes even when pending points do not');
+const facts: ComboFacts = { phase: 'move', move: 1, elements: 1, links: 1, pending: 10, points: 10, scoreMultiplier: 1 };
+test('move count, chain multiplier and banked score multiplier have distinct labels', () => {
+  assert.deepEqual(styleLine(facts), { label: 'PITCH · +10', detail: '10 pending' });
+  assert.deepEqual(styleLine({ ...facts, elements: 2, links: 2, pending: 20 }), {
+    label: 'PITCH · +10', detail: '2 moves · chain ×1 · 20 pending',
+  });
+  assert.deepEqual(styleLine({ ...facts, phase: 'multiplier', elements: 3, links: 3, points: 15, pending: 35 }), {
+    label: 'COMBO 3 · chain ×1.5', detail: 'PITCH +15 · 35 pending',
+  });
+  assert.deepEqual(styleLine({ ...facts, phase: 'banked', elements: 3, points: 35, scoreMultiplier: 1.035 }), {
+    label: 'COMBO BANKED · +35 STYLE', detail: 'score ×1.03',
+  });
 });
-
-test('style stamps and the saturated combo keep the existing compact wording', () => {
-  assert.equal(styleLine('landed', 1234, '', -1, 0), 'BANKED +1,234');
-  assert.equal(styleLine('lost', 35, '', -1, 0), 'lost +35');
-  assert.equal(styleLine('', 0, '', -1, 0), '');
-  assert.equal(styleLine('', 0, 'loop ×8', 1200, 8), 'loop ×8 · ×3 · 1,200 pending');
+test('a reset chain keeps finite pending wording and saturated chains stay capped', () => {
+  assert.deepEqual(styleLine({ ...facts, phase: 'pending', elements: 3, links: 0, pending: 35 }), {
+    label: 'COMBO 3 · chain ×1', detail: '35 pending',
+  });
+  assert.deepEqual(styleLine({ ...facts, phase: 'pending', move: 3, elements: 8, links: 8, pending: 1234 }), {
+    label: 'COMBO 8 · chain ×3', detail: '1,234 pending',
+  });
+  assert.deepEqual(styleLine({ ...facts, phase: 'lost' }), { label: 'COMBO ENDED', detail: 'recover calmly' });
 });

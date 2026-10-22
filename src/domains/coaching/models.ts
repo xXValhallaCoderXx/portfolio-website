@@ -1,6 +1,7 @@
 import type { AirSample, FlightInput, HeightSampler, ThermalSource, Vector2, Vector3 } from '../flight/models.ts';
 
 export type ControlName = 'left' | 'right' | 'brake' | 'bar' | 'ears';
+export type CoachOwner = 'safety' | 'lesson' | 'navigation' | 'acro' | 'flight';
 export interface CoachFields {
   action?: string; state?: string; context?: string; phase?: string;
   title?: string; detail?: string; hold?: readonly string[]; release?: readonly string[];
@@ -11,6 +12,7 @@ export interface CoachFields {
   activity?: string; preferredDirection?: number; distance?: number;
   targetId?: string | number; targetGeneration?: number; warning?: boolean; warningLabel?: string; urgent?: boolean;
   transfer?: Partial<RidgeTransferState>; lessonId?: string; canCancelLesson?: boolean;
+  intentId?: string; owner?: CoachOwner; urgency?: 'immediate' | 'routine'; issuedAt?: number; acknowledged?: boolean;
 }
 export interface CoachMessage extends CoachFields {
   action: string; title: string; detail: string; hold: ControlName[]; release: ControlName[]; accepted: boolean;

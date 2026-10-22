@@ -51,7 +51,7 @@ export const FLIGHT_MARKUP = /* html */ `
   </section>
   <section class="fj-coach" aria-label="Flight coach" hidden>
     <small class="fj-coach-warning" data-coach="warning" hidden></small>
-    <div class="fj-coach-main"><span class="fj-action-symbol" aria-hidden="true">◇</span><div class="fj-coach-copy"><span class="fj-coach-kicker">FLIGHT COACH</span><strong data-coach="action"></strong><small data-coach="reason"></small><div data-coach="controls"></div><small data-coach="feedback"></small></div></div>
+    <div class="fj-coach-main"><span class="fj-action-symbol" aria-hidden="true">◇</span><div class="fj-coach-copy"><span class="fj-coach-kicker">FLIGHT COACH</span><strong data-coach="action"></strong><small data-coach="reason"></small><div data-coach="controls"></div><small data-coach="acknowledgement" hidden></small><small data-coach="feedback"></small></div></div>
     <div data-coach="progress" hidden><span></span><i><b></b></i></div>
     <button data-do="back-to-lift" data-coach="cancel" hidden>Back to lift</button>
     <span data-coach="announce" class="fj-visually-hidden" aria-live="polite" aria-atomic="true"></span>

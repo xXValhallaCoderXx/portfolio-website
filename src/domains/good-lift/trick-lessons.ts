@@ -143,9 +143,6 @@ export function createTrickLessons({ learned = () => [], onLearned = () => {} }:
     else if (state.active) message = physical ?? request ?? actionMessage({ state: 'lesson', context: TRICK_LESSONS[state.active].label,
       phase: 'recover', action: 'release-all', title: 'RECOVER LEVEL TO BANK STYLE',
       detail: 'Let the wing settle for one steady second.', progress: Math.min(1, watch.calm!), progressLabel: 'STEADY FLIGHT · 1s' }, rawInput);
-    else if (clock - state.completedAt < TRICK_LESSONS.celebrate && !interrupted) message = actionMessage({ state: 'banked',
-      context: 'LESSON LEARNED', phase: 'banked', action: 'none', title: `+${state.awarded} STYLE · ×${state.multiplier.toFixed(2)}`,
-      detail: 'Style increases your final score. Follow the lift again.' }, rawInput);
     else message = physical ?? (frame.lift as CoachMessage | null) ?? null;
     if (state.active && message) message = { ...message, lessonId: state.active, canCancelLesson: true };
     return message;

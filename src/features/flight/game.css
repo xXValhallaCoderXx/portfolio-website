@@ -1,6 +1,6 @@
 /* Shared presentation for both flight modes and every pointer device. */
 .fj-scene { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
-.fjord-stage { --flight-bg: #050a13; --flight-panel: #0b1424; --flight-rule: #24405f; --flight-cyan: #29c7e3; --flight-blue: #3b9eff; --flight-muted: #9fb2c6; --flight-text: #e8f1fa; --flight-inset: 12px; --message-top: var(--coach-top, 104px); }
+.fjord-stage, .fj-launch { --flight-bg: #050a13; --flight-panel: #0b1424; --flight-rule: #24405f; --flight-cyan: #29c7e3; --flight-blue: #3b9eff; --flight-muted: #9fb2c6; --flight-text: #e8f1fa; --flight-inset: 12px; --message-top: var(--coach-top, 104px); }
 .fjord-stage [hidden] { display: none !important; }
 .fj-hud { position: absolute; top: max(var(--flight-inset), env(safe-area-inset-top)); left: max(var(--flight-inset), env(safe-area-inset-left)); right: max(var(--flight-inset), env(safe-area-inset-right)); width: min(600px, calc(100% - 2 * var(--flight-inset))); z-index: 3; color: var(--flight-text); pointer-events: none; }
 .fj-hud > dl { position: relative; display: grid; grid-template-columns: 1fr 1.2fr 1fr; align-items: center; gap: 8px; width: calc(100% - 120px); box-sizing: border-box; min-height: 56px; margin: 0; padding: 7px 12px 9px; border: 1px solid #1c2b45; border-radius: 10px; background: #050a13d6; }
@@ -49,6 +49,7 @@
 .fj-coach-control[data-advice='release'][data-held='true'] .fj-coach-gesture { color: #f5c066; }
 .fj-coach-released { color: var(--flight-muted); font-size: 10px; }
 .fj-coach [data-coach='feedback'] { color: #83efc0; font-size: 11px; }
+.fj-coach [data-coach='acknowledgement'] { color: #83efc0; font-size: 11px; }
 .fj-coach [data-coach='progress'] > span { display: block; padding: 0 12px 7px; color: var(--flight-muted); font-size: 10px; }
 .fj-coach [data-coach='progress'] i { display: block; height: 3px; background: #16233a; overflow: hidden; }
 .fj-coach [data-coach='progress'] i b { display: block; height: 100%; background: var(--flight-cyan); transform-origin: left; }
@@ -67,10 +68,11 @@
 .fjord-stage:not([data-message-owner='coach']) .fj-coach,
 .fjord-stage:not([data-message-owner='intro']) .fj-drag-tip,
 .fjord-stage:not([data-message-owner='hint']) .fj-hint,
-.fjord-stage:not([data-message-owner='notice']):not([data-message-owner='judges']) .fj-toasts,
-.fjord-stage[data-message-owner='judges'] .fj-toast,
-.fjord-stage[data-message-owner='notice'] .fj-lights,
+.fjord-stage:not([data-message-owner='notice']):not([data-secondary-owner='judges']) .fj-toasts,
+.fjord-stage[data-secondary-owner='judges'] .fj-toast,
+.fjord-stage:not([data-secondary-owner='judges']) .fj-lights,
 .fjord-stage .fj-toast:not(:last-child) { display: none; }
+.fjord-stage[data-message-owner='coach'][data-secondary-owner='judges'] .fj-toasts { top: var(--secondary-top); }
 .lost .fj-coach, .cloudbase-ended .fj-coach { display: none; }
 /* The scenery cue and mouse diagram remain passive; only the two handles take input. */
 .fj-flight-cues { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; color: #5ee6ff; }
@@ -160,6 +162,10 @@
 .fj-brief > small { color: #8aa0b8; font-size: 11px; }
 .fj-brief > b { color: var(--flight-blue); font-size: 30px; font-weight: 800; letter-spacing: .06em; }
 .fj-brief p { margin: 0; }
+.fj-launch button:disabled { opacity: .55; cursor: wait; }
+.fj-launch { overflow-y: auto; }
+.fj-launch > [role="status"] { color: #b9c8d8; }
+.fj-launch [data-overlay-focus]:focus { outline: none; }
 .fj-brief-objective { font-size: 15px; line-height: 1.6; }
 .fj-brief-controls { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .fj-brief-controls li { display: flex; align-items: center; gap: 14px; padding: 12px; border: 1px solid #1f3350; border-radius: 12px; background: #0b1424e6; }
@@ -170,7 +176,7 @@
 .fj-brief-note { color: #8aa0b8; font-size: 12px; line-height: 1.6; }
 .fj-brief-actions { display: flex; flex-direction: column; gap: 6px; }
 .fj-brief-actions > button:not(.primary) { border-color: transparent; color: var(--flight-muted); }
-.fjord-stage button:focus-visible, .fjord-stage summary:focus-visible { outline: 2px solid var(--flight-cyan); outline-offset: 3px; }
+.fjord-stage button:focus-visible, .fjord-stage summary:focus-visible, .fj-launch button:focus-visible { outline: 2px solid var(--flight-cyan); outline-offset: 3px; }
 .flight-paused .fj-labels { visibility: hidden; pointer-events: none; }
 .flight-paused .fj-labels * { pointer-events: none; }
 .lost [data-do='keys'], .lost .fj-keys, .lost [data-do='map'] { display: none !important; }

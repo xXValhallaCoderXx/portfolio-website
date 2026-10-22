@@ -370,12 +370,12 @@ test('low clearance aborts deliberate motion but leaves ordinary ridge guidance 
   assert.equal(coach.step(STEP, f)!.context, 'ridge', 'steady recovery yields to qualified guidance even while terrain clearance remains below80m');
 });
 
-test('qualified lift and hazards retain secondary praise without opening entry or background cards', () => {
+test('qualified lift and hazards retain their action while rewards stay in the combo strip', () => {
   const coach = createFlightCoach(), f = frame({ style: { bankedAt: 20, said: 20 },
     lift: { context: 'ridge', state: 'ridge', phase: 'align', action: 'right', detail: 'Follow the ridge.' } });
   f.watch.moveKind = 2;
   let message = coach.step(STEP, f);
-  assert.equal(message!.action, 'right'); assert.match(message!.feedback!, /BANKED/);
+  assert.equal(message!.action, 'right'); assert.equal(message!.feedback, undefined);
   f.entry = { side: -1, age: 1 }; message = coach.step(STEP, f);
   assert.equal(message!.context, 'ridge'); assert.equal(message!.action, 'right');
   f.lift = null; f.air = { ridge: 3, windY: 3 }; f.watch.timedAt = f.watch.moveAt = f.watch.clock;

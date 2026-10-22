@@ -17,9 +17,9 @@ import { actionMessage } from './coach-actions.ts';
 import { WATCH } from './swing-watch.ts';
 import { pitchPeak, WING } from '../flight/flight.ts';
 import { createControlSummary } from '../flight/brake-controls.ts';
+import { COACH_INTENT } from './coach-intent.ts';
 
 const DEG = Math.PI / 180;
-const names = ['', 'PITCH & CATCH', 'WINGOVER', 'LOOP'];
 export const COACH = Object.freeze({ returnBank: 40 * DEG, prepareBank: 55 * DEG,
   clearance: 80, inversionClearance: 250, neutral: 0.25, steady: 1, pitchIdle: WATCH.within,
   catchLead: 0.03, pitchCatch: 0.65, surge: 0.8 });
@@ -36,11 +36,13 @@ export function createFlightCoach() {
   let neutralFor = 0, wing = false, pitch = false, pitchShaping = false, recovering = false, inverted = false, surge = false;
   let target = 0, requested = 0, answeredTopAt = -Infinity, seenMoves = 0, seenBreaks = 0;
   let motionAfter = -Infinity, rollBelow = true;
+  let recoveryPull = false;
 
   function clearIntent() {
     wing = pitch = pitchShaping = recovering = inverted = surge = false;
     target = requested = 0;
     answeredTopAt = -Infinity;
+    recoveryPull = false;
   }
   function reset() {
     observeControls.reset();
@@ -96,25 +98,30 @@ export function createFlightCoach() {
     seenMoves = watch.moves ?? 0;
 
     function feedback() {
-      if (style && style.lostAt! > style.bankedAt! && now - style.lostAt! < 2) return 'PENDING STYLE LOST · RECOVER CALMLY';
-      if (style && now - style.bankedAt! < 2.8) return `${names[watch.moveKind!] || 'MOVE'} BANKED · +${style.said} STYLE`;
-      if (style?.elements! > 0) return `${names[style!.last!]} · ${watch.quality === 2 ? 'PRECISE' : 'CLEAN'} · +${style!.pending} pending`;
-      if (now - watch.moveAt < 3) return `${names[watch.moveKind!] || 'MOVE'} COMPLETE`;
       if (now - watch.timedAt < 0.65) return watch.quality === 2 ? 'PRECISE TIMING' : 'GOOD TIMING';
       return undefined;
     }
     function emit(fields: CoachFields) {
-      message = actionMessage({ ...fields, feedback: feedback() ?? fields.feedback }, rawInput);
+      const immediate = ['recover', 'hazard', 'descent'].includes(fields.state ?? '') ||
+        fields.state === 'timing' && ['reverse', 'catch', 'release'].includes(fields.phase ?? '');
+      message = actionMessage({ ...fields, urgency: fields.urgency ?? (immediate ? 'immediate' : 'routine'),
+        feedback: feedback() ?? fields.feedback }, rawInput);
       return message;
     }
     function recover(reason = surge ? 'Catch the forward surge, then let the wing settle.' : 'Let the wing settle before adding another turn.') {
       const fields = { state: 'recover', context: inverted ? 'inversion' : surge ? 'surge' : wing ? 'wingover' : pitch ? 'pitch' : 'recovery',
         phase: 'recovery', detail: reason, progress: clamp((watch.calm ?? 0) / COACH.steady), progressLabel: 'STEADY FLIGHT · 1s' };
-      if (g.pitch < 0) return emit({ ...fields, action: 'brake', title: input.brake ? 'HOLD BRAKE' : 'PRESS BRAKE',
+      // Recorded legacy intent retains its original catch edge. All live manual devices use
+      // independent brakes and share the same small deadband around the overhead position.
+      const acroRecovery = wing || pitch || inverted || surge || frame.forceRecovery || g.acro || (style?.elements ?? 0) > 0;
+      const band = rawInput.controlMode === 'brakes' && acroRecovery ? COACH_INTENT.recoveryPitch : 0;
+      if (!band) recoveryPull = g.pitch < 0;
+      else if (g.pitch < -band || surge && g.pitch < 0 && pitchPeak(g) < -COACH.surge) recoveryPull = true;
+      else if (g.pitch > band || (watch.calm ?? 0) >= COACH.neutral) recoveryPull = false;
+      if (recoveryPull) return emit({ ...fields, action: 'brake', title: 'PULL BOTH BRAKES',
         brakeDepth: 'working', hold: ['brake'], release: ['left', 'right', 'bar'], detail: `${reason} Check the forward swing with the working brake.` });
-      if (input.brake) return emit({ ...fields, action: 'release-brake', release: ['brake', 'left', 'right', 'bar'],
+      return emit({ ...fields, action: 'release-brake', release: ['brake', 'left', 'right', 'bar'],
         detail: `${reason} Release the brake as the wing swings back.` });
-      return emit({ ...fields, action: 'straight', release: ['left', 'right', 'bar'] });
     }
 
     // Fully separated flight has phase-specific recovery. A hands-up instruction appropriate

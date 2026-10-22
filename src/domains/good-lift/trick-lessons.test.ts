@@ -53,14 +53,14 @@ for (const kind of ['pitch', 'wingover']) for (const side of [-1, 1]) for (const
         const next = follow(message, input);
         if (JSON.stringify(next) !== JSON.stringify(input)) pending = { at: tick + Math.round(delay / dt) + 1, input: next };
       }
-      if (lessons.state.phase === 'banked') { banked = message; break; }
+      if (lessons.state.phase === 'banked') { banked = { message }; break; }
     }
     assert.ok(banked, 'following the whole lesson completes and recovers within its timeout');
     assert.equal(watch.state.moves, 1); assert.equal(watch.state.moveKind, kind === 'pitch' ? 1 : 2);
     assert.equal(style.state.landed, 1); assert.equal(style.state.lost, 0); assert.equal(style.state.pending, 0);
     assert.ok(watch.state.calm >= 1); assert.ok(style.state.total > 0);
     assert.equal(lessons.state.awarded, style.state.said); assert.deepEqual(learned, [kind]);
-    assert.match(banked.title, new RegExp(`\\+${style.state.said} STYLE`));
+    assert.notEqual(banked.message?.state, 'banked', 'the reward does not replace the next flight instruction');
     assert.ok(phases.has('deep') && phases.has('recovery'));
     assert.ok(kind === 'pitch' ? phases.has('shape') && phases.has('catch') : phases.has('prepare') && phases.has('reverse'));
     assert.ok(g.pos.y < height, 'a completed trick spends real altitude');
@@ -148,7 +148,8 @@ test('pitch queues before wingover; only a fresh matching move and its recovered
   assert.deepEqual(f.done, [], 'completion is still pending');
   f.style.landed++; f.style.elements = 0; f.style.total = 90; f.style.said = 30;
   f.style.bankedAt = f.watch.clock + dt; f.watch.calm = 1;
-  assert.match(f.step()!.title, /\+30 STYLE · ×1.09/); assert.deepEqual(f.done, ['pitch']);
+  assert.notEqual(f.step()?.state, 'banked'); assert.deepEqual(f.done, ['pitch']);
+  assert.equal(f.lessons.state.awarded, 30); assert.equal(f.lessons.state.multiplier, 1.09);
   f.step(3.1); assert.equal(f.lessons.state.active, 'wingover');
   const remembered = fixture(['wingover', 'pitch', 'pitch', 'unknown']); remembered.step(5);
   assert.equal(remembered.lessons.state.active, null); assert.deepEqual(remembered.lessons.state.learned, ['pitch', 'wingover']);

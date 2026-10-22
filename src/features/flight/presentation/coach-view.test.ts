@@ -9,6 +9,8 @@ test('device captions expose reachable normal, thermal, wingover and loop demand
   const target = (left: number, right: number) => ({ brakeTargets: { left, right, tolerance: 0.07 } });
   assert.equal(coachGesture(target(0.3, 0), 'left', 'hold', 'keyboard'), 'A / ←');
   assert.equal(coachGesture(target(0.5, 0.2), 'left', 'hold', 'keyboard'), 'A + W · circle');
+  assert.equal(coachGesture(target(0.5, 0.2), 'brake', 'hold', 'keyboard'), 'W · gentle both brakes');
+  assert.equal(coachGesture(target(0.5, 0.2), 'right', 'release', 'keyboard'), 'release D / →');
   assert.equal(coachGesture(target(0.2, 0.2), 'brake', 'hold', 'keyboard'), 'W · gentle both brakes');
   assert.equal(coachGesture(target(0.82, 0), 'left', 'hold', 'keyboard'), 'Q · swing brake');
   assert.equal(coachGesture(target(0, 1), 'right', 'hold', 'keyboard'), 'Shift + D');
@@ -57,7 +59,7 @@ class Node {
 function fixture(warning = false, canAnnounce = () => true) {
   const document = { createElement: () => new Node(document) };
   const element = new Node(document), parts: Record<string, Node> = {};
-  for (const name of ['action', 'reason', 'controls', 'feedback', 'progress', 'announce', 'cancel']) {
+  for (const name of ['action', 'reason', 'controls', 'feedback', 'acknowledgement', 'progress', 'announce', 'cancel']) {
     parts[name] = new Node(document); element.selectors.set(`[data-coach="${name}"]`, parts[name]);
   }
   if (warning) { parts.warning = new Node(document); element.selectors.set('[data-coach="warning"]', parts.warning); }
@@ -102,7 +104,7 @@ test('explicit release and hold instructions reflect brake pairs without changin
   assert.equal(f.parts.feedback.hidden, true, 'a held input is not credited as good timing');
   f.raw({ controlMode: 'brakes' as const, leftBrake: .3, rightBrake: 0 }); f.view.update(reverse);
   assert.equal(f.chip('left').children[0].textContent, 'Pulling left brake');
-  assert.equal(f.chip('right').children[0].textContent, 'right brake released');
+  assert.equal(f.chip('right').hidden, true, 'an already released opposite hand does not add another instruction');
   assert.equal(raw.rightBrake, .3); assert.deepEqual(reverse.hold, ['left']);
 });
 test('hands up presents release feedback for either hand and settles to a compact neutral message', () => {
@@ -187,7 +189,7 @@ test('thermal circle and ease cues describe both brakes without changing the res
     f.raw(raw); f.view.update(actionMessage(fields, raw));
     assert.equal(f.parts.action.textContent, title);
     assert.equal(f.chip(direction).dataset.held, 'true'); assert.equal(f.chip('brake').dataset.held, 'true');
-    assert.equal(f.chip('brake').children[0].textContent, 'Holding both brakes');
+    assert.equal(f.chip('brake').hidden, true, 'the side + W caption already describes the complete pair');
     const ease = { ...fields, phase: 'ease', action: 'straight',
       title: `EASE ${direction.toUpperCase()} · KEEP BRAKE`, hold: ['brake'], release: ['left', 'right', 'bar'] };
     f.view.update(actionMessage(ease, raw));
@@ -224,8 +226,25 @@ test('only semantic instructions are announced; numerical progress and raw held-
   assert.equal(f.parts.announce.textContent, first, 'normal changes are briefly coalesced');
   f.time(801); f.view.update({ ...reverse, state: 'building', phase: 'Building', action: 'right', title: 'HOLD RIGHT' });
   assert.match(f.parts.announce.textContent, /HOLD RIGHT/);
-  f.time(802); f.view.update({ ...reverse, state: 'recover', phase: 'Release', action: 'release-all', title: 'HANDS UP' });
+  f.time(802); f.view.update({ ...reverse, state: 'recover', urgent: true, phase: 'Release', action: 'release-all', title: 'HANDS UP' });
   assert.match(f.parts.announce.textContent, /HANDS UP/, 'urgent recovery does not wait behind chatter');
+});
+test('fixed-step acknowledgement leaves the instruction and announcements stable while raw input stays live', () => {
+  const f = fixture();
+  const intent = { ...reverse, intentId: 'wingover:left:1', acknowledged: false };
+  f.view.update(intent);
+  const first = f.parts.announce.textContent, writes = f.parts.announce.writes;
+  f.raw({ controlMode: 'brakes', leftBrake: .82, rightBrake: 0 });
+  f.view.update({ ...intent, acknowledged: true, phase: 'hold' });
+  assert.equal(f.parts.action.textContent, reverse.title);
+  assert.equal(f.parts.acknowledgement.textContent, 'Good · keep that pull');
+  assert.equal(f.parts.acknowledgement.hidden, false);
+  assert.equal(f.parts.announce.textContent, first); assert.equal(f.parts.announce.writes, writes);
+  assert.equal(f.chip('left').dataset.held, 'true');
+  f.view.update({ ...intent, acknowledged: true, warning: true });
+  assert.equal(f.parts.acknowledgement.hidden, true, 'safety is not accompanied by reassuring input feedback');
+  f.view.update(null);
+  assert.equal(f.parts.acknowledgement.textContent, '');
 });
 test('stable frames reuse DOM and reset/dispose clear advice without touching input', () => {
   const f = fixture(), raw = Object.freeze({ controlMode: 'brakes' as const, leftBrake: 0, rightBrake: .3 }); f.raw(raw); f.view.update(reverse);
@@ -281,6 +300,13 @@ test('a warning-only semantic card works without a soaring activity', () => {
   assert.equal(f.parts.feedback.textContent, 'FOG CLOSING · The fog is rising below you.');
   assert.equal(f.parts.controls.hidden, true);
   assert.equal(f.parts.progress.hidden, true);
+});
+test('navigation keeps its human heading while internal alignment phases change', () => {
+  const f = fixture();
+  f.view.update({ ...reverse, owner: 'navigation', heading: 'NEXT LIFT', phase: 'approach' });
+  assert.equal(f.parts.kicker.textContent, 'NEXT LIFT');
+  f.view.update({ ...reverse, owner: 'navigation', heading: 'NEXT LIFT', phase: 'align' });
+  assert.equal(f.parts.kicker.textContent, 'NEXT LIFT');
 });
 test('quiet transit clears recommendations without changing held brake demands', () => {
   const f = fixture(), raw = Object.freeze({ controlMode: 'brakes' as const, leftBrake: 0, rightBrake: .3 });

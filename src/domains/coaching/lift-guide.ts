@@ -347,6 +347,7 @@ export function createLiftGuide(adapter: CoachingAdapter) {
         Math.sign(g.bank!) || 1, input, fog, clock, { brake: !direct }) : null;
       const escapeControls = direct && escape !== null ? centeringControls(input, escape, false) : null;
       return { state: 'lift', context: 'search', phase: 'blocked', action: adapter.navigation ? 'release-all' : 'none',
+        owner: 'navigation', urgency: 'immediate',
         title: 'NO CLEAR LIFT ROUTE', stableTitle: true,
         ...(escape !== null ? { action: escape < 0 ? 'left' : escape > 0 ? 'right' : 'straight',
           brakeDepth: 'working', hold: escape ? [escape < 0 ? 'left' : 'right', 'brake'] : ['brake'],
@@ -395,7 +396,8 @@ export function createLiftGuide(adapter: CoachingAdapter) {
     const flowDetail = flock ? `Follow the ravens — circle ${flowDirection}. ` : '';
     const traffic = adapter.thermalFlow?.();
     const pressure = traffic?.pressure && traffic.source === locked.id && traffic.generation === locked.generation && g.pos.y >= 500;
-    return { state: 'lift', context: locked.context, ...(transfer ? { heading: 'NEXT LIFT' } : {}), phase, action,
+    return { state: 'lift', context: locked.context, owner: 'navigation', urgency: 'routine',
+      ...(transfer ? { heading: 'NEXT LIFT' } : {}), phase, action,
       ...(locked.circling ? { brakeDepth: 'working', hold: side ? [side < 0 ? 'left' : 'right', 'brake'] : ['brake'],
         release: side ? [side < 0 ? 'right' : 'left', 'bar'] : ['left', 'right', 'bar'] } : {
         release: side ? [side < 0 ? 'right' : 'left', 'brake', 'bar'] : ['left', 'right', 'brake', 'bar'],

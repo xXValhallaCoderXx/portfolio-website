@@ -11,18 +11,19 @@ export interface CoachNode<T> {
   append(...nodes: T[]): void; querySelector(selector: string): unknown;
   setAttribute(name: string, value: string): void; getAttribute(name: string): string | null;
 }
-type PresentedCoach = CoachFields & { canCancelLesson?: boolean };
+type PresentedCoach = CoachFields & { canCancelLesson?: boolean; intentId?: string; acknowledged?: boolean };
 export function coachGesture(message: PresentedCoach | null, name: 'left' | 'right' | 'brake', advice: string, device: BrakeDevice, soften = false) {
   if (device === 'mouse') return soften ? 'ease toward center' : advice === 'release' ? name === 'brake' ? 'slide up / let go' : `ease ${name}` : name === 'brake' ? 'drag down' : `drag ${name}`;
   if (device === 'touch') return soften ? 'ease both handles up' : advice === 'release' ? name === 'brake' ? 'lift both thumbs' : `lift ${name} thumb` : name === 'brake' ? 'pull both handles down' : `pull ${name} handle down`;
   if (soften) return message?.context === 'thermal' && message?.dragAction === 'ease' ? 'W · gentle both brakes' : 'release Shift · keep Space';
-  if (advice === 'release') return 'release the keys';
+  if (advice === 'release') return name === 'left' ? 'release A / ←' : name === 'right' ? 'release D / →' : 'release the keys';
   if (message?.context === 'thermal' && message?.dragAction === 'ease') return 'W · gentle both brakes';
   const targets = message?.brakeTargets;
   const thermalCircle = message?.context === 'thermal' &&
     (['circle', 'ease'].includes(message.phase ?? '') || message.hold?.includes('brake') || message.dragAction === 'ease');
   const left = targets?.left ?? 0, right = targets?.right ?? 0;
-  if (name === 'brake') return Math.min(left, right) >= 0.95 || message?.brakeDepth === 'deep' ? 'Shift + Space' : Math.max(left, right) > 0 && Math.max(left, right) <= 0.35 ? 'W · gentle both brakes' : 'Space · both brakes';
+  if (name === 'brake') return Math.min(left, right) >= 0.95 || message?.brakeDepth === 'deep' ? 'Shift + Space'
+    : thermalCircle || Math.min(left, right) > 0 && Math.min(left, right) <= 0.35 ? 'W · gentle both brakes' : 'Space · both brakes';
   const side = name === 'left' ? left : right, outside = name === 'left' ? right : left;
   const key = name === 'left' ? 'A / ←' : 'D / →';
   return side >= 0.95 ? `Shift + ${name === 'left' ? 'A' : 'D'}` : side > 0.70 ? `${name === 'left' ? 'Q' : 'E'} · swing brake`
@@ -42,6 +43,7 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
   const reason = query(element, '[data-coach="reason"]');
   const controls = query(element, '[data-coach="controls"]');
   const feedback = query(element, '[data-coach="feedback"]');
+  const acknowledgement = query(element, '[data-coach="acknowledgement"]');
   const progress = query(element, '[data-coach="progress"]');
   const progressLabel = query(progress, 'span');
   const progressFill = query(progress, 'i > b');
@@ -81,7 +83,10 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
       const deepen = requestedDepth === 'deep' && !deep;
       const soften = requestedDepth === 'working' && effective.maxBrake > 0.70;
       const advice = soften ? 'release' : hold.includes(name) ? 'hold' : release.includes(name) ? 'release' : '';
-      const show = !!message && (pressed || advice === 'hold' || (advice === 'release' && release.length === 1));
+      const sideExplainsBoth = brake && message?.context === 'thermal' &&
+        hold.some(name => name === 'left' || name === 'right') &&
+        (hold.includes('brake') || message.brakeDepth === 'working' || ['circle', 'ease'].includes(message.phase ?? ''));
+      const show = !!message && !sideExplainsBoth && (pressed || advice === 'hold' || (advice === 'release' && release.length === 1 && hold.length === 0));
       hide(chip, !show);
       shown ||= show; heldAny ||= pressed;
       if (chip.dataset.advice !== advice) chip.dataset.advice = advice;
@@ -111,6 +116,7 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
       if (visible) element.hidden = true;
       visible = false; semantic = pending = '';
       write(announce, '');
+      write(acknowledgement, ''); hide(acknowledgement, true);
       return;
     }
     if (!visible) { element.hidden = false; visible = true; }
@@ -125,8 +131,13 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
       write(warningStrip, message.warning ? `⚠ ${warningLabel || 'FLIGHT SAFETY'}${message.feedback ? ` · ${message.feedback}` : ''}` : '');
       hide(warningStrip, !message.warning);
     }
-    write(kicker, activity || (phase ? `${context} · ${phase}` : context));
+    write(kicker, activity || (message.owner !== 'navigation' && phase && phase.toLowerCase() !== context.toLowerCase() ? `${context} · ${phase}` : context));
     write(action, title); write(reason, detail); hide(reason, !detail);
+    const accepted = !!message.acknowledged && !!message.action && message.action !== 'none' &&
+      !message.action.startsWith('prepare-') && !message.warning;
+    const acceptance = message.action === 'release-all' || message.action === 'release-turns' || message.action === 'straight' && !message.hold?.length
+      ? 'Good · keep this line' : 'Good · keep that pull';
+    write(acknowledgement, accepted ? acceptance : ''); hide(acknowledgement, !accepted);
     write(feedback, secondary); hide(feedback, !secondary);
     const state = message.state || '';
     if (element.dataset.state !== state) element.dataset.state = state;
@@ -148,15 +159,14 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
       const transform = `scaleX(${value})`;
       if (fill !== transform) { progressFill.style.transform = transform; fill = transform; }
     }
-    // Raw held states can change the visual title, but only a different resolved instruction is
-    // announced. Numeric progress and strength never enter this identity.
-    const identity = `${state}|${context}|${phase}|${intent}|${message.brakeDepth || ''}|${(message.hold ?? []).join(',')}|${(message.release ?? []).join(',')}|${message.warning ? warningLabel || 'warning' : ''}`;
+    // Acceptance, progress and preparation/hold wording are not new flying instructions.
+    const identity = `${message.intentId || `${state}|${context}|${phase}|${intent}|${message.brakeDepth || ''}|${(message.hold ?? []).join(',')}|${(message.release ?? []).join(',')}`}|${message.warning ? warningLabel || 'warning' : ''}`;
     if (identity !== semantic) {
       semantic = identity;
       pending = `${context}. ${phase ? `${phase}. ` : ''}${title}${detail ? `. ${detail}` : ''}${message.warning ? `. ${[warningLabel, message.feedback || ''].filter(Boolean).join(' · ')}` : ''}`;
     }
     const clock = now();
-    const urgent = !!message.warning || state === 'recover' || state === 'hazard' || state === 'timing';
+    const urgent = !!message.warning || !!message.urgent;
     if (!canAnnounce()) write(announce, '');
     if (pending && canAnnounce() && (urgent || clock - announcedAt >= 800)) {
       write(announce, pending); pending = ''; announcedAt = clock;
@@ -167,9 +177,9 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
     if (cancel) hide(cancel, true);
     element.hidden = true; visible = false; semantic = pending = ''; announcedAt = -Infinity;
     element.dataset.state = element.dataset.action = element.dataset.warning = '';
-    for (const node of [kicker, action, reason, feedback, progressLabel, announce]) write(node, '');
+    for (const node of [kicker, action, reason, feedback, acknowledgement, progressLabel, announce]) write(node, '');
     if (warningStrip) { write(warningStrip, ''); hide(warningStrip, true); }
-    reason.hidden = feedback.hidden = progress.hidden = controls.hidden = released.hidden = true;
+    reason.hidden = feedback.hidden = acknowledgement.hidden = progress.hidden = controls.hidden = released.hidden = true;
     progressFill.style.transform = ''; fill = '';
     for (const { chip } of chips) chip.hidden = true;
   }

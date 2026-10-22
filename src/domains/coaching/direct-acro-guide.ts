@@ -1,5 +1,6 @@
 import type { CoachFrame } from './flight-coach.ts';
 import type { CoachFields } from './models.ts';
+import { COACH_INTENT } from './coach-intent.ts';
 
 export type DirectManeuver = 'pitch' | 'wingover' | 'loop';
 const working = 0.60;
@@ -8,23 +9,46 @@ const names = { pitch: 'PITCH & CATCH', wingover: 'WINGOVER', loop: 'LOOP' };
 /** Visible requests from measured motion. This observer never moves the wing or presses a key. */
 export function createDirectAcroGuide() {
   let phase = 'level', side = 1, topAt = -Infinity, frontAt = -Infinity, inverted = false;
+  let preparing = false, recoveryPull = false, lastClock = -Infinity;
+  let reversal: { side: number; depth: number; at: number; acceptedFor: number } | null = null;
   function reset(direction = 1) {
     phase = 'level'; side = Math.sign(direction) || 1;
     topAt = frontAt = -Infinity; inverted = false;
+    preparing = recoveryPull = false; lastClock = -Infinity; reversal = null;
   }
   function step(kind: DirectManeuver, frame: CoachFrame): CoachFields {
     const { g, watch, input = {} } = frame;
     const common = Math.min(input.leftBrake ?? 0, input.rightBrake ?? 0);
     const released = Math.max(input.leftBrake ?? 0, input.rightBrake ?? 0) <= 0.04;
-    const base = { state: 'lesson', context: names[kind] };
-    const request = (left: number, right: number, title: string, detail: string, shownPhase = phase): CoachFields => ({
+    const now = watch.clock, dt = Number.isFinite(lastClock) ? Math.max(0, now - lastClock) : 0;
+    lastClock = now;
+    if (reversal) {
+      const matches = (actual: number, target: number) => target === 0 ? actual <= 0.04 : Math.abs(actual - target) <= 0.07;
+      const accepted = !input.bar && !input.ears &&
+        matches(input.leftBrake ?? 0, reversal.side < 0 ? reversal.depth : 0) &&
+        matches(input.rightBrake ?? 0, reversal.side > 0 ? reversal.depth : 0);
+      reversal.acceptedFor = accepted ? reversal.acceptedFor + dt : 0;
+    }
+    const base = { state: 'lesson', context: names[kind], owner: 'lesson' as const };
+    const request = (left: number, right: number, title: string, detail: string, shownPhase = phase): CoachFields => {
+      if (reversal) {
+        const same = left === (reversal.side < 0 ? reversal.depth : 0) && right === (reversal.side > 0 ? reversal.depth : 0);
+        if (same && (now - reversal.at < COACH_INTENT.reverse || reversal.acceptedFor + 1e-9 < COACH_INTENT.acknowledge)) {
+          title = `REVERSE ${reversal.side < 0 ? 'LEFT' : 'RIGHT'} NOW`;
+          detail = 'Pull the other hand as the swing returns. Momentum carries you across.';
+          shownPhase = 'reverse';
+        } else reversal = null;
+      }
+      return {
       ...base, phase: shownPhase, title, detail, stableTitle: true,
+      urgency: ['reverse', 'catch', 'recovery'].includes(shownPhase) ? 'immediate' : 'routine',
       action: left && right ? 'brake' : left ? 'left' : right ? 'right' : 'release-all',
       hold: left && right ? ['brake'] : left ? ['left'] : right ? ['right'] : [],
       release: left && right ? ['left', 'right', 'bar', 'ears'] : left ? ['right', 'bar', 'ears'] : right ? ['left', 'bar', 'ears'] : ['left', 'right', 'brake', 'bar', 'ears'],
       brakeDepth: Math.max(left, right) > 0.7 ? 'deep' : 'working',
       brakeTargets: { left, right, tolerance: 0.07 },
-    });
+      };
+    };
     if (phase === 'level') {
       if (released && Math.abs(g.bank) < 0.175 && (watch.calm ?? 0) >= 1) {
         phase = kind === 'pitch' ? 'shape' : 'first-turn';
@@ -61,11 +85,14 @@ export function createDirectAcroGuide() {
           watch.frontAt > frontAt && g.bank * side > 1.03;
         if (firstWingSwing || returning && Math.abs(g.bank) <= (kind === 'loop' ? 0.50 : 1.20)) {
           side = -side; topAt = watch.topAt;
+          preparing = false;
+          reversal = { side, depth, at: now, acceptedFor: 0 };
           phase = kind === 'loop' ? 'orbit' : 'alternate';
           return request(side < 0 ? depth : 0, side > 0 ? depth : 0, `REVERSE ${side < 0 ? 'LEFT' : 'RIGHT'} NOW`, 'Pull the other hand as the swing returns. Momentum carries you across.', 'reverse');
         }
-        const prepare = kind === 'wingover' ? phase === 'first-turn' ? g.bank * side > 0.90 :
-          returning && Math.abs(g.bank) < 1.45 : returning && Math.abs(g.bank) < 1.15;
+        const prepare = preparing || (kind === 'wingover' ? phase === 'first-turn' ? g.bank * side > 0.90 :
+          returning && Math.abs(g.bank) < 1.45 : returning && Math.abs(g.bank) < 1.15);
+        preparing = prepare;
         return request(side < 0 ? depth : 0, side > 0 ? depth : 0,
           prepare ? `GET READY ${side < 0 ? 'RIGHT' : 'LEFT'}` : `PULL ${side < 0 ? 'LEFT' : 'RIGHT'} TO THE ${kind === 'loop' ? 'FULL' : 'SWING'} MARK`,
           prepare ? 'Keep this hand pulled while the forward swing finishes. Get ready for the opposite pull.' :
@@ -78,7 +105,9 @@ export function createDirectAcroGuide() {
       }
     }
     // A forward catch followed by hands up removes swing energy without an automatic rescue.
-    return g.pitch < 0 ? request(working, working, 'CATCH THE FORWARD SWING', 'Use both working brakes, then release as the wing comes back.', 'recovery') :
+    if (g.pitch < -COACH_INTENT.recoveryPitch) recoveryPull = true;
+    else if (g.pitch > COACH_INTENT.recoveryPitch || (watch.calm ?? 0) >= 0.25) recoveryPull = false;
+    return recoveryPull ? request(working, working, 'CATCH THE FORWARD SWING', 'Use both working brakes, then release as the wing comes back.', 'recovery') :
       request(0, 0, 'HANDS UP · RECOVER LEVEL', 'Let the wing settle for one steady second to bank style.', 'recovery');
   }
   return { reset, step };

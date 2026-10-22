@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { ROUGH_LANDINGS, SECTIONS } from '../../../domains/portfolio/content.ts';
-import { dailyNumber, dayOf } from '../../../domains/good-lift/good-lift-address.ts';
 import type { ComponentType } from 'react';
 import type { SectionId } from '../../../domains/portfolio/portfolio.types.ts';
 import type { GameAddress } from '../../good-lift/good-lift.models.ts';
 import type { readProgress } from '../../../adapters/browser/flight-progress.service.ts';
 import { useFjordFlight } from '../hooks/useFjordFlight.ts';
+import { GoodLiftLaunch } from './GoodLiftLaunch.tsx';
 import type { FlightPanel, LandingScoreData } from '../flight.models.ts';
 
 export interface FjordProps {
@@ -150,14 +150,14 @@ function FlightControlHelp({ navigation = false }: { navigation?: boolean }) {
 
 /**
  * The fjord. Idle, it is the hero's backdrop; with `flying` it fills the window and the visitor steers.
- * `armed` says the visitor has already clicked something, which browsers require before sound may play;
- * arriving straight at the flight's address shows a start button first. `lost` is the address of a
+ * `armed` keeps the ordinary fjord behind its first start action. Good Lift prepares its sky first
+ * and always asks for one explicit Fly action before sound or a run begins. `lost` is the address of a
  * missing page; it plays the emergency instead of a flight. `game` is a Good Lift address (see
  * good-lift-address.js): the game beyond the arch is played on the sky it asks for. Flying through
  * the arch asks the page for it with `onPortal`, and `onFjord` asks to leave it for the fjord.
  */
 export default function Fjord({ flying, armed, target, lost, game: address, warping, onArm, onExit, onFly, onPortal, onFjord, onProgress, sectionBodies }: FjordProps) {
-  const { stage, game, live, panel, result, music, bots, world, sky, rival, lostStage, retrySky, skipMissingPage, retryMissingPage } = useFjordFlight({ flying, armed, target, lost, game: address, warping, onArm, onExit, onFly, onPortal, onFjord, onProgress, sectionBodies });
+  const { stage, game, live, panel, result, music, bots, world, sky, preparedSky, startSky, lostStage, retrySky, skipMissingPage, retryMissingPage } = useFjordFlight({ flying, armed, target, lost, game: address, warping, onArm, onExit, onFly, onPortal, onFjord, onProgress, sectionBodies });
 
   // The meet sheet comes with the game beyond the arch, never with the page: a run's result is
   // only ever shown once the game has loaded it.
@@ -166,19 +166,6 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
     <div className={`fjord${flying ? ' flying' : ''}${live ? ' live' : ''}${flying && panel ? ' reading' : ''}`}>
       <div className="fjord-stage" ref={stage} />
       {flying && !live && !lost && <p className="fjord-note">loading the fjord…</p>}
-      {flying && live && address && sky === 'loading' && <p className="fjord-note">loading the sky…</p>}
-      {flying && live && address && sky === 'failed' && (
-        <div className="fjord-start">
-          <p className="dim">$ ./good-lift.sh</p>
-          <p>// the sky beyond the arch did not load.</p>
-          <p>
-            <button className="primary" onClick={retrySky}>
-              [ try again ]
-            </button>{' '}
-            <button onClick={() => onFjord()}>[ back to the fjord ]</button>
-          </p>
-        </div>
-      )}
       {flying && lost && (
         <MissingPage
           path={lost}
@@ -190,49 +177,9 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
           onRetry={retryMissingPage}
         />
       )}
-      {flying && live && !armed && !lost && address && (
-        <div className="fjord-start">
-          <p className="dim">
-            $ ./good-lift.sh{' '}
-            {address.kind === 'practice'
-              ? '--practice'
-              : address.kind === 'vs'
-                ? '--race'
-                : address.kind === 'sky'
-                  ? `--sky ${((address.sky ?? 0) >>> 0).toString(16).padStart(8, '0')}`
-                  : '--daily'}
-          </p>
-          <h2 className="shout">
-            <span>&gt;</span> GOOD_LIFT
-          </h2>
-          <p>
-            Climb through a line every 150 m. Three judges light each lift.
-            {address.kind === 'daily' ? ` Daily #${dailyNumber(dayOf(Date.now()))}.` : ''}
-          </p>
-          {address.bad && <p className="dim">// that sky could not be read, so here is today's.</p>}
-          {address.kind === 'vs' &&
-            (!rival ? (
-              <p className="dim">// reading the challenge…</p>
-            ) : 'error' in rival ? (
-              <p className="dim">
-                // {rival.error === 'version' ? 'that challenge was flown under older rules' : 'that challenge could not be read'}, so here is today's sky.
-              </p>
-            ) : (
-              <p>
-                // to beat: {rival.who || 'a pilot'} · {(rival.score ?? 0).toLocaleString('en-GB')} pts ·{' '}
-                {rival.peak.toLocaleString('en-GB')} m · verified
-              </p>
-            ))}
-          <FlightControlHelp />
-          <p className="fjord-start-actions">
-            <button className="primary" onClick={onArm}>
-              [ <span className="for-keys">click</span>
-              <span className="for-touch">tap</span> to start ]
-            </button>{' '}
-            <button onClick={() => onExit(null)}>[ back to the page ]</button>
-          </p>
-          <p className="dim fjord-start-note">Thermals, plates, kettlebells and tricks: the coach introduces each one in flight.</p>
-        </div>
+      {flying && !lost && address && sky !== '' && (live || sky === 'failed') && (
+        <GoodLiftLaunch sky={preparedSky} address={address} state={sky} stage={stage}
+          onFly={startSky} onRetry={retrySky} onExit={() => onExit(null)} />
       )}
       {flying && live && !armed && !lost && !address && (
         <div className="fjord-start">

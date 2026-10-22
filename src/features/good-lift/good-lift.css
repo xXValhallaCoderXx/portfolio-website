@@ -36,75 +36,57 @@
   animation: fj-lifted 0.6s ease-out both;
 }
 
-/* ---- the set of tricks in hand, over the swing gauge, stamped as it lands or is lost: only over
-   a run under way, never over its sheet, the fjord, the page or the missing page */
-
+/* A secondary, passive combo strip shares the message area's measured placement. */
 .fj-style {
   display: none;
   position: absolute;
-  right: 0;
-  bottom: 170px;
-  left: 0;
+  top: var(--secondary-top, var(--message-top));
+  left: max(var(--flight-inset), env(safe-area-inset-left));
+  z-index: 3;
+  width: min(520px, calc(100% - 2 * var(--flight-inset)));
+  box-sizing: border-box;
   margin: 0;
-  color: var(--dim);
-  font-size: 12px;
-  line-height: 1.2;
-  text-align: center;
-  text-shadow: 0 0 6px var(--bg);
+  padding: 7px 12px;
+  border: 1px solid #24405f;
+  border-radius: 9px;
+  background: #050a13e0;
+  color: #9fb2c6;
+  line-height: 1.4;
+  text-align: left;
   pointer-events: none;
 }
-
-.fj-style.landed {
-  color: var(--cyan);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  animation: fj-stamp 0.35s ease-out both;
-}
-
-.fj-style.lost {
-  color: #ff546b;
-  text-decoration: line-through;
-}
-
-@keyframes fj-stamp {
-  from {
-    opacity: 0;
-    scale: 1.35;
-  }
-}
-
+.cloudbase .fj-style { display: flex; flex-direction: column; gap: 2px; }
+.fjord-stage[data-combo-layout='hidden'] .fj-style,
+.flight-paused .fj-style { display: none; }
+.fj-style [data-combo='label'] { font-size: 12px; font-weight: 700; transform-origin: left center; }
+.fj-style [data-combo='detail'] { color: #9fb2c6; font-size: 10px; }
+.fj-style[data-phase='move'], .fj-style[data-phase='multiplier'] { border-color: #29c7e366; }
+.fj-style[data-phase='move'] [data-combo='label'],
+.fj-style[data-phase='multiplier'] [data-combo='label'] { color: #b7eef4; }
+.fj-style[data-phase='banked'] { border-color: #83efc066; }
+.fj-style[data-phase='banked'] [data-combo='label'] { color: #83efc0; }
+.fj-style[data-phase='lost'] [data-combo='label'] { font-weight: 600; }
+/* Alternating names restart once per observed event, without forced layout reads. */
+.fj-style[data-phase='move'] [data-combo='label'] { animation: fj-combo-move-a 180ms ease-out both; }
+.fj-style[data-phase='move'][data-beat='0'] [data-combo='label'] { animation-name: fj-combo-move-b; }
+.fj-style[data-phase='multiplier'] [data-combo='label'] { animation: fj-combo-multiplier-a 240ms ease-out both; }
+.fj-style[data-phase='multiplier'][data-beat='0'] [data-combo='label'] { animation-name: fj-combo-multiplier-b; }
+.fj-style[data-phase='banked'] [data-combo='label'] { animation: fj-combo-bank-a 300ms ease-out both; }
+.fj-style[data-phase='banked'][data-beat='0'] [data-combo='label'] { animation-name: fj-combo-bank-b; }
+@keyframes fj-combo-move-a { from { opacity: .65; scale: 1.03; } to { opacity: 1; scale: 1; } }
+@keyframes fj-combo-move-b { from { opacity: .65; scale: 1.03; } to { opacity: 1; scale: 1; } }
+@keyframes fj-combo-multiplier-a { from { color: #fff; text-shadow: 0 0 6px #29c7e380; } to { color: #b7eef4; text-shadow: none; } }
+@keyframes fj-combo-multiplier-b { from { color: #fff; text-shadow: 0 0 6px #29c7e380; } to { color: #b7eef4; text-shadow: none; } }
+@keyframes fj-combo-bank-a { from { opacity: .65; scale: 1.04; } to { opacity: 1; scale: 1; } }
+@keyframes fj-combo-bank-b { from { opacity: .65; scale: 1.04; } to { opacity: 1; scale: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .fj-style.landed {
-    animation: none;
-  }
+  .fj-style [data-combo='label'] { animation: none !important; }
 }
-
-.cloudbase .fj-style {
-  display: block;
+@media (max-height: 560px) and (min-width: 601px) {
+  .fj-style { width: min(310px, calc(50% - 28px)); }
 }
-
-@media (max-width: 560px) {
-  .fj-style {
-    bottom: 162px;
-  }
-}
-
-@media (pointer: coarse) {
-  .fj-style {
-    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 180px);
-  }
-}
-
-/* Held sideways, beside the gauge rather than over it, clear of the right-hand buttons. */
-@media (pointer: coarse) and (orientation: landscape) {
-  .fj-style {
-    right: auto;
-    bottom: calc(max(8px, env(safe-area-inset-bottom)) + 30px);
-    left: calc(50% + 85px);
-    max-width: calc(50% - 85px - 150px);
-    text-align: left;
-  }
+@media (max-height: 500px) {
+  .fjord-stage .fj-style { left: 88px; width: min(520px, calc(100% - 176px)); }
 }
 
 /* ---- feeling for the core: a surge flares the vario, and a rep to depth stamps the bar */
@@ -1342,8 +1324,6 @@
 
 /* ---- the briefing a device's first runs open with: drag controls over the gate.
    The card scrolls inside itself on a short screen. */
-
-.cloudbase .fj-style { display: none; }
 
 /* The opening instruction now occupies the shared message area. */
 .cloudbase .fj-title { display: none; }

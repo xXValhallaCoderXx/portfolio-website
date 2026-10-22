@@ -22,7 +22,9 @@ import { FJORD_THERMALS, sampleFjordAir, fjordWindAt } from '../../../domains/fl
 import { createFlightView } from '../presentation/flight-view.ts';
 import { createFlightCues } from '../presentation/flight-cues.ts';
 import { createFlightOverlay } from '../presentation/flight-overlay.ts';
+import { createSkyPreparation } from './sky-preparation.ts';
 import { createFlightCoach } from '../../../domains/coaching/flight-coach.ts';
+import { createCoachIntent } from '../../../domains/coaching/coach-intent.ts';
 import { createLiftGuide } from '../../../domains/coaching/lift-guide.ts';
 import { createCoachView } from '../presentation/coach-view.ts';
 import { createBrakeDrag } from '../../../domains/flight/brake-drag.ts';
@@ -76,7 +78,7 @@ const DAILY = Object.freeze({ kind: 'daily', sky: null, vs: null, bad: null });
  * hooks.onLost(stage)                 a beat of the missing-page emergency (see lost.js)
  * hooks.onResult(result | null)       a run of Good Lift ended, or its result was put away
  * hooks.onPortal()                    the glider flew through the arch: the page warps into Good
- *                                     Lift and calls play()
+ *                                     Lift and prepares its one ready screen
  * hooks.onFjord()                     the visitor asked to leave Good Lift for the fjord: the page
  *                                     changes the address and calls fly()
  * hooks.onMusic(on)                   Good Lift's music was switched on or off, from anywhere
@@ -126,6 +128,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   let run: ReturnType<typeof createGoodLift> | null = null;
   function requireRun() { if (!run) throw new Error('No Good Lift run is loaded'); return run; }
   let runLoading: Promise<ReturnType<typeof createGoodLift> | null> | null = null;
+  let runModuleFailed = false;
   let portal = false;
   // The Good Lift address being played (good-lift-address.js), and the sky it came to: what R
   // flies again, though practice draws a new one every requireRun().
@@ -214,7 +217,6 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   let disposed = false;
   let revealShown = false;
   let cloudResult: RunResult | null = null;
-  let cloudRequest = 0;
   let mapOpen = false;
   let keysOpen = false;
   let resetConfirmOpen = false;
@@ -257,6 +259,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     const kind = briefing ? 'briefing' : keysOpen ? 'menu' : mapOpen ? 'map' : '';
     stage.classList.toggle('flight-paused', !!kind);
     if (kind) {
+      run?.clearComboFeedback();
       stage.dataset.overlay = kind;
       overlayFocus.activate(briefing ? $('.fj-brief') : keysOpen ? $('.fj-keys') : resetConfirmOpen ? $('.fj-reset-confirm') : $('.fj-map'));
     } else {
@@ -336,7 +339,6 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     if (!briefing) return;
     briefing = false;
     clearInput();
-    run?.endBrief();
     syncFlightOverlay(false);
   }
 
@@ -369,37 +371,62 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   // Loads and makes the game beyond the arch, once.
   function loadRun() {
     runLoading ??= import('../../good-lift/services/good-lift-session.service.ts').then(({ createGoodLift }) => {
+      runModuleFailed = false;
       if (disposed) return null;
       run ??= createGoodLift(host);
       return run;
+    }, error => {
+      // Browsers retain a failed ES-module load for this document; retry requires a fresh page.
+      runModuleFailed = true;
+      throw error;
     });
     return runLoading;
   }
 
-  // Starts a run of Good Lift on the sky `game` asks for, settled at the gate. The first time, the
-  // game beyond the arch is fetched first, with the flight held still; if it cannot be had, the
-  // flight stays over the fjord and what comes back fails.
-  async function beginCloudbase(): Promise<boolean> {
-    if (mode === 'intro' || mode === 'lost' || !game) return false;
-    const request = ++cloudRequest;
-    const address = game;
-    if (!run) {
-      portal = true;
-      clearInput();
-      return loadRun().then(
-        () => (request !== cloudRequest || disposed || game !== address || mode === 'intro' || mode === 'lost' ? false : beginCloudbase()),
-        (error) => {
-          portal = false;
-          runLoading = null;
-          console.warn('Good Lift did not load; staying over the fjord.', error);
-          throw error;
-        },
-      );
+  const skyPreparation = createSkyPreparation(async (address, isCurrent) => {
+    try {
+      await loadRun();
+      if (!isCurrent() || disposed) return null;
+      return sameGame(address, game) && gameSky && gameSky.kind !== 'practice'
+        ? gameSky : await requireRun().resolveSky(address);
+    } catch (error) {
+      if (!run) runLoading = null;
+      throw error;
     }
+  });
+
+  // Preparation loads and verifies the sky without beginning a world, creating sound, awarding
+  // achievements or writing progress. React owns the one ready dialog, including portal entry.
+  function prepareSky(address: GameAddress) {
+    if (disposed) return Promise.resolve(null);
+    if (mode === 'cloudbase' && sameGame(address, game)) return Promise.resolve(null);
     portal = true;
-    const nextSky = !gameSky || gameSky.kind === 'practice' ? await requireRun().resolveSky(address) : gameSky;
-    if (request !== cloudRequest || disposed || game !== address || mode === 'intro' || mode === 'lost') return false;
-    gameSky = nextSky;
+    clearInput();
+    closeMap();
+    showKeys(false);
+    clearCloudResult();
+    return skyPreparation.prepare(address);
+  }
+
+  function cancelPreparedSky() {
+    skyPreparation.cancel();
+    run?.cancelReplays();
+    portal = false;
+    clearInput();
+  }
+
+  // This operation stays synchronous: Fly's trusted gesture unlocks sound before the run's music
+  // joins it. A consumed request cannot be started twice or revived by a late async response.
+  function startPreparedSky(activationKey?: string, expected?: ResolvedSky): boolean {
+    if (disposed) return false;
+    const prepared = skyPreparation.consume(expected);
+    if (!prepared) return false;
+    startAudio();
+    if (mode === 'cloudbase') finishCloudbase('quit', false);
+    if (mode === 'lost') idle();
+    if (mode === 'intro') takeControl();
+    game = prepared.address;
+    gameSky = prepared.sky;
     clearTimeout(fadeTimer);
     $('.fj-fade').classList.remove('on');
     closeMap();
@@ -422,8 +449,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     requireRun().begin(flownSky.seed, flownSky);
     vario.reset(g.vy);
     resetCoach();
-    // A device's first runs wait at the gate for the explicit Fly action.
-    briefing = requireRun().briefing;
+    briefing = false;
     portal = false;
     mode = 'cloudbase';
     stage.classList.add('cloudbase');
@@ -433,11 +459,12 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     startAudio();
     snapCamera();
     syncFlightOverlay(false);
-    return Promise.resolve(true);
+    swallowed = activationKey ?? null;
+    return true;
   }
 
   // Through the arch, or [ Good Lift ] from the menu or the map: the flight holds still and takes no
-  // keys while the page warps into Good Lift, which then calls play(). With no page to ask, the
+  // keys while the page warps into Good Lift and prepares its ready screen. With no page to ask, the
   // day's sky starts here.
   function enterPortal() {
     if (portal) return;
@@ -468,15 +495,11 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
    * the game beyond the arch could not be loaded.
    */
   function playGame(address: GameAddress) {
-    if (mode === 'lost') idle();
     if (mode === 'cloudbase' && sameGame(address, game)) return Promise.resolve(true);
-    if (mode === 'intro') {
-      takeControl();
-      launchFrom(GATEWAY.x, 80, GATEWAY.z, Math.PI / 2);
-    }
-    if (!sameGame(address, game)) gameSky = null;
-    game = address;
-    return beginCloudbase();
+    // Legacy programmatic/debug callers and Retry are explicit actions too. Unlock now, before
+    // an asynchronous practice seed or challenge verification, then start without another dialog.
+    startAudio();
+    return prepareSky(address).then(sky => sky ? startPreparedSky(undefined, sky) : false);
   }
 
   // R, and [ again ]: the same sky once more (a new one in practice). Outside the game, the way in
@@ -484,11 +507,12 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   function retryCloudbase() {
     if (mode === 'cloudbase') finishCloudbase('quit', false);
     if (!game) return enterPortal();
-    return beginCloudbase();
+    return playGame(game);
   }
 
   // Out of Good Lift and back over the fjord, from the launch: the game's music stops with it.
   function backToFjord() {
+    cancelPreparedSky();
     finishCloudbase('quit', false);
     run?.leave();
     game = gameSky = flownSky = null;
@@ -1071,11 +1095,13 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   });
   const coachView = createCoachView({ element: $('.fj-coach'), input: () => input, device: () => brakeInput.state.device,
     canAnnounce: () => stage.dataset.messageOwner === 'coach' && !overlayOpen() && !briefing });
-  let coachMessage: ReturnType<typeof resolveCoachMessage> | null = null;
+  const coachIntent = createCoachIntent();
+  let coachMessage: ReturnType<typeof coachIntent.resolve> = null;
   function resetCoach() {
     thermalAir.reset();
     flightCoach.reset(); liftGuide.reset(); windNotice.reset(); plateNotice.reset();
     run?.resetLessons();
+    coachIntent.reset();
     coachMessage = null;
     coachView.reset();
     flightCues.reset();
@@ -1108,7 +1134,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     const wind = windNotice.step(world?.sky.state.weather ?? null, clock, available);
     const plates = plateNotice.step(world ? requireRun().meet.state.trails : 0, clock, available && !wind && !primary?.transfer);
     const notice = wind ?? plates;
-    coachMessage = resolveCoachMessage(primary, { warning, notice }, coachInput);
+    coachMessage = coachIntent.resolve(resolveCoachMessage(primary, { warning, notice }, coachInput), coachInput, clock);
   }
   function updateCoach() {
     const eligible = isAirborne() && !overlayOpen() && !auto && !controls.steered && !briefing;
@@ -1125,7 +1151,8 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   const hudView = createFlightHud({ stage, g, input, air, vario, thermalAir, progress, zoneLabels, autoHaste: HASTE,
     get mode() { return mode; }, get auto() { return auto; }, get mapOpen() { return mapOpen; }, get keysOpen() { return keysOpen; },
     get briefing() { return briefing; }, get hasDragged() { return hasDragged; }, get portal() { return portal; }, get held() { return held; }, get coachMessage() { return coachMessage; },
-    isAirborne, compact: () => host.compact(), runHud: quiet => requireRun().hud(quiet), runReadouts: () => run?.readouts ?? null, nearestZone, hintText, drawMap });
+    isAirborne, compact: () => host.compact(), runHud: quiet => requireRun().hud(quiet), runReadouts: () => run?.readouts ?? null,
+    clearComboFeedback: () => run?.clearComboFeedback(), nearestZone, hintText, drawMap });
   const updateHud = () => hudView.update();
 
 
@@ -1369,6 +1396,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
 
   /** Takes control back: the glider returns to circling as a backdrop. */
   function idle() {
+    cancelPreparedSky();
     if (mode === 'intro') return;
     finishCloudbase('quit', false);
     clearTimeout(fadeTimer);
@@ -1492,7 +1520,10 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     else if (button?.dataset.briefAction === 'exit') exitFlight();
   });
   // Out of sight, Good Lift's music waits for the page to come back.
-  on(document, 'visibilitychange', () => { run?.hideMusic(document.hidden); if (document.hidden) clearInput(); });
+  on(document, 'visibilitychange', () => {
+    run?.hideMusic(document.hidden);
+    if (document.hidden) { clearInput(); run?.clearComboFeedback(); }
+  });
 
   const actions = {
     map: () => (mapOpen ? closeMap() : openMap()),
@@ -1672,10 +1703,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     updateCoach();
     hudView.presentMessages();
     updateCamera(paused ? 0 : elapsed);
-    const instruments = (stage.querySelector<HTMLElement>('.fj-telemetry') ?? $('.fj-hud > dl')).getBoundingClientRect();
-    const messageTop = `${instruments.bottom - stage.getBoundingClientRect().top + 12}px`;
-    stage.style.setProperty('--coach-top', messageTop);
-    stage.style.setProperty('--message-top', messageTop);
+    hudView.layoutMessages();
     flightCues.update({ pose: renderedFlight, dt: elapsed, message: coachMessage, input,
       facts: { blocked: !isAirborne() || mapOpen || keysOpen || held || portal || briefing || document.hidden ||
           !!auto || controls.steered || controls.locked || controls.climb != null,
@@ -1820,6 +1848,10 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   return {
     fly,
     play: playGame,
+    prepareSky,
+    startPreparedSky,
+    cancelPreparedSky,
+    get skyNeedsReload() { return runModuleFailed; },
     /** The initials Good Lift's board writes this browser's runs under. */
     setInitials: (text: string) => run?.setInitials(text),
     /** Good Lift's music switched over, from the meet sheet: whether it is now on. */
@@ -1861,6 +1893,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     /** The page tells the game whether its stage is on screen, so an unseen backdrop costs nothing. */
     setVisible: (seen: boolean) => (visible = seen),
     dispose() {
+      cancelPreparedSky();
       finishCloudbase('quit', false);
       disposed = true;
       clearTimeout(fadeTimer);
