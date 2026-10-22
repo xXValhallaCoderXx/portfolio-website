@@ -244,16 +244,16 @@ function board(entries: Array<[WorldRow, string]>, doc: BoardDocument | null = n
   return { doc, result, rows: readDay(doc).rows };
 }
 
-test('the board ranks by the score, the total lifted by the style, as the page does: lighter but with style can outrank heavier', () => {
-  // 100 kg with 260 style is 126 points, over 120 kg of none; 100 kg with 200 style ties 120 kg, and
-  // the higher peak goes first.
+test('the board adds uncapped banked acro to lifted points, with the same exact ties as the page', () => {
+  // 100 kg plus 25 acro beats 120 kg; 100 kg plus 20 acro ties it, and the higher peak goes first.
   const { rows } = board([
     [row(1, 120, 500), device(1)],
-    [row(2, 100, 500, NOW + 2, 260), device(2)],
-    [row(3, 100, 600, NOW + 3, 200), device(3)],
+    [row(2, 100, 500, NOW + 2, 25), device(2)],
+    [row(3, 100, 600, NOW + 3, 20), device(3)],
+    [row(4, 0, 700, NOW + 4, 1500), device(4)],
   ]);
-  assert.deepEqual(rows.map((each) => each.id), [2, 3, 1].map((n) => hex(n, WORLD_BOARD.id)));
-  assert.deepEqual(rows.map((each) => each.style), [260, 200, 0]);
+  assert.deepEqual(rows.map((each) => each.id), [4, 2, 3, 1].map((n) => hex(n, WORLD_BOARD.id)));
+  assert.deepEqual(rows.map((each) => each.style), [1500, 25, 20, 0]);
 });
 
 test('the board ranks by total, then by peak, then by which run came first', () => {

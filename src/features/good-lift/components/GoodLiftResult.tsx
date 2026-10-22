@@ -2,8 +2,8 @@ import type { GameKind } from '../../../domains/good-lift/good-lift-address.ts';
 import { verdict, buildResultView, worldBoardView } from '../services/result-view.service.ts';
 import type { BoardRow as BoardRowData, RunResult, BotResult, WorldResult, KitChoice } from '../good-lift.models.ts';
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
-import { FEATS, JUDGES, barogram, kilos, metres, points, shareText, trickSaid, worldSaid } from '../../../domains/good-lift/meet-card.ts';
-import { multiplierOf, scoreOf } from '../../../domains/good-lift/score.ts';
+import { FEATS, JUDGES, barogram, bestComboSaid, kilos, metres, points, shareText, trickSaid, worldSaid } from '../../../domains/good-lift/meet-card.ts';
+import { scoreOf } from '../../../domains/good-lift/score.ts';
 import { bynameOf } from '../../../domains/good-lift/meet-bynames.ts';
 import { isBlocked, runesOf } from '../../../domains/good-lift/meet-initials.ts';
 import GoodLiftKit,{ KitNews } from './GoodLiftKit.tsx';
@@ -516,7 +516,7 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
               )}
 
               <Medals bots={landed} />
-              {result.stats.style > 0 && <p className="good-lift-style">× {multiplierOf(result.stats.style).toFixed(2)} style</p>}
+              {result.stats.style > 0 && <p className="good-lift-style">{kilos(result.total)} flight + {result.stats.style.toLocaleString('en-GB')} acro points</p>}
               {(result.stats.stalls > 0 || result.stats.cloud > 0 || result.stats.thrown > 0 || result.stats.reps > 0) && (
                 <p className="good-lift-cost">
                   {[
@@ -529,6 +529,7 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
               )}
               <SkyLine result={result} />
               {trickSaid(result.stats) && <p className="dim good-lift-tricks">{trickSaid(result.stats)}</p>}
+              {bestComboSaid(result.stats.bestCombo) && <p className="good-lift-tricks">{bestComboSaid(result.stats.bestCombo)}</p>}
               {rival && <p className="good-lift-verdict">vs {rival.who || 'a pilot'} · {points(rival)} pts · {metres(rival.peak)} m — {verdict(result, rival)}</p>}
               {fresh.size > 0 && <p className="good-lift-fresh">new feat{fresh.size === 1 ? '' : 's'}: {FEATS.filter((feat) => fresh.has(feat.id)).map((feat) => feat.name).join(' · ')}</p>}
               <KitNews sheet={result.kit} />

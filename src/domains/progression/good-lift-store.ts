@@ -1,5 +1,6 @@
 import type { KitReward } from './models.ts';
 export interface GoodLiftStore {
+  scoreVersion: number;
   best: { total: number; peak: number; score: number }; tonnage: number; runs: number;
   feats: string[]; learnedLessons: string[]; daily: {last: number; streak: number};
   initials: string; optIn: boolean; board: ReturnType<typeof emptyBoard>; bots: ReturnType<typeof normalizeBots>;
@@ -149,7 +150,7 @@ export function kitSheet(store: KitProgress, worn: unknown, fresh: string[] = []
  * null: one day's, as a later day's takes its place.
  */
 export function emptyStore(): GoodLiftStore {
-  return { best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], learnedLessons: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: emptyBoard(), bots: null };
+  return { scoreVersion: SIM_VERSION, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], learnedLessons: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: emptyBoard(), bots: null };
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -179,7 +180,7 @@ export function normalizeStore(raw: unknown): GoodLiftStore {
     const best = raw.best as Partial<GoodLiftStore['best']> | null | undefined;
     if (isAmount(best?.total)) store.best.total = best.total;
     if (isAmount(best?.peak)) store.best.peak = best.peak;
-    if (isAmount(best?.score)) store.best.score = best.score;
+    if (raw.scoreVersion === SIM_VERSION && isAmount(best?.score)) store.best.score = best.score;
     if (isAmount(raw.tonnage)) store.tonnage = raw.tonnage;
     if (isCount(raw.runs)) store.runs = raw.runs;
     if (Array.isArray(raw.feats)) store.feats = [...new Set(raw.feats.filter((id): id is string => typeof id === 'string' && FEAT_IDS.includes(id)))];
@@ -263,6 +264,7 @@ export function recordRun(store: GoodLiftStore, run: RecordedRun, { version = SI
   const peak = isAmount(run.peak) ? run.peak : 0;
   const style = styleOf(run.style);
   const today = dayOf(now);
+  if (store.scoreVersion !== version) { store.best.score = 0; store.scoreVersion = version; }
   store.best.total = Math.max(store.best.total, total);
   store.best.peak = Math.max(store.best.peak, peak);
   store.best.score = Math.max(store.best.score, scoreOf({ total, style }));

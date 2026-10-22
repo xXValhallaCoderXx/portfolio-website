@@ -6,7 +6,7 @@ import { DAILY_EPOCH, DAY_MS, dailyNumber, dayOf, gameHref, readGameAddress, sam
 const at = (pathname: string, search = '', hash = '') => readGameAddress({ pathname, search, hash });
 
 test('only the game\'s own addresses are the game\'s, and any other under /good-lift/ is missing', () => {
-  for (const path of ['/good-lift', '/good-lift/', '/good-lift/daily', '/good-lift/daily/']) assert.ok(at(path), path);
+  for (const path of ['/good-lift', '/good-lift/', '/good-lift/daily', '/good-lift/daily/', '/good-lift/training', '/good-lift/training/']) assert.ok(at(path), path);
   for (const path of ['/', '/fly', '/good-lift/x', '/good-lift/daily/x', '/good-liftx', '/goodlift', '/projects/good-lift', '']) {
     assert.equal(at(path), null, path);
   }
@@ -46,6 +46,7 @@ test('a written address reads back as the same sky', () => {
     { kind: 'practice', sky: null, vs: null, bad: null },
     { kind: 'sky', sky: 0x0000beef, vs: null, bad: null },
     { kind: 'vs', sky: null, vs: 'AQGv-_x9', bad: null },
+    { kind: 'training', sky: null, vs: null, bad: null },
   ] as GameAddress[]) {
     const url = new URL(gameHref(address), 'https://example.test');
     const read = readGameAddress(url);
@@ -57,6 +58,12 @@ test('a written address reads back as the same sky', () => {
   assert.ok(!sameGame(at('/good-lift', '?sky=1'), at('/good-lift', '?sky=2')), 'another named sky is another game');
   assert.ok(!sameGame(at('/good-lift/daily', '', '#vs=AQ'), at('/good-lift/daily', '', '#vs=AR')), 'and another challenge');
   assert.ok(!sameGame(null, at('/good-lift')));
+});
+
+test('Training is a separate destination and ignores ranked seed and challenge modifiers', () => {
+  assert.deepEqual(at('/good-lift/training', '?sky=bad', '#vs=AQ'), { kind: 'training', sky: null, vs: null, bad: null });
+  assert.equal(gameHref({ kind: 'training', sky: 12, vs: 'AQ' }), '/good-lift/training');
+  assert.equal(at('/good-lift/training/x'), null);
 });
 
 test('the address reader imports nothing, so it can sit in the page\'s own bundle', async () => {

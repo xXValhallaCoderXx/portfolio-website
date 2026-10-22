@@ -38,6 +38,19 @@ export const WATCH = Object.freeze({
   wing: 0.873, early: 0.2, late: 0.2, pump: 0.3, pumped: 0.35, straight: 1, perfect: 0.08, intent: 12, maxTop: Math.PI * 0.55, ears: 0.01,
 });
 
+// A spiral is a deliberate steep, upright circle of the pilot's actual air-relative course.
+// The gap between entering and leaving keeps a noisy bank threshold from starting new moves.
+export const SPIRAL = Object.freeze({
+  enter: 50 * Math.PI / 180, exit: 45 * Math.PI / 180, maximum: 85 * Math.PI / 180,
+  arm: 0.5, rearm: 0.5, brake: 0.75, speed: 4, rateMin: 0.25, rateMax: 3, arc: Math.PI * 2,
+});
+
+type WatchedFlight = Pick<FlightState, 'bank' | 'rollRate' | 'pitch' | 'pitchRate' | 'turn' | 'loop' | 'loops' | 'tuck' | 'stall' | 'ears'> &
+  Partial<Pick<FlightState, 'track' | 'pilot' | 'canopy' | 'physical' | 'windX' | 'windZ' | 'wingPhase'>>;
+
+export type SwingBreak = 1 | 3 | 4 | 5 | 6;
+const breakPriority = (reason: number) => reason === 6 ? 5 : reason === 1 ? 4 : reason === 3 ? 3 : reason === 4 ? 2 : reason === 5 ? 1 : 0;
+
 const DEG = Math.PI / 180;
 // The band a peak reaches (0 for none, 1 to 4), in BANDS' degrees.
 export function bandOf(bands: readonly number[], angle: number) {
@@ -85,6 +98,7 @@ export function createSwingWatch() {
     catches: 0, caughtPeak: 0, caughtAt: -Infinity, brakeAt: -Infinity, pumping: 0, tops: 0, top: 0, topSide: 0, topAt: -Infinity, chain: 0, breaks: 0, broke: 0, calm: 0,
     timed: 0, timedKind: 0, timedAt: -Infinity, swappedAt: -Infinity, wingTop: 0, linking: 0,
     looping: 0, loops: 0, loopAt: -Infinity,
+    spiraling: 0, spiralArc: 0, spiralSide: 0, spirals: 0, spiralAt: -Infinity,
     rollAcceleration: 0, moves: 0, moveKind: 0, moveBand: 0, moveSize: 0, moveAt: -Infinity, quality: 1,
   };
   // The swing as it was last step, to find its turns, whether a surge is heading for the fold, and
@@ -113,6 +127,46 @@ export function createSwingWatch() {
   let drivenAt = -Infinity;
   let brakeChanges = 0;
   let rollQuality = 1;
+  let spiralTrack: number | null = null;
+  let spiralFor = 0;
+  let spiralExitFor = 0;
+  let spiralCredited = false;
+  let brokeAt = -Infinity;
+  let wingAfterSpiral = 0;
+
+  function clearSpiral() {
+    state.spiraling = state.spiralArc = state.spiralSide = spiralFor = 0;
+  }
+
+  // May also be called after hazards resolve, before style consumes this step. It never advances
+  // time or observes a second motion sample. A completed move on this step stays consumed, while
+  // the break takes precedence over its score and over banking an older combo.
+  function interrupt(reason: SwingBreak) {
+    if (!broken) {
+      state.breaks += 1;
+      state.broke = reason;
+      brokeAt = state.clock;
+    } else if (brokeAt === state.clock && breakPriority(reason) > breakPriority(state.broke)) {
+      state.broke = reason;
+    }
+    broken = true;
+    state.building = state.chain = 0;
+    previousTop = pitchTimed = brakeChanges = 0;
+    state.top = state.topSide = state.wingTop = 0;
+    state.topAt = state.frontAt = state.backAt = state.swappedAt = state.timedAt = -Infinity;
+    rollTimedAt = drivenAt = -Infinity;
+    completedTop = state.tops;
+    way = swappedTo = straightFor = 0;
+    topAnswered = true;
+    wingAfterSpiral = 0;
+    surging = false;
+    state.calm = state.pumping = state.linking = state.looping = 0;
+    clearSpiral();
+    spiralTrack = null;
+    spiralExitFor = 0;
+    // A new physical exit is required after damage, just as after a credited spiral.
+    spiralCredited = true;
+  }
 
   function reset() {
     observeControls.reset();
@@ -132,6 +186,14 @@ export function createSwingWatch() {
     previousTopAt = rollTimedAt = drivenAt = -Infinity;
     brakeChanges = 0;
     rollQuality = 1;
+    state.spirals = 0;
+    state.spiralAt = -Infinity;
+    clearSpiral();
+    spiralTrack = null;
+    spiralExitFor = 0;
+    spiralCredited = false;
+    brokeAt = -Infinity;
+    wingAfterSpiral = 0;
   }
 
   function onTime(kind: number, now: number, offset: number = WATCH.late) {
@@ -146,7 +208,7 @@ export function createSwingWatch() {
   // Completion is observed motion, never a correctly pressed key by itself. One event is emitted
   // for each complete alternating cycle, so linking it cannot retroactively score its first top.
   function complete(kind: number, band: number, size: number, now: number) {
-    if (band === 0 && kind !== 3) return;
+    if (band === 0 && kind !== 3 && kind !== 4) return;
     state.moves += 1;
     state.moveKind = kind;
     state.moveBand = band;
@@ -159,13 +221,14 @@ export function createSwingWatch() {
    * or a kettlebell has the wing folded (a run's own; over the fjord, never), and `controls` are
    * what the pilot asked of it this step (flight.js's), for the hands on time; left out, none are.
    */
-  function step(dt: number, g: Pick<FlightState, 'bank' | 'rollRate' | 'pitch' | 'pitchRate' | 'turn' | 'loop' | 'loops' | 'tuck' | 'stall' | 'ears'>, struck = false, controls: FlightInput | null = null) {
+  function step(dt: number, g: WatchedFlight, struck = false, controls: FlightInput | null = null) {
     // Only effective bilateral pulls count as pitch presses. Hysteresis keeps small analog
     // movements around a threshold from manufacturing extra timing edges.
     const summarized = observeControls.step(controls ?? {});
     const effective = (controls?.controlMode === 'brakes' ? summarized : controls) as FlightInput & Partial<import('../flight/models.ts').ControlSummary>;
     state.clock += dt;
     const now = state.clock;
+    const movesBefore = state.moves;
     const measuredRate = g.rollRate ?? 0;
     state.rollAcceleration = ((measuredRate - measuredRollWas) / dt) * 0.15 + state.rollAcceleration * 0.85;
     if (controls && !controls.steered) {
@@ -196,18 +259,7 @@ export function createSwingWatch() {
     }
     // Anything that takes the wing out of the pilot's hands breaks off the trick in hand.
     const breaking = controls?.steered ? 6 : g.tuck > 0 ? 1 : g.stall > 0 ? 3 : struck ? 4 : g.ears > WATCH.ears ? 5 : 0;
-    if (breaking && !broken) {
-      state.breaks += 1;
-      state.broke = breaking;
-      state.building = state.chain = 0;
-      previousTop = pitchTimed = brakeChanges = 0;
-      state.top = state.topSide = state.wingTop = 0;
-      state.topAt = state.frontAt = state.backAt = state.swappedAt = state.timedAt = -Infinity;
-      rollTimedAt = drivenAt = -Infinity;
-      completedTop = state.tops;
-      way = swappedTo = straightFor = 0;
-      topAnswered = true;
-    }
+    if (breaking) interrupt(breaking);
     broken = breaking !== 0;
     if (broken) {
       surging = false;
@@ -268,6 +320,8 @@ export function createSwingWatch() {
       loopsSeen = g.loops;
     }
     if (state.looping) {
+      clearSpiral();
+      spiralTrack = null;
       rolling = 0;
       bankWas = g.bank;
       state.calm = 0;
@@ -280,7 +334,10 @@ export function createSwingWatch() {
       // A wingover's top: a steep one, or one the turn was reversed into. Only these link, each on
       // the other side from the last and not long after it; the overshoot of a turn rolled into from
       // straight flight is no wingover, and nothing links to it.
-      const wing = Math.abs(g.bank) >= WATCH.wing || now - state.swappedAt <= WATCH.gap ? 1 : 0;
+      const freshWing = wingAfterSpiral === 0 || side === -wingAfterSpiral;
+      if (freshWing) wingAfterSpiral = 0;
+      else completedTop = state.tops + 1;
+      const wing = freshWing && (Math.abs(g.bank) >= WATCH.wing || now - state.swappedAt <= WATCH.gap) ? 1 : 0;
       previousTop = state.top;
       previousTopAt = state.topAt;
       state.chain = wing === 1 && state.chain > 0 && side === -state.topSide && now - state.topAt <= WATCH.gap ? state.chain + 1 : wing;
@@ -294,7 +351,7 @@ export function createSwingWatch() {
       if (!topAnswered && swappedTo === -side && now - state.swappedAt <= WATCH.early) onTime(3, now, state.swappedAt - now);
     }
     const drivenCycle = state.swappedAt >= previousTopAt - WATCH.early && swappedTo === state.topSide;
-    if (!broken && !controls?.steered && state.chain >= 2 && state.tops - completedTop >= 2 &&
+    if (state.moves === movesBefore && !broken && !controls?.steered && state.chain >= 2 && state.tops - completedTop >= 2 &&
         previousTop >= WATCH.wing && state.top >= WATCH.wing && (drivenCycle || rollTimedAt >= previousTopAt - WATCH.early)) {
       // Completed motion earns CLEAN; a reversal near the actual top separately earns precision.
       state.quality = rollTimedAt >= state.topAt - WATCH.early ? rollQuality : 1;
@@ -309,10 +366,52 @@ export function createSwingWatch() {
     const recent = state.wingTop === 1 && now - state.topAt <= WATCH.gap;
     state.linking = recent && swappedTo === -state.topSide && state.swappedAt >= state.topAt - WATCH.early ? 1 : 0;
 
+    const bank = Math.abs(g.bank);
+    spiralExitFor = bank < SPIRAL.exit ? spiralExitFor + dt : 0;
+    if (spiralExitFor >= SPIRAL.rearm) {
+      spiralCredited = false;
+      clearSpiral();
+    }
+    const track = g.track;
+    const delta = track != null && spiralTrack != null ? Math.atan2(Math.sin(track - spiralTrack), Math.cos(track - spiralTrack)) : 0;
+    spiralTrack = track != null && Number.isFinite(track) ? track : null;
+    const speed = g.pilot ? Math.hypot(g.pilot.vel.x - (g.windX ?? 0), g.pilot.vel.z - (g.windZ ?? 0)) : 0;
+    const side = Math.sign(g.bank);
+    const courseRate = delta * side / dt;
+    const deep = controls?.controlMode === 'brakes' ? summarized.maxBrake >= SPIRAL.brake : !!controls?.deepBrake;
+    const upright = g.pilot && g.canopy && g.pilot.pos.y < g.canopy.pos.y && !g.physical?.inverted;
+    const valid = upright && g.wingPhase === 'flying' && Number.isFinite(speed) && speed >= SPIRAL.speed &&
+      Number.isFinite(courseRate) && courseRate >= SPIRAL.rateMin && courseRate <= SPIRAL.rateMax &&
+      bank >= SPIRAL.exit && bank < SPIRAL.maximum && state.moves === movesBefore;
+    if (!valid || !deep || (state.spiralSide !== 0 && side !== state.spiralSide)) clearSpiral();
+    else if (!spiralCredited) {
+      if (!state.spiraling) {
+        spiralFor = bank >= SPIRAL.enter ? spiralFor + dt : 0;
+        if (spiralFor >= SPIRAL.arm) { state.spiraling = 1; state.spiralSide = side; }
+      } else {
+        state.spiralArc = Math.min(SPIRAL.arc, state.spiralArc + delta * side);
+        if (state.spiralArc >= SPIRAL.arc) {
+          state.quality = 1;
+          complete(4, 0, SPIRAL.arc, now);
+          state.spirals += 1;
+          state.spiralAt = now;
+          state.spiraling = 0;
+          spiralCredited = true;
+          // A later wingover must contain two new alternating tops, not reuse this spiral's bank.
+          previousTop = state.top = state.topSide = state.wingTop = state.chain = state.linking = 0;
+          previousTopAt = state.topAt = rollTimedAt = state.swappedAt = -Infinity;
+          completedTop = state.tops;
+          wingAfterSpiral = side;
+          swappedTo = 0;
+          topAnswered = true;
+        }
+      }
+    }
+
     // Level and calm: little bank, and the swing fore and aft all but still.
     const settled = !broken && !controls?.steered && Math.abs(g.bank) < WATCH.level && Math.abs(g.rollRate ?? 0) < WATCH.still && Math.abs(g.pitch) < WATCH.calm && Math.abs(g.pitchRate) < WATCH.still;
     state.calm = settled ? state.calm + dt : 0;
   }
 
-  return { reset, step, get state() { return state; } };
+  return { reset, step, interrupt, get state() { return state; } };
 }

@@ -47,12 +47,14 @@ test('Chromium pitch, wingover and loop lessons retain every paired-control body
     assert.deepEqual(record.learned, [record.kind]);
     assert.equal(record.lesson.phase, 'banked');
     assert.equal(record.metrics.stalls, 0); assert.equal(record.metrics.tucks, 0);
-    assert.equal(record.snapshot.watch.breaks, 0); assert.ok(record.snapshot.watch.calm >= 1);
+    assert.equal(record.snapshot.watch.breaks, 0); assert.ok(record.snapshot.watch.calm + 1e-9 >= 3);
     assert.equal(record.snapshot.watch.moveKind, record.kind === 'pitch' ? 1 : record.kind === 'wingover' ? 2 : 3);
     assert.equal(record.snapshot.style.landed, 1); assert.equal(record.snapshot.style.lost, 0);
     assert.ok(record.snapshot.style.total > 0);
     assert.equal(record.snapshot.loops, record.kind === 'loop' ? 1 : 0);
     assert.ok(record.messages.some(message => message.targets), 'the pilot follows visible paired brake targets');
-    assert.match(record.messages.at(-1)!.title, /STYLE/);
+    assert.equal(record.lesson.awarded, record.snapshot.style.lastCombo.points);
+    assert.equal(record.lesson.awarded, record.snapshot.style.said);
+    assert.doesNotMatch(record.messages.at(-1)!.title, /STYLE|BANKED/, 'bank feedback belongs to the compact combo strip');
   }
 });

@@ -1,5 +1,6 @@
 export interface LiftSummary { line: number; kg: number; red: number; good: boolean; double: boolean; at: number }
-export interface TrickStats { wingovers?: number; loops?: number; pitch?: number; style?: number }
+import type { StyleCombo } from './meet-style.ts';
+export interface TrickStats { wingovers?: number; loops?: number; pitch?: number; style?: number; spirals?: number; bestCombo?: StyleCombo | null }
 export interface FeatSummary {
   total: number; lifts: LiftSummary[]; stats: TrickStats & { thrown: number; hits: number };
 }
@@ -79,8 +80,18 @@ export function trickSaid(stats: TrickStats) {
   const said = [];
   if ((stats.wingovers ?? 0) > 0) said.push(`wingover ×${stats.wingovers}`);
   if ((stats.loops ?? 0) > 0) said.push(`loop ×${stats.loops}`);
+  if ((stats.spirals ?? 0) > 0) said.push(`spiral 360 ×${stats.spirals}`);
   if ((stats.pitch ?? 0) > 0) said.push(`pitched ${stats.pitch}°`);
   return said.length ? `tricks: ${said.join(' · ')}` : '';
+}
+
+/** A bounded, replay-derived sequence; earlier moves remain represented by their count. */
+export function bestComboSaid(combo?: StyleCombo | null) {
+  if (!combo || combo.points <= 0) return '';
+  const names = ['', 'Pitch', 'Wingover', 'Loop', 'Spiral 360'];
+  const omitted = Math.max(0, combo.moves - combo.sequence.length);
+  const sequence = `${omitted ? `+${omitted} earlier · ` : ''}${combo.sequence.map(kind => names[kind] || 'Move').join(' → ')}`;
+  return `best combo: ${sequence} · ${combo.points.toLocaleString('en-GB')} pts`;
 }
 
 /**
@@ -134,11 +145,14 @@ export const lightsOf = (red: number) => JUDGES.map((_, i) => ((red >> i) & 1 ? 
  * The line a run is shared by, and under it the link that races it:
  *   Good Lift · Daily #12 · 646 pts · 512.5 kg · 1,412 m · ⚪⚪⚪ ⚪🔴⚪ 🔴🔴⚪
  * `label` names the sky ('Daily #12', 'Sky 7f3a2c1e'), and `link` is the challenge's address. The
- * score (the total lifted by the style it landed) leads; the kilograms say what was lifted.
+ * score (lifted points plus banked acro) leads; the kilograms say what was lifted.
  */
 export function shareText(result: ShareSummary, { label, link = '' }: { label: string; link?: string }) {
   const lights = result.lifts.map((lift) => lightsOf(lift.red)).join(' ');
-  const line = ['Good Lift', label, `${points({ total: result.total, style: result.style ?? result.stats?.style })} pts`, `${kilos(result.total)} kg`, `${metres(result.peak)} m`, lights].filter(Boolean).join(' · ');
+  const acro = result.style ?? result.stats?.style ?? 0;
+  const line = ['Good Lift', label, `${points({ total: result.total, style: acro })} pts`, `${kilos(result.total)} kg`,
+    acro > 0 ? `+${acro.toLocaleString('en-GB')} acro` : '', `${metres(result.peak)} m`, lights,
+    bestComboSaid(result.stats?.bestCombo)].filter(Boolean).join(' · ');
   return link ? `${line}\n${link}` : line;
 }
 

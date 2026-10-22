@@ -1,7 +1,7 @@
 import type { LiftSummary, TrickStats } from './meet-card.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FEATS, JUDGES, THOUSAND_POUNDS, TRICK_FEATS, barogram, featsFor, kilos, lightsOf, medalsSaid, metres, shareText, trickSaid, worldSaid } from './meet-card.ts';
+import { FEATS, JUDGES, THOUSAND_POUNDS, TRICK_FEATS, barogram, bestComboSaid, featsFor, kilos, lightsOf, medalsSaid, metres, shareText, trickSaid, worldSaid } from './meet-card.ts';
 import { FEAT_IDS } from '../progression/good-lift-store.ts';
 
 const lift = (line: number, red: number, { kg = 25, double = false } = {}) => ({ line, kg, red, good: (red & (red - 1)) === 0, double, at: 0 });
@@ -29,10 +29,18 @@ test('the share line reads exactly as expected, lights in judging order and the 
   );
   // A run that never reached a line has no lights to show, and no dangling dot for them.
   assert.equal(shareText({ ...run([], { total: 0 }), peak: 80 }, { label: 'Sky 7f3a2c1e' }), 'Good Lift · Sky 7f3a2c1e · 0 pts · 0 kg · 80 m');
-  // Style multiplies the score the line leads with; the kilograms stay what was lifted.
-  assert.match(shareText({ ...result, style: 260 }, { label: 'Daily #12' }), /^Good Lift · Daily #12 · 646 pts · 512\.5 kg · /);
+  // Banked acro adds to the score the line leads with; the kilograms stay what was lifted.
+  assert.match(shareText({ ...result, style: 260 }, { label: 'Daily #12' }), /^Good Lift · Daily #12 · 773 pts · 512\.5 kg · /);
   assert.equal(lightsOf(0b101), '🔴⚪🔴');
   assert.deepEqual(JUDGES, ['contact', 'control', 'airspace']);
+});
+
+test('sharing includes independently earned acro and a bounded verified best combo', () => {
+  const bestCombo = { points: 150, base: 130, variety: 20, moves: 5, mask: 14, sequence: [4, 2, 3] };
+  assert.equal(bestComboSaid(bestCombo), 'best combo: +2 earlier · Spiral 360 → Wingover → Loop · 150 pts');
+  const text = shareText({ total: 100, style: 150, peak: 800, lifts: [], stats: { bestCombo } }, { label: 'Sky 1234' });
+  assert.equal(text, 'Good Lift · Sky 1234 · 250 pts · 100 kg · +150 acro · 800 m · best combo: +2 earlier · Spiral 360 → Wingover → Loop · 150 pts');
+  assert.equal(bestComboSaid(null), '');
 });
 
 test('each feat is earned by what the run did, and only by that', () => {

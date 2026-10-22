@@ -5,6 +5,7 @@ import {
 BOARD,ROW,BOARD_LOG_BUDGET,addRow,boardDay,boardKey,emptyBoard,normalizeBoard,normalizeBots,normalizeRow,normalizeScore,outranks,pruneBoard,rowsFor,trimBoardLogs,withBot,
 } from './board.ts';
 import { BYNAMES } from './meet-bynames.ts';
+import { SIM_VERSION } from './sim-version.ts';
 
 const DAY = 20_756;
 const KEY = boardKey(1, DAY);
@@ -13,6 +14,17 @@ const KEY = boardKey(1, DAY);
 // needs its own log.
 const row = (fields = {}) => ({ who: '', via: 'me' as const, total: 100, style: 0, peak: 600, red: [0, 0, 0], at: 1_000, log: 'AQ', byname: '', ...fields });
 const logs = (board: Board, key = KEY) => rowsFor(board, key).map(({ log }) => log);
+
+test('normalization preserves old scoring order and applies additive ranking only to current rules', () => {
+  const old = boardKey(SIM_VERSION - 1, DAY), current = boardKey(SIM_VERSION, DAY);
+  const historical = [row({ total: 1000, style: 0, log: 'heavy' }), row({ total: 100, style: 1500, log: 'acro' })];
+  const raw = { days: { [old]: { rows: historical }, [current]: { rows: historical } } };
+  const board = normalizeBoard(raw);
+  assert.deepEqual(logs(board, old), ['heavy', 'acro']);
+  assert.deepEqual(logs(board, current), ['acro', 'heavy']);
+  assert.equal(rowsFor(board, current)[0].style, 1500, 'banked acro above the old cap survives');
+  assert.deepEqual(raw.days[old].rows, historical, 'normalization does not mutate stored input');
+});
 
 test('long-run rows accept the parser boundary and persistent log budgets retain the latest best', () => {
   assert.ok(normalizeRow(row({ log: 'A'.repeat(ROW.log) })));
@@ -184,7 +196,7 @@ test('a damaged row is dropped rather than repaired', () => {
     extra: true,
   }).replace('"yesterday"', '"__proto__"'));
   assert.ok(Object.hasOwn(stored.days, '__proto__'), 'the stored board names a day __proto__');
-  const read = normalizeBoard(stored);
+  const read = normalizeBoard(stored, 1);
   assert.deepEqual(Object.keys(read).sort(), ['days']);
   assert.deepEqual(Object.keys(read.days).sort(), [KEY, boardKey(1, DAY - 3), boardKey(1, DAY - 4)].sort());
   assert.equal(Object.getPrototypeOf(read.days), Object.prototype);

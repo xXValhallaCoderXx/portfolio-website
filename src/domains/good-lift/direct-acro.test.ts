@@ -19,6 +19,50 @@ function clean(flight: ReturnType<typeof createDirectFlight>) {
   assert.equal(flight.g.coordination, 0);
 }
 
+for (const side of sides) for (const delay of delays)
+  test(`an actual spiral 360 recovers and banks once, side ${side}, ${delay}s reactions`, () => {
+    const flight = createDirectFlight(), recover = createDirectCatch(delay);
+    let releaseAt: number | null = null;
+    for (let tick = 0; tick < 30 / DIRECT_STEP && flight.style.state.landed === 0; tick++) {
+      if (releaseAt === null && flight.watch.state.spirals > 0) releaseAt = tick + Math.round(delay / DIRECT_STEP);
+      flight.step(releaseAt === null || tick < releaseAt ? sidePull(side, .82) : recover(flight.g, tick));
+    }
+    assert.deepEqual(flight.stats.moves.map(move => move.kind), [4]);
+    assert.equal(flight.g.loops, 0);
+    assert.equal(flight.style.state.total, STYLE.spiral);
+    assert.equal(flight.style.state.landed, 1);
+    assert.equal(flight.style.state.lost, 0);
+    assert.equal(flight.style.state.pitch, 0);
+    assert.ok(flight.stats.minimumHeight > 1800, 'the taught spiral and recovery cost under 200m');
+    assert.ok(flight.watch.state.calm >= STYLE.settle - 1e-9);
+    clean(flight);
+  });
+
+for (const side of sides) for (const delay of delays)
+  test(`a physical spiral links fresh wingovers into one bank, side ${side}, ${delay}s reactions`, () => {
+    const flight = createDirectFlight(), recover = createDirectCatch(delay);
+    let reverseAt: number | null = null;
+    for (let tick = 0; tick < 45 / DIRECT_STEP && flight.style.state.landed === 0; tick++) {
+      if (reverseAt === null && flight.watch.state.spirals > 0) reverseAt = tick + Math.round(delay / DIRECT_STEP);
+      const elapsed = reverseAt === null ? -1 : (tick - reverseAt) * DIRECT_STEP;
+      const direction = Math.floor(elapsed / 4.5) % 2 ? side : -side;
+      flight.step(elapsed < 0 ? sidePull(side, .82) : elapsed < 20 ? sidePull(direction, .82) : recover(flight.g, tick));
+      if (elapsed < 20) assert.equal(flight.style.state.total, 0, 'the mixed sequence stays in hand');
+    }
+    assert.deepEqual(flight.stats.moves.map(move => move.kind), [4, 2, 2]);
+    assert.ok(flight.stats.moves[1].time - flight.stats.moves[0].time > 8, 'both wingover tops are new physical motion');
+    assert.equal(flight.g.loops, 0);
+    assert.equal(flight.style.state.landed, 1);
+    assert.equal(flight.style.state.lost, 0);
+    assert.equal(flight.style.state.lastCombo.moves, 3);
+    assert.equal(flight.style.state.lastCombo.mask, 10);
+    assert.equal(flight.style.state.lastCombo.variety, STYLE.variety);
+    assert.equal(flight.style.state.total, flight.style.state.lastCombo.base + STYLE.variety);
+    assert.deepEqual(flight.style.state.lastCombo.sequence, [4, 2, 2]);
+    assert.ok(flight.stats.minimumHeight > 1700, 'linking moves spends altitude without adding energy');
+    clean(flight);
+  });
+
 for (const side of sides) test(`ordinary canonical pulls settle without rebound or accidental style, side ${side}`, () => {
   const flight = createDirectFlight();
   // Use the same rounded .30 demand as the browser. One extra tenth of a second accommodates
@@ -35,14 +79,33 @@ for (const side of sides) test(`ordinary canonical pulls settle without rebound 
   clean(flight);
 });
 
-test('prolonged same-side deep travel and rapid reversals cannot manufacture completed maneuvers', () => {
-  for (const side of sides) for (const amount of [0.2, 0.5, 2 / 3, 1]) {
+test('actual thermal circles travel through full 360s without earning spiral style', () => {
+  for (const side of sides) for (const [inside, outside] of [[.5, .2], [.6, .3], [.6, .2]]) {
+    const flight = createDirectFlight();
+    let previous = flight.g.track, arc = 0;
+    for (let tick = 0; tick < 60 / DIRECT_STEP; tick++) {
+      flight.step(side < 0 ? directBrakes(inside, outside) : directBrakes(outside, inside));
+      arc += Math.atan2(Math.sin(flight.g.track - previous), Math.cos(flight.g.track - previous));
+      previous = flight.g.track;
+    }
+    assert.ok(Math.abs(arc) > 2 * Math.PI, 'the actual pilot course completes a full circle');
+    assert.equal(flight.watch.state.moves, 0);
+    assert.equal(flight.watch.state.spirals, 0);
+    assert.equal(flight.style.state.total + flight.style.state.pending, 0);
+    clean(flight);
+  }
+});
+
+test('prolonged same-side travel earns only a deliberate spiral, and rapid reversals manufacture no moves', () => {
+  for (const side of sides) for (const amount of [0.2, 0.5, 2 / 3, 0.82, 1]) {
     const flight = createDirectFlight();
     for (let tick = 0; tick < 60 / DIRECT_STEP; tick++) flight.step(sidePull(side, amount));
     for (let tick = 0; tick < 15 / DIRECT_STEP; tick++) flight.step(directBrakes());
-    assert.equal(flight.watch.state.moves, 0, `holding ${amount} on side ${side} is no alternating cycle`);
+    const spiral = amount === .82;
+    assert.equal(flight.watch.state.moves, spiral ? 1 : 0, `holding ${amount} on side ${side} can only complete one deliberate spiral`);
+    assert.deepEqual(flight.stats.moves.map(move => move.kind), spiral ? [4] : []);
     assert.equal(flight.g.loops, 0);
-    assert.equal(flight.style.state.total, 0);
+    assert.equal(flight.style.state.total + flight.style.state.pending, spiral ? STYLE.spiral : 0);
     clean(flight);
   }
   const flight = createDirectFlight();
@@ -169,7 +232,7 @@ for (const side of sides) for (const delay of delays)
     assert.equal(flight.style.state.lost, 0);
     assert.ok(flight.stats.steps * DIRECT_STEP < 25);
     assert.ok(flight.stats.minimumHeight > 1800 && flight.stats.minimumHeight < 1950);
-    assert.ok(flight.watch.state.calm >= STYLE.settle);
+    assert.ok(flight.watch.state.calm >= STYLE.settle - 1e-9);
     for (let tick = 0; tick < 10 / DIRECT_STEP; tick++) flight.step(directBrakes());
     assert.equal(flight.g.loops, 1, 'a recovered loop cannot continue tumbling after release');
     assert.equal(flight.watch.state.moves, 1);

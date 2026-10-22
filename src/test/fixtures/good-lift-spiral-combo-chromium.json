@@ -1,0 +1,2659 @@
+{
+  "engine": "Chromium 143.0.7499.4",
+  "generated": "2026-10-22T09:14:27.236Z",
+  "command": "node --import tsx .artifacts/fun-acro-v4/browser-spiral-combo.mjs",
+  "provenance": "Isolated still-air physical Spiral 360 -> Wingover combo; actual course, no injected angles, forces or results",
+  "sourceDigest": "8fe5357f4e7ac7626cc0825f254ad317048b58a0d6df347d3f796a9538399109",
+  "sourceManifest": [
+    {
+      "path": ".artifacts/fun-acro-v4/browser-spiral-combo.mjs",
+      "sha256": "85eccad9cd464d5f5b4d6c5a1221f6fe0fb48d4da878a93e4ead1e5faad3fb07"
+    },
+    {
+      "path": "src/domains/coaching/swing-watch.ts",
+      "sha256": "ba8cc2cfd7eecf83dfb0810e711c21355357c18ab10c9bfa6e764019c25ee5c0"
+    },
+    {
+      "path": "src/domains/flight/brake-controls.ts",
+      "sha256": "6c9954891801590aaff902c9270b0ab12a1670de8f112859b6c4ac9dca14d231"
+    },
+    {
+      "path": "src/domains/flight/flight-physics.ts",
+      "sha256": "814189dfeacf8ad41712cdc07d807c17f707b892b2a38cf303fbfbca03a2db21"
+    },
+    {
+      "path": "src/domains/flight/flight.ts",
+      "sha256": "16ed9d5385f4b88dcc30d1f92d8624fe4e0281165caef33ab3b55f836d1f6292"
+    },
+    {
+      "path": "src/domains/flight/wing-envelope.ts",
+      "sha256": "e6240df898b15b265624150d89867207a2da6e73b455c5e0a6325016b83432af"
+    },
+    {
+      "path": "src/domains/good-lift/meet-style.ts",
+      "sha256": "3972f39b1debd37d97c4bcff25cc7672c042c79fb15ad71bf9d60d14588d5b55"
+    },
+    {
+      "path": "src/domains/good-lift/recorder.ts",
+      "sha256": "9760809a7a9287588498f68c8852886a3380444dc57ec04a7ec0fc558aa27126"
+    },
+    {
+      "path": "src/domains/good-lift/run-rules.ts",
+      "sha256": "f7879719bf2d62bc10110304e1e5434569db1945ae425b349a4272ef5337f8e2"
+    },
+    {
+      "path": "src/domains/good-lift/sim-version.ts",
+      "sha256": "5a4a73224754aa54fd9d73b3e41d54697b689d8ead65649b2fd4f6666a01e261"
+    },
+    {
+      "path": "src/test/helpers/test-direct-flight.ts",
+      "sha256": "a974e95fbbb2011c8fbcd9f23cc3ef0e232a37e6175cd877717068e2d56ccec8"
+    },
+    {
+      "path": "src/test/helpers/test-spiral-combo.ts",
+      "sha256": "60a41a89122b49204ad91ffc89bd0ee3ef14c55a1d855069ee686780ea6cbce2"
+    }
+  ],
+  "records": [
+    {
+      "side": -1,
+      "delay": 0.3,
+      "simVersion": 5,
+      "origin": {
+        "x": 0,
+        "y": 2000,
+        "z": 0
+      },
+      "steps": 2309,
+      "link": "AgUAAAAAAAAAAAAs0A-FEvoEINEAjgIgANGOAiDRAI4CIADRjgIg0QB4IADREiAAABMgmZnTASAAAKwBIJmZNyAAAA",
+      "moves": [
+        {
+          "step": 616,
+          "kind": 4,
+          "band": 0
+        },
+        {
+          "step": 1176,
+          "kind": 2,
+          "band": 4
+        },
+        {
+          "step": 1717,
+          "kind": 2,
+          "band": 2
+        }
+      ],
+      "metrics": {
+        "stalls": 0,
+        "tucks": 0,
+        "heightLoss": 220.9509384999999
+      },
+      "checkpoints": [
+        {
+          "step": 1,
+          "snapshot": {
+            "pilot": {
+              "pos": {
+                "x": 0,
+                "y": 1999.9781581,
+                "z": -0.1903702
+              },
+              "vel": {
+                "x": 0.0000021,
+                "y": -1.3107225,
+                "z": -11.4222085
+              }
+            },
+            "canopy": {
+              "pos": {
+                "x": -6e-7,
+                "y": 2007.3270489,
+                "z": -0.3177669
+              },
+              "vel": {
+                "x": -0.0000782,
+                "y": -1.310639,
+                "z": -11.4174982
+              },
+              "q": {
+                "x": -0.0060631,
+                "y": 0.0000181,
+                "z": 0.000009,
+                "w": 0.9999816
+              },
+              "omega": {
+                "x": -0.0002834,
+                "y": 0.0034398,
+                "z": 0.0017302
+              }
+            },
+            "wing": {
+              "controlMode": "brakes",
+              "leftBrake": 0.058543417366946765,
+              "rightBrake": 0,
+              "wingPhase": "flying",
+              "inflation": 1,
+              "stall": 0,
+              "tuck": 0,
+              "loops": 0,
+              "energy": 2226377.259360578
+            },
+            "watch": {
+              "clock": 0.016666666666666666,
+              "fronts": 0,
+              "backs": 0,
+              "front": 0,
+              "back": 0,
+              "frontAt": null,
+              "backAt": null,
+              "building": 0,
+              "catches": 0,
+              "caughtPeak": 0,
+              "caughtAt": null,
+              "brakeAt": null,
+              "pumping": 0,
+              "tops": 0,
+              "top": 0,
+              "topSide": 0,
+              "topAt": null,
+              "chain": 0,
+              "breaks": 0,
+              "broke": 0,
+              "calm": 0.016666666666666666,
+              "timed": 0,
+              "timedKind": 0,
+              "timedAt": null,
+              "swappedAt": null,
+              "wingTop": 0,
+              "linking": 0,
+              "looping": 0,
+              "loops": 0,
+              "loopAt": null,
+              "spiraling": 0,
+              "spiralArc": 0,
+              "spiralSide": 0,
+              "spirals": 0,
+              "spiralAt": null,
+              "rollAcceleration": -0.00960271166,
+              "moves": 0,
+              "moveKind": 0,
+              "moveBand": 0,
+              "moveSize": 0,
+              "moveAt": null,
+              "quality": 1
+            },
+            "style": {
+              "total": 0,
+              "pending": 0,
+              "elements": 0,
+              "links": 0,
+              "rolls": 0,
+              "loops": 0,
+              "deepest": 0,
+              "last": 0,
+              "landed": 0,
+              "lost": 0,
+              "said": 0,
+              "wingovers": 0,
+              "mostLoops": 0,
+              "pitch": 0,
+              "armed": true,
+              "bankedAt": null,
+              "lostAt": null,
+              "spirals": 0,
+              "mostSpirals": 0,
+              "base": 0,
+              "variety": 0,
+              "kindMask": 0,
+              "sequence": [],
+              "bankCalm": 0,
+              "lastCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              },
+              "bestCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              }
+            }
+          }
+        },
+        {
+          "step": 600,
+          "snapshot": {
+            "pilot": {
+              "pos": {
+                "x": -23.9890685,
+                "y": 1901.2569248,
+                "z": -32.0294392
+              },
+              "vel": {
+                "x": -19.961712,
+                "y": -17.9459,
+                "z": -4.6536812
+              }
+            },
+            "canopy": {
+              "pos": {
+                "x": -26.078877,
+                "y": 1903.5719355,
+                "z": -25.3772014
+              },
+              "vel": {
+                "x": -10.9555907,
+                "y": -18.0809818,
+                "z": -1.7773108
+              },
+              "q": {
+                "x": -0.0368337,
+                "y": -0.7027469,
+                "z": -0.6175882,
+                "w": -0.3512477
+              },
+              "omega": {
+                "x": 0.022754,
+                "y": 1.347829,
+                "z": -0.0169944
+              }
+            },
+            "wing": {
+              "controlMode": "brakes",
+              "leftBrake": 0.49176470588235266,
+              "rightBrake": 0,
+              "wingPhase": "flying",
+              "inflation": 1,
+              "stall": 0,
+              "tuck": 0,
+              "loops": 0,
+              "energy": 2146407.6246022102
+            },
+            "watch": {
+              "clock": 10.000000000000076,
+              "fronts": 2,
+              "backs": 0,
+              "front": 0.73087222174,
+              "back": 0,
+              "frontAt": 8.816666666666684,
+              "backAt": null,
+              "building": 2,
+              "catches": 0,
+              "caughtPeak": 0,
+              "caughtAt": null,
+              "brakeAt": null,
+              "pumping": 0,
+              "tops": 2,
+              "top": 1.31081812844,
+              "topSide": -1,
+              "topAt": 9.533333333333387,
+              "chain": 1,
+              "breaks": 0,
+              "broke": 0,
+              "calm": 0,
+              "timed": 0,
+              "timedKind": 0,
+              "timedAt": null,
+              "swappedAt": null,
+              "wingTop": 1,
+              "linking": 0,
+              "looping": 0,
+              "loops": 0,
+              "loopAt": null,
+              "spiraling": 1,
+              "spiralArc": 5.94136812927,
+              "spiralSide": -1,
+              "spirals": 0,
+              "spiralAt": null,
+              "rollAcceleration": -0.04120284606,
+              "moves": 0,
+              "moveKind": 0,
+              "moveBand": 0,
+              "moveSize": 0,
+              "moveAt": null,
+              "quality": 1
+            },
+            "style": {
+              "total": 0,
+              "pending": 0,
+              "elements": 0,
+              "links": 0,
+              "rolls": 0,
+              "loops": 0,
+              "deepest": 0,
+              "last": 0,
+              "landed": 0,
+              "lost": 0,
+              "said": 0,
+              "wingovers": 0,
+              "mostLoops": 0,
+              "pitch": 0,
+              "armed": true,
+              "bankedAt": null,
+              "lostAt": null,
+              "spirals": 0,
+              "mostSpirals": 0,
+              "base": 0,
+              "variety": 0,
+              "kindMask": 0,
+              "sequence": [],
+              "bankCalm": 0,
+              "lastCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              },
+              "bestCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              }
+            }
+          }
+        },
+        {
+          "step": 616,
+          "snapshot": {
+            "pilot": {
+              "pos": {
+                "x": -29.4453581,
+                "y": 1896.4756469,
+                "z": -32.2964211
+              },
+              "vel": {
+                "x": -20.5153778,
+                "y": -17.9147597,
+                "z": 2.5945006
+              }
+            },
+            "canopy": {
+              "pos": {
+                "x": -29.0412778,
+                "y": 1898.7491468,
+                "z": -25.3217134
+              },
+              "vel": {
+                "x": -11.022381,
+                "y": -18.1024671,
+                "z": 2.1057728
+              },
+              "q": {
+                "x": -0.1494965,
+                "y": -0.7522062,
+                "z": -0.6025061,
+                "w": -0.2209593
+              },
+              "omega": {
+                "x": 0.022969,
+                "y": 1.3545806,
+                "z": -0.0172278
+              }
+            },
+            "wing": {
+              "controlMode": "brakes",
+              "leftBrake": 0.49176470588235266,
+              "rightBrake": 0,
+              "wingPhase": "flying",
+              "inflation": 1,
+              "stall": 0,
+              "tuck": 0,
+              "loops": 0,
+              "energy": 2141420.404656529
+            },
+            "watch": {
+              "clock": 10.266666666666756,
+              "fronts": 2,
+              "backs": 0,
+              "front": 0.73087222174,
+              "back": 0,
+              "frontAt": 8.816666666666684,
+              "backAt": null,
+              "building": 2,
+              "catches": 0,
+              "caughtPeak": 0,
+              "caughtAt": null,
+              "brakeAt": null,
+              "pumping": 0,
+              "tops": 2,
+              "top": 0,
+              "topSide": 0,
+              "topAt": null,
+              "chain": 0,
+              "breaks": 0,
+              "broke": 0,
+              "calm": 0,
+              "timed": 0,
+              "timedKind": 0,
+              "timedAt": null,
+              "swappedAt": null,
+              "wingTop": 0,
+              "linking": 0,
+              "looping": 0,
+              "loops": 0,
+              "loopAt": null,
+              "spiraling": 0,
+              "spiralArc": 6.28318530718,
+              "spiralSide": -1,
+              "spirals": 1,
+              "spiralAt": 10.266666666666756,
+              "rollAcceleration": -0.03148016565,
+              "moves": 1,
+              "moveKind": 4,
+              "moveBand": 0,
+              "moveSize": 6.28318530718,
+              "moveAt": 10.266666666666756,
+              "quality": 1
+            },
+            "style": {
+              "total": 0,
+              "pending": 20,
+              "elements": 1,
+              "links": 1,
+              "rolls": 0,
+              "loops": 0,
+              "deepest": 0,
+              "last": 4,
+              "landed": 0,
+              "lost": 0,
+              "said": 0,
+              "wingovers": 0,
+              "mostLoops": 0,
+              "pitch": 0,
+              "armed": true,
+              "bankedAt": null,
+              "lostAt": null,
+              "spirals": 1,
+              "mostSpirals": 0,
+              "base": 20,
+              "variety": 0,
+              "kindMask": 8,
+              "sequence": [
+                4
+              ],
+              "bankCalm": 0,
+              "lastCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              },
+              "bestCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              }
+            }
+          }
+        },
+        {
+          "step": 1176,
+          "snapshot": {
+            "pilot": {
+              "pos": {
+                "x": -121.6702421,
+                "y": 1840.2551658,
+                "z": -20.6586439
+              },
+              "vel": {
+                "x": -14.9412003,
+                "y": -9.4745876,
+                "z": 3.5374929
+              }
+            },
+            "canopy": {
+              "pos": {
+                "x": -119.5073549,
+                "y": 1841.0567205,
+                "z": -13.6816436
+              },
+              "vel": {
+                "x": -10.0472247,
+                "y": -9.8953258,
+                "z": 2.0692861
+              },
+              "q": {
+                "x": -0.3437204,
+                "y": -0.6939949,
+                "z": -0.5955921,
+                "w": -0.2133012
+              },
+              "omega": {
+                "x": 0.0606545,
+                "y": 0.6728211,
+                "z": 0.4439471
+              }
+            },
+            "wing": {
+              "controlMode": "brakes",
+              "leftBrake": 0.3415032679738558,
+              "rightBrake": 0.11011738028544749,
+              "wingPhase": "flying",
+              "inflation": 1,
+              "stall": 0,
+              "tuck": 0,
+              "loops": 0,
+              "energy": 2057011.3641208608
+            },
+            "watch": {
+              "clock": 19.60000000000017,
+              "fronts": 4,
+              "backs": 2,
+              "front": 0.32920969863,
+              "back": 1.69326484262,
+              "frontAt": 16.466666666667013,
+              "backAt": 14.416666666666963,
+              "building": 1,
+              "catches": 0,
+              "caughtPeak": 0,
+              "caughtAt": null,
+              "brakeAt": null,
+              "pumping": 0,
+              "tops": 5,
+              "top": 1.51644807986,
+              "topSide": -1,
+              "topAt": 19.60000000000017,
+              "chain": 2,
+              "breaks": 0,
+              "broke": 0,
+              "calm": 0,
+              "timed": 2,
+              "timedKind": 3,
+              "timedAt": 19.60000000000017,
+              "swappedAt": 19.583333333333503,
+              "wingTop": 1,
+              "linking": 1,
+              "looping": 0,
+              "loops": 0,
+              "loopAt": null,
+              "spiraling": 0,
+              "spiralArc": 0,
+              "spiralSide": 0,
+              "spirals": 1,
+              "spiralAt": 10.266666666666756,
+              "rollAcceleration": 1.54428026269,
+              "moves": 2,
+              "moveKind": 2,
+              "moveBand": 4,
+              "moveSize": 1.51644807986,
+              "moveAt": 19.60000000000017,
+              "quality": 2
+            },
+            "style": {
+              "total": 0,
+              "pending": 80,
+              "elements": 2,
+              "links": 2,
+              "rolls": 1,
+              "loops": 0,
+              "deepest": 0,
+              "last": 2,
+              "landed": 0,
+              "lost": 0,
+              "said": 0,
+              "wingovers": 0,
+              "mostLoops": 0,
+              "pitch": 0,
+              "armed": true,
+              "bankedAt": null,
+              "lostAt": null,
+              "spirals": 1,
+              "mostSpirals": 0,
+              "base": 70,
+              "variety": 10,
+              "kindMask": 10,
+              "sequence": [
+                4,
+                2
+              ],
+              "bankCalm": 0,
+              "lastCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              },
+              "bestCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              }
+            }
+          }
+        },
+        {
+          "step": 1200,
+          "snapshot": {
+            "pilot": {
+              "pos": {
+                "x": -127.1976379,
+                "y": 1835.8025607,
+                "z": -18.2924801
+              },
+              "vel": {
+                "x": -12.6417793,
+                "y": -12.7902034,
+                "z": 7.8330906
+              }
+            },
+            "canopy": {
+              "pos": {
+                "x": -123.382368,
+                "y": 1836.9116335,
+                "z": -12.1208535
+              },
+              "vel": {
+                "x": -9.6332726,
+                "y": -9.7046851,
+                "z": 5.3667116
+              },
+              "q": {
+                "x": -0.3459074,
+                "y": -0.7657742,
+                "z": -0.5017615,
+                "w": -0.2053617
+              },
+              "omega": {
+                "x": -0.8596022,
+                "y": -0.0286177,
+                "z": -0.1592517
+              }
+            },
+            "wing": {
+              "controlMode": "brakes",
+              "leftBrake": 0.004295808953279969,
+              "rightBrake": 0.4735458696736834,
+              "wingPhase": "flying",
+              "inflation": 1,
+              "stall": 0,
+              "tuck": 0,
+              "loops": 0,
+              "energy": 2054933.692684785
+            },
+            "watch": {
+              "clock": 20.000000000000146,
+              "fronts": 4,
+              "backs": 2,
+              "front": 0.32920969863,
+              "back": 1.69326484262,
+              "frontAt": 16.466666666667013,
+              "backAt": 14.416666666666963,
+              "building": 1,
+              "catches": 0,
+              "caughtPeak": 0,
+              "caughtAt": null,
+              "brakeAt": null,
+              "pumping": 0,
+              "tops": 5,
+              "top": 1.51644807986,
+              "topSide": -1,
+              "topAt": 19.60000000000017,
+              "chain": 2,
+              "breaks": 0,
+              "broke": 0,
+              "calm": 0,
+              "timed": 2,
+              "timedKind": 3,
+              "timedAt": 19.60000000000017,
+              "swappedAt": 19.583333333333503,
+              "wingTop": 1,
+              "linking": 1,
+              "looping": 0,
+              "loops": 0,
+              "loopAt": null,
+              "spiraling": 0,
+              "spiralArc": 0,
+              "spiralSide": 0,
+              "spirals": 1,
+              "spiralAt": 10.266666666666756,
+              "rollAcceleration": 1.25497205994,
+              "moves": 2,
+              "moveKind": 2,
+              "moveBand": 4,
+              "moveSize": 1.51644807986,
+              "moveAt": 19.60000000000017,
+              "quality": 2
+            },
+            "style": {
+              "total": 0,
+              "pending": 80,
+              "elements": 2,
+              "links": 2,
+              "rolls": 1,
+              "loops": 0,
+              "deepest": 0,
+              "last": 2,
+              "landed": 0,
+              "lost": 0,
+              "said": 0,
+              "wingovers": 0,
+              "mostLoops": 0,
+              "pitch": 0,
+              "armed": true,
+              "bankedAt": null,
+              "lostAt": null,
+              "spirals": 1,
+              "mostSpirals": 0,
+              "base": 70,
+              "variety": 10,
+              "kindMask": 10,
+              "sequence": [
+                4,
+                2
+              ],
+              "bankCalm": 0,
+              "lastCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              },
+              "bestCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              }
+            }
+          }
+        },
+        {
+          "step": 1717,
+          "snapshot": {
+            "pilot": {
+              "pos": {
+                "x": -218.6078837,
+                "y": 1797.57541,
+                "z": -4.1100689
+              },
+              "vel": {
+                "x": -12.7573418,
+                "y": -5.8027544,
+                "z": 3.4228075
+              }
+            },
+            "canopy": {
+              "pos": {
+                "x": -217.4757535,
+                "y": 1800.7983623,
+                "z": 2.3972133
+              },
+              "vel": {
+                "x": -9.9504181,
+                "y": -6.5533457,
+                "z": 3.3082131
+              },
+              "q": {
+                "x": -0.3000032,
+                "y": -0.7527745,
+                "z": -0.4567179,
+                "w": -0.3670658
+              },
+              "omega": {
+                "x": -0.0251718,
+                "y": 0.5151944,
+                "z": 0.3731958
+              }
+            },
+            "wing": {
+              "controlMode": "brakes",
+              "leftBrake": 0.2845860566448798,
+              "rightBrake": 0.15555158571365052,
+              "wingPhase": "flying",
+              "inflation": 1,
+              "stall": 0,
+              "tuck": 0,
+              "loops": 0,
+              "energy": 2004547.435150336
+            },
+            "watch": {
+              "clock": 28.616666666666323,
+              "fronts": 5,
+              "backs": 2,
+              "front": 0.41152349855,
+              "back": 1.69326484262,
+              "frontAt": 24.333333333333233,
+              "backAt": 14.416666666666963,
+              "building": 2,
+              "catches": 0,
+              "caughtPeak": 0,
+              "caughtAt": null,
+              "brakeAt": null,
+              "pumping": 0,
+              "tops": 7,
+              "top": 1.14585199331,
+              "topSide": -1,
+              "topAt": 28.616666666666323,
+              "chain": 4,
+              "breaks": 0,
+              "broke": 0,
+              "calm": 0,
+              "timed": 4,
+              "timedKind": 3,
+              "timedAt": 28.616666666666323,
+              "swappedAt": 28.58333333333299,
+              "wingTop": 1,
+              "linking": 1,
+              "looping": 0,
+              "loops": 0,
+              "loopAt": null,
+              "spiraling": 0,
+              "spiralArc": 0,
+              "spiralSide": 0,
+              "spirals": 1,
+              "spiralAt": 10.266666666666756,
+              "rollAcceleration": 1.90006755092,
+              "moves": 3,
+              "moveKind": 2,
+              "moveBand": 2,
+              "moveSize": 1.14585199331,
+              "moveAt": 28.616666666666323,
+              "quality": 2
+            },
+            "style": {
+              "total": 0,
+              "pending": 110,
+              "elements": 3,
+              "links": 3,
+              "rolls": 2,
+              "loops": 0,
+              "deepest": 0,
+              "last": 2,
+              "landed": 0,
+              "lost": 0,
+              "said": 0,
+              "wingovers": 0,
+              "mostLoops": 0,
+              "pitch": 0,
+              "armed": true,
+              "bankedAt": null,
+              "lostAt": null,
+              "spirals": 1,
+              "mostSpirals": 0,
+              "base": 100,
+              "variety": 10,
+              "kindMask": 10,
+              "sequence": [
+                4,
+                2,
+                2
+              ],
+              "bankCalm": 0,
+              "lastCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              },
+              "bestCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              }
+            }
+          }
+        },
+        {
+          "step": 1800,
+          "snapshot": {
+            "pilot": {
+              "pos": {
+                "x": -232.6718383,
+                "y": 1786.1528571,
+                "z": 8.5523529
+              },
+              "vel": {
+                "x": -7.0373032,
+                "y": -6.4359556,
+                "z": 14.4213093
+              }
+            },
+            "canopy": {
+              "pos": {
+                "x": -232.0123881,
+                "y": 1793.2473775,
+                "z": 10.3454967
+              },
+              "vel": {
+                "x": -11.9140273,
+                "y": -4.4895231,
+                "z": 8.5025194
+              },
+              "q": {
+                "x": -0.1098226,
+                "y": -0.8815425,
+                "z": -0.1490167,
+                "w": -0.4342993
+              },
+              "omega": {
+                "x": -0.7188468,
+                "y": 0.1237491,
+                "z": 0.4957158
+              }
+            },
+            "wing": {
+              "controlMode": "brakes",
+              "leftBrake": 7.623777202229938e-8,
+              "rightBrake": 0.49175563464247246,
+              "wingPhase": "flying",
+              "inflation": 1,
+              "stall": 0,
+              "tuck": 0,
+              "loops": 0,
+              "energy": 1997909.7140827398
+            },
+            "watch": {
+              "clock": 29.999999999999577,
+              "fronts": 6,
+              "backs": 2,
+              "front": 0.4238797442,
+              "back": 1.69326484262,
+              "frontAt": 28.833333333332977,
+              "backAt": 14.416666666666963,
+              "building": 3,
+              "catches": 0,
+              "caughtPeak": 0,
+              "caughtAt": null,
+              "brakeAt": null,
+              "pumping": 0,
+              "tops": 7,
+              "top": 1.14585199331,
+              "topSide": -1,
+              "topAt": 28.616666666666323,
+              "chain": 4,
+              "breaks": 0,
+              "broke": 0,
+              "calm": 0,
+              "timed": 4,
+              "timedKind": 3,
+              "timedAt": 28.616666666666323,
+              "swappedAt": 28.58333333333299,
+              "wingTop": 1,
+              "linking": 1,
+              "looping": 0,
+              "loops": 0,
+              "loopAt": null,
+              "spiraling": 0,
+              "spiralArc": 0,
+              "spiralSide": 0,
+              "spirals": 1,
+              "spiralAt": 10.266666666666756,
+              "rollAcceleration": 0.53626933112,
+              "moves": 3,
+              "moveKind": 2,
+              "moveBand": 2,
+              "moveSize": 1.14585199331,
+              "moveAt": 28.616666666666323,
+              "quality": 2
+            },
+            "style": {
+              "total": 0,
+              "pending": 110,
+              "elements": 3,
+              "links": 3,
+              "rolls": 2,
+              "loops": 0,
+              "deepest": 0,
+              "last": 2,
+              "landed": 0,
+              "lost": 0,
+              "said": 0,
+              "wingovers": 0,
+              "mostLoops": 0,
+              "pitch": 0,
+              "armed": true,
+              "bankedAt": null,
+              "lostAt": null,
+              "spirals": 1,
+              "mostSpirals": 0,
+              "base": 100,
+              "variety": 10,
+              "kindMask": 10,
+              "sequence": [
+                4,
+                2,
+                2
+              ],
+              "bankCalm": 0,
+              "lastCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              },
+              "bestCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              }
+            }
+          }
+        },
+        {
+          "step": 2309,
+          "snapshot": {
+            "pilot": {
+              "pos": {
+                "x": -310.1711514,
+                "y": 1779.0490615,
+                "z": 46.7215273
+              },
+              "vel": {
+                "x": -10.0185859,
+                "y": -1.3070756,
+                "z": -0.7963731
+              }
+            },
+            "canopy": {
+              "pos": {
+                "x": -310.3425413,
+                "y": 1786.3894463,
+                "z": 46.3881309
+              },
+              "vel": {
+                "x": -11.1839331,
+                "y": -1.3405721,
+                "z": -0.924565
+              },
+              "q": {
+                "x": 0.0221442,
+                "y": -0.6768492,
+                "z": 0.0145904,
+                "w": -0.7356439
+              },
+              "omega": {
+                "x": 0.0054357,
+                "y": -0.0653071,
+                "z": 0.0662814
+              }
+            },
+            "wing": {
+              "controlMode": "brakes",
+              "leftBrake": 0.000015897687945570363,
+              "rightBrake": 0.000015897687945570363,
+              "wingPhase": "flying",
+              "inflation": 1,
+              "stall": 0,
+              "tuck": 0,
+              "loops": 0,
+              "energy": 1980130.575331179
+            },
+            "watch": {
+              "clock": 38.48333333333243,
+              "fronts": 6,
+              "backs": 3,
+              "front": 0.4238797442,
+              "back": 0.33154747813,
+              "frontAt": 28.833333333332977,
+              "backAt": 32.06666666666613,
+              "building": 3,
+              "catches": 0,
+              "caughtPeak": 0,
+              "caughtAt": null,
+              "brakeAt": 37.58333333333248,
+              "pumping": 0,
+              "tops": 7,
+              "top": 1.14585199331,
+              "topSide": -1,
+              "topAt": 28.616666666666323,
+              "chain": 0,
+              "breaks": 0,
+              "broke": 0,
+              "calm": 2.9999999999999942,
+              "timed": 4,
+              "timedKind": 3,
+              "timedAt": 28.616666666666323,
+              "swappedAt": 28.58333333333299,
+              "wingTop": 1,
+              "linking": 0,
+              "looping": 0,
+              "loops": 0,
+              "loopAt": null,
+              "spiraling": 0,
+              "spiralArc": 0,
+              "spiralSide": 0,
+              "spirals": 1,
+              "spiralAt": 10.266666666666756,
+              "rollAcceleration": 0.02993234778,
+              "moves": 3,
+              "moveKind": 2,
+              "moveBand": 2,
+              "moveSize": 1.14585199331,
+              "moveAt": 28.616666666666323,
+              "quality": 2
+            },
+            "style": {
+              "total": 110,
+              "pending": 0,
+              "elements": 0,
+              "links": 0,
+              "rolls": 0,
+              "loops": 0,
+              "deepest": 0,
+              "last": 0,
+              "landed": 1,
+              "lost": 0,
+              "said": 110,
+              "wingovers": 2,
+              "mostLoops": 0,
+              "pitch": 0,
+              "armed": true,
+              "bankedAt": 38.48333333333243,
+              "lostAt": null,
+              "spirals": 0,
+              "mostSpirals": 1,
+              "base": 0,
+              "variety": 0,
+              "kindMask": 0,
+              "sequence": [],
+              "bankCalm": 0,
+              "lastCombo": {
+                "points": 110,
+                "base": 100,
+                "variety": 10,
+                "moves": 3,
+                "mask": 10,
+                "sequence": [
+                  4,
+                  2,
+                  2
+                ]
+              },
+              "bestCombo": {
+                "points": 110,
+                "base": 100,
+                "variety": 10,
+                "moves": 3,
+                "mask": 10,
+                "sequence": [
+                  4,
+                  2,
+                  2
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "snapshot": {
+        "pilot": {
+          "pos": {
+            "x": -310.1711514,
+            "y": 1779.0490615,
+            "z": 46.7215273
+          },
+          "vel": {
+            "x": -10.0185859,
+            "y": -1.3070756,
+            "z": -0.7963731
+          }
+        },
+        "canopy": {
+          "pos": {
+            "x": -310.3425413,
+            "y": 1786.3894463,
+            "z": 46.3881309
+          },
+          "vel": {
+            "x": -11.1839331,
+            "y": -1.3405721,
+            "z": -0.924565
+          },
+          "q": {
+            "x": 0.0221442,
+            "y": -0.6768492,
+            "z": 0.0145904,
+            "w": -0.7356439
+          },
+          "omega": {
+            "x": 0.0054357,
+            "y": -0.0653071,
+            "z": 0.0662814
+          }
+        },
+        "wing": {
+          "controlMode": "brakes",
+          "leftBrake": 0.000015897687945570363,
+          "rightBrake": 0.000015897687945570363,
+          "wingPhase": "flying",
+          "inflation": 1,
+          "stall": 0,
+          "tuck": 0,
+          "loops": 0,
+          "energy": 1980130.575331179
+        },
+        "watch": {
+          "clock": 38.48333333333243,
+          "fronts": 6,
+          "backs": 3,
+          "front": 0.4238797442,
+          "back": 0.33154747813,
+          "frontAt": 28.833333333332977,
+          "backAt": 32.06666666666613,
+          "building": 3,
+          "catches": 0,
+          "caughtPeak": 0,
+          "caughtAt": null,
+          "brakeAt": 37.58333333333248,
+          "pumping": 0,
+          "tops": 7,
+          "top": 1.14585199331,
+          "topSide": -1,
+          "topAt": 28.616666666666323,
+          "chain": 0,
+          "breaks": 0,
+          "broke": 0,
+          "calm": 2.9999999999999942,
+          "timed": 4,
+          "timedKind": 3,
+          "timedAt": 28.616666666666323,
+          "swappedAt": 28.58333333333299,
+          "wingTop": 1,
+          "linking": 0,
+          "looping": 0,
+          "loops": 0,
+          "loopAt": null,
+          "spiraling": 0,
+          "spiralArc": 0,
+          "spiralSide": 0,
+          "spirals": 1,
+          "spiralAt": 10.266666666666756,
+          "rollAcceleration": 0.02993234778,
+          "moves": 3,
+          "moveKind": 2,
+          "moveBand": 2,
+          "moveSize": 1.14585199331,
+          "moveAt": 28.616666666666323,
+          "quality": 2
+        },
+        "style": {
+          "total": 110,
+          "pending": 0,
+          "elements": 0,
+          "links": 0,
+          "rolls": 0,
+          "loops": 0,
+          "deepest": 0,
+          "last": 0,
+          "landed": 1,
+          "lost": 0,
+          "said": 110,
+          "wingovers": 2,
+          "mostLoops": 0,
+          "pitch": 0,
+          "armed": true,
+          "bankedAt": 38.48333333333243,
+          "lostAt": null,
+          "spirals": 0,
+          "mostSpirals": 1,
+          "base": 0,
+          "variety": 0,
+          "kindMask": 0,
+          "sequence": [],
+          "bankCalm": 0,
+          "lastCombo": {
+            "points": 110,
+            "base": 100,
+            "variety": 10,
+            "moves": 3,
+            "mask": 10,
+            "sequence": [
+              4,
+              2,
+              2
+            ]
+          },
+          "bestCombo": {
+            "points": 110,
+            "base": 100,
+            "variety": 10,
+            "moves": 3,
+            "mask": 10,
+            "sequence": [
+              4,
+              2,
+              2
+            ]
+          }
+        }
+      },
+      "source": "Chromium computed canonical paired brakes, physical spiral and fresh wingovers",
+      "nodeMatches": true
+    },
+    {
+      "side": 1,
+      "delay": 0.3,
+      "simVersion": 5,
+      "origin": {
+        "x": 0,
+        "y": 2000,
+        "z": 0
+      },
+      "steps": 2309,
+      "link": "AgUAAAAAAAAAAAAs0A-FEvoEIADRjgIg0QCOAiAA0Y4CINEAjgIgANF4INEAEiAAABMgmZnTASAAAKwBIJmZNyAAAA",
+      "moves": [
+        {
+          "step": 616,
+          "kind": 4,
+          "band": 0
+        },
+        {
+          "step": 1176,
+          "kind": 2,
+          "band": 4
+        },
+        {
+          "step": 1717,
+          "kind": 2,
+          "band": 2
+        }
+      ],
+      "metrics": {
+        "stalls": 0,
+        "tucks": 0,
+        "heightLoss": 220.9509384999999
+      },
+      "checkpoints": [
+        {
+          "step": 1,
+          "snapshot": {
+            "pilot": {
+              "pos": {
+                "x": 0,
+                "y": 1999.9781581,
+                "z": -0.1903702
+              },
+              "vel": {
+                "x": -0.0000021,
+                "y": -1.3107225,
+                "z": -11.4222085
+              }
+            },
+            "canopy": {
+              "pos": {
+                "x": 6e-7,
+                "y": 2007.3270489,
+                "z": -0.3177669
+              },
+              "vel": {
+                "x": 0.0000782,
+                "y": -1.310639,
+                "z": -11.4174982
+              },
+              "q": {
+                "x": -0.0060631,
+                "y": -0.0000181,
+                "z": -0.000009,
+                "w": 0.9999816
+              },
+              "omega": {
+                "x": -0.0002834,
+                "y": -0.0034398,
+                "z": -0.0017302
+              }
+            },
+            "wing": {
+              "controlMode": "brakes",
+              "leftBrake": 0,
+              "rightBrake": 0.058543417366946765,
+              "wingPhase": "flying",
+              "inflation": 1,
+              "stall": 0,
+              "tuck": 0,
+              "loops": 0,
+              "energy": 2226377.259360578
+            },
+            "watch": {
+              "clock": 0.016666666666666666,
+              "fronts": 0,
+              "backs": 0,
+              "front": 0,
+              "back": 0,
+              "frontAt": null,
+              "backAt": null,
+              "building": 0,
+              "catches": 0,
+              "caughtPeak": 0,
+              "caughtAt": null,
+              "brakeAt": null,
+              "pumping": 0,
+              "tops": 0,
+              "top": 0,
+              "topSide": 0,
+              "topAt": null,
+              "chain": 0,
+              "breaks": 0,
+              "broke": 0,
+              "calm": 0.016666666666666666,
+              "timed": 0,
+              "timedKind": 0,
+              "timedAt": null,
+              "swappedAt": null,
+              "wingTop": 0,
+              "linking": 0,
+              "looping": 0,
+              "loops": 0,
+              "loopAt": null,
+              "spiraling": 0,
+              "spiralArc": 0,
+              "spiralSide": 0,
+              "spirals": 0,
+              "spiralAt": null,
+              "rollAcceleration": 0.00960271166,
+              "moves": 0,
+              "moveKind": 0,
+              "moveBand": 0,
+              "moveSize": 0,
+              "moveAt": null,
+              "quality": 1
+            },
+            "style": {
+              "total": 0,
+              "pending": 0,
+              "elements": 0,
+              "links": 0,
+              "rolls": 0,
+              "loops": 0,
+              "deepest": 0,
+              "last": 0,
+              "landed": 0,
+              "lost": 0,
+              "said": 0,
+              "wingovers": 0,
+              "mostLoops": 0,
+              "pitch": 0,
+              "armed": true,
+              "bankedAt": null,
+              "lostAt": null,
+              "spirals": 0,
+              "mostSpirals": 0,
+              "base": 0,
+              "variety": 0,
+              "kindMask": 0,
+              "sequence": [],
+              "bankCalm": 0,
+              "lastCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              },
+              "bestCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              }
+            }
+          }
+        },
+        {
+          "step": 600,
+          "snapshot": {
+            "pilot": {
+              "pos": {
+                "x": 23.9890685,
+                "y": 1901.2569248,
+                "z": -32.0294392
+              },
+              "vel": {
+                "x": 19.961712,
+                "y": -17.9459,
+                "z": -4.6536812
+              }
+            },
+            "canopy": {
+              "pos": {
+                "x": 26.078877,
+                "y": 1903.5719355,
+                "z": -25.3772014
+              },
+              "vel": {
+                "x": 10.9555907,
+                "y": -18.0809818,
+                "z": -1.7773108
+              },
+              "q": {
+                "x": -0.0368337,
+                "y": 0.7027469,
+                "z": 0.6175882,
+                "w": -0.3512477
+              },
+              "omega": {
+                "x": 0.022754,
+                "y": -1.347829,
+                "z": 0.0169944
+              }
+            },
+            "wing": {
+              "controlMode": "brakes",
+              "leftBrake": 0,
+              "rightBrake": 0.49176470588235266,
+              "wingPhase": "flying",
+              "inflation": 1,
+              "stall": 0,
+              "tuck": 0,
+              "loops": 0,
+              "energy": 2146407.6246022102
+            },
+            "watch": {
+              "clock": 10.000000000000076,
+              "fronts": 2,
+              "backs": 0,
+              "front": 0.73087222174,
+              "back": 0,
+              "frontAt": 8.816666666666684,
+              "backAt": null,
+              "building": 2,
+              "catches": 0,
+              "caughtPeak": 0,
+              "caughtAt": null,
+              "brakeAt": null,
+              "pumping": 0,
+              "tops": 2,
+              "top": 1.31081812844,
+              "topSide": 1,
+              "topAt": 9.533333333333387,
+              "chain": 1,
+              "breaks": 0,
+              "broke": 0,
+              "calm": 0,
+              "timed": 0,
+              "timedKind": 0,
+              "timedAt": null,
+              "swappedAt": null,
+              "wingTop": 1,
+              "linking": 0,
+              "looping": 0,
+              "loops": 0,
+              "loopAt": null,
+              "spiraling": 1,
+              "spiralArc": 5.94136812927,
+              "spiralSide": 1,
+              "spirals": 0,
+              "spiralAt": null,
+              "rollAcceleration": 0.04120284606,
+              "moves": 0,
+              "moveKind": 0,
+              "moveBand": 0,
+              "moveSize": 0,
+              "moveAt": null,
+              "quality": 1
+            },
+            "style": {
+              "total": 0,
+              "pending": 0,
+              "elements": 0,
+              "links": 0,
+              "rolls": 0,
+              "loops": 0,
+              "deepest": 0,
+              "last": 0,
+              "landed": 0,
+              "lost": 0,
+              "said": 0,
+              "wingovers": 0,
+              "mostLoops": 0,
+              "pitch": 0,
+              "armed": true,
+              "bankedAt": null,
+              "lostAt": null,
+              "spirals": 0,
+              "mostSpirals": 0,
+              "base": 0,
+              "variety": 0,
+              "kindMask": 0,
+              "sequence": [],
+              "bankCalm": 0,
+              "lastCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              },
+              "bestCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              }
+            }
+          }
+        },
+        {
+          "step": 616,
+          "snapshot": {
+            "pilot": {
+              "pos": {
+                "x": 29.4453581,
+                "y": 1896.4756469,
+                "z": -32.2964211
+              },
+              "vel": {
+                "x": 20.5153778,
+                "y": -17.9147597,
+                "z": 2.5945006
+              }
+            },
+            "canopy": {
+              "pos": {
+                "x": 29.0412778,
+                "y": 1898.7491468,
+                "z": -25.3217134
+              },
+              "vel": {
+                "x": 11.022381,
+                "y": -18.1024671,
+                "z": 2.1057728
+              },
+              "q": {
+                "x": -0.1494965,
+                "y": 0.7522062,
+                "z": 0.6025061,
+                "w": -0.2209593
+              },
+              "omega": {
+                "x": 0.022969,
+                "y": -1.3545806,
+                "z": 0.0172278
+              }
+            },
+            "wing": {
+              "controlMode": "brakes",
+              "leftBrake": 0,
+              "rightBrake": 0.49176470588235266,
+              "wingPhase": "flying",
+              "inflation": 1,
+              "stall": 0,
+              "tuck": 0,
+              "loops": 0,
+              "energy": 2141420.404656529
+            },
+            "watch": {
+              "clock": 10.266666666666756,
+              "fronts": 2,
+              "backs": 0,
+              "front": 0.73087222174,
+              "back": 0,
+              "frontAt": 8.816666666666684,
+              "backAt": null,
+              "building": 2,
+              "catches": 0,
+              "caughtPeak": 0,
+              "caughtAt": null,
+              "brakeAt": null,
+              "pumping": 0,
+              "tops": 2,
+              "top": 0,
+              "topSide": 0,
+              "topAt": null,
+              "chain": 0,
+              "breaks": 0,
+              "broke": 0,
+              "calm": 0,
+              "timed": 0,
+              "timedKind": 0,
+              "timedAt": null,
+              "swappedAt": null,
+              "wingTop": 0,
+              "linking": 0,
+              "looping": 0,
+              "loops": 0,
+              "loopAt": null,
+              "spiraling": 0,
+              "spiralArc": 6.28318530718,
+              "spiralSide": 1,
+              "spirals": 1,
+              "spiralAt": 10.266666666666756,
+              "rollAcceleration": 0.03148016565,
+              "moves": 1,
+              "moveKind": 4,
+              "moveBand": 0,
+              "moveSize": 6.28318530718,
+              "moveAt": 10.266666666666756,
+              "quality": 1
+            },
+            "style": {
+              "total": 0,
+              "pending": 20,
+              "elements": 1,
+              "links": 1,
+              "rolls": 0,
+              "loops": 0,
+              "deepest": 0,
+              "last": 4,
+              "landed": 0,
+              "lost": 0,
+              "said": 0,
+              "wingovers": 0,
+              "mostLoops": 0,
+              "pitch": 0,
+              "armed": true,
+              "bankedAt": null,
+              "lostAt": null,
+              "spirals": 1,
+              "mostSpirals": 0,
+              "base": 20,
+              "variety": 0,
+              "kindMask": 8,
+              "sequence": [
+                4
+              ],
+              "bankCalm": 0,
+              "lastCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              },
+              "bestCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              }
+            }
+          }
+        },
+        {
+          "step": 1176,
+          "snapshot": {
+            "pilot": {
+              "pos": {
+                "x": 121.6702421,
+                "y": 1840.2551658,
+                "z": -20.6586439
+              },
+              "vel": {
+                "x": 14.9412003,
+                "y": -9.4745876,
+                "z": 3.5374929
+              }
+            },
+            "canopy": {
+              "pos": {
+                "x": 119.5073549,
+                "y": 1841.0567205,
+                "z": -13.6816436
+              },
+              "vel": {
+                "x": 10.0472247,
+                "y": -9.8953258,
+                "z": 2.0692861
+              },
+              "q": {
+                "x": -0.3437204,
+                "y": 0.6939949,
+                "z": 0.5955921,
+                "w": -0.2133012
+              },
+              "omega": {
+                "x": 0.0606545,
+                "y": -0.6728211,
+                "z": -0.4439471
+              }
+            },
+            "wing": {
+              "controlMode": "brakes",
+              "leftBrake": 0.11011738028544749,
+              "rightBrake": 0.3415032679738558,
+              "wingPhase": "flying",
+              "inflation": 1,
+              "stall": 0,
+              "tuck": 0,
+              "loops": 0,
+              "energy": 2057011.3641208608
+            },
+            "watch": {
+              "clock": 19.60000000000017,
+              "fronts": 4,
+              "backs": 2,
+              "front": 0.32920969863,
+              "back": 1.69326484262,
+              "frontAt": 16.466666666667013,
+              "backAt": 14.416666666666963,
+              "building": 1,
+              "catches": 0,
+              "caughtPeak": 0,
+              "caughtAt": null,
+              "brakeAt": null,
+              "pumping": 0,
+              "tops": 5,
+              "top": 1.51644807986,
+              "topSide": 1,
+              "topAt": 19.60000000000017,
+              "chain": 2,
+              "breaks": 0,
+              "broke": 0,
+              "calm": 0,
+              "timed": 2,
+              "timedKind": 3,
+              "timedAt": 19.60000000000017,
+              "swappedAt": 19.583333333333503,
+              "wingTop": 1,
+              "linking": 1,
+              "looping": 0,
+              "loops": 0,
+              "loopAt": null,
+              "spiraling": 0,
+              "spiralArc": 0,
+              "spiralSide": 0,
+              "spirals": 1,
+              "spiralAt": 10.266666666666756,
+              "rollAcceleration": -1.54428026269,
+              "moves": 2,
+              "moveKind": 2,
+              "moveBand": 4,
+              "moveSize": 1.51644807986,
+              "moveAt": 19.60000000000017,
+              "quality": 2
+            },
+            "style": {
+              "total": 0,
+              "pending": 80,
+              "elements": 2,
+              "links": 2,
+              "rolls": 1,
+              "loops": 0,
+              "deepest": 0,
+              "last": 2,
+              "landed": 0,
+              "lost": 0,
+              "said": 0,
+              "wingovers": 0,
+              "mostLoops": 0,
+              "pitch": 0,
+              "armed": true,
+              "bankedAt": null,
+              "lostAt": null,
+              "spirals": 1,
+              "mostSpirals": 0,
+              "base": 70,
+              "variety": 10,
+              "kindMask": 10,
+              "sequence": [
+                4,
+                2
+              ],
+              "bankCalm": 0,
+              "lastCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              },
+              "bestCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              }
+            }
+          }
+        },
+        {
+          "step": 1200,
+          "snapshot": {
+            "pilot": {
+              "pos": {
+                "x": 127.1976379,
+                "y": 1835.8025607,
+                "z": -18.2924801
+              },
+              "vel": {
+                "x": 12.6417793,
+                "y": -12.7902034,
+                "z": 7.8330906
+              }
+            },
+            "canopy": {
+              "pos": {
+                "x": 123.382368,
+                "y": 1836.9116335,
+                "z": -12.1208535
+              },
+              "vel": {
+                "x": 9.6332726,
+                "y": -9.7046851,
+                "z": 5.3667116
+              },
+              "q": {
+                "x": -0.3459074,
+                "y": 0.7657742,
+                "z": 0.5017615,
+                "w": -0.2053617
+              },
+              "omega": {
+                "x": -0.8596022,
+                "y": 0.0286177,
+                "z": 0.1592517
+              }
+            },
+            "wing": {
+              "controlMode": "brakes",
+              "leftBrake": 0.4735458696736834,
+              "rightBrake": 0.004295808953279969,
+              "wingPhase": "flying",
+              "inflation": 1,
+              "stall": 0,
+              "tuck": 0,
+              "loops": 0,
+              "energy": 2054933.692684785
+            },
+            "watch": {
+              "clock": 20.000000000000146,
+              "fronts": 4,
+              "backs": 2,
+              "front": 0.32920969863,
+              "back": 1.69326484262,
+              "frontAt": 16.466666666667013,
+              "backAt": 14.416666666666963,
+              "building": 1,
+              "catches": 0,
+              "caughtPeak": 0,
+              "caughtAt": null,
+              "brakeAt": null,
+              "pumping": 0,
+              "tops": 5,
+              "top": 1.51644807986,
+              "topSide": 1,
+              "topAt": 19.60000000000017,
+              "chain": 2,
+              "breaks": 0,
+              "broke": 0,
+              "calm": 0,
+              "timed": 2,
+              "timedKind": 3,
+              "timedAt": 19.60000000000017,
+              "swappedAt": 19.583333333333503,
+              "wingTop": 1,
+              "linking": 1,
+              "looping": 0,
+              "loops": 0,
+              "loopAt": null,
+              "spiraling": 0,
+              "spiralArc": 0,
+              "spiralSide": 0,
+              "spirals": 1,
+              "spiralAt": 10.266666666666756,
+              "rollAcceleration": -1.25497205994,
+              "moves": 2,
+              "moveKind": 2,
+              "moveBand": 4,
+              "moveSize": 1.51644807986,
+              "moveAt": 19.60000000000017,
+              "quality": 2
+            },
+            "style": {
+              "total": 0,
+              "pending": 80,
+              "elements": 2,
+              "links": 2,
+              "rolls": 1,
+              "loops": 0,
+              "deepest": 0,
+              "last": 2,
+              "landed": 0,
+              "lost": 0,
+              "said": 0,
+              "wingovers": 0,
+              "mostLoops": 0,
+              "pitch": 0,
+              "armed": true,
+              "bankedAt": null,
+              "lostAt": null,
+              "spirals": 1,
+              "mostSpirals": 0,
+              "base": 70,
+              "variety": 10,
+              "kindMask": 10,
+              "sequence": [
+                4,
+                2
+              ],
+              "bankCalm": 0,
+              "lastCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              },
+              "bestCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              }
+            }
+          }
+        },
+        {
+          "step": 1717,
+          "snapshot": {
+            "pilot": {
+              "pos": {
+                "x": 218.6078837,
+                "y": 1797.57541,
+                "z": -4.1100689
+              },
+              "vel": {
+                "x": 12.7573418,
+                "y": -5.8027544,
+                "z": 3.4228075
+              }
+            },
+            "canopy": {
+              "pos": {
+                "x": 217.4757535,
+                "y": 1800.7983623,
+                "z": 2.3972133
+              },
+              "vel": {
+                "x": 9.9504181,
+                "y": -6.5533457,
+                "z": 3.3082131
+              },
+              "q": {
+                "x": -0.3000032,
+                "y": 0.7527745,
+                "z": 0.4567179,
+                "w": -0.3670658
+              },
+              "omega": {
+                "x": -0.0251718,
+                "y": -0.5151944,
+                "z": -0.3731958
+              }
+            },
+            "wing": {
+              "controlMode": "brakes",
+              "leftBrake": 0.15555158571365052,
+              "rightBrake": 0.2845860566448798,
+              "wingPhase": "flying",
+              "inflation": 1,
+              "stall": 0,
+              "tuck": 0,
+              "loops": 0,
+              "energy": 2004547.435150336
+            },
+            "watch": {
+              "clock": 28.616666666666323,
+              "fronts": 5,
+              "backs": 2,
+              "front": 0.41152349855,
+              "back": 1.69326484262,
+              "frontAt": 24.333333333333233,
+              "backAt": 14.416666666666963,
+              "building": 2,
+              "catches": 0,
+              "caughtPeak": 0,
+              "caughtAt": null,
+              "brakeAt": null,
+              "pumping": 0,
+              "tops": 7,
+              "top": 1.14585199331,
+              "topSide": 1,
+              "topAt": 28.616666666666323,
+              "chain": 4,
+              "breaks": 0,
+              "broke": 0,
+              "calm": 0,
+              "timed": 4,
+              "timedKind": 3,
+              "timedAt": 28.616666666666323,
+              "swappedAt": 28.58333333333299,
+              "wingTop": 1,
+              "linking": 1,
+              "looping": 0,
+              "loops": 0,
+              "loopAt": null,
+              "spiraling": 0,
+              "spiralArc": 0,
+              "spiralSide": 0,
+              "spirals": 1,
+              "spiralAt": 10.266666666666756,
+              "rollAcceleration": -1.90006755092,
+              "moves": 3,
+              "moveKind": 2,
+              "moveBand": 2,
+              "moveSize": 1.14585199331,
+              "moveAt": 28.616666666666323,
+              "quality": 2
+            },
+            "style": {
+              "total": 0,
+              "pending": 110,
+              "elements": 3,
+              "links": 3,
+              "rolls": 2,
+              "loops": 0,
+              "deepest": 0,
+              "last": 2,
+              "landed": 0,
+              "lost": 0,
+              "said": 0,
+              "wingovers": 0,
+              "mostLoops": 0,
+              "pitch": 0,
+              "armed": true,
+              "bankedAt": null,
+              "lostAt": null,
+              "spirals": 1,
+              "mostSpirals": 0,
+              "base": 100,
+              "variety": 10,
+              "kindMask": 10,
+              "sequence": [
+                4,
+                2,
+                2
+              ],
+              "bankCalm": 0,
+              "lastCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              },
+              "bestCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              }
+            }
+          }
+        },
+        {
+          "step": 1800,
+          "snapshot": {
+            "pilot": {
+              "pos": {
+                "x": 232.6718383,
+                "y": 1786.1528571,
+                "z": 8.5523529
+              },
+              "vel": {
+                "x": 7.0373032,
+                "y": -6.4359556,
+                "z": 14.4213093
+              }
+            },
+            "canopy": {
+              "pos": {
+                "x": 232.0123881,
+                "y": 1793.2473775,
+                "z": 10.3454967
+              },
+              "vel": {
+                "x": 11.9140273,
+                "y": -4.4895231,
+                "z": 8.5025194
+              },
+              "q": {
+                "x": -0.1098226,
+                "y": 0.8815425,
+                "z": 0.1490167,
+                "w": -0.4342993
+              },
+              "omega": {
+                "x": -0.7188468,
+                "y": -0.1237491,
+                "z": -0.4957158
+              }
+            },
+            "wing": {
+              "controlMode": "brakes",
+              "leftBrake": 0.49175563464247246,
+              "rightBrake": 7.623777202229938e-8,
+              "wingPhase": "flying",
+              "inflation": 1,
+              "stall": 0,
+              "tuck": 0,
+              "loops": 0,
+              "energy": 1997909.7140827398
+            },
+            "watch": {
+              "clock": 29.999999999999577,
+              "fronts": 6,
+              "backs": 2,
+              "front": 0.4238797442,
+              "back": 1.69326484262,
+              "frontAt": 28.833333333332977,
+              "backAt": 14.416666666666963,
+              "building": 3,
+              "catches": 0,
+              "caughtPeak": 0,
+              "caughtAt": null,
+              "brakeAt": null,
+              "pumping": 0,
+              "tops": 7,
+              "top": 1.14585199331,
+              "topSide": 1,
+              "topAt": 28.616666666666323,
+              "chain": 4,
+              "breaks": 0,
+              "broke": 0,
+              "calm": 0,
+              "timed": 4,
+              "timedKind": 3,
+              "timedAt": 28.616666666666323,
+              "swappedAt": 28.58333333333299,
+              "wingTop": 1,
+              "linking": 1,
+              "looping": 0,
+              "loops": 0,
+              "loopAt": null,
+              "spiraling": 0,
+              "spiralArc": 0,
+              "spiralSide": 0,
+              "spirals": 1,
+              "spiralAt": 10.266666666666756,
+              "rollAcceleration": -0.53626933112,
+              "moves": 3,
+              "moveKind": 2,
+              "moveBand": 2,
+              "moveSize": 1.14585199331,
+              "moveAt": 28.616666666666323,
+              "quality": 2
+            },
+            "style": {
+              "total": 0,
+              "pending": 110,
+              "elements": 3,
+              "links": 3,
+              "rolls": 2,
+              "loops": 0,
+              "deepest": 0,
+              "last": 2,
+              "landed": 0,
+              "lost": 0,
+              "said": 0,
+              "wingovers": 0,
+              "mostLoops": 0,
+              "pitch": 0,
+              "armed": true,
+              "bankedAt": null,
+              "lostAt": null,
+              "spirals": 1,
+              "mostSpirals": 0,
+              "base": 100,
+              "variety": 10,
+              "kindMask": 10,
+              "sequence": [
+                4,
+                2,
+                2
+              ],
+              "bankCalm": 0,
+              "lastCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              },
+              "bestCombo": {
+                "points": 0,
+                "base": 0,
+                "variety": 0,
+                "moves": 0,
+                "mask": 0,
+                "sequence": []
+              }
+            }
+          }
+        },
+        {
+          "step": 2309,
+          "snapshot": {
+            "pilot": {
+              "pos": {
+                "x": 310.1711514,
+                "y": 1779.0490615,
+                "z": 46.7215273
+              },
+              "vel": {
+                "x": 10.0185859,
+                "y": -1.3070756,
+                "z": -0.7963731
+              }
+            },
+            "canopy": {
+              "pos": {
+                "x": 310.3425413,
+                "y": 1786.3894463,
+                "z": 46.3881309
+              },
+              "vel": {
+                "x": 11.1839331,
+                "y": -1.3405721,
+                "z": -0.924565
+              },
+              "q": {
+                "x": 0.0221442,
+                "y": 0.6768492,
+                "z": -0.0145904,
+                "w": -0.7356439
+              },
+              "omega": {
+                "x": 0.0054357,
+                "y": 0.0653071,
+                "z": -0.0662814
+              }
+            },
+            "wing": {
+              "controlMode": "brakes",
+              "leftBrake": 0.000015897687945570363,
+              "rightBrake": 0.000015897687945570363,
+              "wingPhase": "flying",
+              "inflation": 1,
+              "stall": 0,
+              "tuck": 0,
+              "loops": 0,
+              "energy": 1980130.575331179
+            },
+            "watch": {
+              "clock": 38.48333333333243,
+              "fronts": 6,
+              "backs": 3,
+              "front": 0.4238797442,
+              "back": 0.33154747813,
+              "frontAt": 28.833333333332977,
+              "backAt": 32.06666666666613,
+              "building": 3,
+              "catches": 0,
+              "caughtPeak": 0,
+              "caughtAt": null,
+              "brakeAt": 37.58333333333248,
+              "pumping": 0,
+              "tops": 7,
+              "top": 1.14585199331,
+              "topSide": 1,
+              "topAt": 28.616666666666323,
+              "chain": 0,
+              "breaks": 0,
+              "broke": 0,
+              "calm": 2.9999999999999942,
+              "timed": 4,
+              "timedKind": 3,
+              "timedAt": 28.616666666666323,
+              "swappedAt": 28.58333333333299,
+              "wingTop": 1,
+              "linking": 0,
+              "looping": 0,
+              "loops": 0,
+              "loopAt": null,
+              "spiraling": 0,
+              "spiralArc": 0,
+              "spiralSide": 0,
+              "spirals": 1,
+              "spiralAt": 10.266666666666756,
+              "rollAcceleration": -0.02993234778,
+              "moves": 3,
+              "moveKind": 2,
+              "moveBand": 2,
+              "moveSize": 1.14585199331,
+              "moveAt": 28.616666666666323,
+              "quality": 2
+            },
+            "style": {
+              "total": 110,
+              "pending": 0,
+              "elements": 0,
+              "links": 0,
+              "rolls": 0,
+              "loops": 0,
+              "deepest": 0,
+              "last": 0,
+              "landed": 1,
+              "lost": 0,
+              "said": 110,
+              "wingovers": 2,
+              "mostLoops": 0,
+              "pitch": 0,
+              "armed": true,
+              "bankedAt": 38.48333333333243,
+              "lostAt": null,
+              "spirals": 0,
+              "mostSpirals": 1,
+              "base": 0,
+              "variety": 0,
+              "kindMask": 0,
+              "sequence": [],
+              "bankCalm": 0,
+              "lastCombo": {
+                "points": 110,
+                "base": 100,
+                "variety": 10,
+                "moves": 3,
+                "mask": 10,
+                "sequence": [
+                  4,
+                  2,
+                  2
+                ]
+              },
+              "bestCombo": {
+                "points": 110,
+                "base": 100,
+                "variety": 10,
+                "moves": 3,
+                "mask": 10,
+                "sequence": [
+                  4,
+                  2,
+                  2
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "snapshot": {
+        "pilot": {
+          "pos": {
+            "x": 310.1711514,
+            "y": 1779.0490615,
+            "z": 46.7215273
+          },
+          "vel": {
+            "x": 10.0185859,
+            "y": -1.3070756,
+            "z": -0.7963731
+          }
+        },
+        "canopy": {
+          "pos": {
+            "x": 310.3425413,
+            "y": 1786.3894463,
+            "z": 46.3881309
+          },
+          "vel": {
+            "x": 11.1839331,
+            "y": -1.3405721,
+            "z": -0.924565
+          },
+          "q": {
+            "x": 0.0221442,
+            "y": 0.6768492,
+            "z": -0.0145904,
+            "w": -0.7356439
+          },
+          "omega": {
+            "x": 0.0054357,
+            "y": 0.0653071,
+            "z": -0.0662814
+          }
+        },
+        "wing": {
+          "controlMode": "brakes",
+          "leftBrake": 0.000015897687945570363,
+          "rightBrake": 0.000015897687945570363,
+          "wingPhase": "flying",
+          "inflation": 1,
+          "stall": 0,
+          "tuck": 0,
+          "loops": 0,
+          "energy": 1980130.575331179
+        },
+        "watch": {
+          "clock": 38.48333333333243,
+          "fronts": 6,
+          "backs": 3,
+          "front": 0.4238797442,
+          "back": 0.33154747813,
+          "frontAt": 28.833333333332977,
+          "backAt": 32.06666666666613,
+          "building": 3,
+          "catches": 0,
+          "caughtPeak": 0,
+          "caughtAt": null,
+          "brakeAt": 37.58333333333248,
+          "pumping": 0,
+          "tops": 7,
+          "top": 1.14585199331,
+          "topSide": 1,
+          "topAt": 28.616666666666323,
+          "chain": 0,
+          "breaks": 0,
+          "broke": 0,
+          "calm": 2.9999999999999942,
+          "timed": 4,
+          "timedKind": 3,
+          "timedAt": 28.616666666666323,
+          "swappedAt": 28.58333333333299,
+          "wingTop": 1,
+          "linking": 0,
+          "looping": 0,
+          "loops": 0,
+          "loopAt": null,
+          "spiraling": 0,
+          "spiralArc": 0,
+          "spiralSide": 0,
+          "spirals": 1,
+          "spiralAt": 10.266666666666756,
+          "rollAcceleration": -0.02993234778,
+          "moves": 3,
+          "moveKind": 2,
+          "moveBand": 2,
+          "moveSize": 1.14585199331,
+          "moveAt": 28.616666666666323,
+          "quality": 2
+        },
+        "style": {
+          "total": 110,
+          "pending": 0,
+          "elements": 0,
+          "links": 0,
+          "rolls": 0,
+          "loops": 0,
+          "deepest": 0,
+          "last": 0,
+          "landed": 1,
+          "lost": 0,
+          "said": 110,
+          "wingovers": 2,
+          "mostLoops": 0,
+          "pitch": 0,
+          "armed": true,
+          "bankedAt": 38.48333333333243,
+          "lostAt": null,
+          "spirals": 0,
+          "mostSpirals": 1,
+          "base": 0,
+          "variety": 0,
+          "kindMask": 0,
+          "sequence": [],
+          "bankCalm": 0,
+          "lastCombo": {
+            "points": 110,
+            "base": 100,
+            "variety": 10,
+            "moves": 3,
+            "mask": 10,
+            "sequence": [
+              4,
+              2,
+              2
+            ]
+          },
+          "bestCombo": {
+            "points": 110,
+            "base": 100,
+            "variety": 10,
+            "moves": 3,
+            "mask": 10,
+            "sequence": [
+              4,
+              2,
+              2
+            ]
+          }
+        }
+      },
+      "source": "Chromium computed canonical paired brakes, physical spiral and fresh wingovers",
+      "nodeMatches": true
+    }
+  ]
+}

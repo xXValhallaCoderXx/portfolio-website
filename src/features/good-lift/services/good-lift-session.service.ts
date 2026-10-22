@@ -7,7 +7,7 @@ import type { RunLog } from '../../../domains/good-lift/recorder.ts';
 import type { FlightInput } from '../../../domains/flight/models.ts';
 import type { ReplayResult } from './replay-work.service.ts';
 import type { RunSheet, ChallengeOutcome, BoardRow } from '../good-lift.models.ts';
-import { clearStore, learnTrickLesson, repeatTrickLessons, readStore, recordRun, updateStore } from '../../../adapters/browser/good-lift-storage.service.ts';
+import { clearStore, learnTrickLesson, readStore, recordRun, updateStore } from '../../../adapters/browser/good-lift-storage.service.ts';
 import { readKit, writeKit } from '../../../adapters/browser/kit-storage.service.ts';
 import type { GoodLiftHost, RunResult, BotResult, WorldResult, ResolvedSky, KitChoice, GameAddress } from '../good-lift.models.ts';
 import { createRunVoices } from './run-audio.adapter.ts';
@@ -32,10 +32,16 @@ import { resolveSky, seedFor, skyId } from '../../../domains/good-lift/daily.ts'
 import { featsFor } from '../../../domains/good-lift/meet-card.ts';
 import { DAY_MS, dailyNumber, dayOf, gameHref } from '../../../domains/good-lift/good-lift-address.ts';
 import { earnFeats, keepEarned, kitAfterRun, kitSheet, setInitials as nameRuns } from '../../../domains/progression/good-lift-store.ts';
-import { createTrickLessons } from '../../../domains/good-lift/trick-lessons.ts';
+import { createFlightCoach } from '../../../domains/coaching/flight-coach.ts';
+import { createTrainingSession } from '../../../domains/good-lift/training-session.ts';
+
+/** The same lazy entry, with no ranked world, recorder or reward controller instantiated. */
+export function createGoodLiftTraining(host: Pick<GoodLiftHost, 'g' | 'controls' | 'air'>) {
+  return createTrainingSession({ ...host, onLearned: id => { learnTrickLesson(id); } });
+}
 import { createChalk } from '../presentation/meet-chalk.ts';
 import { addRow, boardKey, outranks, rowsFor } from '../../../domains/good-lift/board.ts';
-import { multiplierOf, scoreOf } from '../../../domains/good-lift/score.ts';
+import { scoreOf } from '../../../domains/good-lift/score.ts';
 import { BOTS, createBots, landing, owing } from '../../../domains/good-lift/meet-bots.ts';
 import { bynameFor } from '../../../domains/good-lift/meet-bynames.ts';
 import { verseFor } from '../../../domains/good-lift/meet-verse.ts';
@@ -67,7 +73,8 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 const sameSheet = (run: RunSheet, again: ReplayResult | null) => !!again && !('error' in again) && again.reason === run.reason && again.steps === run.steps &&
   again.total === run.total && again.peak === run.peak && again.lifts.length === run.lifts.length &&
   run.lifts.every((lift, i: number) => lift.red === again.lifts[i].red && lift.kg === again.lifts[i].kg && lift.good === again.lifts[i].good) &&
-  again.stats.style === run.stats.style;
+  again.stats.style === run.stats.style && again.stats.spirals === run.stats.spirals &&
+  JSON.stringify(again.stats.bestCombo) === JSON.stringify(run.stats.bestCombo);
 
 // Whether two kits (wing-kit.js's, normalised) wear the same colours and gear.
 const sameKit = (a: KitChoice, b: KitChoice) => a.wing === b.wing && a.harness === b.harness && a.helmet === b.helmet && a.chalk === b.chalk;
@@ -144,8 +151,7 @@ export function createGoodLift(host: GoodLiftHost) {
   const { caw, thud, whoosh, rush, ting, twice, sparkle, lurch, flap, swish, arpeggio, dud, thunk, thump, swell, grunt, growl, whistle, ricochet, chime, rubble, clatter, gale, lure, judges, horn, thunder } = createRunVoices(sound);
   const sky = createCloudbaseRun();
   const coachEnvironment = createRunCoachEnvironment(sky);
-  const lessons = createTrickLessons({ learned: () => readStore().learnedLessons,
-    onLearned: (id) => { learnTrickLesson(id); } });
+  const coach = createFlightCoach();
   const meet = createMeet();
   const style = createStyle();
   const bells = createBells();
@@ -234,7 +240,8 @@ export function createGoodLift(host: GoodLiftHost) {
   const styleEl = $('.fj-style');
   const comboAnnounceEl = $('.fj-combo-announcement');
   const combo = createComboPresenter({ element: styleEl, label: $('[data-combo="label"]', styleEl),
-    detail: $('[data-combo="detail"]', styleEl), announce: comboAnnounceEl });
+    detail: $('[data-combo="detail"]', styleEl), announce: comboAnnounceEl,
+    calm: $('[data-combo="calm"]', styleEl), fill: $('[data-combo="calm"] i', styleEl) });
   const hornEl = $('.fj-horn');
   const lightsEl = $('.fj-lights');
   const lightEls = lightsEl.querySelectorAll('i');
@@ -744,8 +751,8 @@ export function createGoodLift(host: GoodLiftHost) {
       bar: lift.bar + MEET.bar,
       total: lift.total,
       fogClearance: Math.max(0, Math.floor(g.pos.y - fogHeight)),
-      status: pilot.collapse > 0 ? 'collapsed' : g.stall > 0 ? 'stalled' : pilot.cloud > 0.25 ? 'in cloud' : '',
-      styleMultiplier: multiplierOf(style.state.total),
+      status: pilot.collapse > 0 || g.tuck > 0 ? 'collapsed' : g.stall > 0 ? 'stalled' : pilot.cloud > 0.25 ? 'in cloud' : '',
+      acroPoints: style.state.total,
       horn: lift.horn,
     };
   }
@@ -764,14 +771,13 @@ export function createGoodLift(host: GoodLiftHost) {
     const compact = host.compact();
     barCell.textContent = bar;
     barCell.classList.toggle('doubled', lift.horn);
-    // The style, once a set of tricks has landed, with what it multiplies the total by (score.js):
+    // Banked acro adds directly to the flight's final score:
     // written as it changes, or as the readouts change form (a phone turned, a window narrowed).
     const total = style.state.total;
     if (total !== styled.total || compact !== styled.compact) {
       styled.total = total;
       styled.compact = compact;
-      const times = `×${multiplierOf(total).toFixed(2)}`;
-      styleCell.textContent = compact ? `style ${times}` : `${total.toLocaleString('en-GB')} · ${times}`;
+      styleCell.textContent = `+${total.toLocaleString('en-GB')} acro`;
       rows.toggleAttribute('data-style', total > 0);
     }
     // The blessing held rides beside the bar as its rune, lit up as it is taken.
@@ -1265,16 +1271,10 @@ export function createGoodLift(host: GoodLiftHost) {
     get world() { return world; },
     get pumpLimit() { return CLOUD_STRIKE.pump.most; },
     get coachEnvironment() { return coachEnvironment; },
-    stepCoach: (dt: number, frame: Parameters<typeof lessons.step>[1]) => lessons.step(dt, frame),
-    resetLessons: () => lessons.reset(),
-    cancelLesson: () => lessons.cancel(),
-    repeatLessons: () => {
-      repeatTrickLessons();
-      lessons.repeat();
-    },
+    stepCoach: (dt: number, frame: Parameters<typeof coach.step>[1]) => coach.step(dt, frame),
+    resetCoach: () => coach.reset(),
     clearProgress: () => clearStore(),
     clearComboFeedback: () => combo.clear(),
-    get lessons() { return lessons.state; },
     get coachHazard() { return runCoachHazard(world); },
     get coachWarning() { return runCoachWarning(world); },
     get style() { return style; },

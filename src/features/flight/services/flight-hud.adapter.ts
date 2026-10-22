@@ -10,7 +10,7 @@ const clamp = (value: number, low: number, high: number) => Math.max(low, Math.m
 const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
 interface RunReadouts {
- nextLine: number; bar: number; total: number; fogClearance: number; status: string; styleMultiplier: number; horn: boolean;
+ nextLine: number; bar: number; total: number; fogClearance: number; status: string; acroPoints: number; horn: boolean;
 }
 interface FlightHudPort {
  stage: HTMLElement; g: FlightState; input: FlightInput; air: AirSample;
@@ -19,6 +19,7 @@ interface FlightHudPort {
  readonly mode: string; readonly auto: FlightZone | null; readonly mapOpen: boolean; readonly keysOpen: boolean; readonly briefing: boolean; readonly hasDragged: boolean; readonly portal: boolean; readonly held: boolean; readonly coachMessage: CoachFields | null;
  isAirborne(): boolean; compact(): boolean; runHud(quiet: boolean): string; runReadouts?(): RunReadouts | null;
  clearComboFeedback?(): void;
+ trainingReadouts?(): {lesson: string; points: number} | null;
  nearestZone(onlyUnvisited: boolean): { zone: FlightZone; dist: number } | null; hintText(): string; drawMap(): void;
 }
 /** DOM readouts only sample the session; all flight and coaching state remains owned upstream. */
@@ -42,7 +43,8 @@ export function createFlightHud(port: FlightHudPort) {
    const urgent = !!message?.warning || !!message?.urgent;
    const judges = !!stage.querySelector('.fj-lights:not([hidden])');
    const owner = flightMessageOwner({ blocked, urgent, coach: !!message, judges,
-     notice: !!stage.querySelector('.fj-toast'), hint: !!$('.fj-hint').textContent, intro: !port.hasDragged && !port.auto });
+     notice: !!stage.querySelector('.fj-toast'), hint: !!$('.fj-hint').textContent,
+     intro: port.mode !== 'cloudbase' && port.mode !== 'training' && !port.hasDragged && !port.auto });
    stage.dataset.messageOwner = owner;
    const secondary = flightSecondaryOwner({ blocked, urgent, judges });
    stage.dataset.secondaryOwner = secondary;
@@ -83,6 +85,7 @@ export function createFlightHud(port: FlightHudPort) {
    thermalTrack.setAttribute('aria-valuenow', Math.min(THERMAL_AIR.scale, thermalAir.value).toFixed(1));
    thermalTrack.setAttribute('aria-valuetext', `${thermalAir.value.toFixed(1)} metres per second of thermal air, ${thermalAir.trend.toLowerCase()}`);
    label.textContent = 'ALT'; altitudeProgress.hidden = true; status.hidden = true; styleReadout.hidden = true;
+   $('.fj-destination-metric dt').textContent = port.mode === 'training' ? 'LESSON' : 'NEXT';
    if (port.mode === 'lost') {
      hud('speed').textContent = `${Math.round(Math.abs(g.vy) * 3.6)} km/h down`;
      hud('destination').textContent = '404'; hud('next').textContent = 'nowhere · 404';
@@ -95,11 +98,11 @@ export function createFlightHud(port: FlightHudPort) {
        label.textContent = `ALT → ${run.nextLine}`;
        metric('alt', String(Math.max(0, Math.floor(g.pos.y))), 'm');
        metric('bar', String(Math.round(run.bar * 10) / 10), run.horn ? 'kg ×2' : 'kg');
-       hud('belt').textContent = `total ${Math.round(run.total * 10) / 10} kg`;
+       hud('belt').textContent = `score ${Math.round(run.total + run.acroPoints)} · lifted ${Math.round(run.total * 10) / 10} kg`;
        hud('next').textContent = `fog ${run.fogClearance} m ↓`;
        hud('next').classList.toggle('fj-fog-close', run.fogClearance < 80);
        status.textContent = run.status; status.hidden = !run.status;
-       styleReadout.textContent = `style ×${run.styleMultiplier.toFixed(2)}`; styleReadout.hidden = run.styleMultiplier <= 1;
+       styleReadout.textContent = `acro +${run.acroPoints.toLocaleString('en-GB')}`; styleReadout.hidden = run.acroPoints <= 0;
        altitudeProgress.hidden = false;
        const previousLine = Math.max(0, run.nextLine - 150);
        const fill = clamp((g.pos.y - previousLine) / Math.max(1, run.nextLine - previousLine), 0, 1);
@@ -107,6 +110,17 @@ export function createFlightHud(port: FlightHudPort) {
        altitudeProgress.setAttribute('aria-valuenow', String(Math.round(fill * 100)));
        altitudeProgress.setAttribute('aria-valuetext', `${Math.max(0, Math.round(g.pos.y))} metres; next banking line ${run.nextLine} metres`);
      }
+   } else if (port.mode === 'training') {
+     const practice = port.trainingReadouts?.();
+     const lesson = practice?.lesson === 'pitch' ? 'PITCH & CATCH' : practice?.lesson === 'spiral' ? 'SPIRAL 360' : (practice?.lesson ?? '').toUpperCase();
+     label.textContent = 'TRAINING';
+     hud('destination').textContent = lesson;
+     hud('speed').textContent = `${Math.round(g.speed * 3.6)} km/h`;
+     hud('belt').textContent = 'unranked practice';
+     hud('next').textContent = practice?.points ? `acro +${practice.points}` : '';
+     hud('next').classList.remove('fj-fog-close');
+     status.textContent = g.stall > 0 ? 'stalled' : g.tuck > 0 ? 'collapsed' : ''; status.hidden = !status.textContent;
+     $('.fj-hint').textContent = '';
    } else {
      hud('next').classList.remove('fj-fog-close');
      status.textContent = g.stall > 0 ? 'stalled' : ''; status.hidden = !status.textContent;

@@ -6,6 +6,7 @@ import { GAME_STORE as RESET_KEY } from './achievements.ts';
 
 import { addRow, boardKey, emptyBoard, rowsFor } from '../good-lift/board.ts';
 import { DAY_MS } from '../good-lift/good-lift-address.ts';
+import { SIM_VERSION } from '../good-lift/sim-version.ts';
 import { FEAT_IDS, GAME_STORE, KIT, TRAINING_BLOCK, earnFeats, earnedKit, emptyStore, keepEarned, kitAfterRun, kitSheet, newlyEarned, normalizeStore, setInitials, } from './good-lift-store.ts';
 import { clearStore, readStore, recordRun, updateStore, writeStore } from '../../adapters/browser/good-lift-storage.service.ts';
 import { BLOCKED } from '../good-lift/meet-initials.ts';
@@ -15,8 +16,8 @@ import { KIT_THEMES, emptyKit } from './wing-kit.ts';
 
 const DAY = 20_756;
 const NOON = DAY * DAY_MS + DAY_MS / 2;
-const KEY = boardKey(1, DAY);
-const AT = { version: 1, now: NOON };
+const KEY = boardKey(SIM_VERSION, DAY);
+const AT = { version: SIM_VERSION, now: NOON };
 
 // A finished run: today's Daily Sky, judged by the fog, unless told otherwise.
 const run = (fields: Partial<RecordedRun> = {}) => ({
@@ -50,7 +51,7 @@ afterEach(() => {
 
 
 test('a fresh or damaged store reads as empty, and a good one round-trips', () => {
-  assert.deepEqual(emptyStore(), { best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], learnedLessons: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: { days: {} }, bots: null });
+  assert.deepEqual(emptyStore(), { scoreVersion: SIM_VERSION, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], learnedLessons: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: { days: {} }, bots: null });
   assert.deepEqual(readStore(memoryStorage()), emptyStore());
   for (const text of ['{broken', 'null', '[]', '"store"', '42', JSON.stringify({ best: 'high' })]) {
     assert.deepEqual(readStore(memoryStorage({ [GAME_STORE]: text })), emptyStore(), text);
@@ -77,10 +78,10 @@ test('a fresh or damaged store reads as empty, and a good one round-trips', () =
   // No best or tonnage is negative, and the run count is a whole number small enough to count up from.
   assert.deepEqual(normalizeStore({ best: { total: 512.5, peak: -1 }, tonnage: -5, runs: 2 ** 53 }), { ...emptyStore(), best: { total: 512.5, peak: 0, score: 0 } });
   // Damaged scores fall back to zero; no score is inferred from an incomplete record.
-  assert.equal(normalizeStore({ best: { total: 512.5, peak: 1412, score: 646 } }).best.score, 646);
+  assert.equal(normalizeStore({ scoreVersion: SIM_VERSION, best: { total: 512.5, peak: 1412, score: 646 } }).best.score, 646);
   assert.equal(normalizeStore({ best: { total: 512.5, peak: 1412 } }).best.score, 0);
   assert.equal(normalizeStore({ best: { total: 512.5, peak: 1412, score: -1 } }).best.score, 0);
-  assert.equal(normalizeStore({ best: { total: 512.5, peak: 1412, score: 400 } }).best.score, 400);
+  assert.equal(normalizeStore({ scoreVersion: SIM_VERSION, best: { total: 512.5, peak: 1412, score: 400 } }).best.score, 400);
   assert.equal(normalizeStore({ runs: 2 ** 53 - 1 }).runs, 2 ** 53 - 1);
   // A streak and its day stand or fall together.
   assert.deepEqual(normalizeStore({ daily: { last: 0, streak: 4 } }).daily, { last: 0, streak: 0 });
@@ -97,6 +98,28 @@ test('a fresh or damaged store reads as empty, and a good one round-trips', () =
   assert.deepEqual(store.best, { total: 512.5, peak: 1412, score: 646 });
   assert.deepEqual(store.feats, ['opener', 'clean-meet']);
   assert.deepEqual(store.board.days[KEY].rows[0].red, [0, 2, 4]);
+});
+
+test('new score rules reset only the competitive PB while career progress and historical boards survive', () => {
+  const legacy = { ...emptyStore(), scoreVersion: SIM_VERSION - 1,
+    best: { total: 500, peak: 1500, score: 9000 }, tonnage: 2000, runs: 12,
+    feats: ['opener'], learnedLessons: ['pitch'], initials: 'REN', optIn: true,
+    daily: { last: DAY, streak: 3 } };
+  const oldKey = boardKey(SIM_VERSION - 1, DAY);
+  addRow(legacy.board, oldKey, { who: 'REN', via: 'me', total: 500, style: 0, peak: 1500,
+    red: [0], at: NOON, log: 'old', byname: '' });
+  const migrated = normalizeStore(legacy);
+  assert.equal(migrated.scoreVersion, SIM_VERSION);
+  assert.deepEqual(migrated.best, { total: 500, peak: 1500, score: 0 });
+  assert.deepEqual([migrated.tonnage, migrated.runs, migrated.feats, migrated.learnedLessons, migrated.daily, migrated.initials, migrated.optIn],
+    [2000, 12, ['opener'], ['pitch'], { last: DAY, streak: 3 }, 'REN', true]);
+  assert.deepEqual(rowsFor(migrated.board, oldKey), rowsFor(legacy.board, oldKey));
+  assert.equal(normalizeStore({ best: legacy.best }).best.score, 0, 'an untagged PB has no current scoring provenance');
+  recordRun(migrated, run({ total: 100, style: 1500, log: 'new' }), AT);
+  assert.equal(migrated.best.score, 1600);
+  assert.equal(rowsFor(migrated.board, KEY)[0].style, 1500, 'local persistence never truncates raw banked acro');
+  assert.deepEqual(migrated.best, { total: 500, peak: 1500, score: 1600 });
+  assert.equal(normalizeStore(migrated).best.score, 1600, 'a current tagged PB survives reload');
 });
 
 test('blocked storage still keeps the visit\'s runs', () => {

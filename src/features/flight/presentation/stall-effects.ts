@@ -43,7 +43,7 @@ export interface BrakeMeter { fill: number; red: number; state: string }
 export function stallEffects(mode: string, flight: FlightState, output: Partial<StallVisuals>, load = flight?.stallLoad ?? 0): StallVisuals {
   const out = output as StallVisuals;
   out.left = out.right = out.luff = out.shake = out.tuck = 0;
-  if (mode !== 'flying' && mode !== 'cloudbase') return out;
+  if (mode !== 'flying' && mode !== 'cloudbase' && mode !== 'training') return out;
   const E = STALL_EFFECTS;
   const backfly = flight.wingPhase === WING.backfly;
   const severity = clamp(flight.stall, 0, 1);

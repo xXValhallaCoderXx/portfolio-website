@@ -2,9 +2,9 @@ import type { CoachFrame } from './flight-coach.ts';
 import type { CoachFields } from './models.ts';
 import { COACH_INTENT } from './coach-intent.ts';
 
-export type DirectManeuver = 'pitch' | 'wingover' | 'loop';
+export type DirectManeuver = 'pitch' | 'spiral' | 'wingover' | 'loop';
 const working = 0.60;
-const names = { pitch: 'PITCH & CATCH', wingover: 'WINGOVER', loop: 'LOOP' };
+const names = { pitch: 'PITCH & CATCH', spiral: 'SPIRAL 360', wingover: 'WINGOVER', loop: 'LOOP' };
 
 /** Visible requests from measured motion. This observer never moves the wing or presses a key. */
 export function createDirectAcroGuide() {
@@ -16,6 +16,7 @@ export function createDirectAcroGuide() {
     topAt = frontAt = -Infinity; inverted = false;
     preparing = recoveryPull = false; lastClock = -Infinity; reversal = null;
   }
+  function recover() { phase = 'recover'; reversal = null; preparing = false; }
   function step(kind: DirectManeuver, frame: CoachFrame): CoachFields {
     const { g, watch, input = {} } = frame;
     const common = Math.min(input.leftBrake ?? 0, input.rightBrake ?? 0);
@@ -53,7 +54,7 @@ export function createDirectAcroGuide() {
       if (released && Math.abs(g.bank) < 0.175 && (watch.calm ?? 0) >= 1) {
         phase = kind === 'pitch' ? 'shape' : 'first-turn';
         topAt = watch.topAt; frontAt = watch.frontAt;
-      } else return request(0, 0, 'LEVEL THE WING', 'Release both hands. Tricks spend height and earn style, increasing your final score. First let the wing settle.');
+      } else return request(0, 0, 'LEVEL THE WING', 'Release both hands. First let the wing settle before building the move.');
     }
     if (kind === 'pitch') {
       if (phase === 'shape') {
@@ -74,7 +75,14 @@ export function createDirectAcroGuide() {
       }
       if (phase === 'catch' && g.pitch >= 0) phase = 'recover';
       if (phase === 'catch') return request(working, working, 'CATCH · PULL BOTH BRAKES', 'Check the forward swing with working brake, then let the wing settle.', 'catch');
-    } else {
+    } else if (kind === 'spiral' && phase !== 'recover') {
+      const field = request(side < 0 ? .82 : 0, side > 0 ? .82 : 0,
+        `HOLD ${side < 0 ? 'LEFT' : 'RIGHT'} · TURN THROUGH 360°`,
+        'Hold the marked deep turn. The course you actually fly counts the full circle; release at the next cue.', 'turn');
+      field.progress = Math.min(1, ((watch as { spiralArc?: number }).spiralArc ?? 0) / (Math.PI * 2));
+      field.progressLabel = 'OBSERVED TURN · 360°';
+      return field;
+    } else if (kind !== 'spiral') {
       const depth = kind === 'loop' ? 1 : 0.82;
       if (kind === 'loop' && g.loop) inverted = true;
       const returning = watch.topAt > topAt && watch.topSide === side && g.bank * side > 0 && g.rollRate * side < 0;
@@ -83,7 +91,8 @@ export function createDirectAcroGuide() {
         // a bank target. The first forward pendulum peak gives its observed transfer of energy.
         const firstWingSwing = kind === 'wingover' && phase === 'first-turn' &&
           watch.frontAt > frontAt && g.bank * side > 1.03;
-        if (firstWingSwing || returning && Math.abs(g.bank) <= (kind === 'loop' ? 0.50 : 1.20)) {
+        const qualifiedReturn = returning && (kind !== 'wingover' || phase !== 'first-turn' || watch.top >= 0.873);
+        if (firstWingSwing || qualifiedReturn && Math.abs(g.bank) <= (kind === 'loop' ? 0.50 : 1.45)) {
           side = -side; topAt = watch.topAt;
           preparing = false;
           reversal = { side, depth, at: now, acceptedFor: 0 };
@@ -105,10 +114,11 @@ export function createDirectAcroGuide() {
       }
     }
     // A forward catch followed by hands up removes swing energy without an automatic rescue.
-    if (g.pitch < -COACH_INTENT.recoveryPitch) recoveryPull = true;
-    else if (g.pitch > COACH_INTENT.recoveryPitch || (watch.calm ?? 0) >= 0.25) recoveryPull = false;
+    if ((watch.calm ?? 0) >= 0.25) recoveryPull = false;
+    else if (g.pitch < -COACH_INTENT.recoveryPitch) recoveryPull = true;
+    else if (g.pitch > COACH_INTENT.recoveryPitch) recoveryPull = false;
     return recoveryPull ? request(working, working, 'CATCH THE FORWARD SWING', 'Use both working brakes, then release as the wing comes back.', 'recovery') :
-      request(0, 0, 'HANDS UP · RECOVER LEVEL', 'Let the wing settle for one steady second to bank style.', 'recovery');
+      request(0, 0, 'HANDS UP · RECOVER LEVEL', 'Let the wing settle for three steady seconds to bank the move.', 'recovery');
   }
-  return { reset, step };
+  return { reset, step, recover };
 }

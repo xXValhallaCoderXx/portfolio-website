@@ -60,6 +60,8 @@
 .flight-paused .fj-style { display: none; }
 .fj-style [data-combo='label'] { font-size: 12px; font-weight: 700; transform-origin: left center; }
 .fj-style [data-combo='detail'] { color: #9fb2c6; font-size: 10px; }
+.fj-combo-calm { display: block; height: 2px; margin-top: 3px; overflow: hidden; border-radius: 2px; background: #24405f; }
+.fj-combo-calm i { display: block; height: 100%; background: #83efc0; transform: scaleX(0); transform-origin: left; }
 .fj-style[data-phase='move'], .fj-style[data-phase='multiplier'] { border-color: #29c7e366; }
 .fj-style[data-phase='move'] [data-combo='label'],
 .fj-style[data-phase='multiplier'] [data-combo='label'] { color: #b7eef4; }

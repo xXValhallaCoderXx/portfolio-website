@@ -197,6 +197,7 @@ export function stepRun(world: RunWorld, intent: FlightInput, dt: number = RUN.s
   if (g.stall > 0 && !stalled) world.stalls += 1;
   if (g.tuck > 0 && !tucked) world.tucks += 1;
   world.watch.step(dt, g, pilot.collapse > 0, controls);
+  const strikesBeforeHazards = pilot.strikes;
   if (g.pos.y - surfaceAt(g.pos.x, g.pos.z) <= RUN.ground) return world.ended = 'landed';
 
   const ended = sky.step(dt, g.pos, { flowEligible: !controls.steered && !controls.deepBrake &&
@@ -211,6 +212,10 @@ export function stepRun(world: RunWorld, intent: FlightInput, dt: number = RUN.s
     world.hook = Math.sign(g.yawRate) || 1;
   }
   world.meet?.step(dt, world);
+  // Sky and bell hazards resolve after the motion observation. Synchronize their break before
+  // scoring this step, so a strike cannot bank a combo on its last recovery frame. This does not
+  // observe motion again or change the solver, hazard or hook order.
+  if (pilot.strikes > strikesBeforeHazards) world.watch.interrupt(4);
   world.style?.step(dt, world);
   world.steps += 1;
   if (world.steps % TRACE.every === 0) sample(world);

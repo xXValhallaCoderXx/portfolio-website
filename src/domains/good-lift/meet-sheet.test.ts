@@ -41,11 +41,12 @@ test('a run\'s sheet is what its world holds: every lift judged in order with it
       scattered: met.scattered, recovered: met.recovered,
       thrown: bells!.state.thrown, dodged: bells!.state.dodged, hits: bells!.state.hits, glanced: bells!.state.glanced, beast: bells!.state.beast.result,
       gates: met.runes.taken, runes: met.runes.runes,
-      style: style!.state.total, wingovers: style!.state.wingovers, pitch: style!.state.pitch, loops: style!.state.mostLoops,
+      style: style!.state.total, wingovers: style!.state.wingovers, pitch: style!.state.pitch, loops: style!.state.mostLoops, spirals: style!.state.mostSpirals,
+      bestCombo: style!.state.bestCombo.points > 0 ? style!.state.bestCombo : null,
     });
     // The plate sources first, then what strikes cost, the kettlebells, the gates and the style!.
     assert.deepEqual(Object.keys(sheet.stats), ['strikes', 'stalls', 'cloud', 'reps', 'deep', 'trails', 'wind', 'thunder', 'bait', 'close',
-      'scattered', 'recovered', 'thrown', 'dodged', 'hits', 'glanced', 'beast', 'gates', 'runes', 'style', 'wingovers', 'pitch', 'loops']);
+      'scattered', 'recovered', 'thrown', 'dodged', 'hits', 'glanced', 'beast', 'gates', 'runes', 'style', 'wingovers', 'pitch', 'loops', 'spirals', 'bestCombo']);
     assert.deepEqual(sheet.trace, { alt: [...trace.alt.subarray(0, trace.n)], fog: [...trace.fog.subarray(0, trace.n)], total: [...trace.total.subarray(0, trace.n)], n: trace.n });
     assert.ok(sheet.lifts.length >= 2 && sheet.trace.n > 100, JSON.stringify(sheet.stats));
   }
@@ -88,7 +89,7 @@ test('a quit is any ending but the fog and a touchdown, and a world with no meet
   assert.deepEqual([sheet.total, sheet.lifts, sheet.steps, sheet.trace.n], [0, [], 20 * 60, 21]);
   assert.deepEqual(sheet.stats, {
     strikes: 0, stalls: bare.stalls, cloud: 0, reps: 0, deep: 0, trails: 0, wind: 0, thunder: 0, bait: 0, close: 0, scattered: 0, recovered: 0,
-    thrown: 0, dodged: 0, hits: 0, glanced: 0, beast: 0, gates: 0, runes: 0, style: 0, wingovers: 0, pitch: 0, loops: 0,
+    thrown: 0, dodged: 0, hits: 0, glanced: 0, beast: 0, gates: 0, runes: 0, style: 0, wingovers: 0, pitch: 0, loops: 0, spirals: 0, bestCombo: null,
   });
   assert.ok(sheet.peak > CLOUD_GATE.y);
 });
@@ -104,4 +105,30 @@ test('the peak counts where the glider is as well as the highest the sky saw, an
   const sheet = summariseRun(world, reason);
   assert.equal(sheet.lifts.length, MEET_POOL.lifts);
   assert.deepEqual(sheet.lifts, meet!.state.lifts);
+});
+
+test('an empty style observer and an omitted observer have the same unbanked result', () => {
+  const bare = startRun(createRunWorld({ sky: createCloudbaseRun() }), 1);
+  const styled = startRun(createRunWorld({ sky: createCloudbaseRun(), style: createStyle() }), 1);
+  assert.deepEqual(summariseRun(styled, 'quit').stats, summariseRun(bare, 'quit').stats);
+  assert.equal(summariseRun(styled, 'quit').stats.bestCombo, null);
+});
+
+test('a banked mixed combo is copied into the result with its score breakdown and bounded sequence', () => {
+  const style = createStyle(), world = startRun(createRunWorld({ sky: createCloudbaseRun(), style }), 1);
+  const watch = world.watch.state;
+  for (const kind of [4, 2, 3]) {
+    Object.assign(watch, { moves: watch.moves + 1, moveKind: kind, moveBand: 2, moveSize: 1, clock: watch.clock + RUN.step, calm: 0 });
+    style.step(RUN.step, world);
+  }
+  for (let n = 0; n < 180; n++) {
+    watch.clock += RUN.step; watch.calm += RUN.step; style.step(RUN.step, world);
+  }
+  const sheet = summariseRun(world, 'quit');
+  assert.equal(sheet.stats.style, 150); assert.equal(sheet.stats.spirals, 1);
+  assert.deepEqual(sheet.stats.bestCombo, { points: 150, base: 130, variety: 20, moves: 3, mask: 14, sequence: [4, 2, 3] });
+  style.state.bestCombo.sequence[0] = 1;
+  assert.deepEqual(sheet.stats.bestCombo!.sequence, [4, 2, 3], 'the result never aliases live observer arrays');
+  sheet.stats.bestCombo!.sequence[1] = 1;
+  assert.equal(style.state.bestCombo.sequence[1], 2, 'the copy is independent in both directions');
 });

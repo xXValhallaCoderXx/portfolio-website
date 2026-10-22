@@ -179,7 +179,7 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
       )}
       {flying && !lost && address && sky !== '' && (live || sky === 'failed') && (
         <GoodLiftLaunch sky={preparedSky} address={address} state={sky} stage={stage}
-          onFly={startSky} onRetry={retrySky} onExit={() => onExit(null)} />
+          onFly={startSky} onRetry={retrySky} onExit={() => address.kind === 'training' ? game.current?.backToGame() : onExit(null)} />
       )}
       {flying && live && !armed && !lost && !address && (
         <div className="fjord-start">

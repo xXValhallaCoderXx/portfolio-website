@@ -5,7 +5,7 @@ import { SIM_VERSION } from './sim-version.ts';
 import { BRAKE, FLIGHT, PITCH, STALL, PHYSICS } from '../flight/flight.ts';
 import { ATMOSPHERE } from '../flight/atmosphere.ts';
 import { RUN_RULES } from './run-rules.ts';
-import { BANDS, WATCH } from '../coaching/swing-watch.ts';
+import { BANDS, WATCH, SPIRAL } from '../coaching/swing-watch.ts';
 import { STYLE } from './meet-style.ts';
 import { SCORE } from './score.ts';
 import * as SKY from './cloudbase-state.ts';
@@ -17,7 +17,7 @@ import { ZONES, surfaceAt } from '../../adapters/rendering/terrain.ts';
 import { BRAKE_CONTROLS } from '../flight/brake-controls.ts';
 
 // Pin the current release's tables. A physical or scoring change requires a new version and pin.
-const FINGERPRINT = 'fea36d7c';
+const FINGERPRINT = '09a6d448';
 
 // Everything a run is flown by that is a number rather than code: the wing's tables, every one of
 // the sky's, the step's, the meet's (its plates off the trail and its rune gates and blessings with
@@ -35,7 +35,7 @@ function material() {
     for (let dx = -zone.r; dx <= zone.r; dx += 10) ground.push(Math.round(surfaceAt(zone.x + dx, zone.z + dz) * 100));
   }
   return {
-    FLIGHT, BRAKE, STALL, PITCH, BANDS, WATCH, STYLE, SCORE, PHYSICS, ATMOSPHERE, RUN_RULES, BRAKE_CONTROLS,
+    FLIGHT, BRAKE, STALL, PITCH, BANDS, WATCH, SPIRAL, STYLE, SCORE, PHYSICS, ATMOSPHERE, RUN_RULES, BRAKE_CONTROLS,
     ...Object.fromEntries(Object.entries(SKY).filter(([name]) => name.startsWith('CLOUD_'))),
     RUN, MEET, TRAIL, MEET_POOL, WIND, THUNDER, BAIT, SCATTER, GATES, BLESSING, RUNE, BELLS, BELL_POOL, BEAST,
     ZONES: ZONES.map(({ x, z, r, h }) => ({ x, z, r, h })),

@@ -34,13 +34,18 @@ export const FLIGHT_MARKUP = /* html */ `
         <div><dt>Mouse</dt><dd>drag anywhere: sideways turns, down pulls both brakes; let go to release. Full pulls can stall.</dd></div>
       </dl>
       <details><summary>thermals &amp; climbing</summary><p>Keep a little brake on both hands and pull the inside hand farther to circle in rising air. Ease the difference to widen. On keyboard, W holds both gently; W + A / D circles, then W alone widens. Brake slows the wing; rising air provides lift.</p><p class="fj-keys-fjord">Land inside a lit ring to read that part of the page. Select a pillar or map destination for automatic travel.</p><p class="fj-keys-goal fj-keys-run" hidden>Bank the bar every 150 m. Raven warnings, gusts and storms begin above 500 m; kettlebells join at 700 m and the Beast at 1,000 m. Fog rises slowly below; a surviving flight completes at ten.</p></details>
-      <details><summary>tricks &amp; recovery</summary><p>Safe lessons introduce pitch and catch at 500 m, wingovers at 750 m, then loops at 1,000 m. Build rhythm with timed pulls and releases, link moves into a combo, and recover level to bank style. Follow the coach or choose Back to lift to leave a lesson. Full pulls can stall; follow the release cue.</p><button data-do="repeat-lessons" hidden>Repeat trick lessons</button></details>
+      <details><summary>tricks &amp; recovery</summary><p>Link pitch, Spiral 360, wingover and loop moves for acro points. Add different moves for variety, then recover level for three seconds to bank. Training starts high and guides one trick at a time. Full pulls can stall; release to recover.</p></details>
+      <button class="fj-training-entry" data-do="training">Training</button>
       <div class="fj-keys-more"><button data-do="sound">sound: on</button></div>
     </div>
-    <footer class="fj-menu-footer"><button data-do="cloudbase" hidden>Good Lift</button><button data-do="quit-cloudbase" hidden>end run</button><button data-do="exit">back to the page</button></footer>
+    <footer class="fj-menu-footer"><button data-do="cloudbase" hidden>Good Lift</button><button data-do="back-to-game" hidden>back to game</button><button data-do="training-choose" hidden>choose lesson</button><button data-do="quit-cloudbase" hidden>end run</button><button data-do="exit">back to the page</button></footer>
   </section>
   <div class="fj-toasts"></div>
   <div class="fj-hint"></div>
+  <section class="fj-training-result" role="dialog" aria-modal="true" aria-labelledby="fj-training-title" tabindex="-1" hidden>
+    <small>TRAINING · UNRANKED</small><h2 id="fj-training-title" data-overlay-focus tabindex="-1"></h2><p data-training-detail></p>
+    <div><button class="primary" data-do="training-retry">Try again</button><button data-do="training-next">Next lesson</button><button data-do="training-choose">Choose lesson</button><button data-do="back-to-game">Back to game</button></div>
+  </section>
   <section class="fj-map window" role="dialog" aria-modal="true" aria-labelledby="fj-map-title" tabindex="-1" hidden>
     <header><i></i><i></i><i></i><span id="fj-map-title">~/fjord/map</span></header>
     <div class="fj-map-heading"><span>pick a place to fly to</span><b class="fj-paused-badge">❚❚ PAUSED</b></div>
@@ -53,7 +58,7 @@ export const FLIGHT_MARKUP = /* html */ `
     <small class="fj-coach-warning" data-coach="warning" hidden></small>
     <div class="fj-coach-main"><span class="fj-action-symbol" aria-hidden="true">◇</span><div class="fj-coach-copy"><span class="fj-coach-kicker">FLIGHT COACH</span><strong data-coach="action"></strong><small data-coach="reason"></small><div data-coach="controls"></div><small data-coach="acknowledgement" hidden></small><small data-coach="feedback"></small></div></div>
     <div data-coach="progress" hidden><span></span><i><b></b></i></div>
-    <button data-do="back-to-lift" data-coach="cancel" hidden>Back to lift</button>
+    <button data-do="training-choose" data-coach="cancel" hidden>Choose lesson</button>
     <span data-coach="announce" class="fj-visually-hidden" aria-live="polite" aria-atomic="true"></span>
   </section>
   <div class="fj-drag-tip" role="status" hidden><span class="fj-action-symbol" aria-hidden="true">◇</span><div><small>AIRBORNE</small><strong>Small pulls, smooth flight</strong><span class="fj-touch-help">pull either handle down · lift your thumb to release</span><span class="fj-key-help">A / D turn · Space brakes · Q / E swing · release to glide</span><span class="fj-mouse-help">drag sideways to turn · down to brake · let go to glide</span></div></div>

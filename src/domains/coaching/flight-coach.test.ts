@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFlight, stepFlight, pitchPeak } from '../flight/flight.ts';
 import { createSwingWatch } from './swing-watch.ts';
-import { createStyle } from '../good-lift/meet-style.ts';
+import { createStyle, STYLE } from '../good-lift/meet-style.ts';
 import { createFlightCoach } from './flight-coach.ts';
 import { swingGauge } from '../../features/flight/presentation/swing-gauge.ts';
 type TestFrame = Omit<CoachFrame, 'g' | 'input' | 'watch'> & {entry?: {side: number; age: number}; air?: import('../flight/models.ts').AirSample; g: CoachFlight; input: ReturnType<typeof inputState>; watch: CoachWatch};
@@ -34,7 +34,7 @@ function flyFollowingCoach(kind: string, side: number, delay: number, { reenter 
   const watch = createSwingWatch(), style = createStyle(), coach = createFlightCoach();
   const input = inputState(), controls: FlightInput = {}, world = { g, watch, controls };
   const actions = [], phases = new Set();
-  const banks = [];
+  const banks = [], bankCalms: number[] = [];
   let following = false, pending: CoachMessage | null = null, applyAt = -1, attemptAt = 0, attempt = 0, quietUntil = -1, firstCost = 0, reenteredAt = -1;
   for (let tick = 0; tick < 4200; tick++) {
     if (quietUntil >= 0 && tick > quietUntil) {
@@ -67,21 +67,29 @@ function flyFollowingCoach(kind: string, side: number, delay: number, { reenter 
     assert.equal(watch.state.breaks, 0, 'the complete maneuver and recovery remain controlled');
     if (style.state.landed > banks.length) {
       banks.push(tick); quietUntil = tick + 600;
+      bankCalms.push(watch.state.calm);
       if (banks.length === 1) firstCost = 2000 - g.pos.y;
+      // A fresh attempt starts after the player deliberately releases the prior catch. Keeping
+      // its working brake latched through the quiet interval changes the next shaping setup.
+      input.left = input.right = input.brake = input.deepBrake = false;
+      pending = null;
     }
     if (quietUntil >= 0) assert.equal(message, null, 'finished maneuver evidence cannot reopen a card during ten seconds of steady flight');
     if (reentryOnly && reenteredAt >= 0) break;
   }
   const expected = reenter && !reentryOnly ? 2 : 1;
   assert.ok(following, 'the coach reacts to the player’s observed motion');
-  assert.ok(banks[0] > 0 && banks[0] < 1200, 'following the instructions banks within20s');
+  assert.ok(banks[0] > 0 && banks[0] < (19 + STYLE.settle) / STEP,
+    'the original19s maneuver/recovery budget plus the explicit bank grace');
   assert.equal(banks.length, expected, 'a fresh second attempt can re-enter after the quiet interval');
   if (reenter) assert.ok(reenteredAt > banks[0] + 600, 'the next attempt reacts to fresh inputs and physical motion after ten quiet seconds');
+  if (reenter && reentryOnly && kind === 'pitch')
+    assert.ok(watch.state.frontAt > attemptAt * STEP, 'pitch re-entry requires a new physical forward peak after the fresh attempt');
   assert.equal(watch.state.moves, expected, 'real complete maneuvers, not a score for pressing a key');
   assert.equal(watch.state.moveKind, kind === 'wingover' ? 2 : 1);
   assert.equal(style.state.landed, expected);
   assert.equal(style.state.lost, 0);
-  if (!reentryOnly) assert.ok(watch.state.calm >= 1, 'a full second of physical steady flight banks the move');
+  assert.ok(bankCalms.every(calm => calm >= STYLE.settle - 1e-9), 'each bank follows the full physical steady interval');
   assert.ok(style.state.total > 0);
   assert.ok(firstCost > 15 && firstCost < 70, 'the maneuver spends altitude within the recovery reserve');
   return { actions, phases, cost: firstCost, bankedAt: banks[0], style: style.state.total };
@@ -107,8 +115,8 @@ for (const delay of [0, 6, 12, 18]) {
 for (const side of [-1, 1]) test(`fresh input and physical wingover motion can re-enter after banking and ten quiet seconds, side${side}`, () => {
   flyFollowingCoach('wingover', side, 12, { reenter: true, reentryOnly: true });
 });
-test('fresh worked brake and a new physical front can re-enter pitch after banking and ten quiet seconds', () => {
-  flyFollowingCoach('pitch', 0, 12, { reenter: true });
+test('fresh worked brake and a new physical front safely re-enter pitch after banking and ten hands-up seconds', () => {
+  flyFollowingCoach('pitch', 0, 12, { reenter: true, reentryOnly: true });
 });
 
 test('abandoned real pitch motion expires and cannot reopen from its old front or brake edges', () => {

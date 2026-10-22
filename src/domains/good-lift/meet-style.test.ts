@@ -1,26 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createStyle } from './meet-style.ts';
+import { createStyle, STYLE } from './meet-style.ts';
 function fixture() {
   const style = createStyle();
   const watch = { clock: 0, moves: 0, moveKind: 0, moveBand: 0, moveSize: 0, breaks: 0, broke: 0, calm: 0 };
   const world = { watch: { state: watch }, controls: { steered: false } };
   const step = () => { watch.clock += 1 / 60; style.step(1 / 60, world); };
   const move = (kind = 2, band = 2) => { Object.assign(watch, { moves: watch.moves + 1, moveKind: kind, moveBand: band, moveSize: 1, calm: 0 }); step(); };
-  const recover = () => { watch.calm = 1; step(); };
+  const recover = () => { watch.clock += STYLE.settle; watch.calm = STYLE.settle; step(); };
   return { style, watch, world, step, move, recover };
 }
 test('one completed move banks only after stable recovery', () => {
   const f = fixture(); f.move();
   assert.equal(f.style.state.pending, 20); assert.equal(f.style.state.total, 0);
-  f.watch.calm = 0.99; f.step(); assert.equal(f.style.state.total, 0);
+  f.watch.calm = STYLE.settle - 0.01; f.step(); assert.equal(f.style.state.total, 0);
   f.recover(); assert.equal(f.style.state.total, 20); assert.equal(f.style.state.landed, 1);
   f.step(); assert.equal(f.style.state.total, 20, 'no repeat banking');
 });
 test('linked moves multiply pending points without counting runup peaks', () => {
   const f = fixture(); f.move(); f.move(); f.move(3, 4);
-  assert.equal(f.style.state.pending, 20 + 20 + 90);
-  f.recover(); assert.equal(f.style.state.total, 130);
+  assert.equal(f.style.state.pending, 20 + 20 + 90 + 10);
+  f.recover(); assert.equal(f.style.state.total, 140);
   assert.equal(f.style.state.mostLoops, 1);
 });
 test('keys, raw peaks and isolated bank angles cannot award style', () => {
@@ -83,7 +83,94 @@ test('a real standalone wingover and pitch-and-catch bank after physical recover
     assert.equal(watch.state.moves, 1, 'one complete move');
     assert.equal(style.state.landed, 1);
     assert.ok(style.state.total > 0);
-    assert.ok(watch.state.calm >= 1);
+    assert.ok(watch.state.calm >= STYLE.settle - 1e-9);
     assert.ok(g.pos.y < 1000, 'the maneuver pays for its energy in altitude');
   }
+});
+
+test('spirals use fixed points and new kinds earn a flat bonus outside the existing multiplier', () => {
+  const f = fixture();
+  f.move(4, 0);
+  assert.equal(f.style.state.pending, 20);
+  f.move(2, 1);
+  assert.equal(f.style.state.pending, 40, '20 spiral + 10 first-band wingover + 10 new kind');
+  f.move(2, 1);
+  assert.equal(f.style.state.pending, 55, 'repeated wingover gets its chain multiplier, no second variety bonus');
+  f.move(3, 4);
+  f.move(1, 1);
+  f.move(4, 0);
+  assert.equal(f.style.state.variety, 30, 'only the three newly introduced kinds earn variety');
+  assert.equal(f.style.state.kindMask, 15);
+  assert.equal(f.style.state.elements, 6);
+  assert.deepEqual(f.style.state.sequence, [3, 1, 4]);
+  const pending = f.style.state.pending, base = f.style.state.base;
+  f.recover();
+  assert.deepEqual(f.style.state.lastCombo, { points: pending, base, variety: 30, moves: 6, mask: 15, sequence: [3, 1, 4] });
+  assert.deepEqual(f.style.state.bestCombo, f.style.state.lastCombo);
+  assert.notEqual(f.style.state.bestCombo.sequence, f.style.state.lastCombo.sequence);
+  assert.equal(f.style.state.pitch, Math.round(1 * 180 / Math.PI), 'the spiral arc is never counted as pitch depth');
+  assert.equal(f.style.state.mostSpirals, 2);
+  f.move(1, 1); f.recover();
+  assert.equal(f.style.state.lastCombo.moves, 1);
+  assert.equal(f.style.state.bestCombo.moves, 6, 'later clearing and smaller banks cannot mutate the best receipt');
+  assert.deepEqual(f.style.state.bestCombo.sequence, [3, 1, 4]);
+  f.style.reset();
+  assert.equal(f.style.state.bestCombo.points, 0);
+  assert.deepEqual(f.style.state.sequence, []);
+});
+
+test('linking grace restarts after each move and requires three post-move calm seconds', () => {
+  const f = fixture();
+  f.watch.calm = 10;
+  f.move(4, 0);
+  f.watch.calm = 10;
+  f.step();
+  assert.equal(f.style.state.total, 0, 'calm accumulated before the move cannot bank it');
+  f.watch.clock += 2;
+  f.watch.calm = 2;
+  f.step();
+  assert.equal(f.style.state.total, 0, 'the player can link another move during the short grace');
+  f.move(2, 1);
+  assert.equal(f.style.state.pending, 40);
+  assert.equal(f.style.state.bankCalm, 0);
+  f.watch.clock += 2;
+  f.watch.calm = 10;
+  f.step();
+  assert.equal(f.style.state.total, 0, 'the last move restarts the grace');
+  f.recover();
+  assert.equal(f.style.state.total, 40);
+});
+
+test('break recovery rearms after one second independently of the three-second bank grace', () => {
+  const f = fixture(); f.move();
+  Object.assign(f.watch, { breaks: 1, broke: 4, calm: 0 }); f.step();
+  f.watch.calm = STYLE.rearm - 0.01; f.step();
+  assert.equal(f.style.state.armed, false);
+  f.watch.calm = STYLE.rearm; f.step();
+  assert.equal(f.style.state.armed, true);
+  f.move(4, 0);
+  assert.equal(f.style.state.pending, 20);
+  assert.equal(f.style.state.total, 0);
+  f.style.finish(); f.recover();
+  assert.equal(f.style.state.total, 0, 'ending during the grace never banks unfinished points');
+});
+
+test('three calm seconds bank on the 180th fixed step despite accumulated floating point error', () => {
+  const f = fixture(); f.move(4, 0);
+  for (let tick = 0; tick < 179; tick++) { f.watch.calm += 1 / 60; f.step(); }
+  assert.equal(f.style.state.total, 0);
+  f.watch.calm += 1 / 60; f.step();
+  assert.equal(f.style.state.total, STYLE.spiral);
+});
+
+test('best combo ties prefer more moves and otherwise preserve the earlier bank', () => {
+  const f = fixture(); f.move(1, 4); f.recover();
+  assert.equal(f.style.state.bestCombo.points, 50);
+  f.move(4, 0); f.move(2, 2); f.recover();
+  assert.equal(f.style.state.bestCombo.points, 50);
+  assert.equal(f.style.state.bestCombo.moves, 2);
+  assert.deepEqual(f.style.state.bestCombo.sequence, [4, 2]);
+  f.move(2, 2); f.move(4, 0); f.recover();
+  assert.deepEqual(f.style.state.lastCombo.sequence, [2, 4]);
+  assert.deepEqual(f.style.state.bestCombo.sequence, [4, 2]);
 });

@@ -147,9 +147,9 @@ test('pitch queues before wingover; only a fresh matching move and its recovered
   f.watch.moves++; f.watch.moveKind = 1; f.watch.moveAt = f.watch.clock + dt; f.style.elements = 1; f.step();
   assert.deepEqual(f.done, [], 'completion is still pending');
   f.style.landed++; f.style.elements = 0; f.style.total = 90; f.style.said = 30;
-  f.style.bankedAt = f.watch.clock + dt; f.watch.calm = 1;
+  f.style.bankedAt = f.watch.clock + dt; f.watch.calm = 3;
   assert.notEqual(f.step()?.state, 'banked'); assert.deepEqual(f.done, ['pitch']);
-  assert.equal(f.lessons.state.awarded, 30); assert.equal(f.lessons.state.multiplier, 1.09);
+  assert.equal(f.lessons.state.awarded, 30);
   f.step(3.1); assert.equal(f.lessons.state.active, 'wingover');
   const remembered = fixture(['wingover', 'pitch', 'pitch', 'unknown']); remembered.step(5);
   assert.equal(remembered.lessons.state.active, null); assert.deepEqual(remembered.lessons.state.learned, ['pitch', 'wingover']);

@@ -231,7 +231,7 @@ export function createNordicSky({ loadModel = null }: { loadModel?: ModelLoader 
       aurora.uniforms.uTime.value = time; aurora.uniforms.strength.value = 1;
       scenery.visible = moon.visible = halo.visible = false; lastTime = null; return;
     }
-    const active = context.mode === 'cloudbase';
+    const active = context.mode === 'cloudbase' || context.mode === 'training';
     const altitude = context.altitude ?? context.camera?.position?.y ?? 0;
     if (lastTime != null && time < lastTime) {
       for (const hero of heroes) hero.opacity = 0;

@@ -8,6 +8,7 @@ import { createMeet, MEET } from './meet-state.ts';
 import { createBells } from './bells.ts';
 import { copyFlight, createFlight, settleFlight } from '../flight/flight.ts';
 import { surfaceAt } from '../flight/ground.ts';
+import { createStyle, STYLE } from './meet-style.ts';
 
 const fresh = (seed = 1, meet: MeetSystem | null = createMeet()) => startRun(createRunWorld({ sky: createCloudbaseRun(), meet, bells: createBells() }), seed);
 const snapshot = (w: RunWorld) => structuredClone({ pilot: w.g.pilot, canopy: w.g.canopy, steps: w.steps, ended: w.ended, sky: w.sky.state, meet: w.meet?.state, bells: w.bells?.state, trace: w.trace });
@@ -215,4 +216,58 @@ test('ears suppress both brake depths in direct fold pumps exactly as recorded c
   stepRun(direct, {}); stepBits(recorded, 0);
   assert.deepEqual(direct.pump, recorded.pump);
   assert.deepEqual(direct.g, recorded.g);
+});
+
+for (const source of ['sky', 'bell'] as const) test(`a ${source} strike on the banking frame interrupts style before banking, once`, () => {
+  const w = park(fresh());
+  w.style = createStyle();
+  // Seed an observer receipt only; the subject here is hazard/observer/scoring order. Actual
+  // physical maneuvers and three-second recoveries are covered by direct-acro.test.ts.
+  Object.assign(w.watch.state, { moves: 1, moveKind: 4, moveBand: 0, moveSize: Math.PI * 2 });
+  w.style.step(RUN.step, w);
+  assert.equal(w.style.state.pending, STYLE.spiral);
+  w.watch.state.clock = STYLE.settle - RUN.step;
+  w.watch.state.calm = STYLE.settle - RUN.step;
+  w.sky.state.pilot.shield = 0;
+  w.sky.sample = (_pos, _yaw, out) => Object.assign(out!, { windX: 0, windY: 0, windZ: 0, lift: 0, sink: 0, hazardSink: 0, rough: 0 });
+  const stepSky = w.sky.step;
+  let struck = false;
+  const strike = () => { if (!struck) { assert.equal(w.sky.strike(-1), true); struck = true; } };
+  if (source === 'sky') w.sky.step = (...args) => { const ended = stepSky(...args); strike(); return ended; };
+  else w.bells!.step = () => strike();
+  const before = w.watch.state.clock;
+  stepBits(w, 0);
+  assert.equal(w.watch.state.clock, before + RUN.step, 'the watch advances once');
+  assert.equal(w.watch.state.broke, 4);
+  assert.equal(w.watch.state.breaks, 1);
+  assert.equal(w.watch.state.calm, 0);
+  assert.equal(w.style.state.total, 0);
+  assert.equal(w.style.state.landed, 0);
+  assert.equal(w.style.state.pending, 0);
+  assert.equal(w.style.state.lost, 1);
+  for (let tick = 0; tick < 30; tick++) stepBits(w, 0);
+  assert.equal(w.watch.state.breaks, 1, 'the later collapsed observations do not count the strike twice');
+  assert.equal(w.style.state.lost, 1);
+  assert.equal(w.style.state.total, 0);
+});
+
+test('a same-step strike consumes a newly completed move without scoring or resurrecting it', () => {
+  const w = park(fresh()); w.style = createStyle();
+  w.sky.state.pilot.shield = 0;
+  const stepWatch = w.watch.step;
+  w.watch.step = (...args) => {
+    stepWatch(...args);
+    Object.assign(w.watch.state, { moves: w.watch.state.moves + 1, moveKind: 4, moveBand: 0, moveSize: Math.PI * 2 });
+  };
+  w.bells!.step = () => { w.sky.strike(-1); };
+  stepBits(w, 0);
+  assert.equal(w.style.state.total, 0);
+  assert.equal(w.style.state.pending, 0);
+  assert.equal(w.style.state.armed, false);
+  w.watch.step = stepWatch;
+  w.sky.state.pilot.collapse = 0;
+  w.bells!.step = () => {};
+  for (let tick = 0; tick < 240; tick++) stepBits(w, 0);
+  assert.equal(w.style.state.total, 0);
+  assert.equal(w.style.state.pending, 0, 'the already consumed move cannot reappear after rearming');
 });

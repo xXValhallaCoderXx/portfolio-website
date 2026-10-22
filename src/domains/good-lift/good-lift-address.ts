@@ -1,4 +1,4 @@
-export type GameKind = 'daily' | 'practice' | 'sky' | 'vs';
+export type GameKind = 'daily' | 'practice' | 'sky' | 'vs' | 'training';
 export interface GameAddress { kind: GameKind; sky: number | null; vs: string | null; bad: 'sky' | null }
 export interface GameDestination { kind?: GameKind; sky?: number | null; vs?: string | null }
 // Good Lift's addresses, read without loading any of the game: the page's router asks this whether
@@ -14,6 +14,7 @@ export interface GameDestination { kind?: GameKind; sky?: number | null; vs?: st
 
 export const GAME_PATH = '/good-lift';
 export const DAILY_PATH = `${GAME_PATH}/daily`;
+export const TRAINING_PATH = `${GAME_PATH}/training`;
 // One UTC day, in milliseconds. A day's sky changes at midnight UTC and nowhere else.
 export const DAY_MS = 86_400_000;
 // The UTC day of Daily #1: 15 October 2026, the day Good Lift shipped.
@@ -36,6 +37,7 @@ export const dailyNumber = (day: number) => day - DAILY_EPOCH + 1;
  */
 export function readGameAddress({ pathname = '', search = '', hash = '' }: {pathname?: string; search?: string; hash?: string} = {}): GameAddress | null {
   const path = pathname.replace(/\/+$/, '');
+  if (path === TRAINING_PATH) return { kind: 'training', sky: null, vs: null, bad: null };
   if (path !== GAME_PATH && path !== DAILY_PATH) return null;
   const named = new URLSearchParams(search).get('sky');
   // A log is base64url, which a query string reads as it is: no '+', '/' or '='.
@@ -48,6 +50,7 @@ export function readGameAddress({ pathname = '', search = '', hash = '' }: {path
 
 /** The address of a Good Lift sky: `kind` as readGameAddress reads it, with its `sky` or `vs`. */
 export function gameHref({ kind = 'daily', sky = null, vs = null }: GameDestination = {}) {
+  if (kind === 'training') return TRAINING_PATH;
   if (kind === 'vs' && vs) return `${DAILY_PATH}#vs=${vs}`;
   if (kind === 'sky' && sky !== null) return `${GAME_PATH}?sky=${(sky >>> 0).toString(16).padStart(8, '0')}`;
   return kind === 'practice' ? GAME_PATH : DAILY_PATH;

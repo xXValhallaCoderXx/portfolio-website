@@ -103,9 +103,11 @@ test('sixteen Chromium lessons replay real circling, setup, matching maneuvers a
     assert.deepEqual(normalize({ g, watch: watch.state, style: style.state }), normalize(record.snapshot));
     assert.equal(watch.state.moves, 1); assert.equal(watch.state.moveKind, record.kind === 'pitch' ? 1 : 2);
     assert.equal(watch.state.breaks, 0); assert.equal(style.state.lost, 0); assert.equal(style.state.landed, 1);
-    assert.ok(watch.state.calm >= 1 && style.state.total > 0);
+    assert.ok(watch.state.calm + 1e-9 >= 3 && style.state.total > 0);
     assert.ok(record.learned.includes(record.kind), 'the browser saved completion immediately at banking');
     assert.equal(record.keptBest.score, 123, 'learning does not replace competitive progress');
-    assert.match(record.feedback, new RegExp(`\\+${style.state.said} STYLE`));
+    assert.equal(record.phase, 'banked');
+    assert.equal(record.awarded, style.state.said);
+    assert.doesNotMatch(record.feedback, /STYLE|BANKED/, 'bank feedback belongs to the compact combo strip');
   }
 });

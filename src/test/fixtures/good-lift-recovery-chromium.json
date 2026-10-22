@@ -15,16 +15,20 @@
       "sha256": "b6eb1a7ea575b60d791d94de5d37a541ce33d9a869803972c617316d6b71a406"
     },
     {
+      "path": "src/domains/coaching/coach-intent.ts",
+      "sha256": "002287d862bc7ce05a6b74acbb3d74f936b35b8f6588414b5d78ffd9dcd8974a"
+    },
+    {
       "path": "src/domains/coaching/coach-routing.ts",
       "sha256": "01b029a67ca53f9a1e5d45ddca6b17aefb64ed9e581f6d145ebe9467b37c6eab"
     },
     {
       "path": "src/domains/coaching/direct-acro-guide.ts",
-      "sha256": "aa212964fd9915f93e21684fd6db0c54015d33b75b6f66a6528d7586b3e6a2fd"
+      "sha256": "a293626d7505f355ff2d602038c8842f29d9ecca604d05b4ca6386cdb4e8ba72"
     },
     {
       "path": "src/domains/coaching/flight-coach.ts",
-      "sha256": "865215b65381c0c6073bdd514e560f00ca9cb4288bda42dac7040144fc4c19f2"
+      "sha256": "2dfefe578efceeea404e4f6c4be25e4104e16a704143f1045e609ce527c87bfa"
     },
     {
       "path": "src/domains/coaching/lift-activity.ts",
@@ -32,7 +36,7 @@
     },
     {
       "path": "src/domains/coaching/lift-guide.ts",
-      "sha256": "01bd916fd6070e60e99ef1c503a2e60f3e00d9fd8268c9c96d4e5872b847d13b"
+      "sha256": "8937f5c936c38055af81c45b39c4db852ee86fda3ad2876e149424d72a7aad14"
     },
     {
       "path": "src/domains/coaching/ridge-transfer.ts",
@@ -44,7 +48,7 @@
     },
     {
       "path": "src/domains/coaching/swing-watch.ts",
-      "sha256": "058944bffb6b0f5bdd710eed26e726698b08b578119b183c306f5a46d94dae06"
+      "sha256": "ba8cc2cfd7eecf83dfb0810e711c21355357c18ab10c9bfa6e764019c25ee5c0"
     },
     {
       "path": "src/domains/flight/atmosphere.ts",
@@ -108,7 +112,7 @@
     },
     {
       "path": "src/domains/good-lift/meet-sheet.ts",
-      "sha256": "0307970c4bf356ed6db13d19b6ce52e6f59a39572a1c8eeff9393ed5d3924985"
+      "sha256": "5d86bc4810846fad90b45e3dcb4d8b40e3ed042a15f267e754869d10f34adfcb"
     },
     {
       "path": "src/domains/good-lift/meet-state.ts",
@@ -116,7 +120,7 @@
     },
     {
       "path": "src/domains/good-lift/meet-style.ts",
-      "sha256": "f12337a9aaea8e1e628451c2e252f3f2ec9d29b063f52aef865ab63b06d761c1"
+      "sha256": "3972f39b1debd37d97c4bcff25cc7672c042c79fb15ad71bf9d60d14588d5b55"
     },
     {
       "path": "src/domains/good-lift/pilots.ts",
@@ -136,23 +140,23 @@
     },
     {
       "path": "src/domains/good-lift/run-step.ts",
-      "sha256": "b97cfd706419573f2eb18fd751abdb8e8e3a609248ca5c4d8bdfe35925dda7ac"
+      "sha256": "ea3afe03407c19b06346d5b492a4b0ec0f2687c956e4fc6fc4b9e8b955c33bd4"
     },
     {
       "path": "src/domains/good-lift/score.ts",
-      "sha256": "4a3c1e2237097673d84c1d18084b7ea8a9d85ab2da5efc8320d3a938f125827c"
+      "sha256": "5203038600a3a201c844f32a0c3d52a4bc7972eda9019944a220e1cf21c60979"
     },
     {
       "path": "src/domains/good-lift/sim-version.ts",
-      "sha256": "c4ec8299d1e3a26e0e218940b81665d539e551b78ffdecd8f1358363da600f27"
+      "sha256": "5a4a73224754aa54fd9d73b3e41d54697b689d8ead65649b2fd4f6666a01e261"
     },
     {
       "path": "src/domains/good-lift/trick-lessons.ts",
-      "sha256": "d2b6e959cda8015817898496fb3a08fae84c63bf8f914f0929a0da94c72fd8f0"
+      "sha256": "138d55040879b13c913e053d02914f761a50efbf63603f63254667056097473a"
     },
     {
       "path": "src/domains/progression/trick-learning.ts",
-      "sha256": "4e892b1c1322b568f51902b61679a67d9caf9db764c7deff563a2c07b29e79cf"
+      "sha256": "0127fc180de511bf9dba8faa9c13f95e060d1ab3b370e8e41b9ec9fe5dde6f2d"
     },
     {
       "path": "src/features/flight/presentation/swing-gauge.ts",
@@ -164,7 +168,7 @@
     },
     {
       "path": "src/test/helpers/test-guided-opening.ts",
-      "sha256": "8d64a07ded0ddb2c7379b97ff9077456a25e02b4329dac442d80d79fcf375f29"
+      "sha256": "2d826f4d2aa2a33a62cd818596eb2196adce7fdc5b32085e6b0a240e376e833c"
     },
     {
       "path": "src/test/helpers/test-recovery-flight.ts",
@@ -176,11 +180,12 @@
     }
   ],
   "engine": "Chromium 143.0.7499.4",
-  "generated": "2026-10-22T07:28:39.674Z",
+  "generated": "2026-10-22T09:18:08.459Z",
   "sourceFiles": [
     ".artifacts/fun-acro-v4/browser-recovery-goldens.mjs",
     ".artifacts/fun-acro-v4/capture-source.mjs",
     "src/domains/coaching/coach-actions.ts",
+    "src/domains/coaching/coach-intent.ts",
     "src/domains/coaching/coach-routing.ts",
     "src/domains/coaching/direct-acro-guide.ts",
     "src/domains/coaching/flight-coach.ts",
@@ -222,19 +227,19 @@
     "src/test/helpers/test-recovery-flight.ts",
     "tools/source-graph.ts"
   ],
-  "sourceDigest": "e3d2a33f438db74751d95db3706c57e0137e9756734e107bda62d88e6bf063a4",
+  "sourceDigest": "a6fa9e48e719867d7ad2575b3e8206f81c46bb828f6b6225360217ba029fab25",
   "records": [
     {
       "pureFlight": true,
       "scenario": "stall",
       "delay": 0,
-      "simVersion": 4,
+      "simVersion": 5,
       "origin": {
         "x": 0,
         "y": 1000,
         "z": 0
       },
-      "link": "AgQAAAAAAAAAAAAA6AeJDMIDFNACBGEAqgEE7wEAxAEEOQA",
+      "link": "AgUAAAAAAAAAAAAA6AeJDMIDFNACBGEAqgEE7wEAxAEEOQA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -510,6 +515,11 @@
           "looping": 0,
           "loops": 0,
           "loopAt": null,
+          "spiraling": 0,
+          "spiralArc": 0,
+          "spiralSide": 0,
+          "spirals": 0,
+          "spiralAt": null,
           "rollAcceleration": 0,
           "moves": 0,
           "moveKind": 0,
@@ -535,7 +545,30 @@
           "pitch": 0,
           "armed": true,
           "bankedAt": null,
-          "lostAt": null
+          "lostAt": null,
+          "spirals": 0,
+          "mostSpirals": 0,
+          "base": 0,
+          "variety": 0,
+          "kindMask": 0,
+          "sequence": [],
+          "bankCalm": 0,
+          "lastCombo": {
+            "points": 0,
+            "base": 0,
+            "variety": 0,
+            "moves": 0,
+            "mask": 0,
+            "sequence": []
+          },
+          "bestCombo": {
+            "points": 0,
+            "base": 0,
+            "variety": 0,
+            "moves": 0,
+            "mask": 0,
+            "sequence": []
+          }
         }
       },
       "metrics": {
@@ -611,7 +644,7 @@
           "wing": "exit-surge",
           "phase": "recovery",
           "action": "brake",
-          "title": "PRESS BRAKE",
+          "title": "PULL BOTH BRAKES",
           "pitch": -0.5797320009348241,
           "forward": 14.502633678681903,
           "pilotForward": 0.4608162,
@@ -631,23 +664,11 @@
           "inflation": 1
         },
         {
-          "time": 17.55,
-          "wing": "exit-surge",
-          "phase": "recovery",
-          "action": "straight",
-          "title": "HOLD THIS LINE",
-          "pitch": 0.022032861180053886,
-          "forward": 14.48117826931599,
-          "pilotForward": 20.0190422,
-          "height": 890.8653418,
-          "inflation": 1
-        },
-        {
           "time": 21.516666666666666,
           "wing": "exit-surge",
           "phase": "recovery",
           "action": "brake",
-          "title": "PRESS BRAKE",
+          "title": "PULL BOTH BRAKES",
           "pitch": -0.007695202069563131,
           "forward": 9.385616885114164,
           "pilotForward": 4.2995861,
@@ -664,18 +685,6 @@
           "forward": 10.724466521959407,
           "pilotForward": 12.7986623,
           "height": 888.8231677,
-          "inflation": 1
-        },
-        {
-          "time": 24.8,
-          "wing": "exit-surge",
-          "phase": "recovery",
-          "action": "straight",
-          "title": "HOLD THIS LINE",
-          "pitch": 0.006354979742500024,
-          "forward": 10.737355198353958,
-          "pilotForward": 12.7915424,
-          "height": 888.7956173,
           "inflation": 1
         },
         {
@@ -707,13 +716,13 @@
       "pureFlight": true,
       "scenario": "stall",
       "delay": 0.15,
-      "simVersion": 4,
+      "simVersion": 5,
       "origin": {
         "x": 0,
         "y": 1000,
         "z": 0
       },
-      "link": "AgQAAAAAAAAAAAAA6AenDMIDFNkCBGoAsgEE7AEAwQEEQwA",
+      "link": "AgUAAAAAAAAAAAAA6AenDMIDFNkCBGoAsgEE7AEAwQEEQwA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -989,6 +998,11 @@
           "looping": 0,
           "loops": 0,
           "loopAt": null,
+          "spiraling": 0,
+          "spiralArc": 0,
+          "spiralSide": 0,
+          "spirals": 0,
+          "spiralAt": null,
           "rollAcceleration": 0,
           "moves": 0,
           "moveKind": 0,
@@ -1014,7 +1028,30 @@
           "pitch": 0,
           "armed": true,
           "bankedAt": null,
-          "lostAt": null
+          "lostAt": null,
+          "spirals": 0,
+          "mostSpirals": 0,
+          "base": 0,
+          "variety": 0,
+          "kindMask": 0,
+          "sequence": [],
+          "bankCalm": 0,
+          "lastCombo": {
+            "points": 0,
+            "base": 0,
+            "variety": 0,
+            "moves": 0,
+            "mask": 0,
+            "sequence": []
+          },
+          "bestCombo": {
+            "points": 0,
+            "base": 0,
+            "variety": 0,
+            "moves": 0,
+            "mask": 0,
+            "sequence": []
+          }
         }
       },
       "metrics": {
@@ -1090,7 +1127,7 @@
           "wing": "exit-surge",
           "phase": "recovery",
           "action": "brake",
-          "title": "PRESS BRAKE",
+          "title": "PULL BOTH BRAKES",
           "pitch": -0.5787810711332182,
           "forward": 14.495814834349687,
           "pilotForward": 0.4602501,
@@ -1110,23 +1147,11 @@
           "inflation": 1
         },
         {
-          "time": 17.983333333333334,
-          "wing": "exit-surge",
-          "phase": "recovery",
-          "action": "straight",
-          "title": "HOLD THIS LINE",
-          "pitch": 0.13366060134793054,
-          "forward": 15.248484457753186,
-          "pilotForward": 20.6024637,
-          "height": 885.3099497,
-          "inflation": 1
-        },
-        {
           "time": 21.75,
           "wing": "exit-surge",
           "phase": "recovery",
           "action": "brake",
-          "title": "PRESS BRAKE",
+          "title": "PULL BOTH BRAKES",
           "pitch": -0.0028799069661959373,
           "forward": 9.18289813308019,
           "pilotForward": 3.2993209,
@@ -1143,18 +1168,6 @@
           "forward": 11.120223255979232,
           "pilotForward": 13.7647083,
           "height": 883.4599483,
-          "inflation": 1
-        },
-        {
-          "time": 25.133333333333333,
-          "wing": "exit-surge",
-          "phase": "recovery",
-          "action": "straight",
-          "title": "HOLD THIS LINE",
-          "pitch": 0.06407930938907487,
-          "forward": 11.088975930142533,
-          "pilotForward": 13.6102979,
-          "height": 883.2349855,
           "inflation": 1
         },
         {
@@ -1186,13 +1199,13 @@
       "pureFlight": true,
       "scenario": "stall",
       "delay": 0.3,
-      "simVersion": 4,
+      "simVersion": 5,
       "origin": {
         "x": 0,
         "y": 1000,
         "z": 0
       },
-      "link": "AgQAAAAAAAAAAAAA6AewDcIDFOICBHMAvgEE6gEAwAEEsQEA",
+      "link": "AgUAAAAAAAAAAAAA6AewDcIDFOICBHMAvgEE6gEAwAEEsQEA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -1468,6 +1481,11 @@
           "looping": 0,
           "loops": 0,
           "loopAt": null,
+          "spiraling": 0,
+          "spiralArc": 0,
+          "spiralSide": 0,
+          "spirals": 0,
+          "spiralAt": null,
           "rollAcceleration": 0,
           "moves": 0,
           "moveKind": 0,
@@ -1493,7 +1511,30 @@
           "pitch": 0,
           "armed": true,
           "bankedAt": null,
-          "lostAt": null
+          "lostAt": null,
+          "spirals": 0,
+          "mostSpirals": 0,
+          "base": 0,
+          "variety": 0,
+          "kindMask": 0,
+          "sequence": [],
+          "bankCalm": 0,
+          "lastCombo": {
+            "points": 0,
+            "base": 0,
+            "variety": 0,
+            "moves": 0,
+            "mask": 0,
+            "sequence": []
+          },
+          "bestCombo": {
+            "points": 0,
+            "base": 0,
+            "variety": 0,
+            "moves": 0,
+            "mask": 0,
+            "sequence": []
+          }
         }
       },
       "metrics": {
@@ -1569,7 +1610,7 @@
           "wing": "exit-surge",
           "phase": "recovery",
           "action": "brake",
-          "title": "PRESS BRAKE",
+          "title": "PULL BOTH BRAKES",
           "pitch": -0.5778279501293986,
           "forward": 14.473486978211312,
           "pilotForward": 0.4579701,
@@ -1589,23 +1630,11 @@
           "inflation": 1
         },
         {
-          "time": 18.483333333333334,
-          "wing": "exit-surge",
-          "phase": "recovery",
-          "action": "straight",
-          "title": "HOLD THIS LINE",
-          "pitch": 0.22978553288277181,
-          "forward": 15.713512141622019,
-          "pilotForward": 20.2255947,
-          "height": 879.1402063,
-          "inflation": 1
-        },
-        {
           "time": 22.066666666666666,
           "wing": "exit-surge",
           "phase": "recovery",
           "action": "brake",
-          "title": "PRESS BRAKE",
+          "title": "PULL BOTH BRAKES",
           "pitch": -0.004374074629941034,
           "forward": 8.997372475122953,
           "pilotForward": 2.6186022,
@@ -1622,18 +1651,6 @@
           "forward": 11.398590449857897,
           "pilotForward": 14.4551173,
           "height": 876.700934,
-          "inflation": 1
-        },
-        {
-          "time": 25.583333333333332,
-          "wing": "exit-surge",
-          "phase": "recovery",
-          "action": "straight",
-          "title": "HOLD THIS LINE",
-          "pitch": 0.1315438144828375,
-          "forward": 11.264054297344279,
-          "pilotForward": 13.9699699,
-          "height": 876.412221,
           "inflation": 1
         },
         {
@@ -1665,13 +1682,13 @@
       "pureFlight": true,
       "scenario": "stall",
       "delay": 0.6,
-      "simVersion": 4,
+      "simVersion": 5,
       "origin": {
         "x": 0,
         "y": 1000,
         "z": 0
       },
-      "link": "AgQAAAAAAAAAAAAA6AeFD8IDFPQCBIUBANkBBOABAMEBBMMBAI0BBA",
+      "link": "AgUAAAAAAAAAAAAA6AeFD8IDFPQCBIUBANkBBOABAMEBBMMBAI0BBA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -1947,6 +1964,11 @@
           "looping": 0,
           "loops": 0,
           "loopAt": null,
+          "spiraling": 0,
+          "spiralArc": 0,
+          "spiralSide": 0,
+          "spirals": 0,
+          "spiralAt": null,
           "rollAcceleration": 0,
           "moves": 0,
           "moveKind": 0,
@@ -1972,7 +1994,30 @@
           "pitch": 0,
           "armed": true,
           "bankedAt": null,
-          "lostAt": null
+          "lostAt": null,
+          "spirals": 0,
+          "mostSpirals": 0,
+          "base": 0,
+          "variety": 0,
+          "kindMask": 0,
+          "sequence": [],
+          "bankCalm": 0,
+          "lastCombo": {
+            "points": 0,
+            "base": 0,
+            "variety": 0,
+            "moves": 0,
+            "mask": 0,
+            "sequence": []
+          },
+          "bestCombo": {
+            "points": 0,
+            "base": 0,
+            "variety": 0,
+            "moves": 0,
+            "mask": 0,
+            "sequence": []
+          }
         }
       },
       "metrics": {
@@ -2048,7 +2093,7 @@
           "wing": "exit-surge",
           "phase": "recovery",
           "action": "brake",
-          "title": "PRESS BRAKE",
+          "title": "PULL BOTH BRAKES",
           "pitch": -0.5761768252970022,
           "forward": 14.46028700938188,
           "pilotForward": 0.4539667,
@@ -2068,23 +2113,11 @@
           "inflation": 1
         },
         {
-          "time": 19.53333333333333,
-          "wing": "exit-surge",
-          "phase": "recovery",
-          "action": "straight",
-          "title": "HOLD THIS LINE",
-          "pitch": 0.4460016799530034,
-          "forward": 13.189477241869152,
-          "pilotForward": 17.5217436,
-          "height": 869.2358976,
-          "inflation": 1
-        },
-        {
           "time": 22.65,
           "wing": "exit-surge",
           "phase": "recovery",
           "action": "brake",
-          "title": "PRESS BRAKE",
+          "title": "PULL BOTH BRAKES",
           "pitch": -0.0003310202044030627,
           "forward": 8.71648253830129,
           "pilotForward": 1.5481786,
@@ -2104,23 +2137,11 @@
           "inflation": 1
         },
         {
-          "time": 26.483333333333334,
-          "wing": "exit-surge",
-          "phase": "recovery",
-          "action": "straight",
-          "title": "HOLD THIS LINE",
-          "pitch": 0.2847696008185831,
-          "forward": 11.199917985220242,
-          "pilotForward": 13.8749046,
-          "height": 863.0032019,
-          "inflation": 1
-        },
-        {
           "time": 29.116666666666667,
           "wing": "exit-surge",
           "phase": "recovery",
           "action": "brake",
-          "title": "PRESS BRAKE",
+          "title": "PULL BOTH BRAKES",
           "pitch": -0.0013443619610029195,
           "forward": 9.611403116730383,
           "pilotForward": 6.8304991,
@@ -2156,13 +2177,13 @@
       "pureFlight": true,
       "scenario": "frontal",
       "delay": 0,
-      "simVersion": 4,
+      "simVersion": 5,
       "origin": {
         "x": 0,
         "y": 1000,
         "z": 0
       },
-      "link": "AgQAAAAAAAAAAAAA6AfUDVoUygIAWhTKAgBaFL8CADkE9gEAxAEE",
+      "link": "AgUAAAAAAAAAAAAA6AfUDVoUygIAWhTKAgBaFL8CADkE9gEAxAEE",
       "snapshot": {
         "g": {
           "pilot": {
@@ -2438,6 +2459,11 @@
           "looping": 0,
           "loops": 0,
           "loopAt": null,
+          "spiraling": 0,
+          "spiralArc": 0,
+          "spiralSide": 0,
+          "spirals": 0,
+          "spiralAt": null,
           "rollAcceleration": 0,
           "moves": 0,
           "moveKind": 0,
@@ -2463,7 +2489,30 @@
           "pitch": 0,
           "armed": true,
           "bankedAt": null,
-          "lostAt": null
+          "lostAt": null,
+          "spirals": 0,
+          "mostSpirals": 0,
+          "base": 0,
+          "variety": 0,
+          "kindMask": 0,
+          "sequence": [],
+          "bankCalm": 0,
+          "lastCombo": {
+            "points": 0,
+            "base": 0,
+            "variety": 0,
+            "moves": 0,
+            "mask": 0,
+            "sequence": []
+          },
+          "bestCombo": {
+            "points": 0,
+            "base": 0,
+            "variety": 0,
+            "moves": 0,
+            "mask": 0,
+            "sequence": []
+          }
         }
       },
       "metrics": {
@@ -2521,7 +2570,7 @@
           "wing": "exit-surge",
           "phase": "recovery",
           "action": "brake",
-          "title": "PRESS BRAKE",
+          "title": "PULL BOTH BRAKES",
           "pitch": -0.6427829733492424,
           "forward": 15.675654314413247,
           "pilotForward": 13.7324563,
@@ -2541,23 +2590,11 @@
           "inflation": 1
         },
         {
-          "time": 21.766666666666666,
-          "wing": "exit-surge",
-          "phase": "recovery",
-          "action": "straight",
-          "title": "HOLD THIS LINE",
-          "pitch": 0.01633639958652079,
-          "forward": 13.693094973259637,
-          "pilotForward": 17.4159078,
-          "height": 940.0494379,
-          "inflation": 1
-        },
-        {
           "time": 25.849999999999998,
           "wing": "exit-surge",
           "phase": "recovery",
           "action": "brake",
-          "title": "PRESS BRAKE",
+          "title": "PULL BOTH BRAKES",
           "pitch": -0.00154017101972909,
           "forward": 9.457155092596206,
           "pilotForward": 6.512473,
@@ -2593,13 +2630,13 @@
       "pureFlight": true,
       "scenario": "frontal",
       "delay": 0.15,
-      "simVersion": 4,
+      "simVersion": 5,
       "origin": {
         "x": 0,
         "y": 1000,
         "z": 0
       },
-      "link": "AgQAAAAAAAAAAAAA6AfRDVoUygIAWhTKAgBaFMgCAD0E6gEAwAEE",
+      "link": "AgUAAAAAAAAAAAAA6AfRDVoUygIAWhTKAgBaFMgCAD0E6gEAwAEE",
       "snapshot": {
         "g": {
           "pilot": {
@@ -2875,6 +2912,11 @@
           "looping": 0,
           "loops": 0,
           "loopAt": null,
+          "spiraling": 0,
+          "spiralArc": 0,
+          "spiralSide": 0,
+          "spirals": 0,
+          "spiralAt": null,
           "rollAcceleration": 0,
           "moves": 0,
           "moveKind": 0,
@@ -2900,7 +2942,30 @@
           "pitch": 0,
           "armed": true,
           "bankedAt": null,
-          "lostAt": null
+          "lostAt": null,
+          "spirals": 0,
+          "mostSpirals": 0,
+          "base": 0,
+          "variety": 0,
+          "kindMask": 0,
+          "sequence": [],
+          "bankCalm": 0,
+          "lastCombo": {
+            "points": 0,
+            "base": 0,
+            "variety": 0,
+            "moves": 0,
+            "mask": 0,
+            "sequence": []
+          },
+          "bestCombo": {
+            "points": 0,
+            "base": 0,
+            "variety": 0,
+            "moves": 0,
+            "mask": 0,
+            "sequence": []
+          }
         }
       },
       "metrics": {
@@ -2958,7 +3023,7 @@
           "wing": "exit-surge",
           "phase": "recovery",
           "action": "brake",
-          "title": "PRESS BRAKE",
+          "title": "PULL BOTH BRAKES",
           "pitch": -0.6427829733492424,
           "forward": 15.675654314413247,
           "pilotForward": 13.7324563,
@@ -2978,23 +3043,11 @@
           "inflation": 1
         },
         {
-          "time": 21.983333333333334,
-          "wing": "exit-surge",
-          "phase": "recovery",
-          "action": "straight",
-          "title": "HOLD THIS LINE",
-          "pitch": 0.08797697080235224,
-          "forward": 14.004344833762927,
-          "pilotForward": 17.476133,
-          "height": 939.0739025,
-          "inflation": 1
-        },
-        {
           "time": 25.716666666666665,
           "wing": "exit-surge",
           "phase": "recovery",
           "action": "brake",
-          "title": "PRESS BRAKE",
+          "title": "PULL BOTH BRAKES",
           "pitch": -0.004383728675352176,
           "forward": 9.344649611790114,
           "pilotForward": 6.1532561,
@@ -3042,13 +3095,13 @@
       "pureFlight": true,
       "scenario": "frontal",
       "delay": 0.3,
-      "simVersion": 4,
+      "simVersion": 5,
       "origin": {
         "x": 0,
         "y": 1000,
         "z": 0
       },
-      "link": "AgQAAAAAAAAAAAAA6AfQDVoUygIAWhTKAgBaFNECAEIE3QEAvgEE",
+      "link": "AgUAAAAAAAAAAAAA6AfQDVoUygIAWhTKAgBaFNECAEIE3QEAvgEE",
       "snapshot": {
         "g": {
           "pilot": {
@@ -3324,6 +3377,11 @@
           "looping": 0,
           "loops": 0,
           "loopAt": null,
+          "spiraling": 0,
+          "spiralArc": 0,
+          "spiralSide": 0,
+          "spirals": 0,
+          "spiralAt": null,
           "rollAcceleration": 0,
           "moves": 0,
           "moveKind": 0,
@@ -3349,7 +3407,30 @@
           "pitch": 0,
           "armed": true,
           "bankedAt": null,
-          "lostAt": null
+          "lostAt": null,
+          "spirals": 0,
+          "mostSpirals": 0,
+          "base": 0,
+          "variety": 0,
+          "kindMask": 0,
+          "sequence": [],
+          "bankCalm": 0,
+          "lastCombo": {
+            "points": 0,
+            "base": 0,
+            "variety": 0,
+            "moves": 0,
+            "mask": 0,
+            "sequence": []
+          },
+          "bestCombo": {
+            "points": 0,
+            "base": 0,
+            "variety": 0,
+            "moves": 0,
+            "mask": 0,
+            "sequence": []
+          }
         }
       },
       "metrics": {
@@ -3407,7 +3488,7 @@
           "wing": "exit-surge",
           "phase": "recovery",
           "action": "brake",
-          "title": "PRESS BRAKE",
+          "title": "PULL BOTH BRAKES",
           "pitch": -0.6427829733492424,
           "forward": 15.675654314413247,
           "pilotForward": 13.7324563,
@@ -3427,23 +3508,11 @@
           "inflation": 1
         },
         {
-          "time": 22.216666666666665,
-          "wing": "exit-surge",
-          "phase": "recovery",
-          "action": "straight",
-          "title": "HOLD THIS LINE",
-          "pitch": 0.17892832309099685,
-          "forward": 13.369834566353829,
-          "pilotForward": 17.2093451,
-          "height": 938.5055753,
-          "inflation": 1
-        },
-        {
           "time": 25.583333333333332,
           "wing": "exit-surge",
           "phase": "recovery",
           "action": "brake",
-          "title": "PRESS BRAKE",
+          "title": "PULL BOTH BRAKES",
           "pitch": -0.001611743695824896,
           "forward": 9.260383338201931,
           "pilotForward": 5.6172718,
@@ -3491,13 +3560,13 @@
       "pureFlight": true,
       "scenario": "frontal",
       "delay": 0.6,
-      "simVersion": 4,
+      "simVersion": 5,
       "origin": {
         "x": 0,
         "y": 1000,
         "z": 0
       },
-      "link": "AgQAAAAAAAAAAAAA6AfUDloUygIAWhTKAgBaFOMCAEsE0AEAuQEEewA",
+      "link": "AgUAAAAAAAAAAAAA6AfUDloUygIAWhTKAgBaFOMCAEsE0AEAuQEEewA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -3773,6 +3842,11 @@
           "looping": 0,
           "loops": 0,
           "loopAt": null,
+          "spiraling": 0,
+          "spiralArc": 0,
+          "spiralSide": 0,
+          "spirals": 0,
+          "spiralAt": null,
           "rollAcceleration": 0,
           "moves": 1,
           "moveKind": 1,
@@ -3798,7 +3872,30 @@
           "pitch": 0,
           "armed": true,
           "bankedAt": null,
-          "lostAt": null
+          "lostAt": null,
+          "spirals": 0,
+          "mostSpirals": 0,
+          "base": 0,
+          "variety": 0,
+          "kindMask": 0,
+          "sequence": [],
+          "bankCalm": 0,
+          "lastCombo": {
+            "points": 0,
+            "base": 0,
+            "variety": 0,
+            "moves": 0,
+            "mask": 0,
+            "sequence": []
+          },
+          "bestCombo": {
+            "points": 0,
+            "base": 0,
+            "variety": 0,
+            "moves": 0,
+            "mask": 0,
+            "sequence": []
+          }
         }
       },
       "metrics": {
@@ -3856,7 +3953,7 @@
           "wing": "exit-surge",
           "phase": "recovery",
           "action": "brake",
-          "title": "PRESS BRAKE",
+          "title": "PULL BOTH BRAKES",
           "pitch": -0.6427829733492424,
           "forward": 15.675654314413247,
           "pilotForward": 13.7324563,
@@ -3876,23 +3973,11 @@
           "inflation": 1
         },
         {
-          "time": 22.666666666666668,
-          "wing": "exit-surge",
-          "phase": "recovery",
-          "action": "straight",
-          "title": "HOLD THIS LINE",
-          "pitch": 0.3961614203068004,
-          "forward": 12.225703144163251,
-          "pilotForward": 15.5685267,
-          "height": 938.5872678,
-          "inflation": 1
-        },
-        {
           "time": 25.516666666666666,
           "wing": "exit-surge",
           "phase": "recovery",
           "action": "brake",
-          "title": "PRESS BRAKE",
+          "title": "PULL BOTH BRAKES",
           "pitch": -0.010402727609020532,
           "forward": 9.517137117099212,
           "pilotForward": 4.3808167,
@@ -3909,18 +3994,6 @@
           "forward": 10.836360288791996,
           "pilotForward": 13.3909858,
           "height": 933.2975137,
-          "inflation": 1
-        },
-        {
-          "time": 29.216666666666665,
-          "wing": "exit-surge",
-          "phase": "recovery",
-          "action": "straight",
-          "title": "HOLD THIS LINE",
-          "pitch": 0.18988175842591043,
-          "forward": 10.47165940931178,
-          "pilotForward": 12.2931924,
-          "height": 932.9978464,
           "inflation": 1
         },
         {
@@ -3951,9 +4024,9 @@
     {
       "pureFlight": false,
       "scenario": "stall",
-      "simVersion": 4,
+      "simVersion": 5,
       "seed": 1,
-      "link": "AgQBAAAAAAAAAAAepwSoQhUASwRNAPICBsgEBMkFBh8EHwa6AQQfBtkBBB8GPgQfBl0EHwabAQQfBh8EyQUGHwQfBnwEHgbeAQQfBl0EHwZdBB8GfAQfBj4EyQUGHwQfBl0EHwbZAQQfBl0EHwY-BB8GPgQfBj4EHwZdBLYDBvMBALYDFOQCBHUAsAEE5gEAvwEE0AEA",
+      "link": "AgUBAAAAAAAAAAAepwSoQhUASwRNAPICBsgEBMkFBh8EHwa6AQQfBtkBBB8GPgQfBl0EHwabAQQfBh8EyQUGHwQfBnwEHgbeAQQfBl0EHwZdBB8GfAQfBj4EyQUGHwQfBl0EHwbZAQQfBl0EHwY-BB8GPgQfBj4EHwZdBLYDBvMBALYDFOQCBHUAsAEE5gEAvwEE0AEA",
       "sheet": {
         "seed": 1,
         "reason": "quit",
@@ -4010,7 +4083,9 @@
           "style": 0,
           "wingovers": 0,
           "pitch": 0,
-          "loops": 0
+          "loops": 0,
+          "spirals": 0,
+          "bestCombo": null
         },
         "trace": {
           "alt": [
@@ -4492,9 +4567,9 @@
     {
       "pureFlight": false,
       "scenario": "frontal",
-      "simVersion": 4,
+      "simVersion": 5,
       "seed": 1,
-      "link": "AgQBAAAAAAAAAAAevQTYQhUASwRNAPICBsgEBMkFBh8EHwa6AQQfBtkBBB8GPgQfBl0EHwabAQQfBh8EyQUGHwQfBnwEHgbeAQQfBl0EHwZdBB8GfAQfBj4EyQUGHwQfBl0EHwbZAQQfBl0EHwY-BB8GPgQfBj4EHwZdBLYDBvMBAFsUygIAWhTKAgBaFOQCAD8E3QEAwAEEAQA",
+      "link": "AgUBAAAAAAAAAAAevQTYQhUASwRNAPICBsgEBMkFBh8EHwa6AQQfBtkBBB8GPgQfBl0EHwabAQQfBh8EyQUGHwQfBnwEHgbeAQQfBl0EHwZdBB8GfAQfBj4EyQUGHwQfBl0EHwbZAQQfBl0EHwY-BB8GPgQfBj4EHwZdBLYDBvMBAFsUygIAWhTKAgBaFOQCAD8E3QEAwAEEAQA",
       "sheet": {
         "seed": 1,
         "reason": "quit",
@@ -4551,7 +4626,9 @@
           "style": 0,
           "wingovers": 0,
           "pitch": 0,
-          "loops": 0
+          "loops": 0,
+          "spirals": 0,
+          "bestCombo": null
         },
         "trace": {
           "alt": [

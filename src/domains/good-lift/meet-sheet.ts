@@ -76,6 +76,8 @@ export function summariseRun(world: RunWorld, reason?: string) {
       wingovers: style ? style.state.wingovers : 0,
       pitch: style ? style.state.pitch : 0,
       loops: style ? style.state.mostLoops : 0,
+      spirals: style ? style.state.mostSpirals : 0,
+      bestCombo: style && style.state.bestCombo.points > 0 ? { ...style.state.bestCombo, sequence: [...style.state.bestCombo.sequence] } : null,
     },
     trace: {
       alt: trace ? Array.from(trace.alt.subarray(0, n)) : [],

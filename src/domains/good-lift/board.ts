@@ -2,8 +2,8 @@ import type { Board, BoardRow, BotRow, BotScores, RankedScore, Score } from './b
 // Good Lift's local board: the best runs of each Daily Sky flown on this device, kept inside the
 // game's own store (good-lift-store.js, under 'good-lift'). A day's board is the top BOARD.keep
 // runs flown on one UTC day under one version of the rules (sim-version.js), since a run flown
-// under one version is never judged against another. Runs rank by score (the total lifted by the
-// style its tricks landed, score.js), then by peak, then by which started first, so a board always
+// under one version is never judged against another. Runs rank by score (lifted points plus banked
+// acro, score.js), then by peak, then by which started first, so a board always
 // has one order.
 //
 // Every row keeps its run's log. The log is its proof, because a replay of it flies to the same
@@ -21,6 +21,7 @@ import type { Board, BoardRow, BotRow, BotScores, RankedScore, Score } from './b
 import { bynameOf } from './meet-bynames.ts';
 import { byRank, outranks } from './score.ts';
 import { MAX_LINK } from './recorder.ts';
+import { SIM_VERSION } from './sim-version.ts';
 
 // How much the board remembers: the best `keep` runs of each day, for `days` UTC days (today and
 // the 13 before it). The independent log budget bounds storage even for rapidly changing inputs.
@@ -55,8 +56,8 @@ export function boardDay(key: unknown) {
   return Number(match[2]);
 }
 
-// Whether one run ranks above another, and the order of a board: by the score, the total lifted by
-// the style (score.js), then the peak, then the earlier run.
+// Whether one run ranks above another: lifted points plus banked acro (score.js), then the peak,
+// then the earlier run.
 export { outranks };
 
 /**
@@ -66,7 +67,7 @@ export { outranks };
 export function normalizeScore(score: unknown): Score | null {
   if (!isRecord(score)) return null;
   const { total, style, peak, red } = score;
-  if (typeof style !== 'number' || !Number.isInteger(style) || style < 0 || style % 5 !== 0) return null;
+  if (typeof style !== 'number' || !Number.isSafeInteger(style) || style < 0 || style % 5 !== 0) return null;
   // Twice the total is a whole number of 5 kg exactly when the total is a multiple of 2.5, and
   // doubling is exact in floating point, so no near miss rounds its way onto the board.
   if (!isAmount(total) || !Number.isInteger(total * 2) || (total * 2) % 5 !== 0) return null;
@@ -123,14 +124,17 @@ export function normalizeRow(row: unknown): BoardRow | null {
  * forgotten. Never throws on anything JSON can hold (an object built to throw when read can; the
  * store's normaliser catches that), and shares no object with `raw`.
  */
-export function normalizeBoard(raw: unknown): Board {
+export function normalizeBoard(raw: unknown, version = SIM_VERSION): Board {
   const board = emptyBoard();
   if (!isRecord(raw) || !isRecord(raw.days)) return board;
   for (const key of Object.keys(raw.days)) {
     const day = raw.days[key];
     if (Number.isNaN(boardDay(key)) || !isRecord(day) || !Array.isArray(day.rows)) continue;
     const rows: BoardRow[] = [];
-    for (const row of day.rows.map((candidate) => normalizeRow(candidate)).filter((candidate): candidate is BoardRow => candidate !== null).sort(byRank)) {
+    const valid = day.rows.map((candidate) => normalizeRow(candidate)).filter((candidate): candidate is BoardRow => candidate !== null);
+    // Old-version rows retain their historical order; today's formula cannot rescore them.
+    if (Number(key.split(':')[0]) === version) valid.sort(byRank);
+    for (const row of valid) {
       if (rows.length === BOARD.keep) break;
       if (!rows.some((other) => other.log === row.log)) rows.push(row);
     }

@@ -9,7 +9,7 @@ export const BAR_ROW = /* html */ '<div class="fj-run fj-bar-metric"><dt>bar</dt
 // the line above the swing gauge saying the set in hand, and stamping it landed or lost.
 export const STYLE_ROW = /* html */ '<dt class="fj-run fj-trick">style</dt><dd class="fj-run fj-trick" data-hud="style"></dd>';
 
-export const STYLE_LINE = /* html */ '<p class="fj-style" aria-hidden="true" hidden><strong data-combo="label"></strong><span data-combo="detail"></span></p><p class="fj-combo-announcement fj-visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>';
+export const STYLE_LINE = /* html */ '<p class="fj-style" aria-hidden="true" hidden><strong data-combo="label"></strong><span data-combo="detail"></span><span class="fj-combo-calm" data-combo="calm" hidden><i></i></span></p><p class="fj-combo-announcement fj-visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>';
 
 export const MARKUP = /* html */ `
   <div class="fj-horn" aria-hidden="true"></div>
