@@ -9,7 +9,7 @@ import { createBells } from './bells.ts';
 import { createStyle } from './meet-style.ts';
 
 // A run on `seed` with the meet, the kettlebells and the style, flown by the reference pilot
-// (pilots.js) until the fog, and ended as live play ends it.
+// (pilots.js) until a natural ending or the deadline, and ended as live play ends it.
 function flown(seed: number, pilot = { brake: 'eased' }) {
   const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle() }), seed);
   const reference = createReferencePilot(pilot);
@@ -23,14 +23,15 @@ function flown(seed: number, pilot = { brake: 'eased' }) {
   return { world, reason };
 }
 
-test('a run\'s sheet is what its world holds: every lift judged in order with the mist last, the counters, and the peak to the whole metre', () => {
+test('a run\'s sheet is what its world holds: every lift judged in order with its ending last, the counters, and the peak to the whole metre', () => {
   for (const seed of [1, 2, 3]) {
     const { world, reason } = flown(seed, { brake: 'eased' });
     const { sky, g, meet, bells, trace, style } = world;
     const met = meet!.state;
     const sheet = summariseRun(world, reason);
     assert.deepEqual(Object.keys(sheet), ['seed', 'reason', 'steps', 'seconds', 'total', 'peak', 'lifts', 'stats', 'trace']);
-    assert.deepEqual([sheet.seed, sheet.reason, sheet.steps, sheet.seconds, sheet.total], [seed, 'fog', world.steps, sky.state.elapsed, met.total]);
+    assert.deepEqual([sheet.seed, sheet.reason, sheet.steps, sheet.seconds, sheet.total], [seed, reason, world.steps, sky.state.elapsed, met.total]);
+    assert.ok(['fog', 'landed', 'time'].includes(sheet.reason));
     assert.equal(sheet.peak, Math.floor(Math.max(sky.state.peak, g.pos.y)));
     assert.deepEqual(sheet.lifts, met.lifts.slice(0, met.count));
     assert.deepEqual(sheet.lifts.map((lift) => lift.line), [...sheet.lifts.slice(0, -1).map((_, i) => MEET.every * (i + 1)), 0]);

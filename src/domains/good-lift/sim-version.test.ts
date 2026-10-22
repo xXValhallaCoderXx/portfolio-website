@@ -17,7 +17,7 @@ import { ZONES, surfaceAt } from '../../adapters/rendering/terrain.ts';
 import { BRAKE_CONTROLS } from '../flight/brake-controls.ts';
 
 // Pin the current release's tables. A physical or scoring change requires a new version and pin.
-const FINGERPRINT = 'b9dd2bdb';
+const FINGERPRINT = 'fea36d7c';
 
 // Everything a run is flown by that is a number rather than code: the wing's tables, every one of
 // the sky's, the step's, the meet's (its plates off the trail and its rune gates and blessings with
@@ -85,7 +85,7 @@ test('the fingerprint moves with every number in the tables, every landing zone 
   const print = fingerprint(tables);
   // Every table a run is flown by is in it, and the whole of the ground's grid.
   const names = Object.keys(tables);
-  for (const name of ['FLIGHT', 'BRAKE', 'STALL', 'PITCH', 'CLOUD_ZONE', 'CLOUD_GATE', 'CLOUD_LAUNCH', 'CLOUD_WEAR', 'CLOUD_HUNT', 'CLOUD_RAVENS', 'CLOUD_STRIKE', 'CLOUD_STORM', 'CLOUD_WIND', 'CLOUD_GUST', 'CLOUD_POOL',
+  for (const name of ['FLIGHT', 'BRAKE', 'STALL', 'PITCH', 'CLOUD_ZONE', 'CLOUD_GATE', 'CLOUD_LAUNCH', 'CLOUD_WEAR', 'CLOUD_FOG', 'CLOUD_HUNT', 'CLOUD_RAVENS', 'CLOUD_STRIKE', 'CLOUD_STORM', 'CLOUD_WIND', 'CLOUD_GUST', 'CLOUD_POOL',
     'PHYSICS', 'ATMOSPHERE', 'CLOUD_WEATHER', 'RUN_RULES', 'MEET', 'TRAIL', 'MEET_POOL', 'WIND', 'THUNDER', 'BAIT', 'SCATTER', 'GATES', 'BLESSING', 'RUNE', 'BELLS', 'BELL_POOL', 'BEAST']) {
     assert.ok(names.includes(name), name);
   }

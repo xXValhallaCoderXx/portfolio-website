@@ -7,13 +7,15 @@ import { normalizeLearnedLessons } from '../progression/trick-learning.ts';
 import { multiplierOf } from './score.ts';
 import { WING } from '../flight/wing-envelope.ts';
 import { createControlSummary, summarizeControls } from '../flight/brake-controls.ts';
-export type LessonId = 'pitch' | 'wingover';
+import { createDirectAcroGuide } from '../coaching/direct-acro-guide.ts';
+export type LessonId = 'pitch' | 'wingover' | 'loop';
 export interface LessonState {active: LessonId | null; phase: string; learned: string[]; retryAt: number; startedAt: number; stable: number; side: number; completedAt: number; awarded: number; multiplier: number; cancelled: string}
 export interface LessonFrame extends CoachFrame {g: CoachFlight & {pos: {x: number; y: number; z: number}; vy: number; tuck: number}; air?: AirSample; warning?: unknown; hazardActive?: boolean; dt?: number}
 
 export const TRICK_LESSONS = Object.freeze({
   pitch: Object.freeze({ height: 500, entry: 200, abort: 120, kind: 1, label: 'PITCH & CATCH' }),
   wingover: Object.freeze({ height: 750, entry: 250, abort: 180, kind: 2, label: 'WINGOVER' }),
+  loop: Object.freeze({ height: 1000, entry: 400, abort: 250, kind: 3, label: 'LOOP' }),
   stable: 1, retry: 45, setupIdle: 8, timeout: 45, celebrate: 3,
 });
 const sideName = (side: number): 'left' | 'right' => side < 0 ? 'left' : 'right';
@@ -22,6 +24,7 @@ const turnOf = (input: FlightInput) => Number(!!input.right) - Number(!!input.le
 /** An observer with its own coach. All outputs are requests; no input or flight state is written. */
 export function createTrickLessons({ learned = () => [], onLearned = () => {} }: {learned?: () => unknown; onLearned?: (id: LessonId) => void} = {}) {
   const coach = createFlightCoach();
+  const directGuide = createDirectAcroGuide();
   const observeControls = createControlSummary();
   const state: LessonState = { active: null, phase: '', learned: [], retryAt: 0, startedAt: 0,
     stable: 0, side: 1, completedAt: -Infinity, awarded: 0, multiplier: 1, cancelled: '' };
@@ -31,7 +34,7 @@ export function createTrickLessons({ learned = () => [], onLearned = () => {} }:
 
   function reset() {
     observeControls.reset();
-    coach.reset(); clock = phaseAt = acceptedFor = idle = levelFor = 0;
+    coach.reset(); directGuide.reset(); clock = phaseAt = acceptedFor = idle = levelFor = 0;
     movesAt = breaksAt = landedAt = lostAt = 0; moveAt = -Infinity; message = null;
     Object.assign(state, { active: null, phase: '', learned: normalizeLearnedLessons(learned()), retryAt: 0,
       startedAt: 0, stable: 0, side: 1, completedAt: -Infinity, awarded: 0, multiplier: 1, cancelled: '' });
@@ -39,7 +42,7 @@ export function createTrickLessons({ learned = () => [], onLearned = () => {} }:
   function cancel(reason = 'back-to-lift') {
     if (!state.active) return false;
     state.active = null; state.phase = ''; state.stable = 0; state.retryAt = clock + TRICK_LESSONS.retry;
-    state.cancelled = reason; message = null; coach.reset();
+    state.cancelled = reason; message = null; coach.reset(); directGuide.reset();
     return true;
   }
   function repeat() { reset(); }
@@ -91,7 +94,7 @@ export function createTrickLessons({ learned = () => [], onLearned = () => {} }:
     const input = (rawInput.controlMode === 'brakes' ? summarized : rawInput) as FlightInput & Partial<ControlSummary>;
     const reserve = Math.min(frame.clearance ?? Infinity, frame.fogClearance ?? Infinity);
     const interrupted = !!(frame.hazard || frame.warning || frame.collapse! > 0 || g.stall > 0 ||
-      g.tuck > 0 || g.loop || input.ears || frame.hazardActive || g.wingPhase && g.wingPhase !== WING.flying);
+      g.tuck > 0 || g.loop && !(state.active === 'loop' && rawInput.controlMode === 'brakes') || input.ears || frame.hazardActive || g.wingPhase && g.wingPhase !== WING.flying);
     const stable = !interrupted && !input.deepBrake && !g.acro && Math.abs(g.pitch) < 0.3 &&
       Math.abs(g.pitchRate) < 0.4 && Math.abs(g.bank) < 0.75 &&
       (air.windY ?? air.lift ?? 0) >= 1.85 && g.vy > 0.2;
@@ -101,13 +104,14 @@ export function createTrickLessons({ learned = () => [], onLearned = () => {} }:
       cancel(interrupted ? 'hazard' : reserve < TRICK_LESSONS[state.active].abort ? 'clearance' : 'attempt-ended');
 
     if (!state.active && clock >= state.retryAt && clock - state.completedAt >= TRICK_LESSONS.celebrate && state.stable >= TRICK_LESSONS.stable) {
-      const id = !state.learned.includes('pitch') ? 'pitch' : !state.learned.includes('wingover') ? 'wingover' : null;
+      const id = !state.learned.includes('pitch') ? 'pitch' : !state.learned.includes('wingover') ? 'wingover' :
+        rawInput.controlMode === 'brakes' && !state.learned.includes('loop') ? 'loop' : null;
       if (id && g.pos.y >= TRICK_LESSONS[id].height && reserve >= TRICK_LESSONS[id].entry &&
           !(style?.elements! > 0)) {
         state.active = id; state.startedAt = clock; state.cancelled = '';
         state.side = turnOf(input) || Math.sign(g.bank) || 1;
         movesAt = watch.moves!; breaksAt = watch.breaks!; landedAt = style?.landed ?? 0; lostAt = style?.lost ?? 0;
-        moveAt = -Infinity; coach.reset(); phase('level');
+        moveAt = -Infinity; coach.reset(); directGuide.reset(state.side); phase('level');
       }
     }
     const id = state.active;
@@ -120,16 +124,20 @@ export function createTrickLessons({ learned = () => [], onLearned = () => {} }:
       state.completedAt = clock; state.active = null; state.phase = 'banked'; state.stable = 0;
       onLearned(id); coach.reset();
     }
-    const request = state.active && state.phase !== 'maneuver' && state.phase !== 'recover' ? setup({ ...frame, dt }) : null;
+    const direct = rawInput.controlMode === 'brakes';
+    const request = state.active && state.phase !== 'maneuver' && state.phase !== 'recover' ?
+      direct ? actionMessage(directGuide.step(state.active, frame), rawInput) : setup({ ...frame, dt }) : null;
     if (request) {
+      if (direct) state.phase = request.phase ?? state.phase;
       acceptedFor = request.accepted ? acceptedFor + dt : 0;
       idle = request.accepted ? 0 : idle + dt;
       if (idle >= TRICK_LESSONS.setupIdle) cancel('setup-idle');
     }
-    const physical = coach.step(dt, { ...frame, maneuverPolicy: state.active ?? 'off', lift: null,
+    const policy = direct ? state.active === 'loop' ? 'loop' : state.active ? 'off' : state.learned.includes('pitch') ? 'acro' : 'off' : state.active ?? 'off';
+    const physical = coach.step(dt, { ...frame, maneuverPolicy: policy, lift: null,
       forceRecovery: !state.active && !!state.cancelled && watch.calm! < 1 &&
         (g.acro || Math.abs(g.pitch) > 0.3 || Math.abs(g.bank) > 0.75) });
-    if (state.active && physical?.context === state.active && ['building', 'timing'].includes(physical.state!)) phase('maneuver');
+    if (!direct && state.active && physical?.context === state.active && ['building', 'timing'].includes(physical.state!)) phase('maneuver');
     const safety = physical && ['recover', 'hazard', 'descent'].includes(physical.state!);
     if (safety) message = physical;
     else if (state.active) message = physical ?? request ?? actionMessage({ state: 'lesson', context: TRICK_LESSONS[state.active].label,

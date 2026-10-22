@@ -46,6 +46,7 @@ import { createRecorder, decodeLog, encodeLog, inputFrame } from '../../../domai
 import { replayLog } from '../../../domains/good-lift/replay.ts';
 import { createReplayWork } from './replay-work.service.ts';
 import { STYLE, createStyle } from '../../../domains/good-lift/meet-style.ts';
+import { styleLine } from '../presentation/style-line.ts';
 import { summariseRun } from '../../../domains/good-lift/meet-sheet.ts';
 import { createMusic } from '../presentation/music.ts';
 import { createSurge } from '../../../domains/good-lift/run-surge.ts';
@@ -205,7 +206,7 @@ export function createGoodLift(host: GoodLiftHost) {
   // showed (the stamp, or the points of the set in hand).
   const styled = {
     landed: 0, lost: 0, elements: 0, total: -1, compact: null as boolean | null, inHand: '', trick: '', points: 0,
-    stamp: '', stampUntil: -Infinity, stamped: null as string | null, pending: -1,
+    stamp: '', stampUntil: -Infinity, stamped: null as string | null, text: '',
   };
   // The blessing the readouts show, by RUNE.
   let shownRune: number = RUNE.none;
@@ -296,7 +297,7 @@ export function createGoodLift(host: GoodLiftHost) {
     seen.surging = false;
     Object.assign(styled, {
       landed: 0, lost: 0, elements: 0, total: -1, compact: null as boolean | null, inHand: '', trick: '', points: 0,
-      stamp: '', stampUntil: -Infinity, stamped: null as string | null, pending: -1,
+      stamp: '', stampUntil: -Infinity, stamped: null as string | null, text: '',
     });
     styleEl.textContent = '';
     styleEl.className = 'fj-style';
@@ -557,11 +558,11 @@ export function createGoodLift(host: GoodLiftHost) {
     // written only as one of them changes.
     const stamped = elapsed < styled.stampUntil ? styled.stamp : '';
     const pending = !stamped && inHand ? s.pending : -1;
-    if (stamped !== styled.stamped || pending !== styled.pending) {
+    const text = styleLine(stamped, styled.points, styled.inHand, pending, s.links);
+    if (stamped !== styled.stamped || text !== styled.text) {
       styled.stamped = stamped;
-      styled.pending = pending;
-      styleEl.textContent = stamped === 'landed' ? `BANKED +${styled.points.toLocaleString('en-GB')}` : stamped === 'lost' ? `lost +${styled.points.toLocaleString('en-GB')}`
-        : pending >= 0 ? `${styled.inHand} +${pending.toLocaleString('en-GB')}` : '';
+      styled.text = text;
+      styleEl.textContent = text;
       styleEl.className = stamped ? `fj-style ${stamped}` : 'fj-style';
     }
   }

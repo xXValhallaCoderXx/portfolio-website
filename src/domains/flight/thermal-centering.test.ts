@@ -10,7 +10,7 @@ test('direct centering candidates blend both brakes and ease while keeping gentl
   assert.deepEqual(centeringControls(input, -1), { controlMode: 'brakes', leftBrake: .50, rightBrake: .20, bar: false, ears: false });
   assert.deepEqual(centeringControls(input, 1), { controlMode: 'brakes', leftBrake: .20, rightBrake: .50, bar: false, ears: false });
   assert.deepEqual(centeringControls(input, 0), { controlMode: 'brakes', leftBrake: .20, rightBrake: .20, bar: false, ears: false });
-  assert.deepEqual(centeringControls(input, 1, false), { controlMode: 'brakes', leftBrake: 0, rightBrake: .20, bar: false, ears: false });
+  assert.deepEqual(centeringControls(input, 1, false), { controlMode: 'brakes', leftBrake: 0, rightBrake: .30, bar: false, ears: false });
   assert.deepEqual(centeringControls({}, -1), { turn: -1, brake: true });
 });
 

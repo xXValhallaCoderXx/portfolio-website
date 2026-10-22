@@ -90,8 +90,8 @@ test('the band builds once, draws finite positions without advancing the sky, an
   let disposed = 0; geometry.addEventListener('dispose', () => disposed++); band.material.addEventListener('dispose', () => disposed++);
   view.dispose(); view.dispose(); assert.equal(disposed, 2); assert.equal(scene.children.length, 0);
 });
-test('short instructions fit phone hints and the fog accelerates with the horn', () => {
+test('short instructions fit phone hints and the fog keeps its gentle speed after the horn', () => {
   for (const text of Object.values(GLIDE_LINES)) assert.ok(text.length <= HINT_WIDTH);
-  assert.ok(cloudFogSpeed(0, 301) > cloudFogSpeed(0, 300));
+  assert.equal(cloudFogSpeed(0, 301), cloudFogSpeed(0, 300));
   assert.equal(CLOUD_ZONE.r, 320);
 });

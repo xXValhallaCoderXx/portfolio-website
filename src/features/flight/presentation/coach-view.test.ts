@@ -1,8 +1,40 @@
 import type { FlightInput } from '../../../domains/flight/models.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createCoachView } from './coach-view.ts';
+import { coachGesture, createCoachView } from './coach-view.ts';
 import { actionMessage } from '../../../domains/coaching/coach-actions.ts';
+import { keyboardBrakes } from '../../../domains/flight/brake-input.ts';
+
+test('device captions expose reachable normal, thermal, wingover and loop demands', () => {
+  const target = (left: number, right: number) => ({ brakeTargets: { left, right, tolerance: 0.07 } });
+  assert.equal(coachGesture(target(0.3, 0), 'left', 'hold', 'keyboard'), 'A / ←');
+  assert.equal(coachGesture(target(0.5, 0.2), 'left', 'hold', 'keyboard'), 'A + W · circle');
+  assert.equal(coachGesture(target(0.2, 0.2), 'brake', 'hold', 'keyboard'), 'W · gentle both brakes');
+  assert.equal(coachGesture(target(0.82, 0), 'left', 'hold', 'keyboard'), 'Q · swing brake');
+  assert.equal(coachGesture(target(0, 1), 'right', 'hold', 'keyboard'), 'Shift + D');
+  assert.equal(coachGesture(target(0, 0), 'brake', 'release', 'keyboard'), 'release the keys');
+  assert.equal(coachGesture(target(0.6, 0.6), 'brake', 'hold', 'touch'), 'pull both handles down');
+  assert.equal(coachGesture(target(0, 0), 'right', 'release', 'touch'), 'lift right thumb');
+});
+
+test('thermal approach and alignment use ordinary turn keys until both brakes are requested', () => {
+  for (const phase of ['approach', 'align']) for (const side of ['left', 'right'] as const) {
+    const message = { context: 'thermal', phase, action: side, hold: [side], release: [side === 'left' ? 'right' : 'left', 'bar'] };
+    assert.equal(coachGesture(message, side, 'hold', 'keyboard'), side === 'left' ? 'A / ←' : 'D / →');
+    assert.equal(coachGesture({ ...message, brakeTargets: { left: side === 'left' ? 0.3 : 0, right: side === 'right' ? 0.3 : 0, tolerance: 0.07 } }, side, 'hold', 'keyboard'), side === 'left' ? 'A / ←' : 'D / →');
+    assert.equal(coachGesture({ ...message, phase: 'circle', hold: [side, 'brake'] }, side, 'hold', 'keyboard'), side === 'left' ? 'A + W · circle' : 'D + W · circle');
+  }
+});
+
+test('easing full brake into a recovery catch requests the reachable working shortcut', () => {
+  const request = actionMessage({ action: 'brake', state: 'recover', brakeDepth: 'working' },
+    { controlMode: 'brakes', leftBrake: 1, rightBrake: 1 });
+  assert.equal(coachGesture(request, 'brake', 'release', 'keyboard', true), 'release Shift · keep Space');
+  const working = { controlMode: 'brakes' as const, ...keyboardBrakes(new Set(['Space'])) };
+  assert.equal(actionMessage(request, working).accepted, true);
+  const tooShallow = { controlMode: 'brakes' as const, ...keyboardBrakes(new Set(['KeyW'])) };
+  assert.equal(actionMessage(request, tooShallow).accepted, false);
+});
 
 // A small DOM boundary records writes; real layout and native input handling are browser QA.
 class Node {
@@ -150,7 +182,7 @@ test('thermal circle and ease cues describe both brakes without changing the res
     const neutral = { controlMode: 'brakes' as const, leftBrake: 0, rightBrake: 0 };
     f.raw(neutral); f.view.update(actionMessage(fields, neutral));
     const title = f.parts.action.textContent;
-    assert.equal(title, `PULL DOWN + ${direction.toUpperCase()} · CIRCLE`);
+    assert.equal(title, `CIRCLE ${direction.toUpperCase()} · KEEP BOTH BRAKES`);
     const raw = { controlMode: 'brakes' as const, [`${direction}Brake`]: .5, [`${opposite}Brake`]: .2 };
     f.raw(raw); f.view.update(actionMessage(fields, raw));
     assert.equal(f.parts.action.textContent, title);

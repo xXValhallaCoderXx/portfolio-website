@@ -7,7 +7,7 @@ interface CircleState {key?: string; dir?: number; easing: boolean; since: numbe
 type TargetSeed = Partial<GuideTarget> & Pick<GuideTarget, 'context' | 'key' | 'dir'>;
 // Directional advice only. The guide owns its memory, never the wing, its controls or a sky.
 import { FLIGHT } from '../flight/flight.ts';
-import { createThermalCentering } from '../flight/thermal-centering.ts';
+import { centeringControls, createThermalCentering } from '../flight/thermal-centering.ts';
 import { actionMessage } from './coach-actions.ts';
 import { glideDuration, glidePathClear, movingLiftIntercept } from '../flight/glide-math.ts';
 import { createLiftActivity, ridgeTangent } from './lift-activity.ts';
@@ -275,9 +275,11 @@ export function createLiftGuide(adapter: CoachingAdapter) {
     const confirmed = activity.state;
     const flow = adapter.thermalFlow?.();
     const ridden = flow && live.find((source) => source.id === flow.source && source.generation === flow.generation);
-    // The protected opening keeps its useful circle through overlapping cores. Traffic may
-    // identify stronger air beside it before the pilot has established a circle there.
-    if (!adapter.openingProtected?.() && ridden && alive(ridden) && vertical(air) >= C.useful) {
+    // Preserve an established opening circle through overlap. Before a direct pilot has
+    // established one, follow the useful source they actually entered instead of retaining
+    // a launch target whose circle would carry them out of the new core.
+    if ((!adapter.openingProtected?.() || currentInput.controlMode === 'brakes' && confirmed.activity !== 'thermal') &&
+        ridden && alive(ridden) && vertical(air) >= C.useful) {
       const candidate = refresh({ context: 'thermal', key: ridden.key, dir: direction(ridden, g, air) }, live, g, air, fog);
       if (candidate?.occupied) return candidate;
     }
@@ -340,14 +342,22 @@ export function createLiftGuide(adapter: CoachingAdapter) {
     if (!locked) {
       circleState = null;
       const refuge = adapter.recoveryPoint?.();
+      const direct = input.controlMode === 'brakes';
       const escape = refuge ? centering.choose(g as FlightState, { ...refuge, key: 'recovery', vx: 0, vz: 0 },
-        Math.sign(g.bank!) || 1, input, fog, clock) : null;
+        Math.sign(g.bank!) || 1, input, fog, clock, { brake: !direct }) : null;
+      const escapeControls = direct && escape !== null ? centeringControls(input, escape, false) : null;
       return { state: 'lift', context: 'search', phase: 'blocked', action: adapter.navigation ? 'release-all' : 'none',
         title: 'NO CLEAR LIFT ROUTE', stableTitle: true,
         ...(escape !== null ? { action: escape < 0 ? 'left' : escape > 0 ? 'right' : 'straight',
           brakeDepth: 'working', hold: escape ? [escape < 0 ? 'left' : 'right', 'brake'] : ['brake'],
           release: escape ? [escape < 0 ? 'right' : 'left', 'bar'] : ['left', 'right', 'bar'] } : {}),
-        detail: escape !== null ? `${escape < 0 ? 'Turn left' : escape > 0 ? 'Turn right' : 'Level the wing'} with normal brake to keep clear of terrain. Look for rising streaks.` :
+        ...(escapeControls ? { brakeTargets: { left: escapeControls.leftBrake!, right: escapeControls.rightBrake!, tolerance: 0.07 },
+          hold: escape ? [escape < 0 ? 'left' : 'right'] : [],
+          release: escape ? [escape < 0 ? 'right' : 'left', 'bar', 'ears'] : ['left', 'right', 'brake', 'bar', 'ears'],
+          brakeDepth: escape ? 'working' : undefined } : {}),
+        detail: escapeControls ? escape ? `Use a gentle ${escape < 0 ? 'left' : 'right'} brake to keep clear of terrain. Look for rising streaks.` :
+          'Release both brakes to level the wing. Look for rising streaks.' :
+          escape !== null ? `${escape < 0 ? 'Turn left' : escape > 0 ? 'Turn right' : 'Level the wing'} with normal brake to keep clear of terrain. Look for rising streaks.` :
           'Release brake and level the wing. Keep clear of terrain and look for rising streaks.' };
     }
     if (!locked.circling) circleState = null;

@@ -25,7 +25,9 @@ export const CLOUD_POOL = Object.freeze({ thermals: 5, ravens: 20, clouds: 33, g
 
 // The anchored launch source stands over the safe northward valley departure. `s` is m/s across the core.
 export const CLOUD_LAUNCH = Object.freeze({ x: 100, z: 285, r: 60, s: 5.5 });
-export const CLOUD_OPENING = Object.freeze({ height: 450, blend: 45, r: 80, second: Object.freeze({ x: 60, z: 170 }) });
+// Direct brake circles have a radius of about 32 m, versus 18 m for the historical
+// bank controller. Give that physical wing room to centre and correct for the breeze.
+export const CLOUD_OPENING = Object.freeze({ height: 450, blend: 45, r: 140, second: Object.freeze({ x: 60, z: 170 }) });
 // Draw an interval once, when an opportunity is scheduled. Learning progress never enters the sky.
 export const CLOUD_ENCOUNTERS = Object.freeze({
   raven: Object.freeze({ from: 500, first: Object.freeze([45, 60]), every: Object.freeze([60, 90]), high: Object.freeze([25, 40]), warning: 1, window: 3 }),
@@ -40,10 +42,13 @@ export function encounterInterval(schedule: Readonly<{ from: 500; first: readonl
 // Seconds flown inside a thermal: full strength until `full`, gone at `dead`.
 export const CLOUD_WEAR = Object.freeze({ full: 75, dead: 110 });
 
+// The floor rises gently throughout a run, leaving height to build and recover acro after the horn.
+export const CLOUD_FOG = Object.freeze({ base: 0.25, ramp: 0.001, rampUntil: 300, max: 0.55 });
+
 // Four drifting cells give time to centre, climb and choose the next source. They fade before
 // changing wind could carry a live core outside the arena. Peak values are environmental m/s.
 export const CLOUD_HUNT = Object.freeze({
-  r: 60, s: 5.5, margin: 85, separation: 110, hop: 60, launchClear: 100, tries: 128, rimSteps: 360,
+  r: 110, s: 5.5, margin: 85, separation: 110, hop: 60, launchClear: 100, tries: 128, rimSteps: 360,
   life: [90, 120], bloom: 5, fade: 12, core: 0.7, peak: 1, drift: 270,
 });
 
@@ -115,7 +120,8 @@ const wrap = (value: number, span: number) => ((value % span) + span) % span;
 // Lift across a column, 0 to 1: flat in the middle, fading over the outer share `fade` of it.
 const profile = (distance: number, radius: number, fade = 0.55) => thermalProfile(distance, radius, fade);
 export const cloudThermalStrength = (wear: number) => ease(clamp((CLOUD_WEAR.dead - wear) / (CLOUD_WEAR.dead - CLOUD_WEAR.full), 0, 1));
-export const cloudFogSpeed = (fogHeight: number, elapsed: number) => 0.25 + 0.001 * elapsed + 0.08 * Math.max(elapsed - 300, 0);
+export const cloudFogSpeed = (_fogHeight: number, elapsed: number) => Math.min(CLOUD_FOG.max,
+  CLOUD_FOG.base + CLOUD_FOG.ramp * clamp(elapsed, 0, CLOUD_FOG.rampUntil));
 // Advice must account for an early boundary fade without changing a cell's seeded lifetime.
 export const cloudThermalRemaining = (thermal: Pick<ThermalSource, 'age' | 'life' | 'edgeFade'> = {}) => Math.max(0, Math.min(
   (thermal.life ?? Infinity) - (thermal.age ?? 0), thermal.edgeFade! >= 0 ? thermal.edgeFade! : Infinity,

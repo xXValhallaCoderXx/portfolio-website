@@ -5,6 +5,8 @@ export interface CoachFields {
   action?: string; state?: string; context?: string; phase?: string;
   title?: string; detail?: string; hold?: readonly string[]; release?: readonly string[];
   brakeDepth?: string; dragAction?: string; stableTitle?: boolean;
+  /** Normalized hand demands shared by visible targets and instruction acceptance. */
+  brakeTargets?: { left: number; right: number; tolerance: number };
   progress?: number; progressLabel?: string; feedback?: string; heading?: string;
   activity?: string; preferredDirection?: number; distance?: number;
   targetId?: string | number; targetGeneration?: number; warning?: boolean; warningLabel?: string; urgent?: boolean;

@@ -140,8 +140,8 @@ function MissingPage({ path, stage, onThrow, onSkip, onHome, onFly, onRetry }: {
 function FlightControlHelp({ navigation = false }: { navigation?: boolean }) {
   return <>
     <ol className="fjord-intro-controls">
-      <li><span aria-hidden="true">↔</span><div><strong>TURN</strong><span>drag left or right</span></div></li>
-      <li><span aria-hidden="true">↓</span><div><strong>BRAKE</strong><span>drag down · <em>purple</em> is deep and can stall</span></div></li>
+      <li><span aria-hidden="true">↔</span><div><strong>TURN</strong><span>pull either side handle · A / D on keyboard</span></div></li>
+      <li><span aria-hidden="true">↓</span><div><strong>BRAKE</strong><span>pull both handles · Space on keyboard · full pulls can stall</span></div></li>
       <li><span aria-hidden="true">↑</span><div><strong>HANDS UP</strong><span>slide up, or just let go</span></div></li>
     </ol>
     {navigation && <p className="dim">Select a lit pillar for automatic travel, or open the map to pick a destination.</p>}

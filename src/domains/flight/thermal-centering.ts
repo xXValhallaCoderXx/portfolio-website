@@ -8,7 +8,7 @@ import { createFlight, copyFlight, stepFlight } from './flight.ts';
 /** Candidate controls use the same brake mode as the pilot, without touching the real input. */
 export function centeringControls(input: FlightInput, side: number, brake = true): FlightInput {
   if (input.controlMode !== 'brakes') return { turn: side, brake };
-  const inner = brake ? 0.50 : 0.20, outer = brake ? 0.20 : 0;
+  const inner = brake ? 0.50 : 0.30, outer = brake ? 0.20 : 0;
   return { controlMode: 'brakes', leftBrake: side < 0 ? inner : outer,
     rightBrake: side > 0 ? inner : outer, bar: false, ears: false };
 }

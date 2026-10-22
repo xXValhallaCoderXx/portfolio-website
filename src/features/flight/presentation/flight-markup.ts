@@ -1,10 +1,5 @@
 const mapIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2Zm6-2v16m6-14v16"/></svg>';
 const menuIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h14"/></svg>';
-const controlGuide = `<svg class="fj-control-guide" viewBox="0 0 220 170" aria-hidden="true">
-  <text x="110" y="15" text-anchor="middle">▲ HANDS UP</text><path d="m110 32 28 28-28 28-28-28Z" fill="#e8f1fa0d" stroke="#9fb2c6"/>
-  <path d="m22 88 88 56 88-56Z" fill="#29c7e328" stroke="#29c7e3"/><path d="m22 88 88 56 88-56-88 78Z" fill="#c9b6ff38" stroke="#9c78e2"/>
-  <text x="22" y="76">◀ LEFT</text><text x="198" y="76" text-anchor="end">RIGHT ▶</text><text x="110" y="164" text-anchor="middle" fill="#c9b6ff">DEEP</text><circle cx="110" cy="88" r="8" fill="#29c7e3"/>
-</svg>`;
 
 export const FLIGHT_MARKUP = /* html */ `
   <canvas class="fj-scene"></canvas>
@@ -31,15 +26,15 @@ export const FLIGHT_MARKUP = /* html */ `
     <button class="primary fj-resume" data-do="resume">▶ resume flight</button>
     <p class="fj-pause-summary" data-pause-summary></p>
     <div class="fj-menu-content">
-      <h2>MOUSE / TOUCH · DRAG TO FLY</h2>${controlGuide}
+      <h2>TWO BRAKES · ONE WING</h2>
       <dl class="fj-control-rows">
-        <div><dt>Turn</dt><dd>drag left or right; a smaller pull turns gently</dd></div>
-        <div><dt>Brake</dt><dd>drag down to pull both brakes and slow down</dd></div>
-        <div><dt>Deep brake</dt><dd>drag farther down into purple; a deep pull can stall</dd></div>
-        <div><dt>Let go</dt><dd>slide up, release the mouse or lift your finger</dd></div>
+        <div><dt>Touch</dt><dd>pull either side handle down; use both thumbs to brake together. Lift a thumb to release that hand.</dd></div>
+        <div><dt>Keyboard</dt><dd>A / D or ← / → turn gently. Space, S or ↓ pulls both brakes. Add a direction to circle.</dd></div>
+        <div><dt>Acro</dt><dd>Q / E builds wingovers. Shift + a direction pulls fully for a loop; Shift + Space pulls both fully.</dd></div>
+        <div><dt>Mouse</dt><dd>drag anywhere: sideways turns, down pulls both brakes; let go to release. Full pulls can stall.</dd></div>
       </dl>
-      <details><summary>thermals &amp; climbing</summary><p>Blend a gentle downward and side pull to circle in rising air. Ease the side pull to widen. Brake slows the wing; rising air provides lift.</p><p class="fj-keys-fjord">Land inside a lit ring to read that part of the page. Select a pillar or map destination for automatic travel.</p><p class="fj-keys-goal fj-keys-run" hidden>Bank the bar every 150 m. Raven warnings, gusts and storms begin above 500 m; kettlebells join at 700 m and the Beast at 1,000 m. The fog builds after five minutes; a surviving flight completes at ten.</p></details>
-      <details><summary>tricks &amp; recovery</summary><p>Safe lessons introduce pitch and catch at 500 m, then wingovers at 750 m. Follow the coach, recover level to bank style, or choose Back to lift to leave a lesson. Full pulls can stall; follow the release cue.</p><button data-do="repeat-lessons" hidden>Repeat trick lessons</button></details>
+      <details><summary>thermals &amp; climbing</summary><p>Keep a little brake on both hands and pull the inside hand farther to circle in rising air. Ease the difference to widen. On keyboard, W holds both gently; W + A / D circles, then W alone widens. Brake slows the wing; rising air provides lift.</p><p class="fj-keys-fjord">Land inside a lit ring to read that part of the page. Select a pillar or map destination for automatic travel.</p><p class="fj-keys-goal fj-keys-run" hidden>Bank the bar every 150 m. Raven warnings, gusts and storms begin above 500 m; kettlebells join at 700 m and the Beast at 1,000 m. Fog rises slowly below; a surviving flight completes at ten.</p></details>
+      <details><summary>tricks &amp; recovery</summary><p>Safe lessons introduce pitch and catch at 500 m, wingovers at 750 m, then loops at 1,000 m. Build rhythm with timed pulls and releases, link moves into a combo, and recover level to bank style. Follow the coach or choose Back to lift to leave a lesson. Full pulls can stall; follow the release cue.</p><button data-do="repeat-lessons" hidden>Repeat trick lessons</button></details>
       <div class="fj-keys-more"><button data-do="sound">sound: on</button></div>
     </div>
     <footer class="fj-menu-footer"><button data-do="cloudbase" hidden>Good Lift</button><button data-do="quit-cloudbase" hidden>end run</button><button data-do="exit">back to the page</button></footer>
@@ -61,5 +56,15 @@ export const FLIGHT_MARKUP = /* html */ `
     <button data-do="back-to-lift" data-coach="cancel" hidden>Back to lift</button>
     <span data-coach="announce" class="fj-visually-hidden" aria-live="polite" aria-atomic="true"></span>
   </section>
-  <div class="fj-drag-tip" role="status" hidden><span class="fj-action-symbol" aria-hidden="true">◇</span><div><small>AIRBORNE</small><strong>Drag anywhere to steer</strong><span>sideways turns · down brakes · up lets go</span></div></div>
+  <div class="fj-drag-tip" role="status" hidden><span class="fj-action-symbol" aria-hidden="true">◇</span><div><small>AIRBORNE</small><strong>Small pulls, smooth flight</strong><span class="fj-touch-help">pull either handle down · lift your thumb to release</span><span class="fj-key-help">A / D turn · Space brakes · Q / E swing · release to glide</span><span class="fj-mouse-help">drag sideways to turn · down to brake · let go to glide</span></div></div>
+  <div class="fj-brake-handles" aria-label="Flight brake handles" hidden>
+    ${(['left', 'right'] as const).map(side => `<div class="fj-brake-handle" data-hand="${side}">
+      <span class="fj-handle-label">${side.toUpperCase()} BRAKE</span>
+      <div class="fj-handle-rail"><i class="fj-handle-working"></i><i class="fj-handle-wingover"></i><i class="fj-handle-full"></i><i class="fj-handle-target" hidden></i>
+        <button type="button" data-brake-handle="${side}" aria-label="${side} brake. Hold and pull down; release to let go." aria-describedby="fj-handle-help"><span>≡</span></button>
+      </div><span class="fj-handle-key">${side === 'left' ? 'A / ← · Q swing' : 'D / → · E swing'}</span><span class="fj-handle-depth">HANDS UP</span>
+    </div>`).join('')}
+    <span id="fj-handle-help" class="fj-visually-hidden">Pull each handle down independently. The broad cyan range is for ordinary flight; purple builds a swing, and the bottom is a full pull. Lift your thumb to release. With a focused handle, hold Space or Enter to pull it; release the key to let go.</span>
+    <span class="fj-brake-key-help">SPACE · BOTH BRAKES <span>SHIFT · FULL PULL</span></span>
+  </div>
   <div class="fj-flight-cues" aria-hidden="true"></div><div class="fj-fade"></div>`;

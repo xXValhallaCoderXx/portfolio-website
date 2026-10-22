@@ -20,7 +20,8 @@ function departure(seed: number, side: number) {
   const align = side < 0 ? 8 : 3;
   let clearance = Infinity, minimumAltitude = g.pos.y, reachedAt = Infinity, counterturned = false;
   let ridgeClimbing = 0, ridgeClimbingWithoutThermal = 0;
-  for (let tick = 0; tick < 30 * 60; tick++) {
+  // Continue beyond the broader opening columns before measuring ridge-only climb.
+  for (let tick = 0; tick < 40 * 60; tick++) {
     let turn;
     if (tick < held * 60) turn = side;
     else if (tick < align * 60) turn = 0;

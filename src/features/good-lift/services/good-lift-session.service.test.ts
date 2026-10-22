@@ -34,13 +34,13 @@ function flightSurvey() {
   });
 }
 function survey() { return flights ??= flightSurvey(); }
-test('skilled seeded soaring lasts five to eight minutes without exaggerated lift', (t) => {
+test('skilled seeded soaring retains height and time for acro without exaggerated lift', (t) => {
   const runs = survey();
   const durations = runs.map((r) => r.seconds).sort((a: number,b: number)=>a-b);
   const median = (durations[15] + durations[16]) / 2;
-  t.diagnostic(`32 skies: median ${median.toFixed(1)}s; ${runs.filter((r)=>r.seconds>=300 && r.seconds<=480).length}/32 within five to eight minutes; ${runs.filter((r)=>r.peak>=150).length}/32 reach the opener`);
-  assert.ok(median >= 300 && median <= 480, `median ${median.toFixed(1)}s; ${durations.map(Math.round)}`);
-  assert.ok(runs.filter((r)=>r.seconds>=300 && r.seconds<=480).length >= 22, 'most skies allow a useful soaring session');
+  t.diagnostic(`32 skies: median ${median.toFixed(1)}s; ${runs.filter((r)=>r.reason==='time').length}/32 reach the ten-minute deadline; ${runs.filter((r)=>r.peak>=150).length}/32 reach the opener`);
+  assert.ok(Math.abs(median - RUN.seconds) < RUN.step, `median ${median.toFixed(1)}s; ${durations.map(Math.round)}`);
+  assert.ok(runs.filter((r)=>r.reason==='time').length >= 22, 'most skies leave useful acro time through the deadline');
   assert.ok(runs.every((r)=>r.steps<=36000 && r.seconds<=600.01));
   assert.ok(runs.filter((r)=>r.peak>=150).length>=28, 'the first banking line is approachable');
 });

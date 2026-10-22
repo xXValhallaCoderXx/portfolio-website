@@ -25,8 +25,8 @@ import { RUN_RULES, isJudgedEnding } from './run-rules.ts';
 
 // The meet's rules. Every lift starts from the empty `bar` (kg, collars included) and is judged
 // at a line every `every` metres of peak height, the first of them (the opener) at 150 m. From
-// `horn` seconds into a run, where cloudFogSpeed's surge begins and the fog starts to race,
-// Gjallarhorn has sounded and a good lift banks `double` times its weight. A full circle turned
+// `horn` seconds into a run, Gjallarhorn has sounded and a good lift banks `double` times its
+// weight. The fog keeps its gentle rise, leaving room for tricks. A full circle turned
 // the flock's way in lift loads `rep` kg and a close call `close` kg (`beast` kg for the Beast's,
 // bells.js). The airspace judge shows red after more than `cloud` seconds in cloud during one
 // lift. `alive` is the strength (0 to 1) a thermal needs to count as lift, and turning the other
@@ -124,8 +124,7 @@ export const SCATTER = Object.freeze({
 export const PLATE_KIND = Object.freeze({ none: 0, trail: 1, wind: 2, thunder: 3, bait: 4, scatter: 5 });
 
 // How many of each thing the meet holds. The pools never grow or shrink, so the view can keep them:
-// one trail's plates, and more lift records than the fog leaves time for (it catches even a nonstop
-// climb at the launch column's 17 m/s by 3,090 m, which is twelve lines and the mist). The loose
+// one trail's plates, and more lift records than a ten-minute run can reach. The loose
 // plates are laid out by kind: a strike's `SCATTER.most` first, then two gust fronts' at once, then
 // the one under the thunder and the fog's bait (LOOSE).
 export const MEET_POOL = Object.freeze({ plates: 6, lifts: 96, loose: 16 });

@@ -15,6 +15,7 @@ import { createStyle } from './meet-style.ts';
 import { RUNE } from './meet-runes.ts';
 import { summariseRun } from './meet-sheet.ts';
 import { SIM_VERSION } from './sim-version.ts';
+import { isJudgedEnding } from './run-rules.ts';
 
 function readLog(text: string): RunLog { const read = decodeLog(text); assert.ok(read.ok); return read.log; }
 function sheetOf(result: ReplayResult | null) { assert.ok(result && !result.error); return result; }
@@ -184,11 +185,11 @@ test('a log that flies on past the end of its run is corrupt, and one that stops
   };
   for (const { sheet, text } of [runs[0], runs[18]]) {
     const log = readLog(text);
-    assert.ok(sheet.reason === 'fog' || sheet.reason === 'landed');
+    assert.ok(isJudgedEnding(sheet.reason));
     assert.deepEqual(replayLog(longer(log, 1)), { error: 'corrupt' });
     assert.deepEqual(replayLog(longer(log, 600, INPUT.left)), { error: 'corrupt' });
   }
-  // Cut ten seconds before the fog, it is the same run ended there: the lines it judged by then,
+  // Cut ten seconds before the natural ending, it is the same run ended there: the lines it judged by then,
   // and the bar on it forfeited.
   const { sheet, text } = runs[0];
   const log = readLog(text);

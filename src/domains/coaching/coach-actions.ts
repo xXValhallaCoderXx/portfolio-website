@@ -30,15 +30,28 @@ export const controlHeld = (input: FlightInput, name: string) => {
 function directMessage(fields: CoachFields, input: FlightInput): CoachMessage {
   const summary = summarizeControls(input) as DirectControlSummary, action = fields.action ?? 'none';
   const base = defaults[action] ?? defaults.none;
+  if (fields.brakeTargets) {
+    const targets = fields.brakeTargets;
+    const matches = (actual: number, target: number) => Number.isFinite(target) && target >= 0 && target <= 1 &&
+      (target === 0 ? actual <= 0.04 : Math.abs(actual - target) <= targets.tolerance);
+    return { ...fields, action, controlMode: 'brakes', title: fields.title ?? base.title,
+      detail: fields.detail ?? '', hold: controls(fields.hold ?? base.hold), release: controls(fields.release ?? base.release),
+      accepted: !summary.ears && !input.bar && Number.isFinite(targets.tolerance) && targets.tolerance >= 0 &&
+        matches(summary.leftBrake, targets.left) && matches(summary.rightBrake, targets.right) };
+  }
   let hold = controls(fields.hold ?? base.hold), release = controls(fields.release ?? base.release);
   let brakeDepth = fields.brakeDepth ?? (action === 'deep-brake' ? 'deep' : undefined);
   const side = hold.includes('left') ? 'left' : hold.includes('right') ? 'right' : null;
-  const thermal = fields.context === 'thermal';
+  // Approaching a thermal is an ordinary hands-up turn. Only an established circle
+  // asks for common brake; its approach forecast must not be flown as a slow circle.
+  const thermal = fields.context === 'thermal' &&
+    (fields.phase === 'circle' || fields.phase === 'ease' || hold.includes('brake') || fields.brakeDepth === 'working');
   const easing = action === 'straight' && (hold.includes('brake') || fields.dragAction === 'ease');
-  const easeSide = side && release.includes('brake');
+  const easeSide = side && release.includes('brake') && fields.context !== 'thermal';
   if (side) {
     hold = hold.filter(name => name !== 'brake');
-    if (easeSide) { release = release.filter(name => name !== 'brake'); brakeDepth = 'working'; }
+    if (release.includes('brake')) release = release.filter(name => name !== 'brake');
+    if (easeSide) brakeDepth = 'working';
   } else if (easing) {
     if (!thermal) {
       hold = hold.filter(name => name !== 'brake');
@@ -51,23 +64,24 @@ function directMessage(fields: CoachFields, input: FlightInput): CoachMessage {
   const deep = depth > 0.70;
   let title = fields.title ?? base.title, detail = fields.detail ?? '';
   if (side) {
-    title = thermal ? `PULL DOWN + ${side.toUpperCase()} · CIRCLE`
+    title = thermal ? `CIRCLE ${side.toUpperCase()} · KEEP BOTH BRAKES`
       : `${easeSide ? 'EASE' : 'PULL'} ${side.toUpperCase()}${brakeDepth === 'deep' ? ' DEEP' : ''}${easeSide ? ' · KEEP THE TURN' : ' BRAKE'}`;
-    detail = thermal ? `Drag down and ${side}; keep some brake on both. Follow the ravens in this direction.`
-      : brakeDepth === 'deep' ? `Pull farther toward ${side} to build the swing. Follow the next release cue.`
-        : `Pull toward ${side}; use a smaller pull for a gentler turn.`;
+    detail = thermal ? `Pull the ${side} brake farther; keep some brake on both. Follow the ravens in this direction.`
+      : brakeDepth === 'deep' ? `Pull the ${side} brake into the deep range to build the swing. Follow the next release cue.`
+        : `Pull the ${side} brake; use a smaller pull for a gentler turn.`;
   } else if (easing) {
     title = thermal ? 'EASE SIDE PULL · KEEP BOTH BRAKES' : 'EASE THE PULL · WIDEN THE CIRCLE';
-    detail = thermal ? 'Ease the side pull and keep a gentle downward pull on both brakes to widen the circle.'
-      : 'Return the handle toward its origin, or release, to widen the circle. Follow the ravens when you pull again.';
+    detail = thermal ? 'Ease the turning hand and keep gentle pressure on both brakes to widen the circle.'
+      : 'Ease the turning hand, or release, to widen the circle. Follow the ravens when you pull again.';
   } else if (hold.includes('brake')) {
     title = brakeDepth === 'deep' ? 'PULL BOTH BRAKES DEEP' : deep ? 'EASE BOTH TO WORKING BRAKE' : 'PULL BOTH BRAKES';
-    detail = brakeDepth === 'deep' ? 'Drag straight down into the deep range. Follow the release cue as the wing moves.'
-      : deep ? 'Move toward the handle origin until both indicators return to the working range.'
-        : 'Drag straight down into the working range so both brakes pull together.';
+    detail = brakeDepth === 'deep' ? 'Pull both brakes into the deep range. Follow the release cue as the wing moves.'
+      : deep ? 'Ease both hands until both indicators return to the working range.'
+        : 'Pull both brakes into the working range together.';
   } else if (release.includes('brake') || action === 'release-all' || action === 'release-turns') {
     title = 'HANDS UP · RELEASE THE PULL';
-    detail = 'Release the mouse or lift your finger so both brakes come up. ' + detail;
+    detail = 'Release both brakes so your hands come up. ' + detail;
+    if (action === 'release-turns' && !release.includes('brake')) release.push('brake');
   }
   if (requestedBrake && input.ears) {
     title = 'RELEASE EARS, THEN PULL';
@@ -83,8 +97,8 @@ function directMessage(fields: CoachFields, input: FlightInput): CoachMessage {
   const differential = Math.abs(summary.rightBrake - summary.leftBrake);
   const correctDepth = thermal && (side || easing) ? summary.commonBrake >= 0.10 &&
     summary.maxBrake <= (easing ? 0.35 : 0.65) && (easing ? differential <= 0.08 : differential >= 0.15 && differential <= 0.45)
-    : !requestedBrake || (brakeDepth === 'deep' ? depth > 0.70
-      : side ? depth >= 0.15 && depth <= 0.45 : depth >= 0.5 && summary.maxBrake <= 0.70);
+    : side ? brakeDepth === 'deep' ? depth > 0.70 : depth >= 0.15 && depth <= 0.45
+      : !requestedBrake || (brakeDepth === 'deep' ? depth > 0.70 : depth >= 0.5 && summary.maxBrake <= 0.70);
   return { ...fields, action, title, detail, hold, release, controlMode: 'brakes', brakeDepth,
     ...(easing ? { dragAction: 'ease' } : {}),
     accepted: releasing.length === 0 && held && correctDepth };

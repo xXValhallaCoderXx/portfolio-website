@@ -40,7 +40,7 @@ export const BRIEF_MARKUP = /* html */ `
           <circle cx="28" cy="28" r="4" fill="currentColor" />
           <path d="M20 28H8m4-4-4 4 4 4m24-4h12m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <div><strong>Turn</strong><span>drag left or right</span></div>
+        <div><strong>Turn</strong><span>pull either side handle · A / D on keyboard</span></div>
       </li>
       <li>
         <svg viewBox="0 0 56 56" width="56" height="56" aria-hidden="true">
@@ -49,7 +49,7 @@ export const BRIEF_MARKUP = /* html */ `
           <circle cx="28" cy="16" r="4" fill="currentColor" />
           <path d="M28 21v15m-5-5 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <div><strong>Brake</strong><span>drag down · <em>purple</em> is deep and can stall</span></div>
+        <div><strong>Brake</strong><span>pull both handles · Space on keyboard · <em>purple</em> builds a swing</span></div>
       </li>
       <li>
         <svg viewBox="0 0 56 56" width="56" height="56" aria-hidden="true">
@@ -57,7 +57,7 @@ export const BRIEF_MARKUP = /* html */ `
           <circle cx="28" cy="42" r="4" fill="currentColor" />
           <path d="M28 37V14m-5 5 5-5 5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <div><strong>Hands up</strong><span>slide up, or just let go</span></div>
+        <div><strong>Hands up</strong><span>lift your thumbs, release the keys or let go of the mouse</span></div>
       </li>
     </ol>
     <p class="fj-brief-note">Thermals, plates, kettlebells and tricks: the coach introduces each one in flight.</p>

@@ -12,6 +12,7 @@ import { createTestLoader, readModel } from '../../../test/helpers/test-models.t
 import { arraysMadeBy } from '../../../test/helpers/test-alloc.ts';
 import type { Vector2, Vector3 } from '../../../domains/flight/models.ts';
 import type { CloudbaseRun } from '../../../domains/good-lift/models.ts';
+import { RUN_RULES } from '../../../domains/good-lift/run-rules.ts';
 
 const STEP = 1 / 60;
 // How the view is asked to draw a storm cloud: 1.3 times its hazard, around a file that is 1
@@ -432,7 +433,7 @@ test('a whole run can be drawn frame by frame, models and all, without a number 
   const { glow } = named(view, 'glints').geometry.attributes;
   let climb = 0;
   let ended = null;
-  while (!ended && state.elapsed < 600) {
+  while (!ended && state.elapsed < RUN_RULES.seconds) {
     const lift = [1, 2, 0].map((i) => state.thermals[i]).find((thermal) => thermal.live && thermal.move === 0 && thermal.strength > 0.3) ?? state.thermals[1];
     const round = state.elapsed * 0.8;
     const aim = { x: lift.x + 12 * Math.sin(round) - pos.x, z: lift.z - 12 * Math.cos(round) - pos.z };
@@ -466,7 +467,10 @@ test('a whole run can be drawn frame by frame, models and all, without a number 
     });
     assert.equal(glow.array.every((value: number) => value >= 0 && value <= 1), true);
   }
-  assert.equal(ended, 'fog');
+  assert.equal(ended, null, 'slow fog leaves this skilled visual pilot airborne at the deadline');
+  assert.ok(state.elapsed >= RUN_RULES.seconds && state.elapsed < RUN_RULES.seconds + STEP,
+    'the renderer remains finite through the complete ten-minute run');
+  assert.ok(pos.y - state.fogHeight > 3, 'the capped floor has not caught the high pilot');
   // Loose on purpose: this is about drawing, and must not start failing when the balance is tuned.
   assert.ok(state.peak > 300, `the pilot got somewhere (${state.peak.toFixed(0)} m)`);
   for (const [what, frames] of Object.entries(seen)) assert.ok(frames > 60, `${what} were on show for ${frames} frames`);

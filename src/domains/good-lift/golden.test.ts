@@ -14,7 +14,7 @@ import { sampleAtmosphere } from '../flight/atmosphere.ts';
 
 // These inputs AND sheets were computed in Chromium, then replayed in Node. Their source receipt
 // records the engine, timestamp and a source digest checked before/after recording. The ignored
-// .artifacts/initial-release/browser-goldens.mjs reproduces the capture from the Vite source
+// .artifacts/fun-acro-v4/capture-all.mjs reproduces the capture from the Vite source
 // server, on an empty page without HMR or rendering clocks. No Node-generated expected sheets.
 const receipt = JSON.parse(readFileSync(new URL('../../test/fixtures/good-lift-chromium.json', import.meta.url), 'utf8')) as typeof receiptFixture;
 
@@ -31,11 +31,12 @@ test('actual Chromium keyboard runs replay to exactly the same complete Node she
     const sheet = replayLog(read.log); assert.ok(!('error' in sheet));
     assert.deepEqual(sheet, run.sheet, `${run.name}: every score, event, step and Float32 trace sample`);
     if (run.scenario === 'soaring') {
-      assert.ok(sheet.steps >= 300 * 60 && sheet.steps <= 480 * 60, `${run.name}: a complete skilled soaring run`);
+      assert.equal(sheet.steps, 600 * 60, `${run.name}: slow fog leaves a complete skilled soaring run`);
+      assert.equal(sheet.reason, 'time');
     } else {
       assert.equal(run.scenario, 'ears');
-      assert.ok(sheet.steps >= 300 * 60 && sheet.steps <= 480 * 60, 'a complete skilled flight continues after reopening');
-      assert.equal(sheet.reason, 'fog', 'the new start preserves enough clearance to continue soaring after reopening');
+      assert.equal(sheet.steps, 600 * 60, 'a complete skilled flight continues after reopening');
+      assert.equal(sheet.reason, 'time', 'slow fog preserves room to continue soaring after reopening');
       const first = read.log.bits.findIndex((bits) => (bits & 12) === 12);
       assert.ok(first >= 75 * 60 && first <= 75 * 60 + 1, 'elapsed-time rounding allows one boundary tick');
       assert.ok(read.log.bits.slice(first, first + 180).every((bits) => (bits & 12) === 12));

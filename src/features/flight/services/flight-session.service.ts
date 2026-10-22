@@ -1,6 +1,6 @@
 import { createFlightHud } from './flight-hud.adapter.ts';
 import { nearestFlightZone } from './flight-navigation.service.ts';
-import { connectFlightDragControls } from './flight-input.adapter.ts';
+import { connectFlightControls } from './flight-input.adapter.ts';
 import { createFlightEffects } from '../presentation/flight-effects.ts';
 import { readProgress, writeProgress } from '../../../adapters/browser/flight-progress.service.ts';
 import { readKit, clearKit } from '../../../adapters/browser/kit-storage.service.ts';
@@ -26,6 +26,7 @@ import { createFlightCoach } from '../../../domains/coaching/flight-coach.ts';
 import { createLiftGuide } from '../../../domains/coaching/lift-guide.ts';
 import { createCoachView } from '../presentation/coach-view.ts';
 import { createBrakeDrag } from '../../../domains/flight/brake-drag.ts';
+import { createBrakeInput } from '../../../domains/flight/brake-input.ts';
 import { brakeByte, summarizeControls } from '../../../domains/flight/brake-controls.ts';
 import { interruptsLift, resolveCoachMessage } from '../../../domains/coaching/coach-routing.ts';
 import { createPlateNotice, createWindNotice } from '../presentation/wind-feedback.ts';
@@ -186,6 +187,10 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   const plateNotice = createPlateNotice();
   const input: FlightInput & { controlMode: 'brakes'; leftBrake: number; rightBrake: number; bar: boolean; ears: boolean } = { controlMode: 'brakes', leftBrake: 0, rightBrake: 0, bar: false, ears: false };
   const brakeDrag = createBrakeDrag();
+  const brakeInput = createBrakeInput();
+  brakeInput.state.device = matchMedia('(pointer: coarse)').matches ? 'touch' : 'keyboard';
+  stage.dataset.flightDevice = brakeInput.state.device;
+  let flightControls: ReturnType<typeof connectFlightControls> | null = null;
   const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
   const flightCues = createFlightCues({ element: $('.fj-flight-cues'), stage, camera, reducedMotion: () => motionPreference.matches });
   const dragTip = $('.fj-drag-tip');
@@ -197,7 +202,6 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     if (brakeDrag.state.active && (brakeDrag.state.moved || !confirm)) skipFlightClick = true;
     brakeDrag.reset();
     input.leftBrake = input.rightBrake = 0;
-    flightCues.clearDrag({ confirm });
     stage.classList.remove('brake-dragging');
     const canvas = $('.fj-scene');
     if (id !== null && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
@@ -282,6 +286,8 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
 
   function clearInput() {
     releaseDrag();
+    flightControls?.reset();
+    brakeInput.reset();
   }
 
   function clearCloudResult() {
@@ -992,11 +998,11 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     return best;
   }
 
-  on($('.fj-scene'), 'pointermove', (event) => setHot(mode === 'flying' && !overlayOpen() && !brakeDrag.state.active ? pillarAt(event.clientX, event.clientY) : null));
+  on($('.fj-scene'), 'pointermove', (event) => setHot(mode === 'flying' && !overlayOpen() && !brakeInput.state.source ? pillarAt(event.clientX, event.clientY) : null));
   on($('.fj-scene'), 'pointerleave', () => setHot(null));
   on($('.fj-scene'), 'click', (event) => {
     if (skipFlightClick) { skipFlightClick = false; return; }
-    if (brakeDrag.state.active) return;
+    if (brakeInput.state.source) return;
     if (mode === 'flying' && !mapOpen && !keysOpen && !held && !portal) autoFly(pillarAt(event.clientX, event.clientY));
   });
 
@@ -1063,7 +1069,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     fog: () => mode === 'cloudbase' ? requireRun().coachEnvironment.fog() : null,
     cloudDepth: (pos: Vector3) => mode === 'cloudbase' ? requireRun().coachEnvironment.cloudDepth(pos) : 0,
   });
-  const coachView = createCoachView({ element: $('.fj-coach'), input: () => input,
+  const coachView = createCoachView({ element: $('.fj-coach'), input: () => input, device: () => brakeInput.state.device,
     canAnnounce: () => stage.dataset.messageOwner === 'coach' && !overlayOpen() && !briefing });
   let coachMessage: ReturnType<typeof resolveCoachMessage> | null = null;
   function resetCoach() {
@@ -1395,10 +1401,10 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   // ---------------------------------------------------------------- input
 
   const flightCanvas = $('.fj-scene');
-  connectFlightDragControls({ canvas: flightCanvas, stage, input, drag: brakeDrag, signal: listeners.signal,
+  flightControls = connectFlightControls({ canvas: flightCanvas, stage, handles: $('.fj-brake-handles'), input, drag: brakeDrag, controller: brakeInput, signal: listeners.signal,
     canStart: () => isAirborne() && !mapOpen && !keysOpen && !held && !briefing && !portal,
     beforeStart: () => { clearInput(); setAuto(null); setHot(null); skipFlightClick = false; },
-    onActive: () => { hasDragged = true; dragTip.hidden = true; }, release: releaseDrag });
+    onActive: () => { hasDragged = true; dragTip.hidden = true; }, releaseMouse: releaseDrag });
 
   on(window, 'keydown', (event) => {
     if (mode === 'intro' || event.metaKey || event.ctrlKey || event.altKey) return;
@@ -1451,7 +1457,9 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
       else if (event.code === 'KeyL' && !event.repeat) toggleSound();
       return;
     }
-    if (event.target instanceof Element && event.target.closest('button, a, input, textarea, select, [contenteditable="true"]') && ['Space', 'Enter'].includes(event.code)) return;
+    if (event.target instanceof Element && (event.target.closest('input, textarea, select, [contenteditable="true"]') ||
+        event.target.closest('button, a') && ['Space', 'Enter'].includes(event.code))) return;
+    if (flightControls?.keyDown(event)) return;
     if (event.repeat) return;
     if (event.code === 'KeyM') mapOpen ? closeMap() : openMap();
     else if (event.code === 'KeyH') showKeys();
@@ -1466,6 +1474,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
 
   on(window, 'keyup', (event) => {
     if (event.code === swallowed) swallowed = null;
+    flightControls?.keyUp(event);
   });
 
   on(window, 'blur', () => {
@@ -1488,7 +1497,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   const actions = {
     map: () => (mapOpen ? closeMap() : openMap()),
     keys: () => showKeys(),
-    resume: () => showKeys(false),
+    resume: () => { showKeys(false); if (!stage.hasAttribute('tabindex')) stage.tabIndex = -1; stage.focus({ preventScroll: true }); },
     fly: () => endBriefing(),
     'brief-exit': () => { if (briefing) exitFlight(); },
     sound: toggleSound,
@@ -1667,7 +1676,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     const messageTop = `${instruments.bottom - stage.getBoundingClientRect().top + 12}px`;
     stage.style.setProperty('--coach-top', messageTop);
     stage.style.setProperty('--message-top', messageTop);
-    flightCues.update({ pose: renderedFlight, dt: elapsed, drag: brakeDrag.state, message: coachMessage, input,
+    flightCues.update({ pose: renderedFlight, dt: elapsed, message: coachMessage, input,
       facts: { blocked: !isAirborne() || mapOpen || keysOpen || held || portal || briefing || document.hidden ||
           !!auto || controls.steered || controls.locked || controls.climb != null,
         noseYaw: g.yaw, forwardAirspeed: g.forwardAirspeed, wingPhase: g.wingPhase, stall: g.stall,
@@ -1749,6 +1758,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     seed: (value: number|null) => (pinnedSeed = value == null ? null : value >>> 0),
     hold: (on = true) => { held = on; if (on) clearInput(); return held; },
     get brakeDrag() { return { ...brakeDrag.state }; },
+    get brakeInput() { return { ...brakeInput.state, leftPointerId: brakeInput.hands.left.pointerId, rightPointerId: brakeInput.hands.right.pointerId }; },
     get landingEligible() { return landingLeg.eligible; },
     input,
     get coach() { return { message: coachMessage, guide: liftGuide.message, lessons: run?.lessons ?? null, activity: liftGuide.activity, turn: liftGuide.turn, transfer: liftGuide.transfer }; },

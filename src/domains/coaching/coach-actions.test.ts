@@ -7,6 +7,19 @@ import { BELL_RESULT } from '../good-lift/bells.ts';
 import { createCloudbaseRun } from '../good-lift/cloudbase-state.ts';
 
 const direct = (leftBrake: number, rightBrake: number): FlightInput => ({ controlMode: 'brakes', leftBrake, rightBrake });
+test('explicit maneuver targets are the same demands that acknowledge the visible instruction', () => {
+  const fields = { action: 'left', title: 'PULL LEFT TO THE SWING MARK', detail: 'Hold this depth through the swing.',
+    hold: ['left'], release: ['right'], brakeTargets: { left: .82, right: 0, tolerance: .07 } };
+  const message = actionMessage(fields, direct(.82, 0));
+  assert.equal(message.accepted, true);
+  assert.equal(message.title, fields.title);
+  assert.deepEqual(message.brakeTargets, fields.brakeTargets);
+  assert.equal(actionMessage(message, direct(.30, 0)).accepted, false, 'ordinary turning cannot satisfy a wingover cue');
+  assert.equal(actionMessage(message, direct(1, 0)).accepted, false, 'full loop travel overshoots the wingover band');
+  assert.equal(actionMessage(message, direct(.82, .2)).accepted, false, 'the other hand must release');
+  assert.equal(actionMessage(message, { ...direct(.82, 0), ears: true }).accepted, false);
+  assert.equal(actionMessage(message, { ...direct(.82, 0), bar: true }).accepted, false);
+});
 test('direct pulls acknowledge graded side turns and require both hands for a bilateral catch', () => {
   for (const side of ['left', 'right'] as const) {
     const input = side === 'left' ? direct(0.30, 0) : direct(0, 0.30);
@@ -21,6 +34,9 @@ test('direct pulls acknowledge graded side turns and require both hands for a bi
   assert.equal(actionMessage({ action: 'brake', brakeDepth: 'working' }, direct(2 / 3, 2 / 3)).accepted, true);
   assert.equal(actionMessage({ action: 'brake', brakeDepth: 'working' }, direct(1, 1)).accepted, false);
   assert.equal(actionMessage({ action: 'release-all' }, direct(0, 0)).accepted, true);
+  assert.equal(actionMessage({ action: 'release-turns' }, direct(.6, .6)).accepted, false, 'a symmetric pull must release during an inversion abort');
+  assert.equal(actionMessage({ action: 'release-turns' }, direct(1, 1)).accepted, false);
+  assert.equal(actionMessage({ action: 'release-turns' }, direct(0, 0)).accepted, true);
 });
 test('direct thermal cues require a blended pull and retain gentle bilateral brake while easing', () => {
   for (const side of ['left', 'right'] as const) {
@@ -30,7 +46,8 @@ test('direct thermal cues require a blended pull and retain gentle bilateral bra
     const blended = side === 'left' ? direct(.50, .20) : direct(.20, .50);
     const accepted = actionMessage(fields, blended);
     assert.equal(accepted.accepted, true);
-    assert.match(accepted.title, /PULL DOWN \+/);
+    assert.equal(actionMessage(accepted, blended).accepted, true, 'resolving the circle retains common brake');
+    assert.match(accepted.title, /CIRCLE .*KEEP BOTH BRAKES/);
     assert.match(accepted.detail, /keep some brake on both/);
     assert.equal(actionMessage(fields, side === 'left' ? direct(.30, 0) : direct(0, .30)).accepted, false);
     assert.equal(actionMessage(fields, side === 'left' ? direct(.20, .50) : direct(.50, .20)).accepted, false);
@@ -38,10 +55,23 @@ test('direct thermal cues require a blended pull and retain gentle bilateral bra
       hold: ['brake'], release: ['left', 'right', 'bar'] };
     const eased = actionMessage(ease, direct(.20, .20));
     assert.equal(eased.accepted, true);
-    assert.match(eased.detail, /gentle downward pull/);
+    assert.match(eased.detail, /gentle pressure/);
     assert.equal(actionMessage(ease, direct(0, 0)).accepted, false);
     assert.equal(actionMessage(ease, direct(.6, .6)).accepted, false);
     assert.equal(actionMessage(eased, direct(.20, .20)).accepted, true, 'resolving a cue again retains its eased brake target');
+  }
+});
+test('thermal approaches use the ordinary turn projected by the route forecast', () => {
+  for (const side of ['left', 'right'] as const) {
+    const other = side === 'left' ? 'right' : 'left';
+    const fields = { action: side, context: 'thermal', phase: 'approach', hold: [side], release: [other, 'brake', 'bar'] };
+    const input = side === 'left' ? direct(.30, 0) : direct(0, .30);
+    const approach = actionMessage(fields, input);
+    assert.equal(approach.accepted, true);
+    assert.match(approach.title, /PULL .* BRAKE/);
+    assert.equal(approach.brakeDepth, undefined);
+    assert.equal(actionMessage(approach, input).accepted, true);
+    assert.equal(actionMessage(approach, side === 'left' ? direct(.5, .2) : direct(.2, .5)).accepted, false);
   }
 });
 test('direct deep pulls and easing never request double taps, and keep recovery phase advice', () => {

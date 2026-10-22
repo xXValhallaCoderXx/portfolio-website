@@ -1,44 +1,194 @@
 {
-  "engine": "Chromium 143.0.7499.4",
-  "generated": "2026-10-18T23:25:14.332Z",
-  "sourceFiles": [
-    "atmosphere.js",
-    "board.js",
-    "brake-controls.js",
-    "coach-actions.js",
-    "flight-coach.js",
-    "flight-physics.js",
-    "flight.js",
-    "glide-math.js",
-    "good-lift-address.js",
-    "good-lift-key.js",
-    "good-lift-store.js",
-    "ground.js",
-    "lift-activity.js",
-    "lift-guide.js",
-    "meet-bynames.js",
-    "meet-initials.js",
-    "meet-style.js",
-    "recorder.js",
-    "ridge-transfer.js",
-    "run-rules.js",
-    "score.js",
-    "sim-version.js",
-    "soaring-turn.js",
-    "swing-watch.js",
-    "thermal-centering.js",
-    "trick-learning.js",
-    "trick-lessons.js",
-    "wing-envelope.js",
-    "wing-kit.js"
+  "node": "v24.21.0",
+  "command": "node --import tsx .artifacts/fun-acro-v4/browser-lesson-goldens.mjs",
+  "sourceManifest": [
+    {
+      "path": ".artifacts/fun-acro-v4/browser-lesson-goldens.mjs",
+      "sha256": "8860074785d609dd5898ca890951ba59824b0eeb3ec5fa157ceedffcf8b72bc1"
+    },
+    {
+      "path": ".artifacts/fun-acro-v4/capture-source.mjs",
+      "sha256": "978a72289bb8641895f5e09aeeef068f695cc36d18b88ae8c31955537cd745ff"
+    },
+    {
+      "path": "src/adapters/browser/good-lift-storage.service.ts",
+      "sha256": "79aceb0881b9c93399f10ba28c5381d0576d34327bd82db8a007315e394d2ba1"
+    },
+    {
+      "path": "src/adapters/browser/storage.port.ts",
+      "sha256": "8ad2eb0bc340104eb5c9f47d3373203eb57b7fef4d8d9c7832a5249243b60854"
+    },
+    {
+      "path": "src/domains/coaching/coach-actions.ts",
+      "sha256": "b6eb1a7ea575b60d791d94de5d37a541ce33d9a869803972c617316d6b71a406"
+    },
+    {
+      "path": "src/domains/coaching/direct-acro-guide.ts",
+      "sha256": "aa212964fd9915f93e21684fd6db0c54015d33b75b6f66a6528d7586b3e6a2fd"
+    },
+    {
+      "path": "src/domains/coaching/flight-coach.ts",
+      "sha256": "865215b65381c0c6073bdd514e560f00ca9cb4288bda42dac7040144fc4c19f2"
+    },
+    {
+      "path": "src/domains/coaching/lift-activity.ts",
+      "sha256": "3754ed0e8241af3e34acd10e9f7f65754a3e6bf149cecaf6983042de8f8ea8f2"
+    },
+    {
+      "path": "src/domains/coaching/lift-guide.ts",
+      "sha256": "01bd916fd6070e60e99ef1c503a2e60f3e00d9fd8268c9c96d4e5872b847d13b"
+    },
+    {
+      "path": "src/domains/coaching/ridge-transfer.ts",
+      "sha256": "40cbe3a44abaaa64ee247ff3b10995dc600ffef204527fa751cab3e5deeb53d5"
+    },
+    {
+      "path": "src/domains/coaching/soaring-turn.ts",
+      "sha256": "22546a010746edf968db0827fce4285730c50319b742f0090da79f3d5965d0d3"
+    },
+    {
+      "path": "src/domains/coaching/swing-watch.ts",
+      "sha256": "058944bffb6b0f5bdd710eed26e726698b08b578119b183c306f5a46d94dae06"
+    },
+    {
+      "path": "src/domains/flight/atmosphere.ts",
+      "sha256": "70b639b8231820d7a372b341eb302c2a3232895777d93764b729fb59c01478f2"
+    },
+    {
+      "path": "src/domains/flight/brake-controls.ts",
+      "sha256": "6c9954891801590aaff902c9270b0ab12a1670de8f112859b6c4ac9dca14d231"
+    },
+    {
+      "path": "src/domains/flight/flight-physics.ts",
+      "sha256": "814189dfeacf8ad41712cdc07d807c17f707b892b2a38cf303fbfbca03a2db21"
+    },
+    {
+      "path": "src/domains/flight/flight.ts",
+      "sha256": "16ed9d5385f4b88dcc30d1f92d8624fe4e0281165caef33ab3b55f836d1f6292"
+    },
+    {
+      "path": "src/domains/flight/glide-math.ts",
+      "sha256": "87552029455c6fa19c9e9a78446e495ef49a85f8631f31e55601e19a44ec9a1d"
+    },
+    {
+      "path": "src/domains/flight/ground.ts",
+      "sha256": "6386629afad297d5de625f69bc746fc60cd18905d3b14a32a45d81276edaf7a4"
+    },
+    {
+      "path": "src/domains/flight/thermal-centering.ts",
+      "sha256": "685b53f65cdbf3dbf3c497a5fdea4ca4f433f39c8e00102d92749273d60a84d3"
+    },
+    {
+      "path": "src/domains/flight/wing-envelope.ts",
+      "sha256": "e6240df898b15b265624150d89867207a2da6e73b455c5e0a6325016b83432af"
+    },
+    {
+      "path": "src/domains/good-lift/board.ts",
+      "sha256": "66de55416eedb15d2bc7da22eb1fd09588a991b708f514226c1c58787be70950"
+    },
+    {
+      "path": "src/domains/good-lift/good-lift-address.ts",
+      "sha256": "a933e0a9e7e9659601a28f022327186565c4d011ae78622dfbba399c86cee88a"
+    },
+    {
+      "path": "src/domains/good-lift/meet-bynames.ts",
+      "sha256": "c35a761abb53bc35b7897f5c931e01ac2b52959f4ba2c493e731ff537addbe19"
+    },
+    {
+      "path": "src/domains/good-lift/meet-initials.ts",
+      "sha256": "286c5ffc1208ad6aaecad51837dae552dda5d05d17f0bd0f89d9f229ac413f46"
+    },
+    {
+      "path": "src/domains/good-lift/meet-style.ts",
+      "sha256": "f12337a9aaea8e1e628451c2e252f3f2ec9d29b063f52aef865ab63b06d761c1"
+    },
+    {
+      "path": "src/domains/good-lift/recorder.ts",
+      "sha256": "9760809a7a9287588498f68c8852886a3380444dc57ec04a7ec0fc558aa27126"
+    },
+    {
+      "path": "src/domains/good-lift/run-rules.ts",
+      "sha256": "f7879719bf2d62bc10110304e1e5434569db1945ae425b349a4272ef5337f8e2"
+    },
+    {
+      "path": "src/domains/good-lift/score.ts",
+      "sha256": "4a3c1e2237097673d84c1d18084b7ea8a9d85ab2da5efc8320d3a938f125827c"
+    },
+    {
+      "path": "src/domains/good-lift/sim-version.ts",
+      "sha256": "c4ec8299d1e3a26e0e218940b81665d539e551b78ffdecd8f1358363da600f27"
+    },
+    {
+      "path": "src/domains/good-lift/trick-lessons.ts",
+      "sha256": "d2b6e959cda8015817898496fb3a08fae84c63bf8f914f0929a0da94c72fd8f0"
+    },
+    {
+      "path": "src/domains/progression/good-lift-key.ts",
+      "sha256": "a98ab58f2a9f1a22946a922e9a3be2c7c5de75dbc56d8c074e157410e6354501"
+    },
+    {
+      "path": "src/domains/progression/good-lift-store.ts",
+      "sha256": "1a0faa73c2830ee3e488b633006695a4814d9cca5ba3dc7df038dd78865db8de"
+    },
+    {
+      "path": "src/domains/progression/trick-learning.ts",
+      "sha256": "4e892b1c1322b568f51902b61679a67d9caf9db764c7deff563a2c07b29e79cf"
+    },
+    {
+      "path": "src/domains/progression/wing-kit.ts",
+      "sha256": "d12fc60a3222b86b572b38f7322a68b4b682a52f211d2c0bd12244633c381f08"
+    },
+    {
+      "path": "tools/source-graph.ts",
+      "sha256": "adb3a49c01b82b591cb81c531b21a8a7b7dd917cf996f0c72d3d6c43618611b9"
+    }
   ],
-  "sourceDigest": "8e15be37e92238eff6e5cdf202153fa4ad7c5886dd5ab8b50ecc32b7be56ffdb",
+  "engine": "Chromium 143.0.7499.4",
+  "generated": "2026-10-22T07:28:30.942Z",
+  "sourceFiles": [
+    ".artifacts/fun-acro-v4/browser-lesson-goldens.mjs",
+    ".artifacts/fun-acro-v4/capture-source.mjs",
+    "src/adapters/browser/good-lift-storage.service.ts",
+    "src/adapters/browser/storage.port.ts",
+    "src/domains/coaching/coach-actions.ts",
+    "src/domains/coaching/direct-acro-guide.ts",
+    "src/domains/coaching/flight-coach.ts",
+    "src/domains/coaching/lift-activity.ts",
+    "src/domains/coaching/lift-guide.ts",
+    "src/domains/coaching/ridge-transfer.ts",
+    "src/domains/coaching/soaring-turn.ts",
+    "src/domains/coaching/swing-watch.ts",
+    "src/domains/flight/atmosphere.ts",
+    "src/domains/flight/brake-controls.ts",
+    "src/domains/flight/flight-physics.ts",
+    "src/domains/flight/flight.ts",
+    "src/domains/flight/glide-math.ts",
+    "src/domains/flight/ground.ts",
+    "src/domains/flight/thermal-centering.ts",
+    "src/domains/flight/wing-envelope.ts",
+    "src/domains/good-lift/board.ts",
+    "src/domains/good-lift/good-lift-address.ts",
+    "src/domains/good-lift/meet-bynames.ts",
+    "src/domains/good-lift/meet-initials.ts",
+    "src/domains/good-lift/meet-style.ts",
+    "src/domains/good-lift/recorder.ts",
+    "src/domains/good-lift/run-rules.ts",
+    "src/domains/good-lift/score.ts",
+    "src/domains/good-lift/sim-version.ts",
+    "src/domains/good-lift/trick-lessons.ts",
+    "src/domains/progression/good-lift-key.ts",
+    "src/domains/progression/good-lift-store.ts",
+    "src/domains/progression/trick-learning.ts",
+    "src/domains/progression/wing-kit.ts",
+    "tools/source-graph.ts"
+  ],
+  "sourceDigest": "904cbf131ece6bcc388f6ea3d7e55d08dab1b9660a428260ae0bff488fb4da1d",
   "records": [
     {
       "kind": "pitch",
       "side": -1,
       "delay": 0,
-      "simVersion": 3,
+      "simVersion": 4,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -50,7 +200,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgMAAAAAAAAAAAAM6AfJCpQFBfQBAGkUhQEAiwEESAA",
+      "link": "AgQAAAAAAAAAAAAM6AfJCpQFBfQBAGkUhQEAiwEESAA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -370,7 +520,7 @@
       "kind": "pitch",
       "side": -1,
       "delay": 0.1,
-      "simVersion": 3,
+      "simVersion": 4,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -382,7 +532,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgMAAAAAAAAAAAAM6AfhC5oFBfkBAG4UgwEAjQEE0AEA",
+      "link": "AgQAAAAAAAAAAAAM6AfhC5oFBfkBAG4UgwEAjQEE0AEA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -702,7 +852,7 @@
       "kind": "pitch",
       "side": -1,
       "delay": 0.2,
-      "simVersion": 3,
+      "simVersion": 4,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -714,7 +864,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgMAAAAAAAAAAAAM6AfxC6AFBf4BAHMUgQEAkAEEzwEA",
+      "link": "AgQAAAAAAAAAAAAM6AfxC6AFBf4BAHMUgQEAkAEEzwEA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -1034,7 +1184,7 @@
       "kind": "pitch",
       "side": -1,
       "delay": 0.3,
-      "simVersion": 3,
+      "simVersion": 4,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -1046,7 +1196,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgMAAAAAAAAAAAAM6Af-C6YFBYICAHgUgQEAkQEEzAEA",
+      "link": "AgQAAAAAAAAAAAAM6Af-C6YFBYICAHgUgQEAkQEEzAEA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -1366,7 +1516,7 @@
       "kind": "pitch",
       "side": 1,
       "delay": 0,
-      "simVersion": 3,
+      "simVersion": 4,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -1378,7 +1528,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgMAAAAAAAAAAAAM6AfJCpQFBvQBAGkUhQEAiwEESAA",
+      "link": "AgQAAAAAAAAAAAAM6AfJCpQFBvQBAGkUhQEAiwEESAA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -1698,7 +1848,7 @@
       "kind": "pitch",
       "side": 1,
       "delay": 0.1,
-      "simVersion": 3,
+      "simVersion": 4,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -1710,7 +1860,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgMAAAAAAAAAAAAM6AfhC5oFBvkBAG4UgwEAjQEE0AEA",
+      "link": "AgQAAAAAAAAAAAAM6AfhC5oFBvkBAG4UgwEAjQEE0AEA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -2030,7 +2180,7 @@
       "kind": "pitch",
       "side": 1,
       "delay": 0.2,
-      "simVersion": 3,
+      "simVersion": 4,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -2042,7 +2192,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgMAAAAAAAAAAAAM6AfxC6AFBv4BAHMUgQEAkAEEzwEA",
+      "link": "AgQAAAAAAAAAAAAM6AfxC6AFBv4BAHMUgQEAkAEEzwEA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -2362,7 +2512,7 @@
       "kind": "pitch",
       "side": 1,
       "delay": 0.3,
-      "simVersion": 3,
+      "simVersion": 4,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -2374,7 +2524,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgMAAAAAAAAAAAAM6Af-C6YFBoICAHgUgQEAkQEEzAEA",
+      "link": "AgQAAAAAAAAAAAAM6Af-C6YFBoICAHgUgQEAkQEEzAEA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -2694,7 +2844,7 @@
       "kind": "wingover",
       "side": -1,
       "delay": 0,
-      "simVersion": 3,
+      "simVersion": 4,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -2706,7 +2856,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgMAAAAAAAAAAAAE6AfrDZQFBfQBAA8VgwIB8QECmAEBVAAnBEwAAQQ",
+      "link": "AgQAAAAAAAAAAAAE6AfrDZQFBfQBAA8VgwIB8QECmAEBVAAnBEwAAQQ",
       "snapshot": {
         "g": {
           "pilot": {
@@ -3027,7 +3177,7 @@
       "kind": "wingover",
       "side": -1,
       "delay": 0.1,
-      "simVersion": 3,
+      "simVersion": 4,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -3039,7 +3189,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgMAAAAAAAAAAAAE6AeVDpoFBfkBABUVgwIB_AECnwEBWwAsBEgA",
+      "link": "AgQAAAAAAAAAAAAE6AeVDpoFBfkBABUVgwIB_AECnwEBWwAsBEgA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -3360,7 +3510,7 @@
       "kind": "wingover",
       "side": -1,
       "delay": 0.2,
-      "simVersion": 3,
+      "simVersion": 4,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -3372,7 +3522,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgMAAAAAAAAAAAAI6AfWDqAFBf4BABsVgwIBiQICqAEBYAAxBFgA",
+      "link": "AgQAAAAAAAAAAAAI6AfWDqAFBf4BABsVgwIBiQICqAEBYAAxBFgA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -3693,7 +3843,7 @@
       "kind": "wingover",
       "side": -1,
       "delay": 0.3,
-      "simVersion": 3,
+      "simVersion": 4,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -3705,7 +3855,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgMAAAAAAAAAAAAM6AeWD6YFBYICACEVgwIBlwICtgEBXgA4BGcA",
+      "link": "AgQAAAAAAAAAAAAM6AeWD6YFBYICACEVgwIBlwICtgEBXgA4BGcA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -4026,7 +4176,7 @@
       "kind": "wingover",
       "side": 1,
       "delay": 0,
-      "simVersion": 3,
+      "simVersion": 4,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -4038,7 +4188,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgMAAAAAAAAAAAAE6AfrDZQFBvQBAA8WgwIC8QEBmAECVAAnBEwAAQQ",
+      "link": "AgQAAAAAAAAAAAAE6AfrDZQFBvQBAA8WgwIC8QEBmAECVAAnBEwAAQQ",
       "snapshot": {
         "g": {
           "pilot": {
@@ -4359,7 +4509,7 @@
       "kind": "wingover",
       "side": 1,
       "delay": 0.1,
-      "simVersion": 3,
+      "simVersion": 4,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -4371,7 +4521,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgMAAAAAAAAAAAAE6AeVDpoFBvkBABUWgwIC_AEBnwECWwAsBEgA",
+      "link": "AgQAAAAAAAAAAAAE6AeVDpoFBvkBABUWgwIC_AEBnwECWwAsBEgA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -4692,7 +4842,7 @@
       "kind": "wingover",
       "side": 1,
       "delay": 0.2,
-      "simVersion": 3,
+      "simVersion": 4,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -4704,7 +4854,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgMAAAAAAAAAAAAI6AfWDqAFBv4BABsWgwICiQIBqAECYAAxBFgA",
+      "link": "AgQAAAAAAAAAAAAI6AfWDqAFBv4BABsWgwICiQIBqAECYAAxBFgA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -5025,7 +5175,7 @@
       "kind": "wingover",
       "side": 1,
       "delay": 0.3,
-      "simVersion": 3,
+      "simVersion": 4,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -5037,7 +5187,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgMAAAAAAAAAAAAM6AeWD6YFBoICACEWgwIClwIBtgECXgA4BGcA",
+      "link": "AgQAAAAAAAAAAAAM6AeWD6YFBoICACEWgwIClwIBtgECXgA4BGcA",
       "snapshot": {
         "g": {
           "pilot": {

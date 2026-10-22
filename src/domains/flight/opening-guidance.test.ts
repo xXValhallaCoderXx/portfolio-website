@@ -16,7 +16,11 @@ for (const delay of [0.3, 0.6, 1]) test(`visible opening instructions across 32 
 });
 
 for (const height of [150, 250, 350]) test(`real flight leaves lift at ${height}m and loses 20m before following recovery guidance`, t => {
-  const runs = [{ seed: 1, delay: 0.6 }, { seed: 2, delay: 0.3 }].map(({ seed, delay }) => guidedRecovery(seed, delay, height));
+  // At 150 m, these west/east skies leave room to fly beyond the broader opening
+  // columns and lose a real 20 m while retaining the recovery's terrain reserve.
+  const starts = height === 150 ? [{ seed: 12, delay: 0.6 }, { seed: 3, delay: 0.3 }]
+    : [{ seed: 1, delay: 0.6 }, { seed: 2, delay: 0.3 }];
+  const runs = starts.map(({ seed, delay }) => guidedRecovery(seed, delay, height));
   for (const run of runs) {
     assert.ok(run.departure.height >= height && run.departure.height < height + 1, 'the actual climb supplies the starting height');
     assert.ok(run.lost >= 20 && run.lost < 21, `deliberate departure must really lose height: ${JSON.stringify(run)}`);

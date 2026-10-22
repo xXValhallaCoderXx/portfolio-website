@@ -343,9 +343,11 @@ test('full air and route queries run at the quarter-second search cadence, not e
 });
 
 test('actual manual ridge departures hand off only to visible confirmed ridge guidance', () => {
-  for (const seed of [1, 2]) {
+  // These real seeded departures leave a clear cliff section beyond the wider cores.
+  // Seed 1's west route now passes through a second broad thermal instead.
+  for (const seed of [10, 2]) {
     const sky = createCloudbaseRun(), world = createRunWorld({ sky }); startRun(world, seed);
-    const adapter = runAdapter(sky), guide = createQualifiedLiftGuide(adapter), side = seed === 1 ? -1 : 1;
+    const adapter = runAdapter(sky), guide = createQualifiedLiftGuide(adapter), side = sky.state.weather.side;
     const held = side < 0 ? 4 : 1.5, reversed = side < 0 ? 2 : 1, aligned = held + reversed;
     const pending: FlightInput[] = Array.from({ length: 12 }, () => ({ turn: 0, brake: false }));
     let clearance = Infinity, ridgeClimb = 0, ridgeGuidance = 0;
@@ -366,7 +368,7 @@ test('actual manual ridge departures hand off only to visible confirmed ridge gu
     assert.ok(clearance > 45, `sky ${seed}: ${clearance}m clearance`);
     assert.ok(world.g.pos.y > 100 && ridgeClimb > 4, `sky ${seed}: genuine ridge climb after a manual approach`);
     assert.ok(ridgeGuidance > 5, 'only confirmed physical ridge flight provides the handoff');
-    if (seed === 1) assert.ok(ridgeGuidance > 10, 'the far west-cliff handoff stays with useful ridge air');
+    if (side < 0) assert.ok(ridgeGuidance > 10, 'the far west-cliff handoff stays with useful ridge air');
     assert.equal(world.watch.state.moves, 0); assert.equal(world.g.loops, 0);
   }
 });

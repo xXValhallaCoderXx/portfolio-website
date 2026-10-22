@@ -17,7 +17,8 @@ export const PHYSICS = Object.freeze({
   controls: Object.freeze({ bank: 0.66, gain: 1.2, damping: 0.08, relativeDamping: 0.3, relativeRelease: 1.575, differential: 0.55,
     reversal: 3, swingRate: 0.3, swingRateRange: 0.6, swingAngle: 0.7, swingAngleRange: 0.6,
     relativeBank: 0.75, relativeBankRange: 0.35, earsTake: 0.35, earsOpen: 0.7, earsBrake: 0.15, barTime: 0.3 }),
-  directBrakes: Object.freeze({ differentialLift: 0.065, differentialDrag: 0.1, dihedral: 2 }),
+  directBrakes: Object.freeze({ differentialLift: 0.065, differentialDrag: 0.1, dihedral: 2,
+    deepStart: 0.70, deepFull: 0.95, deepDifferentialLift: 0.65, deepDihedral: 0.4 }),
   coordination: Object.freeze({ bank: 0.52, gain: 1.6, damping: 0.12, steerTime: 0.15,
     take: 0.15, release: 0.25, turn: 0.2, rolloutBank: 0.08726646259971647,
     pressureTrim: 0.30, lean: 0.22 }),
@@ -105,6 +106,15 @@ function forces(g: PhysicsBodies, air: AirSample, dt = 0) {
   const C = PHYSICS;
   const H = C.controls, A = C.aero, K = C.coordination;
   const { canopy: c, pilot: p, physical: s } = g;
+  const direct = s.controlMode === 'brakes', D = C.directBrakes;
+  // Ordinary travel keeps the existing wing. Deliberate deep travel progressively opens its
+  // aerodynamic roll authority and eases passive sideslip stability. Read the actual smoothed
+  // hands, not a button edge or a maneuver flag: release restores ordinary handling naturally.
+  const deepTravel = clamp((Math.max(s.leftBrake, s.rightBrake) / C.deepBrake - D.deepStart) /
+    (D.deepFull - D.deepStart), 0, 1);
+  const deepAuthority = deepTravel * deepTravel * (3 - 2 * deepTravel);
+  const directLift = D.differentialLift + (D.deepDifferentialLift - D.differentialLift) * deepAuthority;
+  const directDihedral = D.dihedral + (D.deepDihedral - D.dihedral) * deepAuthority;
   const [r, right, up, forward] = s.work;
   rotate(right, c.q, 1, 0, 0); rotate(up, c.q, 0, 1, 0); rotate(forward, c.q, 0, 0, -1);
   const wx = air.windX || 0, wz = air.windZ || 0;
@@ -189,16 +199,15 @@ function forces(g: PhysicsBodies, air: AirSample, dt = 0) {
       const incidenceNormal = normal + A.rollRelief * rate * side * C.span * A.spanSample;
       const alpha = Math.atan2(-incidenceNormal, along);
       alphaSum += alpha;
-      const direct = s.controlMode === 'brakes';
       const brake = direct ? side < 0 ? s.leftBrake : s.rightBrake : s.brake + Math.max(0, side * s.differential);
       const differential = direct ? brake - s.brake : Math.max(0, side * s.differential);
       const incidence = alpha - A.barIncidence * s.bar;
       let cl = direct ? clamp(C.liftZero + C.liftSlope * incidence + A.brakeLift * s.brake -
-        C.directBrakes.differentialLift * differential, 0, A.maxLift) :
+        directLift * differential, 0, A.maxLift) :
         clamp(C.liftZero + C.liftSlope * incidence + A.brakeLift * s.brake - A.differentialLift * side * s.differential, 0, A.maxLift);
       // Canopy dihedral turns a sideslip into restoring lift. It is a passive local
       // aerodynamic response, not a bank target or an unrequested brake correction.
-      if (direct) cl = clamp(cl + side * C.directBrakes.dihedral *
+      if (direct) cl = clamp(cl + side * directDihedral *
         (vx * right.x + vy * right.y + vz * right.z) / speed, 0, A.maxLift);
       const separated = Math.max(0, Math.abs(incidence) - A.separation);
       cl *= 1 / (1 + A.separationLoss * separated * separated);

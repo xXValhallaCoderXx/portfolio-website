@@ -1,5 +1,6 @@
 import type { CoachFields } from '../../../domains/coaching/models.ts';
 import type { FlightInput } from '../../../domains/flight/models.ts';
+import type { BrakeDevice } from '../../../domains/flight/brake-input.ts';
 // The coach only presents resolved instructions and raw held inputs. It never changes flight.
 import { summarizeControls } from '../../../domains/flight/brake-controls.ts';
 
@@ -11,13 +12,29 @@ export interface CoachNode<T> {
   setAttribute(name: string, value: string): void; getAttribute(name: string): string | null;
 }
 type PresentedCoach = CoachFields & { canCancelLesson?: boolean };
+export function coachGesture(message: PresentedCoach | null, name: 'left' | 'right' | 'brake', advice: string, device: BrakeDevice, soften = false) {
+  if (device === 'mouse') return soften ? 'ease toward center' : advice === 'release' ? name === 'brake' ? 'slide up / let go' : `ease ${name}` : name === 'brake' ? 'drag down' : `drag ${name}`;
+  if (device === 'touch') return soften ? 'ease both handles up' : advice === 'release' ? name === 'brake' ? 'lift both thumbs' : `lift ${name} thumb` : name === 'brake' ? 'pull both handles down' : `pull ${name} handle down`;
+  if (soften) return message?.context === 'thermal' && message?.dragAction === 'ease' ? 'W · gentle both brakes' : 'release Shift · keep Space';
+  if (advice === 'release') return 'release the keys';
+  if (message?.context === 'thermal' && message?.dragAction === 'ease') return 'W · gentle both brakes';
+  const targets = message?.brakeTargets;
+  const thermalCircle = message?.context === 'thermal' &&
+    (['circle', 'ease'].includes(message.phase ?? '') || message.hold?.includes('brake') || message.dragAction === 'ease');
+  const left = targets?.left ?? 0, right = targets?.right ?? 0;
+  if (name === 'brake') return Math.min(left, right) >= 0.95 || message?.brakeDepth === 'deep' ? 'Shift + Space' : Math.max(left, right) > 0 && Math.max(left, right) <= 0.35 ? 'W · gentle both brakes' : 'Space · both brakes';
+  const side = name === 'left' ? left : right, outside = name === 'left' ? right : left;
+  const key = name === 'left' ? 'A / ←' : 'D / →';
+  return side >= 0.95 ? `Shift + ${name === 'left' ? 'A' : 'D'}` : side > 0.70 ? `${name === 'left' ? 'Q' : 'E'} · swing brake`
+    : outside > 0 || !targets && thermalCircle ? `${name === 'left' ? 'A' : 'D'} + W · circle` : key;
+}
 const clamp = (x: unknown) => Math.max(0, Math.min(1, typeof x === 'number' && Number.isFinite(x) ? x : 0));
 const write = (node: { textContent: string | null }, value: string) => { if (node.textContent !== value) node.textContent = value; };
 const attribute = (node: { getAttribute(name: string): string | null; setAttribute(name: string, value: string): void }, name: string, value: string) => { if (node.getAttribute(name) !== value) node.setAttribute(name, value); };
 const hide = (node: { hidden: string | boolean }, value: boolean) => { if (node.hidden !== value) node.hidden = value; };
 
 /** `now` is a presentation clock, injectable for announcement tests; no simulation clock advances. */
-export function createCoachView<T extends CoachNode<T>>({ element, input = () => ({}), now = () => performance.now(), canAnnounce = () => true }: { element: T; input?: () => FlightInput; now?: () => number; canAnnounce?: () => boolean }) {
+export function createCoachView<T extends CoachNode<T>>({ element, input = () => ({}), device = () => 'mouse', now = () => performance.now(), canAnnounce = () => true }: { element: T; input?: () => FlightInput; device?: () => BrakeDevice; now?: () => number; canAnnounce?: () => boolean }) {
   const query = (root: T, selector: string): T => { const node = root.querySelector(selector); if (!node) throw new Error(`Coach view is missing ${selector}`); return node as T; };
   const kicker = query(element, '.fj-coach-kicker');
   const warningStrip = element.querySelector('[data-coach="warning"]') as T | null;
@@ -77,8 +94,7 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
               : name === 'left' || name === 'right' ? `${pressed ? 'Pulling' : 'Pull'} ${name} brake`
                 : `${pressed ? 'Holding' : 'Pull'} ${nameLabel}`;
         write(label, text);
-        write(gesture, soften ? 'ease toward center' : advice === 'release' ? brake ? 'slide up / let go' : `ease ${name}`
-          : brake ? 'drag down' : `drag ${name}`);
+        write(gesture, coachGesture(message, name, advice, device(), soften));
       }
     }
     const allReleased = !!message && !shown && !heldAny && release.length > 0;

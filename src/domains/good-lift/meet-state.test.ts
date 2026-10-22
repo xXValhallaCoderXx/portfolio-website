@@ -216,7 +216,7 @@ test('judgment buffers keep late lines and the meet reuses its pools across rese
   assert.deepEqual(run.state, createMeet().state);
 });
 
-test('recorded digital soaring qualifies for five to eight minutes and replays exactly', () => {
+test('recorded digital soaring retains acro time through the deadline and replays exactly', () => {
   const durations = [];
   for (let seed = 1; seed <= 24; seed++) {
     const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle() }), seed);
@@ -236,5 +236,5 @@ test('recorded digital soaring qualifies for five to eight minutes and replays e
     const replay = replayLog(read.log);
     assert.deepEqual(replay, sheet);
   }
-  assert.ok(durations.filter((seconds) => seconds >= 300 && seconds <= 480).length >= 20, JSON.stringify(durations));
+  assert.ok(durations.filter((seconds) => Math.abs(seconds - RUN.seconds) < RUN.step).length >= 20, JSON.stringify(durations));
 });

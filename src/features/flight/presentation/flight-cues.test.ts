@@ -126,7 +126,7 @@ test('ordinary side, bilateral working/deep and release suggestions obey coach a
   for (const side of ['left', 'right'] as const) {
     const message = actionMessage({ action: side }, direct()), target = coachDragTarget(message);
   assert.ok(target);
-    assert.equal(target.dy, 0); assert.equal(target[`${side}Brake`], 0.2);
+    assert.equal(target.dy, 0); assert.equal(target[`${side}Brake`], cueBrake(0.3));
     assert.equal(actionMessage(message, { ...direct(), ...target }).accepted, true);
   }
   for (const [action, amount] of [['brake', 2 / 3], ['deep-brake', 1]] as [string, number][]) {
@@ -142,6 +142,17 @@ test('ordinary side, bilateral working/deep and release suggestions obey coach a
     assert.deepEqual(released, { leftBrake: 0, rightBrake: 0 });
     assert.equal(actionMessage(message, { ...direct(), ...released }).accepted, true);
     assert.equal(coachDragTarget(message, type, direct())!.accepted, true, 'any accepted neutral position satisfies hands up');
+  }
+});
+
+test('maneuver markers use the resolved physical pair instead of an inferred ordinary turn', () => {
+  for (const [left, right] of [[0.82, 0], [0, 0.82], [1, 0], [0, 1], [0.60, 0.60], [0, 0]]) {
+    const message = actionMessage({ action: left || right ? left === right ? 'brake' : left ? 'left' : 'right' : 'release-all',
+      context: 'acro', brakeTargets: { left, right, tolerance: 0.07 } }, direct());
+    const marker = coachDragTarget(message, 'touch');
+    assert.ok(marker);
+    assert.equal(marker.leftBrake, cueBrake(left)); assert.equal(marker.rightBrake, cueBrake(right));
+    assert.equal(actionMessage(message, { ...direct(), ...marker }).accepted, true);
   }
 });
 

@@ -2,7 +2,7 @@ import type { CloudbaseRun } from '../good-lift/models.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-CLOUD_ENCOUNTERS,CLOUD_OPENING,CLOUD_POOL,CLOUD_STORM,CLOUD_STRIKE,
+CLOUD_ENCOUNTERS,CLOUD_HUNT,CLOUD_LAUNCH,CLOUD_OPENING,CLOUD_POOL,CLOUD_STORM,CLOUD_STRIKE,
 CLOUD_WEAR,createCloudbaseRun,encounterInterval
 } from '../good-lift/cloudbase-state.ts';
 import { BELLS } from '../good-lift/bells.ts';
@@ -13,18 +13,19 @@ function advance(sky: CloudbaseRun, seconds: number, pos: { x: number; y: number
 test('opening cores stay fixed, full and unspent below the first 450 m crossing, then blend once for 45 seconds', () => {
   const sky = createCloudbaseRun({ hazards: false }); sky.reset(100, 7);
   const refs = sky.state.thermals.slice(0, 2), ids = refs.map(t => t.generation);
-  assert.deepEqual(refs.map(t => [t.x, t.z, t.r, t.s]), [[100, 285, 80, 5.5], [60, 170, 80, 5.5]]);
+  assert.deepEqual(refs.map(t => [t.x, t.z, t.r, t.s]), [[100, 285, CLOUD_OPENING.r, 5.5], [60, 170, CLOUD_OPENING.r, 5.5]]);
   for (const t of refs) advance(sky, 90, { x: t.x, y: 449, z: t.z });
   assert.equal(sky.state.openingAt, -1);
   assert.deepEqual(refs.map(t => [t.x, t.z, t.r, t.wear, t.age, t.strength, t.vx, t.vz]),
-    [[100, 285, 80, 0, 0, 1, 0, 0], [60, 170, 80, 0, 0, 1, 0, 0]]);
+    [[100, 285, CLOUD_OPENING.r, 0, 0, 1, 0, 0], [60, 170, CLOUD_OPENING.r, 0, 0, 1, 0, 0]]);
   sky.step(dt, { x: 60, y: 450, z: 170 }); const released = sky.state.openingAt;
   advance(sky, 22.5, { x: 60, y: 449, z: 170 });
-  assert.equal(sky.state.openingAt, released); assert.ok(Math.abs(refs[0].r - 70) < 0.01);
+  assert.equal(sky.state.openingAt, released);
+  for (const [i, t] of refs.entries()) assert.ok(Math.abs(t.r - (CLOUD_OPENING.r + (i ? CLOUD_HUNT.r : CLOUD_LAUNCH.r)) / 2) < 0.01);
   assert.ok(refs[1].wear > 20 && refs[1].wear < 24, 'depletion restarts at the crossing');
   assert.ok(refs[1].age > 22 && refs[1].age < 24, 'the protected lifetime restarts');
   advance(sky, 22.5, { x: 60, y: 449, z: 170 });
-  for (const [i, t] of refs.entries()) { assert.equal(t, sky.state.thermals[i]); assert.equal(t.generation, ids[i]); assert.ok(Math.abs(t.r - 60) < 1e-8); }
+  for (const [i, t] of refs.entries()) { assert.equal(t, sky.state.thermals[i]); assert.equal(t.generation, ids[i]); assert.ok(Math.abs(t.r - (i ? CLOUD_HUNT.r : CLOUD_LAUNCH.r)) < 1e-8); }
   assert.ok(Math.hypot(refs[1].x - 60, refs[1].z - 170) > 10, 'the same second source acquires normal drift');
   assert.equal(refs[0].x, 100); assert.equal(refs[0].z, 285);
   refs[0].wear = CLOUD_WEAR.dead; sky.step(dt, { x: 0, y: 449, z: 0 });

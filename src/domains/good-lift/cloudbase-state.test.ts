@@ -2,7 +2,7 @@ import type { Vector2 } from '../flight/models.ts';
 import type { CloudbaseRun } from './models.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CLOUD_GATE, CLOUD_OPENING, CLOUD_HUNT, CLOUD_LAUNCH, CLOUD_POOL, CLOUD_STORM, CLOUD_STRIKE, CLOUD_WEAR, CLOUD_ZONE, cloudFogSpeed, cloudThermalRemaining, createCloudbaseRun } from './cloudbase-state.ts';
+import { CLOUD_FOG, CLOUD_GATE, CLOUD_OPENING, CLOUD_HUNT, CLOUD_LAUNCH, CLOUD_POOL, CLOUD_STORM, CLOUD_STRIKE, CLOUD_WEAR, CLOUD_ZONE, cloudFogSpeed, cloudThermalRemaining, createCloudbaseRun } from './cloudbase-state.ts';
 import { surfaceAt } from '../flight/ground.ts';
 import { createRunWorld, startRun, stepRun } from './run-step.ts';
 const STEP = 1 / 60;
@@ -26,7 +26,7 @@ test('a seeded sky has four hunted thermals, anchored launch, stable pools and a
   assert.equal(CLOUD_GATE.yaw, 0); assert.equal(run.state.thermals.length, 5); assert.equal(run.state.ravens.length, 20);
   assert.equal(run.state.thermals[0].x, CLOUD_LAUNCH.x);
   assert.equal(run.state.thermals[0].vx, 0);
-  for (const t of run.state.thermals.slice(1)) { assert.equal(t.generation, 1); assert.equal(t.r, t === run.state.thermals[1] ? CLOUD_OPENING.r : 60); assert.ok(t.s <= 5.5); }
+  for (const t of run.state.thermals.slice(1)) { assert.equal(t.generation, 1); assert.equal(t.r, t === run.state.thermals[1] ? CLOUD_OPENING.r : CLOUD_HUNT.r); assert.ok(t.s <= 5.5); }
   const refs = [...run.state.thermals, ...run.state.ravens]; run.reset(80, 99);
   assert.deepEqual([...run.state.thermals, ...run.state.ravens].map((t, i) => t === refs[i]), refs.map(() => true));
 });
@@ -252,13 +252,20 @@ test('cloud weather changes the same vertical vector that the streaks draw', () 
   const felt = run.sample(p), drawn = run.windAt(p.x, p.y, p.z, {});
   assert.ok(felt.windY! < 0); assert.equal(felt.windY, drawn.y);
 });
-test('fog gives soaring time and accelerates after five minutes without stealing the run time limit', () => {
-  assert.equal(cloudFogSpeed(0, 0), 0.25); assert.ok(cloudFogSpeed(0, 360) > 5);
+test('fog preserves the opening then rises slowly enough to leave high acro room through the deadline', () => {
+  for (const elapsed of [0, 60, 150, 299, 300]) {
+    assert.equal(cloudFogSpeed(0, elapsed), 0.25 + 0.001 * elapsed, `unchanged opening at ${elapsed}s`);
+  }
+  for (const elapsed of [300, 360, 480, 600, 1200]) {
+    assert.equal(cloudFogSpeed(0, elapsed), CLOUD_FOG.max, `capped at ${elapsed}s`);
+    assert.equal(cloudFogSpeed(1000, elapsed), CLOUD_FOG.max, 'altitude cannot accelerate the floor');
+  }
   const run = createCloudbaseRun({ hazards: false }); run.reset();
   assert.equal(advance(run, 300, point(CLOUD_ZONE, 10000)), null);
-  assert.ok(run.state.fogHeight < 150);
+  assert.ok(Math.abs(run.state.fogHeight - 120) < 0.01);
   assert.equal(advance(run, 300, point(CLOUD_ZONE, 10000)), null); assert.equal(run.state.active, true);
-  assert.ok(run.state.fogHeight > 3500);
+  assert.ok(Math.abs(run.state.fogHeight - 285) < 0.01);
+  assert.ok(750 - run.state.fogHeight > 450, 'wingover altitude retains useful room after ten minutes');
   assert.equal(run.step(STEP, point(CLOUD_ZONE, run.state.fogHeight + 2)), 'fog');
 });
 test('finish freezes the entire sky and clears canopy damage', () => {

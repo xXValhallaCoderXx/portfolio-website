@@ -72,7 +72,7 @@
 .fjord-stage[data-message-owner='notice'] .fj-lights,
 .fjord-stage .fj-toast:not(:last-child) { display: none; }
 .lost .fj-coach, .cloudbase-ended .fj-coach { display: none; }
-/* Control diagram remains a non-interactive view of the same drag input. */
+/* The scenery cue and mouse diagram remain passive; only the two handles take input. */
 .fj-flight-cues { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; color: #5ee6ff; }
 .fj-flight-cues *, .fj-flight-cues svg { pointer-events: none; }
 .fj-cue-safe { position: absolute; top: max(12px, env(safe-area-inset-top)); bottom: max(12px, env(safe-area-inset-bottom)); left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); }
@@ -82,32 +82,38 @@
 .fj-travel-turn svg { display: block; width: 40px; height: 22px; margin: auto; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .fj-travel-turn[data-direction='left'] svg { transform: scaleX(-1); }
 .fj-travel-turn small { display: block; font-size: 7px; letter-spacing: .06em; }
-.fj-brake-drag { position: absolute; overflow: visible; border: 1px solid #29c7e333; border-radius: 18px; background: #050a13d9; backdrop-filter: blur(8px); font: inherit; }
-.fj-brake-drag text { fill: #e8f1fa; font-size: 8px; letter-spacing: .1em; paint-order: stroke; stroke: #050a13; stroke-width: 2px; stroke-linejoin: round; }
-.fj-drag-frame { fill: none; stroke: #b2e2ea; stroke-opacity: .4; stroke-width: 1; }
-.fj-drag-neutral { fill: #e8f1fa; fill-opacity: .06; stroke: #b2e2ea; stroke-opacity: .6; stroke-width: 1; }
-.fj-brake-drag [data-drag='release'], .fj-brake-drag [data-drag='gentle'], .fj-brake-drag [data-drag='down'] { display: none; }
-.fj-brake-drag[data-depth='released'] .fj-drag-neutral { fill: #5ee6ff; fill-opacity: .12; }
-.fj-brake-drag[data-depth='released'] [data-drag='hands-up'] { fill: #baf5ff; }
-.fj-hands-up { position: absolute; transform: translate(-50%, -50%); padding: 5px 9px; border: 1px solid #baf5ff88; border-radius: 7px; background: #06101be8; color: #baf5ff; font-size: 9px; letter-spacing: .08em; white-space: nowrap; }
-.fj-drag-gentle { fill: #5ee6ff; fill-opacity: .16; }
-.fj-drag-deep { fill: #b28aff; fill-opacity: .3; stroke: #b28aff; stroke-opacity: .7; stroke-width: 1; }
-.fj-drag-guide { fill: none; stroke: #5ee6ff; stroke-opacity: .6; stroke-width: 1; }
-.fj-brake-drag [data-drag='deep'] { fill: #c9b6ff; font-size: 8px; }
-.fj-drag-origin { fill: none; stroke: #baf5ff; stroke-width: 1; }
-.fj-drag-center { fill: #e8f1fa; }
-.fj-drag-line { stroke: #5ee6ff; stroke-width: 1.5; }
-.fj-drag-dot { fill: #29c7e3; stroke: #baf5ff; stroke-width: 1; }
-.fj-brake-drag[data-depth='deep'] .fj-drag-dot { fill: #c9b6ff; }
-.fj-brake-drag[data-depth='deep'] .fj-drag-line { stroke: #c9b6ff; }
-.fj-drag-target { fill: none; stroke: #baf5ff; stroke-width: 1.5; opacity: .9; }
-.fj-drag-target circle { stroke-dasharray: 3 3; }
-.fj-drag-target[data-accepted='true'] { opacity: .35; }
-.fj-drag-target[data-release='true'] path { display: none; }
 .brake-dragging .fj-scene { cursor: grabbing; }
 /* Paused menu, map and briefing use bounded content and explicit actions. */
 .brake-dragging .fj-labels { visibility: hidden; }
 .playing .fj-scene { touch-action: none; user-select: none; }
+.fj-brake-handles { --brake-travel: 140; position: absolute; z-index: 4; bottom: max(30px, env(safe-area-inset-bottom)); left: 50%; width: 320px; height: 240px; transform: translateX(-50%); pointer-events: none; color: var(--flight-text); }
+.fj-brake-handle { position: absolute; top: 0; width: 72px; text-align: center; }
+.fj-brake-handle[data-hand='left'] { left: 0; }
+.fj-brake-handle[data-hand='right'] { right: 0; }
+.fj-handle-label { display: block; margin-bottom: 7px; color: #b9c8d8; font-size: 8px; line-height: 1.5; letter-spacing: .08em; text-shadow: 0 1px 3px #000; }
+.fj-handle-rail { position: relative; box-sizing: border-box; width: 64px; height: calc(var(--brake-travel) * 1px + 64px); margin: auto; border: 1px solid #5ee6ff44; border-radius: 20px; background: linear-gradient(to bottom, #122b37b8 0%, #122b37b8 68%, #47315db8 88%, #724b67b8 100%); }
+.fj-handle-rail > i { position: absolute; left: 10px; right: 10px; top: 32px; height: 1px; background: #5ee6ff55; pointer-events: none; }
+.fj-handle-rail > .fj-handle-wingover { background: #d3b3ff; }
+.fj-handle-rail > .fj-handle-full { background: #f2913d; }
+.fj-handle-rail > .fj-handle-target { z-index: 2; left: 4px; right: 4px; height: 10px; margin-top: -5px; border: 1px dashed #baf5ff; border-radius: 5px; background: #baf5ff22; }
+.fj-handle-target[data-accepted='true'] { opacity: .45; }
+.fj-handle-rail > button { position: absolute; z-index: 3; top: -1px; left: -1px; display: grid; place-items: center; box-sizing: border-box; width: 64px; min-width: 64px; height: 64px; min-height: 64px; margin: 0; padding: 0; border: 1px solid #5ee6ff88; border-radius: 20px; color: #baf5ff; background: #081725ed; box-shadow: 0 3px 12px #0004; cursor: grab; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; font: inherit; font-size: 25px; line-height: 1; }
+.fj-handle-rail > button:focus-visible { outline: 2px solid #e8f1fa; outline-offset: 3px; }
+.fj-brake-handle[data-depth='swing'] button, .fj-brake-handle[data-depth='full'] button { border-color: #c9b6ff; color: #d3b3ff; }
+.fj-brake-handle[data-held='true'] button { cursor: grabbing; background: #113044f5; }
+.fj-handle-depth, .fj-handle-key { display: block; margin-top: 5px; color: #9fb2c6; font-size: 7px; line-height: 1.4; white-space: nowrap; text-shadow: 0 1px 3px #000; }
+.fj-handle-key { color: #baf5ff; font-size: 8px; }
+.fj-brake-key-help { position: absolute; bottom: 0; left: 78px; right: 78px; text-align: center; color: #b9c8d8; font-size: 8px; line-height: 1.8; letter-spacing: .04em; text-shadow: 0 1px 3px #000; }
+.fj-brake-key-help > span { display: block; color: #c9b6ff; }
+.fjord-stage:not([data-flight-device='touch']) .fj-touch-help, .fjord-stage:not([data-flight-device='keyboard']) .fj-key-help, .fjord-stage:not([data-flight-device='mouse']) .fj-mouse-help { display: none; }
+.fjord-stage[data-flight-device='touch'] .fj-handle-key, .fjord-stage[data-flight-device='touch'] .fj-brake-key-help { display: none; }
+@media (pointer: coarse) {
+  .fj-brake-handles { left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); width: auto; transform: none; }
+}
+@media (max-height: 500px) {
+  .fj-brake-handles { --brake-travel: 100; bottom: max(14px, env(safe-area-inset-bottom)); height: 202px; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); width: auto; transform: none; }
+  .fjord-stage .fj-coach, .fjord-stage .fj-hint, .fjord-stage .fj-drag-tip, .fjord-stage .fj-toasts { left: 88px; width: min(520px, calc(100% - 176px)); }
+}
 .fj-keys, .fj-map.window, .fj-brief { position: absolute; inset: 20px; z-index: 12; box-sizing: border-box; width: min(640px, calc(100% - 40px)); height: min(820px, calc(100% - 40px)); max-height: none; margin: auto; padding: 16px; overflow: hidden; border: 1px solid var(--flight-rule); border-radius: 16px; background: #050a13f5; color: var(--flight-text); box-shadow: 0 0 0 100vmax #050a1399; font-size: 12px; line-height: 1.5; transform: none; }
 .fj-keys { display: flex; flex-direction: column; gap: 10px; backdrop-filter: blur(16px); }
 .fj-keys h2 { margin: 6px 0 0; color: var(--flight-cyan); font-size: 11px; font-weight: 700; letter-spacing: .16em; }
@@ -120,7 +126,6 @@
 .fj-paused-badge { display: inline-block; padding: 4px 7px; background: var(--flight-cyan); color: #04101f; font-size: 11px; font-weight: 800; letter-spacing: .1em; white-space: nowrap; }
 .fj-pause-summary { margin: 0; color: var(--flight-muted); font-size: 11px; text-align: center; }
 .fj-menu-content { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.fj-control-guide { display: block; width: 210px; height: 165px; margin: 8px auto; font: inherit; font-size: 9px; letter-spacing: .08em; fill: var(--flight-text); }
 .fj-control-rows { margin: 0; }
 .fj-control-rows > div { display: grid; grid-template-columns: 80px minmax(0,1fr); gap: 10px; padding: 8px 0; border-top: 1px solid #16233a; }
 .fj-control-rows dt { color: var(--flight-cyan); font-weight: 700; }

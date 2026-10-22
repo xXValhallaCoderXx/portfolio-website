@@ -14,7 +14,7 @@ export interface GlideReach { target: number; margin: number; word: string }
 // Hung where the glide meets the fog, rather than on the fog's surface as it is now, the ring is
 // always a few degrees under the pilot's own level, where the chase camera looks (it looks 9° down
 // and sees about 30° either way). On the surface it would be out of the bottom of the picture
-// when the fog accelerates late in a run, just when the ring matters most. The maths is plain
+// when the fog is close below the wing, just when the ring matters most. The maths is plain
 // functions, tested by themselves; the view is one
 // band. It only ever reads the run, so nothing a run flies depends on it.
 import * as THREE from 'three';
@@ -28,13 +28,13 @@ import { glideDuration, glidePathClear, movingLiftIntercept } from '../../../dom
 
 export const GLIDE = Object.freeze({
   // The computed hands-up trim (flight.js) is about 11.6 m/s through the air and 1.3 m/s down.
-  // The forecast uses that ordinary glide; moving lift, terrain clearance and the accelerating
+  // The forecast uses that ordinary glide; moving lift, terrain clearance and the gently rising
   // fog decide whether a source remains reachable.
   speed: FLIGHT.speed.trim, sink: FLIGHT.sink.trim,
   // m over its surface at which the fog takes the wing: where the run's own step ends a run.
   catch: 3,
   // s: the fog's climb is walked forward this much at a time, its speed taken at both ends of each
-  // step. The fog's speed changes smoothly but for the knee at the horn, so half a second is
+  // step. The fog's speed rises smoothly to its five-minute cap, so half a second is
   // within centimetres of the run's own sixtieths.
   step: 0.5,
   // m: once the word is said, the flock has to be this far the other side of the ring to change it,
@@ -74,7 +74,7 @@ const FOG_SEEN = (FOG_SURFACE.radius * (1 + FOG_SURFACE.edge)) / 2;
 /**
  * Seconds a glide hands up lasts before the fog catches the wing: from `y` metres, over fog at
  * `fogHeight` that is `elapsed` seconds into its run. The fog is walked forward with its own speed
- * (cloudFogSpeed), which grows as it climbs and as the run goes on and races after the horn, and
+ * (cloudFogSpeed), which increases gently to its five-minute cap, and
  * the wing sinks at trim. In still fog this would be the height to lose over the sink, so the
  * ring's radius would be that height times the trim glide ratio; the fog's climb shortens it.
  * At most `limit` seconds: a caller who stops caring past some radius says so.

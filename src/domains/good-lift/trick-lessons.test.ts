@@ -84,7 +84,7 @@ function fixture(learned: string[] = []) {
   return { lessons, done, frame, g, watch, style, step };
 }
 
-test('direct lesson setup waits for both hands up before requesting the deep pull', () => {
+test('direct lesson setup waits for both hands up before requesting working brake', () => {
   const f = fixture();
   f.g.bank = 0; f.watch.calm = 2;
   f.frame.input = { controlMode: 'brakes', leftBrake: .06, rightBrake: 0 };
@@ -92,9 +92,9 @@ test('direct lesson setup waits for both hands up before requesting the deep pul
   assert.equal(f.lessons.state.active, 'pitch');
   assert.equal(f.lessons.state.phase, 'level');
   f.frame.input.leftBrake = 0; f.step(.15);
-  assert.equal(f.lessons.state.phase, 'deep');
+  assert.equal(f.lessons.state.phase, 'shape');
   const message = f.step();
-  assert.match(message!.title, /PULL BOTH BRAKES DEEP/);
+  assert.match(message!.title, /PULL BOTH TO WORKING BRAKE/);
   assert.doesNotMatch(message!.detail, /Double-tap|hold X/);
 });
 
@@ -180,6 +180,10 @@ test('learning normalizes, persists immediately, survives blocked storage and re
   writeStore({ ...emptyStore(), best: { total: 100, score: 100, peak: 800 }, runs: 8, tonnage: 500 }, storage);
   assert.equal(learnTrickLesson('pitch', storage), true); assert.equal(learnTrickLesson('pitch', storage), false);
   assert.deepEqual(readStore(storage).learnedLessons, ['pitch']);
+  const scores = { best: readStore(storage).best, runs: readStore(storage).runs, tonnage: readStore(storage).tonnage };
+  assert.equal(learnTrickLesson('loop', storage), true);
+  assert.deepEqual(readStore(storage).learnedLessons, ['pitch', 'loop']);
+  assert.deepEqual({ best: readStore(storage).best, runs: readStore(storage).runs, tonnage: readStore(storage).tonnage }, scores);
   assert.deepEqual(normalizeStore({ learnedLessons: ['wingover', 'oops', 'pitch', 'wingover', 4] }).learnedLessons, ['pitch', 'wingover']);
   const before = readStore(storage); repeatTrickLessons(storage);
   assert.deepEqual(readStore(storage), { ...before, learnedLessons: [] });
@@ -187,4 +191,43 @@ test('learning normalizes, persists immediately, survives blocked storage and re
   assert.equal(learnTrickLesson('wingover', blocked), true); assert.deepEqual(readStore(blocked).learnedLessons, ['wingover']);
   repeatTrickLessons(blocked); assert.deepEqual(readStore(blocked).learnedLessons, []);
   learnTrickLesson('pitch', blocked); clearStore(blocked); assert.deepEqual(readStore(blocked), emptyStore());
+});
+
+test('loop entry needs both previous lessons, 1000m height and independent 400m reserves', () => {
+  for (const blocked of ['height', 'terrain', 'fog', 'warning', 'hazard']) {
+    const f = fixture(['pitch', 'wingover']);
+    f.g.pos.y = 1000; f.frame.clearance = f.frame.fogClearance = 400;
+    f.frame.input = { controlMode: 'brakes', leftBrake: 0, rightBrake: 0 };
+    if (blocked === 'height') f.g.pos.y -= .01;
+    if (blocked === 'terrain') f.frame.clearance -= .01;
+    if (blocked === 'fog') f.frame.fogClearance -= .01;
+    if (blocked === 'warning') f.frame.warning = { context: 'CLOUD ABOVE' };
+    if (blocked === 'hazard') f.frame.hazardActive = true;
+    f.step(2);
+    assert.equal(f.lessons.state.active, null, blocked);
+  }
+  const first = fixture([]);
+  first.frame.input = { controlMode: 'brakes', leftBrake: 0, rightBrake: 0 };
+  first.g.pos.y = 1200; first.step(1.1);
+  assert.equal(first.lessons.state.active, 'pitch');
+});
+
+test('expected inversion continues the loop lesson; low reserve or a real hazard aborts it', () => {
+  for (const reason of ['terrain', 'fog', 'hazard', 'stall']) {
+    const f = fixture(['pitch', 'wingover']);
+    f.g.pos.y = 1000; f.frame.clearance = f.frame.fogClearance = 400;
+    f.frame.input = { controlMode: 'brakes', leftBrake: 0, rightBrake: 0 };
+    f.step(1.1); assert.equal(f.lessons.state.active, 'loop');
+    f.g.loop = 1; f.g.acro = true;
+    f.step(); assert.equal(f.lessons.state.active, 'loop', 'inversion is expected motion, not a scored completion');
+    assert.deepEqual(f.done, []);
+    if (reason === 'terrain') f.frame.clearance = 249;
+    if (reason === 'fog') f.frame.fogClearance = 249;
+    if (reason === 'hazard') f.frame.hazard = { title: 'RAVEN', detail: 'Keep clear.' };
+    if (reason === 'stall') Object.assign(f.g, { stall: 1, wingPhase: WING.stalled });
+    const input = structuredClone(f.frame.input);
+    f.step(); assert.equal(f.lessons.state.active, null, reason);
+    assert.deepEqual(f.done, []);
+    assert.deepEqual(f.frame.input, input, 'abort guidance cannot take over the controls');
+  }
 });

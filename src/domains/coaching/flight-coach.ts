@@ -19,7 +19,7 @@ import { pitchPeak, WING } from '../flight/flight.ts';
 import { createControlSummary } from '../flight/brake-controls.ts';
 
 const DEG = Math.PI / 180;
-const names = ['', 'PITCH & CATCH', 'WINGOVER', 'INVERSION'];
+const names = ['', 'PITCH & CATCH', 'WINGOVER', 'LOOP'];
 export const COACH = Object.freeze({ returnBank: 40 * DEG, prepareBank: 55 * DEG,
   clearance: 80, inversionClearance: 250, neutral: 0.25, steady: 1, pitchIdle: WATCH.within,
   catchLead: 0.03, pitchCatch: 0.65, surge: 0.8 });
@@ -58,6 +58,10 @@ export function createFlightCoach() {
     if (now < clock) reset();
     const summarized = observeControls.step(rawInput);
     const input = rawInput.controlMode === 'brakes' ? summarized : rawInput;
+    const directAcro = rawInput.controlMode === 'brakes' && ['acro', 'loop', 'reactive'].includes(maneuverPolicy);
+    const reserve = Math.min(frame.clearance ?? Infinity, frame.fogClearance ?? Infinity);
+    const intentionalOrbit = directAcro && reserve >= COACH.inversionClearance && !frame.hazard &&
+      (maneuverPolicy === 'loop' || Math.max(rawInput.leftBrake ?? 0, rawInput.rightBrake ?? 0) > 0.7);
     clock = now;
     if (!initialized) {
       seenMoves = watch.moves ?? 0; seenBreaks = watch.breaks ?? 0; initialized = true;
@@ -85,7 +89,10 @@ export function createFlightCoach() {
       recovering = watch.broke! >= 1 && watch.broke! <= 4;
     }
     seenBreaks = watch.breaks ?? 0;
-    if ((watch.moves ?? 0) > seenMoves) { recovering = true; consumeEvidence(); }
+    if ((watch.moves ?? 0) > seenMoves) {
+      if (directAcro && (style?.elements ?? 0) > 0 && summarized.anyBrake && reserve >= COACH.inversionClearance) recovering = false;
+      else { recovering = true; consumeEvidence(); }
+    }
     seenMoves = watch.moves ?? 0;
 
     function feedback() {
@@ -158,7 +165,7 @@ export function createFlightCoach() {
         brakeDepth: 'working',
         detail: released ? 'Let the reopened wing regain airspeed.' : 'Briefly work the brake to reopen the folded wing.' });
     }
-    if ((g.loop ?? 0) !== 0) {
+    if ((g.loop ?? 0) !== 0 && !intentionalOrbit) {
       inverted = recovering = true; wing = pitch = false; consumeEvidence();
       const danger = frame.hazard?.detail ? ` ${frame.hazard.detail}` : '';
       return emit({ state: 'recover', context: 'inversion', phase: 'above', action: 'release-turns',
@@ -214,14 +221,27 @@ export function createFlightCoach() {
       recovering = true; consumeEvidence();
     }
 
-    const reserve = Math.min(frame.clearance ?? Infinity, frame.fogClearance ?? Infinity);
     if (recovering && (watch.calm ?? 0) >= COACH.steady) { clearIntent(); consumeEvidence(); }
-    const uncoachedSwing = maneuverPolicy === 'off' && (g.acro || Math.abs(g.bank) >= WATCH.wing || Math.abs(g.pitch) >= COACH.pitchCatch);
-    if ((wing || pitch || inverted || uncoachedSwing) && reserve < (input.bar && wing ? COACH.inversionClearance : COACH.clearance)) {
+    const uncoachedSwing = (maneuverPolicy === 'off' || directAcro) && (g.acro || Math.abs(g.bank) >= WATCH.wing || Math.abs(g.pitch) >= COACH.pitchCatch);
+    const required = directAcro && (g.loop || summarized.maxBrake > 0.7) || input.bar && wing ? COACH.inversionClearance : COACH.clearance;
+    if ((wing || pitch || inverted || uncoachedSwing) && reserve < required) {
       recovering = true; consumeEvidence();
       return recover('Low clearance. Recover before adding more swing.');
     }
     if (recovering) return recover();
+
+    if (directAcro && maneuverPolicy !== 'loop' && (style?.elements ?? 0) > 0 && reserve >= COACH.inversionClearance) {
+      if (style?.last === 1) {
+        const pull = g.pitchRate > 0 && g.pitch >= -0.34 || g.pitchRate < 0 && g.pitch < -0.35;
+        return emit({ state: 'combo', context: 'pitch', phase: 'link', action: pull ? 'brake' : 'release-all',
+          title: pull ? 'PULL BOTH · LINK THE NEXT PITCH' : 'HANDS UP · KEEP THE RHYTHM',
+          detail: 'Release after each catch, then pull again as the wing swings back. Or let the wing settle to bank the combo.',
+          brakeDepth: 'working', brakeTargets: { left: pull ? 0.6 : 0, right: pull ? 0.6 : 0, tolerance: 0.07 } });
+      }
+      return emit({ state: 'combo', context: 'acro', phase: 'link', action: 'none',
+        title: 'KEEP THE RHYTHM · OR RECOVER TO BANK',
+        detail: 'Continue the alternating swing to link moves. Ease both hands and catch the forward swing when you want to bank style.' });
+    }
 
     if (wing) {
       if (neutralFor > COACH.neutral || now - reversedAt > WATCH.gap) {
@@ -261,7 +281,7 @@ export function createFlightCoach() {
 
     // A dangerous forward surge also needs a catch without deliberate stunt intent. Match the
     // existing run safety forecast; the smaller planned pitch runup retains its own phase cues.
-    if (g.pitch < 0 && g.pitchRate < 0 && pitchPeak(g) < -COACH.surge) {
+    if (!intentionalOrbit && g.pitch < 0 && g.pitchRate < 0 && pitchPeak(g) < -COACH.surge) {
       surge = recovering = true; consumeEvidence();
       return recover();
     }

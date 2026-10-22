@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { THERMAL_MOTES, createThermalMotes, layoutMotes, liftShare, moteAt } from './thermal-motes.ts';
-import { CLOUD_HUNT, CLOUD_LAUNCH, CLOUD_POOL, createCloudbaseRun } from '../../../domains/good-lift/cloudbase-state.ts';
+import { CLOUD_HUNT, CLOUD_LAUNCH, CLOUD_POOL, CLOUD_ZONE, createCloudbaseRun } from '../../../domains/good-lift/cloudbase-state.ts';
 import { CLOUD_LIT } from './cloudbase.ts';
 
 const M = THERMAL_MOTES;
@@ -45,10 +45,10 @@ test('a hunted thermal\'s motes crowd its core: over half lie within 45% of the 
   const inner = share(metres, (r: number) => r < CLOUD_HUNT.r * 0.45);
   assert.ok(inner > 0.55 && inner < 0.65, `${(100 * inner).toFixed(1)}% within the broad strongest region`);
   assert.ok(share(metres, (r: number) => r < CLOUD_HUNT.r * 0.6) >= 0.75);
-  // A tenth of the best lift is 30.6 m out, and the motes thin all the way to there, so the edge
+  // The motes thin to a tenth of the best lift, so the edge
   // of the lift reads by their thinning: no ring is needed.
   const edge = CLOUD_HUNT.r * (1 - 0.1958 * CLOUD_HUNT.core);
-  assert.ok(Math.max(...metres) <= edge && Math.max(...metres) > edge - 4, `the furthest mote is ${Math.max(...metres).toFixed(1)} m out`);
+  assert.ok(Math.max(...metres) <= edge && Math.max(...metres) > edge - CLOUD_HUNT.r / 15, `the furthest mote is ${Math.max(...metres).toFixed(1)} m out`);
   for (let i = 0; i < hunted.count; i++) assert.ok(hunted.trait[i * 4] >= M.reach - 1e-6, `mote ${i} has ${hunted.trait[i * 4]} of the best lift`);
   // The launch column is flat across its core, so fewer motes crowd the middle.
   const column = radii(launch);
@@ -65,6 +65,8 @@ test('each mote\'s lift share is what the run samples at its radius, for the lau
     // Only the thermal being measured is lifting.
     thermals.forEach((thermal, i) => Object.assign(thermal, { live: i === slot, move: 0, strength: i === slot ? 0.8 : 0 }));
     const thermal = thermals[slot];
+    // Keep every sampled radius inside the arena so its boundary cannot clip the profile.
+    Object.assign(thermal, { x: CLOUD_ZONE.x, z: CLOUD_ZONE.z });
     const best = thermal.s * thermal.strength * (slot ? CLOUD_HUNT.peak : 1);
     const place = { x: 0, y: 300, z: 0 };
     for (let i = 0; i < layout.count; i++) {

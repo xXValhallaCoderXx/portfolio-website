@@ -7,14 +7,16 @@ import { thermalProfile } from '../flight/atmosphere.ts';
 
 const STEP = 1 / 60;
 const TAU = Math.PI * 2;
-const ease = (value: number) => value * value * (3 - 2 * value);
 // The same plausible air profile the game now flies, checked against the actual sky below.
 const lift = (d: number) => CLOUD_HUNT.s * thermalProfile(d, CLOUD_HUNT.r, CLOUD_HUNT.core);
 
-// Flies `laps` circles whose middle is `off` metres from the core, starting on the far side: hands
-// up (14.4 m round at 0.8 rad/s) unless told otherwise. `strength(t)` and `riding(t)` say how the
-// thermal and the wing are at `t` seconds.
-function circle({ off, laps = 4, radius = 25, rate = 0.5, strength = () => 1, riding = () => true }: {off: number; laps?: number; radius?: number; rate?: number; strength?: (time: number) => number; riding?: (time: number) => boolean}) {
+// Preserve the fixture's fractions of its original 60 m profile, with unchanged angular rates.
+const metres = (legacy: number) => legacy / 60 * CLOUD_HUNT.r;
+
+// Samples `laps` circles whose middle is `off` metres from the core, starting on the far side.
+// These positions test the observer's felt-rate/once-per-lap contract; they do not steer a wing.
+// `strength(t)` and `riding(t)` say how the thermal and the wing are at `t` seconds.
+function circle({ off, laps = 4, radius = metres(25), rate = 0.5, strength = () => 1, riding = () => true }: {off: number; laps?: number; radius?: number; rate?: number; strength?: (time: number) => number; riding?: (time: number) => boolean}) {
   const surge = createSurge();
   const at = [];
   const steps = Math.round((laps * TAU) / rate / STEP);
@@ -29,16 +31,16 @@ function circle({ off, laps = 4, radius = 25, rate = 0.5, strength = () => 1, ri
 }
 
 test('a circle centred on the core never surges, nor one off it by less than a pilot can feel', () => {
-  for (const off of [0, 1, 2]) assert.deepEqual(circle({ off }).at, [], `${off} m off, hands up`);
-  for (const off of [0, 1, 2]) assert.deepEqual(circle({ off, radius: 20, rate: 0.55 }).at, [], `${off} m off, on the light brake`);
+  for (const off of [0, 1, 2]) assert.deepEqual(circle({ off: metres(off) }).at, [], `${metres(off)} m off, larger circle`);
+  for (const off of [0, 1, 2]) assert.deepEqual(circle({ off: metres(off), radius: metres(20), rate: 0.55 }).at, [], `${metres(off)} m off, smaller circle`);
 });
 
 test('a circle off the core surges once a circle, as it closes on the core, from the second circle on', () => {
   for (const [radius, rate] of [[25, 0.5], [20, 0.55]]) {
     const lap = TAU / rate;
     for (const off of [6, 10, 14]) {
-      const { at } = circle({ off, radius, rate });
-      assert.equal(at.length, 3, `${off} m off a ${radius} m circle: surges at ${at.map((t) => t.toFixed(2))}`);
+      const { at } = circle({ off: metres(off), radius: metres(radius), rate });
+      assert.equal(at.length, 3, `${metres(off)} m off a ${metres(radius)} m circle: surges at ${at.map((t) => t.toFixed(2))}`);
       for (let i = 0; i < at.length; i++) {
         // On the half of the circle that closes on the core (the far side is at 0), once in each.
         const into = (at[i] % lap) / lap;
@@ -51,7 +53,7 @@ test('a circle off the core surges once a circle, as it closes on the core, from
 
 test('flying straight into a thermal is not a surge, however fast the lift builds', () => {
   const surge = createSurge();
-  for (let d = 60; d > 0; d -= 11.5 * STEP) assert.equal(surge.step(STEP, lift(d), 1, 0, true), false);
+  for (let d = CLOUD_HUNT.r; d > 0; d -= 11.5 * STEP) assert.equal(surge.step(STEP, lift(d), 1, 0, true), false);
   assert.equal(surge.state.surges, 0);
 });
 
@@ -66,7 +68,7 @@ test('a fold, a stall or cloud starts it over: half a circle must be flown again
   const from = lap * 1.05;
   const to = from + 2;
   // Folded for two seconds in the second circle, just before its surge would come.
-  const { at, surge } = circle({ off: 6, riding: (t: number) => t < from || t > to });
+  const { at, surge } = circle({ off: metres(6), riding: (t: number) => t < from || t > to });
   assert.ok(at.length >= 1, 'it surges again once settled');
   assert.ok(at.every((t) => t < from || t > to + SURGE.settle / 0.5), `surges at ${at.map((t) => t.toFixed(2))}`);
   surge.step(STEP, 0, 1, 0.5, false);
@@ -75,7 +77,7 @@ test('a fold, a stall or cloud starts it over: half a circle must be flown again
 });
 
 test('a thermal too far gone to centre in is not felt at all', () => {
-  assert.deepEqual(circle({ off: 6, strength: () => SURGE.weak - 0.01 }).at, []);
+  assert.deepEqual(circle({ off: metres(6), strength: () => SURGE.weak - 0.01 }).at, []);
 });
 
 test('a surge is one beat, not one for every step the lift climbs', () => {
@@ -91,7 +93,7 @@ test('a surge is one beat, not one for every step the lift climbs', () => {
   assert.equal(count, 2);
 });
 
-test('on a hunted thermal of the sky itself, a centred circle is quiet and one 6 m off surges once a circle', () => {
+test('on a hunted thermal of the sky itself, a centred circle is quiet and one crossing its gradient surges once a circle', () => {
   // One hunted thermal at full strength in the middle of the zone, in still air with nothing else.
   const sky = createCloudbaseRun({ hazards: false, wind: false });
   sky.reset(80, 1);
@@ -112,8 +114,8 @@ test('on a hunted thermal of the sky itself, a centred circle is quiet and one 6
     return count;
   };
   for (const [radius, rate] of [[25, 0.5], [20, 0.55]]) {
-    assert.equal(surges(0, radius, rate), 0, `a centred ${radius} m circle`);
-    assert.equal(surges(1.5, radius, rate), 0, `a ${radius} m circle 1.5 m off`);
-    assert.equal(surges(6, radius, rate), 3, `a ${radius} m circle 6 m off`);
+    assert.equal(surges(0, metres(radius), rate), 0, `a centred ${metres(radius)} m circle`);
+    assert.equal(surges(metres(1.5), metres(radius), rate), 0, `a ${metres(radius)} m circle ${metres(1.5)} m off`);
+    assert.equal(surges(metres(6), metres(radius), rate), 3, `a ${metres(radius)} m circle ${metres(6)} m off`);
   }
 });
