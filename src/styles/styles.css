@@ -197,10 +197,6 @@ kbd {
   flex: 1;
 }
 
-.belt {
-  color: var(--cyan);
-}
-
 /* Where along the route the reader is, counted down like an altimeter. */
 .hud {
   margin-right: 10px;
@@ -674,7 +670,7 @@ html.warping .footer {
   }
 }
 
-/* ---- the old-monitor look, switched on from the top bar */
+/* ---- the old-monitor look */
 
 html.crt body::after {
   content: '';
@@ -766,22 +762,6 @@ html.tugging {
     display: inline;
   }
 
-  /* Two buttons, side by side; the third is one tap away in the tabs. */
-  .actions {
-    display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
-    max-width: 380px;
-  }
-
-  .actions > button,
-  .actions > .button {
-    justify-content: center;
-    padding: 10px 6px;
-  }
-
-  .actions > .roomy {
-    display: none;
-  }
 }
 
 @media (orientation: portrait), (max-width: 560px) {

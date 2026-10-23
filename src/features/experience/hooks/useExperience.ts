@@ -22,7 +22,6 @@ export function useExperience() {
   const [selected, setSelected] = useState(initialCamp);
   const [view, setView] = useState<ExperienceView>(() =>
     (history.state?.returnTo?.experienceView ?? history.state?.experienceView) === 'list' ? 'list' : 'ridge');
-  const [summaries, setSummaries] = useState(true);
   const [near, setNear] = useState(initialCamp);
   const [pointed, setPointed] = useState<string | null>(null);
   const [reading, setReading] = useState<ExperienceEntry | null>(null);
@@ -119,6 +118,6 @@ export function useExperience() {
     if (Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy) * 1.3) step(dx < 0 ? -1 : 1);
   };
 
-  return { root, list, heading, swipe, suppressClick, compact, selected, view, setView, summaries, setSummaries,
+  return { root, list, heading, swipe, suppressClick, compact, selected, view, setView,
     reading, close, index, current, lit, choose, pickCamp, step, read, startSwipe, endSwipe, setPointed };
 }

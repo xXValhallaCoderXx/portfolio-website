@@ -21,11 +21,11 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
   over. As the hero scrolls away the fjord's camera climbs until the scene reads as a map, and
   the path starts where the glider hangs.
 - On a phone, Experience reads one career camp at a time: pick from the compact ridge or list,
-  use Older/Newer or swipe the summary, then explore the report a section at a time. It starts
-  at the current role with its chapter closed, and keeps reading mode when changing camps.
-  Desktop keeps a career list with summaries/titles controls and Report/Behind tabs. The existing
-  rune ridge and live view follow the role being read. Both layouts use the same career reader
-  in the page and flight panels; sketches run only while their Behind tab is visible.
+  use Older/Newer or swipe the role card. Compact views show titles and dates; desktop adds
+  each role's summary beside the rune ridge. Opening a role goes to `/experience/<hash>` with
+  its full report and sketches. Older/Newer links above and below the report switch positions;
+  returning to Experience restores the original card, scroll position and ridge/list view.
+  Flight landings open the same reports in a reading window, without the page navigation.
 - Three projects have a playable preview: a scripted model of what the product does, never the
   product itself. Each project also has its own address, `/projects/<id>`, with the full report.
 - Project reports use a screenshot-led header and a selectable contribution tour. Screens open

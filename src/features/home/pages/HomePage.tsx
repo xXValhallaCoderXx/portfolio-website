@@ -31,12 +31,6 @@ export default function HomePage({ hidden, flying, backdrop, route, onFly }: {
                 <Button className="primary" onClick={() => onFly()}>
                   [ ./fly.sh ]
                 </Button>
-                <a className="button" href="#projects">
-                  [ ./view_work.sh ]
-                </a>
-                <a className="button roomy" href="#contact">
-                  [ ./contact.sh ]
-                </a>
               </p>
             </div>
           )}

@@ -12,13 +12,12 @@ import { PROFILE } from '../domains/portfolio/content.ts';
 import { useApplicationNavigation } from './hooks/useApplicationNavigation.ts';
 
 export default function App() {
-  const { flight, setFlight, detail, project, experience, progress, setProgress, crt, setCrt, warp, setWarp,
+  const { flight, setFlight, detail, project, experience, setProgress, warp, setWarp,
     warping, pending, hud, takeFlight, leaveFlight, enterGame, leaveGame, openProject, openExperience, closeDetail, building } = useApplicationNavigation();
   return (
     <>
       {!flight.on && (
-        <Topbar detail={detail} hud={hud} progress={progress} crt={crt} onCrt={() => setCrt(!crt)}
-          onSection={closeDetail} onFly={takeFlight} />
+        <Topbar detail={detail} hud={hud} onSection={closeDetail} onFly={takeFlight} />
       )}
 
       <HomePage hidden={!!detail && !flight.on} flying={flight.on} onFly={takeFlight}
@@ -45,7 +44,7 @@ export default function App() {
       />
 
       {project && !flight.on && <ProjectPage key={project.id} project={project} onBack={() => closeDetail()} onOpen={openProject} />}
-      {experience && !flight.on && <ExperiencePage key={experience.hash} entry={experience} onBack={() => closeDetail()} />}
+      {experience && !flight.on && <ExperiencePage key={experience.hash} entry={experience} onBack={() => closeDetail()} onOpen={openExperience} />}
 
       <footer className="footer">
         <span>

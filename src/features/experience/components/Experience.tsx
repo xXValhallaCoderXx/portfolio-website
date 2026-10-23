@@ -7,7 +7,7 @@ import Sheet from '../../../components/molecules/Sheet.tsx';
 import { useExperience } from '../hooks/useExperience.ts';
 
 export default function Experience() {
-  const { root, list, heading, swipe, suppressClick, compact, selected, view, setView, summaries, setSummaries,
+  const { root, list, heading, swipe, suppressClick, compact, selected, view, setView,
     reading, close, index, current, lit, choose, pickCamp, step, read, startSwipe, endSwipe, setPointed } = useExperience();
   return (
     <div className="experience" ref={root}
@@ -63,7 +63,6 @@ export default function Experience() {
                   <h3 className="experience-current-heading" tabIndex={-1} ref={heading}>
                     {current.company} <span className="dim">·</span> <b>{current.role}</b>
                   </h3>
-                  <p className="experience-summary">{current.text}</p>
                   <span className="experience-read">[ view role → ]</span>
                 </a>
               </article>
@@ -74,12 +73,6 @@ export default function Experience() {
         <div className="experience-desktop">
           <div className="ascent">
             <div className="experience-story">
-              <div className="experience-toolbar">
-                <div className="experience-density" role="group" aria-label="Experience detail">
-                  <button type="button" aria-pressed={summaries} onClick={() => setSummaries(true)}>summaries</button>
-                  <button type="button" aria-pressed={!summaries} onClick={() => setSummaries(false)}>titles only</button>
-                </div>
-              </div>
               <ol className="experience-stops" ref={list}>
                 {EXPERIENCE.map((entry, entryIndex) => (
                   <li className={`experience-stop${lit === entry.hash ? ' lit' : ''}${selected === entry.hash ? ' selected' : ''}`}
@@ -91,7 +84,7 @@ export default function Experience() {
                     <a className="experience-entry-link" href={`/experience/${entry.hash}`} onClick={(event) => read(event, entry)}>
                       <p className="experience-when"><span className="camp-tag">camp {EXPERIENCE.length - entryIndex}</span> · {entry.years}</p>
                       <h3 className="experience-role-heading experience-role">{entry.company} <span className="dim">·</span> <b>{entry.role}</b></h3>
-                      {summaries && <p className="experience-summary">{entry.text}</p>}
+                      <p className="experience-summary">{entry.text}</p>
                       <span className="experience-read">[ view role → ]</span>
                     </a>
                   </li>

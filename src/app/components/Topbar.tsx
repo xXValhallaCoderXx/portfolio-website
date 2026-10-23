@@ -1,13 +1,12 @@
 import type { RefObject } from 'react';
 import type { DetailAddress, SectionId } from '../../domains/portfolio/portfolio.types.ts';
 import { PROFILE, ROUTE } from '../../domains/portfolio/content.ts';
-import { ACHIEVEMENTS, beltFor } from '../../domains/progression/achievements.ts';
 import TerminalLights from '../../components/atoms/TerminalLights.tsx';
 import { useTopbar } from '../hooks/useTopbar.ts';
 
-export default function Topbar({ detail, hud, progress, crt, onCrt, onSection, onFly }: {
-  detail: DetailAddress | null; hud: RefObject<HTMLSpanElement | null>; progress: { unlocked: string[] };
-  crt: boolean; onCrt: () => void; onSection: (section: SectionId) => void; onFly: () => void;
+export default function Topbar({ detail, hud, onSection, onFly }: {
+  detail: DetailAddress | null; hud: RefObject<HTMLSpanElement | null>;
+  onSection: (section: SectionId) => void; onFly: () => void;
 }) {
   const { open, setOpen, root, trigger, linksId } = useTopbar();
   return (
@@ -17,14 +16,6 @@ export default function Topbar({ detail, hud, progress, crt, onCrt, onSection, o
         <span className="dim">{PROFILE.user}@{PROFILE.host}: ~/portfolio — zsh</span>
         <span className="spacer" />
         {detail ? <span className="hud">{detail.path}</span> : <span className="hud" ref={hud} />}
-        {progress.unlocked.length > 0 && (
-          <span className="belt" title="Earned in flight">
-            belt: {beltFor(progress)} · {progress.unlocked.length}/{ACHIEVEMENTS.length}
-          </span>
-        )}
-        <button className="link" role="switch" aria-checked={crt} onClick={onCrt}>
-          crt_effects {crt ? 'ON' : 'OFF'}
-        </button>
       </div>
       <div className="tabs">
         <button className="topbar-menu" aria-expanded={open} aria-controls={linksId} ref={trigger} onClick={() => setOpen(!open)}>

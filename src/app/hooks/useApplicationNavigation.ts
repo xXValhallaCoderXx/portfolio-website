@@ -6,14 +6,6 @@ import { createNavigationService, DAILY, type GameAddress } from '../services/na
 
 interface FlightViewState { on: boolean; target: string | null; armed: boolean; lost: string | null; game: GameAddress | null }
 
-function readCrt() {
-  try {
-    return localStorage.getItem('crt') === 'on';
-  } catch {
-    return false;
-  }
-}
-
 export function useApplicationNavigation() {
   const [navigation] = useState(() => createNavigationService({ location, history, scroll: () => scrollY }));
   const { isFlightAddress, missingAddress, gameAddress, detailAddress } = navigation;
@@ -31,7 +23,6 @@ export function useApplicationNavigation() {
   const project = detail?.section === 'projects' ? detail.item : null;
   const experience = detail?.section === 'experience' ? detail.item : null;
   const [progress, setProgress] = useState(readProgress);
-  const [crt, setCrt] = useState(readCrt);
   // The warp that covers the swap between the page and the flight: `swap` runs at its midpoint.
   const [warp, setWarp] = useState<{ crossed: boolean; id: number } | null>(null);
   const warping = useRef(false);
@@ -118,7 +109,7 @@ export function useApplicationNavigation() {
     navigation.openDetail('projects', id);
     setDetail(detailAddress());
   }, [navigation, detailAddress]);
-  const openExperience = useCallback((id: string, view: ExperienceView) => {
+  const openExperience = useCallback((id: string, view?: ExperienceView) => {
     navigation.openDetail('experience', id, view);
     setDetail(detailAddress());
   }, [navigation, detailAddress]);
@@ -221,15 +212,6 @@ export function useApplicationNavigation() {
     document.documentElement.classList.toggle('in-flight', flight.on);
   }, [flight.on]);
 
-  useEffect(() => {
-    document.documentElement.classList.toggle('crt', crt);
-    try {
-      localStorage.setItem('crt', crt ? 'on' : 'off');
-    } catch {
-      // Storage can be blocked; the choice then lasts for this visit only.
-    }
-  }, [crt]);
-
-  return { flight, setFlight, detail, project, experience, progress, setProgress, crt, setCrt, warp, setWarp,
+  return { flight, setFlight, detail, project, experience, progress, setProgress, warp, setWarp,
     warping, pending, hud, takeFlight, leaveFlight, enterGame, leaveGame, openProject, openExperience, closeDetail, building };
 }
