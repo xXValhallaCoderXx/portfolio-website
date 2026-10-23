@@ -1,5 +1,6 @@
+import type { TrainingLessonId } from '../../../domains/coaching/training-catalog.ts';
 import type { GameKind } from '../../../domains/good-lift/good-lift-address.ts';
-import { verdict, buildResultView, worldBoardView } from '../services/result-view.service.ts';
+import { verdict, buildResultView, worldBoardView, resultSummary, medalTrack } from '../services/result-view.service.ts';
 import type { BoardRow as BoardRowData, RunResult, BotResult, WorldResult, KitChoice } from '../good-lift.models.ts';
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { FEATS, JUDGES, barogram, bestComboSaid, kilos, metres, points, shareText, trickSaid, worldSaid } from '../../../domains/good-lift/meet-card.ts';
@@ -8,6 +9,7 @@ import { bynameOf } from '../../../domains/good-lift/meet-bynames.ts';
 import { isBlocked, runesOf } from '../../../domains/good-lift/meet-initials.ts';
 import GoodLiftKit,{ KitNews } from './GoodLiftKit.tsx';
 import '../result-layout.css';
+import '../meet-sheet.css';
 
 // How a run can end, as the meet sheet says it.
 const ENDINGS: Record<string, string> = {
@@ -128,17 +130,11 @@ function Pilot({ who, via, byname, told = false }: { who?: string; via?: string;
 function BoardRow({ row, place, className = '', tag = '' }: { row: BoardRowData; place?: number; className?: string; tag?: string }) {
   return (
     <li value={place} className={className || undefined}>
-      <b>
-        <Pilot who={row.who} via={row.via} byname={row.byname} />
-        {tag && <i className="good-lift-tag"> · {tag}</i>}
-      </b>
-      <span>{points(row)} pts</span>
-      <span>{metres(row.peak)} m</span>
-      <span className="good-lift-row-lights" aria-hidden="true">
-        {row.red.map((red: number, index: number) => (
-          <i key={index} className={red ? (red & (red - 1) ? 'none' : 'one') : 'clean'} />
-        ))}
-      </span>
+      <span className="good-lift-row-rank">{row.via === 'bot' ? 'BOT' : place}</span>
+      <b className="good-lift-row-name"><Pilot who={row.who} via={row.via} byname={row.byname} />{tag && <i className="good-lift-tag">{tag}</i>}</b>
+      <span className="good-lift-row-lights"><span className="good-lift-hide">{row.red.length ? `${row.red.length} judged lifts` : 'No lift yet'}</span>{!row.red.length && <small>—</small>}{row.red.map((red: number, index: number) => <i aria-hidden="true" key={index} className={red ? (red & (red - 1) ? 'none' : 'one') : 'clean'} />)}</span>
+      <span className="good-lift-row-peak">{metres(row.peak)} <small>m</small></span>
+      <span className="good-lift-row-score">{points(row)} <small>pts</small></span>
     </li>
   );
 }
@@ -163,6 +159,8 @@ function WorldBoard({ world, tst, id, onWithdraw }: { world: WorldResult; tst?: 
       <h3 className="good-lift-board-head" id={`${id}-world`}>
         world
       </h3>
+      <BoardColumns />
+      {!world.rows.length && <p className="good-lift-board-empty">No shared scores yet.</p>}
       {world.rows.length > 0 && (
         <ol className="good-lift-board">
           {shown.map((row: BoardRowData) => {
@@ -204,28 +202,24 @@ function WorldBoard({ world, tst, id, onWithdraw }: { world: WorldResult; tst?: 
 
 // The sky's medals, as the bots set them once they have landed, and the one this run took. Each is
 // named in words, so colour is never the only sign of which is which.
-function Medals({ bots }: { bots: BotResult | null }) {
-  if (!bots) return <p className="good-lift-medals dim">medals: the bots are flying this sky…</p>;
-  if (bots.failed) return <p className="good-lift-medals dim">medals: the bots could not fly this sky</p>;
-  return (
-    <p className="good-lift-medals">
-      <span className="dim">medals:</span>{' '}
-      {bots.medals?.map((mark, i: number) => (
-        <span key={mark.medal}>
-          {i > 0 && ' · '}
-          <b className={`good-lift-medal ${mark.medal}`}>{mark.medal}</b> {points(mark)} pts
-          {mark.by === 'tst' && <i className="good-lift-tag"> (TST)</i>}
-        </span>
-      ))}
-      {' · yours: '}
-      <b className={`good-lift-medal ${bots.medal || 'none'}`}>{bots.medal || 'none'}</b>
-    </p>
-  );
+function Medals({ result, bots }: { result: RunResult; bots: BotResult | null }) {
+  const track = medalTrack(result, bots);
+  if (!track) return <p className="good-lift-medals dim" role="status">{bots?.failed ? 'Medal targets unavailable for this sky.' : 'Medal targets · the bots are still flying…'}</p>;
+  return <section className="good-lift-medal-track" aria-label="Medal track">
+    <h3 className="good-lift-section-title">MEDAL TRACK <span>{track.caption}</span></h3>
+    <div className="good-lift-medal-rail" aria-hidden="true"><i style={{ width: `${Math.min(100, track.score / track.maximum * 100)}%` }} />{track.marks.map(mark => <b key={mark.medal} className={mark.medal} style={{ left: `${mark.score / track.maximum * 100}%` }} />)}</div>
+    <p><span>● you {points(result)}</span>{track.marks.map(mark => <span key={mark.medal} className={mark.medal}>● {mark.medal} {mark.score.toLocaleString('en-GB')}{mark.by === 'tst' ? ' · TST' : ''}</span>)}</p>
+    <p className="good-lift-medal-awarded">This run: <b>{bots?.medal || 'no medal yet'}</b></p>
+  </section>;
+}
+
+function BoardColumns() {
+  return <div className="good-lift-board-columns" aria-hidden="true"><span>RANK</span><span>NAME</span><span>LIFTS</span><span>PEAK</span><span>SCORE</span></div>;
 }
 
 // The climb over its fog, once there are seconds enough of it to draw.
 function Barogram({ result }: { result: RunResult }) {
-  if (!(result.trace?.n >= 3)) return null;
+  if (!(result.trace?.n >= 3)) return <div className="good-lift-chart-empty">{metres(result.peak)} m peak · this flight ended before a chart could be recorded.</div>;
   const chart = barogram(result.trace, result.lifts, { width: 320, height: 96, peak: result.peak });
   return (
     <svg
@@ -235,6 +229,7 @@ function Barogram({ result }: { result: RunResult }) {
       aria-label={`The climb: up to ${metres(result.peak)} m in ${Math.round(result.seconds ?? 0)} s, with the fog rising under it.`}
     >
       <polygon className="fog" points={chart.fog} />
+      {result.peak < 150 && <><line className="first-line" x1="0" x2={chart.width} y1={chart.height * (1 - 150 / chart.ceiling)} y2={chart.height * (1 - 150 / chart.ceiling)} /><text x="2" y={chart.height * (1 - 150 / chart.ceiling) - 4}>LINE 1 · 150 m</text></>}
       {chart.lines.map((line) => (
         <line key={line.line} className={line.good ? 'judged good' : 'judged none'} x1="0" x2={chart.width} y1={line.y} y2={line.y} />
       ))}
@@ -267,7 +262,7 @@ function Barogram({ result }: { result: RunResult }) {
  */
 export default function GoodLiftResult({ result, music = null, bots = null, world = null, onRetry, onSky, onFjord, onPage, onInitials, onMusic, onWithdraw, onKit, onTraining }: {
   result: RunResult; music?: boolean | null; bots?: BotResult | null; world?: WorldResult | null;
-  onRetry(): void; onSky(kind: GameKind): void; onFjord(): void; onPage(): void; onTraining?(): void;
+  onRetry(): void; onSky(kind: GameKind): void; onFjord(): void; onPage(): void; onTraining?(lesson?: TrainingLessonId): void;
   onInitials?(text: string): string | undefined; onMusic?(): boolean | undefined;
   onWithdraw?(): Promise<boolean>; onKit?(choice: Partial<KitChoice>): KitChoice | undefined;
 }) {
@@ -286,15 +281,28 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
   // The initials as typed; they are kept (onInitials) once they are three letters the board will
   // show, or none.
   const [initials, setInitials] = useState(result.initials ?? '');
-  const blocked = initials.length === 3 && isBlocked(initials);
+  const blocked = /^[A-Z]{3}$/.test(initials) && isBlocked(initials);
+  const initialSlots = useRef<(HTMLInputElement | null)[]>([]);
   // Whether the initials are the pilot's opt-in to the world board: typed under the line that says
   // they put runs on it, or, where they were set before it was offered (`asking`), confirmed with
   // [ opt in ], which then stays, saying so, with the focus on it.
   const [optedIn, setOptedIn] = useState(!!result.optIn);
-  const named = initials.length === 3 && !blocked;
+  const named = /^[A-Z]{3}$/.test(initials) && !blocked;
   // Decided once as the sheet opens: opting in here turns the button to '[ opted in ]' where it
   // stands, the focus kept on it, and a sheet drawn again after the map opens with it gone.
   const [asking] = useState(() => !!result.online && !result.optIn && !!result.initials);
+  const updateInitials = (value: string) => {
+    const typed = value.toUpperCase().replace(/[^A-Z ]/g, '').slice(0, 3).trimEnd();
+    setInitials(typed);
+    if (!typed || /^[A-Z]{3}$/.test(typed) && !isBlocked(typed)) {
+      onInitials?.(typed);
+      if (result.online || !typed) setOptedIn(!!typed);
+    }
+  };
+  const updateSlot = (index: number, letter: string) => {
+    const slots = initials.padEnd(3, ' ').split(''); slots[index] = letter || ' ';
+    updateInitials(slots.join(''));
+  };
   const musicOn = music ?? result.music ?? true;
   const switchMusic = () => onMusic?.();
   const text = shareText(result, { label: result.label, link: result.link });
@@ -388,9 +396,10 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
   };
 
   const { rival, landed, said, earned, fresh, best, rows, worldFor } = buildResultView(result, bots, world);
+  const summary = resultSummary(result);
   let place = 0;
   const here = (
-    <ol className="good-lift-board">
+    <><BoardColumns /><ol className="good-lift-board">
       {rows.map((row) => {
         const bot = row.via === 'bot';
         const mine = !bot && !!row.log && row.log === result.board?.mine;
@@ -405,7 +414,8 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
           />
         );
       })}
-    </ol>
+      {Array.from({ length: Math.max(0, 3 - place) }, (_, index) => <li key={`empty-${index}`} className="good-lift-empty-row"><span>{place + index + 1}</span><b>—<small>{index === 0 ? 'Your next run lands here' : 'No score yet'}</small></b><span>—</span><span>—</span><span>—</span></li>)}
+    </ol></>
   );
   return (
     <section
@@ -426,16 +436,18 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
           <h2 className="shout" id={`${id}-heading`} ref={heading} tabIndex={-1}>
             FLIGHT COMPLETE
           </h2>
-          <p className="dim" id={`${id}-ending`}>
+          <h3 className={`good-lift-ending ${result.reason}`} id={`${id}-ending`}>{summary.ending}</h3>
+          <p className="dim">
             {ENDINGS[result.reason] ?? 'Run complete.'}
           </p>
           {result.verse && <p className="dim good-lift-verse">{result.verse}</p>}
+          <section className="good-lift-peak-card" aria-label="Peak altitude"><div><strong>{metres(result.peak)}</strong><span>m peak</span>{summary.shortfall > 0 && <b>{summary.shortfall} m short</b>}</div>{summary.shortfall > 0 && <><progress max={150} value={Math.max(0, result.peak)} aria-label="Altitude toward the first line" /><p>The first line is at <b>150 m</b>. Cross it to lock out a lift.</p></>}</section>
           <dl className="good-lift-result-metrics" id={`${id}-total`}>
-            <div className="good-lift-score-hero"><dt>score</dt><dd>{points(result)}<span> PTS</span></dd>{result.newBest && <b className="good-lift-new-best">NEW BEST!</b>}</div>
-            <div><dt>lifted</dt><dd>{kilos(result.total)}<span> kg</span></dd></div>
-            <div><dt>peak</dt><dd>{metres(result.peak)}<span> m</span></dd></div>
-            <div><dt>best</dt><dd>{(best.score ?? scoreOf(best)).toLocaleString('en-GB')}<span> pts</span></dd></div>
+            <div className="good-lift-score-metric"><dt>score</dt><dd>{points(result)}<span> PTS</span></dd>{result.newBest && <b className="good-lift-new-best">Personal best</b>}</div>
+            <div><dt>banked</dt><dd>{kilos(result.total)}<span> kg</span></dd></div>
+            <div><dt>best on device</dt><dd>{(best.score ?? scoreOf(best)).toLocaleString('en-GB')}<span> pts</span></dd></div>
           </dl>
+          {summary.shortfall > 0 && onTraining && <aside className="good-lift-next-time"><h3>NEXT TIME</h3><p>Circle in rising air to reach the first line. Thermal climb shows you how.</p><button type="button" onClick={() => onTraining('thermal')}>Train: Thermal climb ›</button></aside>}
           {((result.pilot ?? result.initials) || bynameOf(result.byname)) && (
             <p className="good-lift-who">
               <Pilot who={result.pilot ?? result.initials} via="me" byname={result.byname} told />
@@ -477,7 +489,8 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
           <div className="fjord-panel-body good-lift-result-panels" ref={panelScroll}>
             <div role="tabpanel" id={`${id}-panel-result`} aria-labelledby={`${id}-tab-result`} hidden={tab !== 'result'} tabIndex={0}>
               {result.verse && <p className="dim good-lift-verse good-lift-result-verse-detail">{result.verse}</p>}
-              <Barogram result={result} />
+              <Medals result={result} bots={landed} />
+              <section className="good-lift-flight-chart"><h3 className="good-lift-section-title">YOUR FLIGHT <span>{result.lifts.length ? `${result.lifts.length} judged lifts` : 'no line reached'}</span></h3><Barogram result={result} /></section>
               {result.lifts.length > 0 ? (
                 <table className="good-lift-lights">
                   <caption className="good-lift-hide">Each lift, its three lights and the call</caption>
@@ -515,7 +528,6 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
                 <p className="dim">// no line reached: the first is at 150 m.</p>
               )}
 
-              <Medals bots={landed} />
               {result.stats.style > 0 && <p className="good-lift-style">{kilos(result.total)} flight + {result.stats.style.toLocaleString('en-GB')} acro points</p>}
               {(result.stats.stalls > 0 || result.stats.cloud > 0 || result.stats.thrown > 0 || result.stats.reps > 0) && (
                 <p className="good-lift-cost">
@@ -534,6 +546,7 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
               {fresh.size > 0 && <p className="good-lift-fresh">new feat{fresh.size === 1 ? '' : 's'}: {FEATS.filter((feat) => fresh.has(feat.id)).map((feat) => feat.name).join(' · ')}</p>}
               <KitNews sheet={result.kit} />
 
+              <h3 className="good-lift-section-title good-lift-feats-title">FEATS <span>{FEATS.filter(feat => earned.has(feat.id)).length} / {FEATS.length}</span></h3>
               <ul className="good-lift-feats" aria-label="Feats">
                 {FEATS.map((feat) => (
                   <li key={feat.id} className={`${earned.has(feat.id) ? 'earned' : ''}${fresh.has(feat.id) ? ' fresh' : ''}`}>
@@ -585,30 +598,13 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
                     // this browser's best runs of {result.label}, and TST, the bot to beat
                     {result.online ? (worldFor ? "; with them, the world's best of the day." : '.') : '; a shared board comes later.'}
                   </p>
-                  <label className="good-lift-initials">
-                    initials{' '}
-                    <input
-                      aria-label="Three initials for the board"
-                      value={initials}
-                      maxLength={3}
-                      autoComplete="off"
-                      spellCheck={false}
-                      aria-describedby={`${id}-initials`}
-                      aria-invalid={blocked || undefined}
-                      onChange={(event) => {
-                        const typed = event.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
-                        setInitials(typed);
-                        if (typed.length === 0 || (typed.length === 3 && !isBlocked(typed))) {
-                          onInitials?.(typed);
-                          // Typed under the line that says what they do, they opt in; none opt out.
-                          if (result.online || !typed) setOptedIn(!!typed);
-                        }
-                      }}
-                    />
-                    <span className="good-lift-typed" aria-hidden="true">
-                      {runesOf(initials).join('')}
-                    </span>
-                  </label>{' '}
+                  <fieldset className="good-lift-initials"><legend>ENTER INITIALS</legend><p>Touch: tap a slot to cycle. Keyboard: type three letters.</p><div className="good-lift-initial-slots">{[0, 1, 2].map(index => <input key={index} ref={node => { initialSlots.current[index] = node; }} aria-label={`Initial ${index + 1}`} aria-describedby={`${id}-initials`} aria-invalid={blocked || undefined} autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={1} placeholder="_" value={initials[index]?.trim() ?? ''}
+                    onPointerDown={event => { if (event.pointerType !== 'touch') return; event.preventDefault(); const alphabet = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ'; const current = initials[index] || ' '; updateSlot(index, alphabet[(alphabet.indexOf(current) + 1) % alphabet.length]); }}
+                    onFocus={event => event.target.select()}
+                    onChange={event => { const value = event.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(-1); updateSlot(index, value); if (value) initialSlots.current[Math.min(2, index + 1)]?.focus(); }}
+                    onPaste={event => { event.preventDefault(); const letters = event.clipboardData.getData('text').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3 - index); const slots = initials.padEnd(3, ' ').split(''); [...letters].forEach((letter, n) => { slots[index + n] = letter; }); updateInitials(slots.join('')); initialSlots.current[Math.min(2, index + letters.length)]?.focus(); }}
+                    onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); initialSlots.current[Math.max(0, Math.min(2, index + (event.key === 'ArrowLeft' ? -1 : 1)))]?.focus(); } else if (event.key === 'Backspace' && !initials[index]?.trim() && index > 0) { event.preventDefault(); updateSlot(index - 1, ''); initialSlots.current[index - 1]?.focus(); } }}
+                  />)}</div><button type="button" onClick={() => updateInitials('')}>Clear initials</button></fieldset>
                   <span className="dim" id={`${id}-initials`} role="status">
                     {blocked
                       ? '// not those three: the board will not show them'
@@ -642,7 +638,7 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
             </div>
 
             <div role="tabpanel" id={`${id}-panel-kit`} aria-labelledby={`${id}-tab-kit`} hidden={tab !== 'kit'} tabIndex={0}>
-              <GoodLiftKit sheet={result.kit} onKit={onKit} />
+              <GoodLiftKit key={`${result.at}-${result.seed}`} sheet={result.kit} onKit={onKit} />
             </div>
           </div>
         </div>
@@ -650,7 +646,7 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
           <button type="button" className="primary" onClick={onRetry}>
             ▶ again
           </button>
-          {onTraining && <button type="button" className="good-lift-result-train" onClick={onTraining}>Train ›</button>}
+          {onTraining && <button type="button" className="good-lift-result-train" onClick={() => onTraining?.()}>Train ›</button>}
           <button type="button" className="good-lift-result-today" onClick={() => onSky('daily')}>today's sky</button>
           <div className="good-lift-result-more" ref={moreMenu} onBlur={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget)) setMoreOpen(false);
@@ -670,8 +666,8 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
             }}>more ⋯</button>
             {moreOpen && <div className="good-lift-result-menu" id={`${id}-more`} role="menu" aria-label="More run actions" onKeyDown={onMenuKey}>
               <button type="button" role="menuitem" tabIndex={-1} ref={(element) => { menuItems.current[0] = element; }} onClick={() => { setMoreOpen(false); onSky('practice'); }}>new sky</button>
-              <button type="button" role="menuitem" tabIndex={-1} ref={(element) => { menuItems.current[1] = element; }} onClick={onFjord}>back to the fjord</button>
-              <button type="button" role="menuitem" tabIndex={-1} ref={(element) => { menuItems.current[2] = element; }} onClick={onPage}>back to the portfolio</button>
+              <button type="button" role="menuitem" tabIndex={-1} ref={(element) => { menuItems.current[1] = element; }} onClick={onFjord}>Free Form · explore the website</button>
+              <button type="button" role="menuitem" tabIndex={-1} ref={(element) => { menuItems.current[2] = element; }} onClick={onPage}>Back to website</button>
               <button type="button" role="menuitemcheckbox" aria-checked={musicOn} tabIndex={-1} ref={(element) => { menuItems.current[3] = element; }} onClick={switchMusic}>music: {musicOn ? 'on' : 'off'}</button>
             </div>}
           </div>

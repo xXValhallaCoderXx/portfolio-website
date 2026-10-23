@@ -48,3 +48,19 @@ export function buildResultView(result: RunResult, bots: BotResult | null, world
   const worldFor = world && world.at === result.at && world.seed === result.seed && result.board ? world : null;
   return { rival, landed, said, earned, fresh, best, rows, worldFor };
 }
+
+/** The carried bar and banked rewards remain different quantities after a quit. */
+export function resultSummary(result: RunResult) {
+  const endings: Record<string, string> = { quit: 'BAR FORFEIT', fog: 'CAUGHT BY THE MIST', time: 'TEN MINUTES ALOFT', landed: 'BACK ON THE GROUND' };
+  return { ending: endings[result.reason] ?? 'FLIGHT COMPLETE',
+    shortfall: result.peak < 150 ? Math.ceil(150 - result.peak) : 0,
+    banked: result.total, score: scoreOf(result), personalBest: !!result.newBest };
+}
+
+export function medalTrack(result: RunResult, bots: BotResult | null) {
+  if (!bots || bots.failed || bots.at !== result.at || bots.seed !== result.seed || !bots.medals?.length) return null;
+  const marks = bots.medals.map(mark => ({ ...mark, score: scoreOf(mark) }));
+  const score = scoreOf(result), next = marks.find(mark => !outranks(result, mark));
+  return { marks, score, maximum: Math.max(1, score, ...marks.map(mark => mark.score)),
+    caption: next ? next.score > score ? `${Math.ceil(next.score - score)} to ${next.medal}` : `Climb higher for ${next.medal}` : result.reason === 'quit' ? 'Targets reached · bar forfeited' : 'Gold reached' };
+}

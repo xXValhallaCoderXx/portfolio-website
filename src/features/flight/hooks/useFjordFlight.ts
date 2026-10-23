@@ -12,7 +12,7 @@ const wantsBackdrop = () =>
   !matchMedia('(prefers-reduced-motion: reduce)').matches && !matchMedia('(pointer: coarse)').matches && innerWidth >= 760;
 
 /** React lifecycle owns subscriptions and stale-load cancellation; engine services own flight. */
-export function useFjordFlight({ flying, armed, target, lost, game: address, warping, onArm, onExit, onPortal, onFjord, onProgress, sectionBodies }: FjordProps) {
+export function useFjordFlight({ flying, armed, target, lost, game: address, warping, onArm, onExit, onPortal, onFjord, onProgress, sectionBodies }: FjordProps, onTraining?: (lesson?: TrainingLessonId) => void) {
   const stage = useRef<HTMLDivElement>(null);
   const game = useRef<FlightEngine | null>(null);
   const loading = useRef<Promise<FlightEngine | null> | null>(null);
@@ -39,8 +39,8 @@ export function useFjordFlight({ flying, armed, target, lost, game: address, war
   const [lostStage, setLostStage] = useState(() => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'still' : 'gliding'));
 
   // The game keeps one set of callbacks for its whole life, so they read the latest props from here.
-  const latest = useRef({ onArm, onExit, onProgress, onPortal, onFjord });
-  latest.current = { onArm, onExit, onProgress, onPortal, onFjord };
+  const latest = useRef({ onArm, onExit, onProgress, onPortal, onFjord, onTraining });
+  latest.current = { onArm, onExit, onProgress, onPortal, onFjord, onTraining };
 
   const load = useCallback(() => {
     const mine = mount.current;
@@ -55,6 +55,7 @@ export function useFjordFlight({ flying, armed, target, lost, game: address, war
         onBots: setBots,
         onWorld: setWorld,
         onPortal: address => latest.current.onPortal(address),
+        onTraining: lesson => latest.current.onTraining?.(lesson),
         onFjord: () => latest.current.onFjord(),
         onPanel: (next) => {
           if (next && sectionBodies[next.id]) lastPlace.current = next.id as SectionId;

@@ -1,0 +1,220 @@
+/* The hub, pause and coaching share a hierarchy while the session owns every action. */
+.fj-hud { width: auto; }
+.fj-hud > dl { width: min(630px, calc(100% - 300px)); grid-template-columns: 1.1fr .8fr 1fr 1.1fr; min-height: 62px; gap: 12px; }
+.fj-mode-identity { display: flex; flex-direction: column; gap: 5px; padding-right: 10px; border-right: 1px solid #24405f; }
+.fj-mode-identity b { color: #3ee6b0; font-size: 11px; letter-spacing: .14em; white-space: nowrap; }
+.fj-mode-identity span { color: #9fb2c6; font-size: 9px; line-height: 1.4; }
+.fj-hud > nav > .fj-play-good-lift { flex-direction: row; width: 174px; height: 62px; padding: 10px 14px; border: 1px solid #69b8ff; color: #04101f; background: #3b9eff; box-shadow: 0 4px #1c65a6; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .035em; }
+.fj-hud > nav > button { height: 62px; }
+.training .fj-hud > dl { width: 350px; grid-template-columns: 1.2fr 1fr 1.2fr; }
+.training .fj-hud > nav > [data-do='keys'] { width: 154px; flex-direction: row; gap: 8px; color: #3ee6b0; }
+.training .fj-destination-metric, .training .fj-hud [data-do='map'] { display: none; }
+.cloudbase .fj-hud > dl { grid-template-columns: 1fr 1fr 1.1fr 1fr; }
+.fj-challenge-hint { position: absolute; z-index: 5; right: 12px; top: 88px; display: flex; gap: 12px; width: min(300px, calc(100% - 24px)); padding: 12px; box-sizing: border-box; border: 1px solid #3b9eff; border-radius: 12px; background: #071323f2; color: #b9c8d8; font-size: 12px; }
+.fj-challenge-hint b { color: #8cc6ff; font-size: 10px; letter-spacing: .1em; }
+.fj-challenge-hint p { margin: 6px 0 0; line-height: 1.5; }
+.fj-challenge-hint button { flex: 0 0 44px; width: 44px; height: 44px; border: 1px solid #24405f; border-radius: 8px; background: transparent; color: #b9c8d8; cursor: pointer; }
+.flight-paused .fj-challenge-hint, .fjord-stage:not([data-flight-context='free-form']) .fj-challenge-hint { display: none; }
+.fjord-stage:not(.playing) .fj-challenge-hint { display: none; }
+.fj-launch.fj-launch-game { width: min(1000px, calc(100% - 40px)); height: min(720px, calc(100% - 40px)); }
+.fj-hub-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.fj-hub-card { display: flex; flex-direction: column; min-width: 0; padding: 20px; }
+.fj-hub-card > button { margin-top: auto; min-height: 52px; }
+.fj-hub-card > p { flex: 1; }
+.fj-hub-card h2 { font-size: 20px; }
+.fj-hub-card .primary { min-height: 56px; box-shadow: 0 5px #1c65a6; }
+.fj-hub-training { border-color: #16795f; background: #061d1880; }
+.fj-hub-explore { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 18px; border: 1px solid #24405f; border-radius: 12px; }
+.fj-hub-explore h2 { margin: 0; font-size: 12px; color: #29c7e3; letter-spacing: .1em; }
+.fj-hub-explore p { margin: 6px 0 0; color: #9fb2c6; font-size: 12px; }
+.fj-hub-stats { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 0 0 18px; color: #9fb2c6; font-size: 10px; }
+.fj-hub-stats b { color: #e8f1fa; }
+.fj-hub-stats > p { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 6px 12px; margin: 0; font-size: 10px; }
+.fj-hub-stats .bronze { color: #c88f5f; }
+.fj-hub-stats .silver { color: #c6d3e0; }
+.fj-hub-stats .gold { color: #f2c94c; }
+.fj-launch-settings, .fj-keys-more { display: flex; align-items: center; gap: 8px; }
+.fj-launch-settings { flex: 1; }
+.fj-launch-settings > span, [data-music-unavailable] { color: #9fb2c6; font-size: 10px; }
+.fj-launch-settings button, .fj-keys-more button { font-size: 11px; white-space: nowrap; }
+.fj-launch .fj-brief-actions { flex-wrap: wrap; }
+.fj-launch.fj-arcade .fj-brief-actions { flex-direction: row; align-items: center; }
+.fj-launch.fj-arcade .fj-brief-actions > button { width: auto; flex: 0 1 auto; }
+.fj-launch.fj-launch-training .fj-brief-actions > .primary { flex: 1 1 100%; }
+.preparing-sky .fj-hud, .preparing-sky .fj-challenge-hint { visibility: hidden; }
+.fj-arcade-pause .fj-keys-more > button { width: auto; padding: 8px 14px; }
+.fj-arcade-pause .fj-train-action { background: #3ee6b0; color: #04140f; border-color: #3ee6b0; box-shadow: 0 4px #1e9b74; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; }
+.fj-keys.fj-arcade-pause { display: flex; flex-direction: column; gap: 16px; width: min(1060px, calc(100% - 40px)); height: min(800px, calc(100% - 40px)); max-height: none; padding: 24px 28px; background: #050a13f5; }
+.fj-arcade-pause .fj-pause-heading { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; }
+.fj-arcade-pause .fj-pause-heading > div { flex-direction: row; align-items: center; gap: 14px; flex-wrap: wrap; }
+.fj-arcade-pause .fj-paused-badge { padding: 8px 12px; color: #04101f; background: #29c7e3; font-size: 14px; text-shadow: none; border-radius: 6px; letter-spacing: .12em; }
+.fj-arcade-pause .fj-pause-summary { margin: 0; font-size: 11px; }
+.fj-arcade-pause .fj-menu-content { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 18px; overflow: auto; padding: 2px 4px 10px; }
+.fj-free-form-resume { display: grid; grid-template-columns: minmax(200px, .9fr) minmax(0, 2fr); gap: 16px; padding: 14px; border: 1px solid #215262; border-radius: 14px; background: #29c7e309; }
+.fj-free-form-resume > button { width: 100%; min-height: 64px; margin: 0; background: #29c7e3; color: #04101f; font-size: 13px; }
+.fj-free-form-resume h2 { margin: 0 0 6px; color: #29c7e3; font-size: 10px; letter-spacing: .12em; }
+.fj-destination-shortcuts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+.fj-destination-shortcuts > button { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 0; min-height: 54px; padding: 9px; text-align: left; }
+.fj-destination-shortcuts b { max-width: 100%; font-size: 11px; overflow-wrap: anywhere; }
+.fj-destination-shortcuts small { color: #9fb2c6; font-size: 9px; }
+.fj-pause-hub-heading { display: flex; align-items: baseline; gap: 16px; margin-bottom: 16px; }
+.fj-pause-hub-heading h2 { margin: 0; font-size: 28px; letter-spacing: .04em; text-shadow: 0 3px #153950; }
+.fj-pause-hub-heading > span { color: #9fb2c6; font-size: 11px; }
+.fj-arcade-pause .fj-pause-guide { padding: 14px; }
+.fj-arcade-pause h2, .fj-arcade-pause h3 { line-height: 1.4; }
+.fj-arcade-pause .fj-pause-guide h2 { margin: 0; font-size: 11px; color: #29c7e3; letter-spacing: .1em; }
+.fj-arcade-pause .fj-pause-basics { margin: 12px 0; }
+.fj-pause-basics > div { display: grid; grid-template-columns: 36px auto; justify-content: center; text-align: left; }
+.fj-pause-basics svg { grid-row: 1 / 3; }
+.fj-pause-basics b { align-self: end; }
+.fj-pause-basics > div > span { text-align: left; }
+.fj-arcade-pause summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: #9fb2c6; }
+.fj-arcade-pause .fj-menu-footer { display: flex; flex: 0 0 auto; align-items: center; flex-wrap: wrap; gap: 8px; border-top: 1px solid #1c3148; padding-top: 12px; }
+.fj-arcade-pause .fj-menu-footer > button { flex: 0 1 auto; min-height: 48px; font-size: 11px; padding: 10px 14px; }
+.fj-arcade-pause .fj-menu-footer > .fj-keys-more { flex: 1; }
+.fj-menu-footer [data-do='exit'] { background: #e8f1fa; color: #04101f; font-weight: 800; }
+.fj-run-end-actions, .fj-current-actions { display: flex; gap: 8px; margin-top: 12px; }
+.fj-run-end-actions > button { flex: 1; font-size: 11px; }
+.fj-training-current { border: 1px solid #21574a; border-radius: 14px; padding: 18px; background: #3ee6b008; }
+.fj-training-current .fj-lesson-title { color: #3ee6b0; font-size: 10px; }
+.fj-training-current h2 { margin: 10px 0 6px; font-size: 25px; }
+.fj-training-current p { color: #b9c8d8; font-size: 13px; line-height: 1.6; }
+.fj-training-current h3, .fj-training-switch h3 { margin: 18px 0 12px; color: #3ee6b0; font-size: 11px; letter-spacing: .1em; }
+.fj-training-switch h3 > span { float: right; color: #9fb2c6; font-size: 10px; font-weight: 400; letter-spacing: 0; }
+.fj-current-actions > button:first-child { flex: 2; }
+.fj-current-actions > button { flex: 1; }
+.fj-pause-lesson-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; border: 0; }
+.fj-pause-lesson { position: relative; display: grid; grid-template-columns: 42px 1fr; align-items: center; gap: 3px 8px; min-height: 72px; padding: 10px; border: 1px solid #24405f; border-radius: 10px; background: #0b1424; cursor: pointer; }
+.fj-pause-lesson input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; cursor: pointer; }
+.fj-pause-lesson:focus-within { outline: 2px solid #29c7e3; outline-offset: 2px; }
+.fj-pause-lesson svg { grid-row: 1 / 3; color: #3ee6b0; }
+.fj-pause-lesson strong { font-size: 12px; }
+.fj-pause-lesson small { font-size: 9px; color: #9fb2c6; }
+.fj-pause-lesson [data-active-lesson] { position: absolute; top: 5px; right: 7px; color: #3ee6b0; font-size: 8px; }
+.fj-pause-lesson.selected { border-color: #3ee6b0; background: #3ee6b012; }
+.fj-lesson-selection { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; margin-top: 16px; padding: 14px; border: 1px solid #21574a; border-radius: 12px; color: #3ee6b0; }
+.fj-lesson-selection h3 { margin: 0 0 8px; font-size: 17px; letter-spacing: 0; }
+.fj-lesson-selection p { color: #9fb2c6; font-size: 12px; line-height: 1.5; }
+.fj-lesson-selection > button { grid-column: 1 / -1; min-height: 52px; background: #3ee6b0; color: #04140f; font-weight: 800; }
+.fj-paused-instruction { padding-top: 10px; border-top: 1px solid #21574a; }
+.fj-training-result { width: min(560px, calc(100% - 32px)); border: 1px solid #3ee6b0; border-radius: 18px; padding: 24px; box-shadow: 0 0 0 100vmax #050a1399; }
+.fj-training-result > small { color: #3ee6b0; letter-spacing: .1em; }
+.fj-training-result h2 { font-size: clamp(22px, 5vw, 32px); }
+.fj-training-result > div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fj-training-result button { min-height: 48px; }
+/* A large instruction, a device cue, measured motion and a separate brake-position readout. */
+.training .fj-coach { width: min(550px, calc(100% - 24px)); border: 2px solid #29c7e3; border-radius: 18px; background: #050a13f5; }
+.fj-coach-lesson { display: none; }
+.training .fj-coach-lesson { display: flex; align-items: center; gap: 8px; padding: 12px 16px 0; color: #3ee6b0; font-size: 10px; letter-spacing: .1em; }
+.fj-coach-lesson > span:first-child { margin-right: auto; }
+.fj-coach-stages { display: flex; gap: 4px; }
+.fj-coach-stages > i { width: 14px; height: 7px; border-radius: 5px; background: #1c3148; }
+.fj-coach-stages > i[data-phase='active'] { background: #29c7e3; }
+.fj-coach-stages > i[data-phase='done'] { background: #3ee6b0; }
+.training .fj-coach .fj-coach-kicker, .training .fj-coach [data-coach='controls'], .training .fj-coach [data-coach='feedback'] { display: none; }
+.training .fj-coach [data-coach='reason'] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.training .fj-coach-main { padding: 12px 16px; gap: 12px; }
+.training .fj-coach strong { font-size: clamp(21px, 2.5vw, 34px); line-height: 1.15; letter-spacing: .035em; }
+.fj-coach .fj-coach-cue { display: none; }
+.training .fj-coach .fj-coach-cue { display: block; margin-top: 7px; color: #d6e2ef; font-size: 14px; line-height: 1.45; }
+.training .fj-coach .fj-action-symbol { flex-basis: 44px; font-size: 36px; }
+.training .fj-coach [data-coach='acknowledgement'] { margin: 8px 0 0; color: #3ee6b0; font-size: 11px; }
+.training .fj-coach [data-coach='progress'], .training .fj-coach-brake-position { padding: 0 16px 12px; }
+.training .fj-coach [data-coach='progress'] > span, .fj-coach-brake-position > span { display: block; color: #b9c8d8; font-size: 10px; line-height: 1.5; letter-spacing: .04em; }
+.training .fj-coach [data-coach='progress'] > i, .fj-coach-brake-position > i { display: block; margin-top: 6px; height: 7px; border: 1px solid #24405f; border-radius: 4px; background: #142338; overflow: hidden; }
+.fj-coach-brake-position > i > b { display: block; height: 100%; background: #3ee6b0; transform-origin: left; }
+.fj-handle-callout { position: absolute; right: calc(100% + 10px); top: 45px; width: 150px; padding: 12px; border: 1px solid #29c7e3; border-radius: 10px; background: #050a13ee; text-align: right; }
+.fj-handle-callout[data-side='right'] { right: auto; left: calc(100% + 10px); text-align: left; }
+.fj-handle-callout[data-side='both'] { top: -80px; left: 50%; right: auto; transform: translateX(-50%); text-align: center; width: 210px; }
+.fj-handle-callout b { display: block; font-size: 14px; letter-spacing: .1em; }
+.fj-handle-callout span { display: block; margin-top: 6px; color: #9fb2c6; font-size: 10px; line-height: 1.4; }
+@media (min-width: 1200px) and (min-height: 600px) {
+  .training .fj-coach { top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); }
+}
+@media (max-width: 767px) {
+  .fj-hud > dl, .training .fj-hud > dl, .cloudbase .fj-hud > dl { width: calc(100% - 104px); min-height: 104px; padding: 50px 9px 9px; grid-template-columns: 1fr 1.25fr; gap: 6px; }
+  .fj-hud .fj-mode-identity { position: absolute; top: 7px; left: 9px; right: 0; padding: 0; border: 0; gap: 3px; }
+  .fj-mode-identity b { font-size: 10px; }
+  .fj-mode-identity span { max-width: 130px; font-size: 9px; }
+  .fj-hud .fj-destination-metric { display: none; }
+  .fj-hud > nav { top: 52px; gap: 6px; }
+  .fj-hud > nav > button { width: 44px; height: 52px; }
+  .fj-hud > nav > .fj-play-good-lift { position: absolute; top: -52px; right: 0; width: 140px; height: 44px; padding: 6px; font-size: 10px; }
+  .cloudbase .fj-hud > dl { grid-template-columns: 1fr 1.1fr 1fr; width: calc(100% - 54px); }
+  .cloudbase .fj-hud > nav [data-do='map'] { display: none; }
+  .training .fj-hud > dl { width: calc(100% - 54px); }
+  .training .fj-hud > nav > [data-do='keys'] { width: 44px; flex-direction: column; gap: 3px; }
+  .training .fj-hud > nav > [data-do='keys'] > span { max-width: 42px; white-space: normal; font-size: 8px; }
+  .fj-telemetry { font-size: 10px; }
+  .fj-challenge-hint { top: 155px; right: 12px; width: min(300px, calc(100% - 24px)); }
+  .fjord-stage:has(.fj-challenge-hint:not([hidden])) .fj-drag-tip { display: none; }
+  .fj-hub-cards { grid-template-columns: 1fr; gap: 16px; }
+  .fj-hub-card { padding: 16px; }
+  .fj-hub-card h2 { font-size: 18px; }
+  .fj-launch.fj-launch-game, .fj-keys.fj-arcade-pause { inset: 0; width: 100%; height: 100%; padding: max(16px, env(safe-area-inset-top)) 16px max(12px, env(safe-area-inset-bottom)); border: 0; border-radius: 0; }
+  .fj-keys.fj-arcade-pause { gap: 12px; }
+  .fj-arcade-pause .fj-pause-heading > div { flex-direction: column; align-items: flex-start; gap: 7px; }
+  .fj-arcade-pause .fj-pause-summary { font-size: 10px; }
+  .fj-free-form-resume { grid-template-columns: 1fr; padding: 12px; }
+  .fj-free-form-resume > button { min-height: 52px; }
+  .fj-destination-shortcuts { grid-template-columns: 1fr 1fr; }
+  .fj-pause-hub-heading { flex-wrap: wrap; gap: 5px; }
+  .fj-pause-hub-heading h2 { font-size: 25px; }
+  .fj-arcade-pause .fj-menu-footer { padding-top: 8px; gap: 7px; }
+  .fj-arcade-pause .fj-menu-footer > .fj-keys-more { flex: 1 1 100%; }
+  .fj-arcade-pause .fj-menu-footer > button { flex: 1; padding: 8px; }
+  .fj-launch-settings { flex-basis: 100%; }
+  .fj-launch.fj-arcade .fj-brief-actions > button:not(.primary) { flex: 1 1 120px; font-size: 11px; padding: 8px; }
+  .fj-hub-explore { padding: 12px; }
+  .fj-training-current { padding: 14px; }
+  .fj-training-current h2 { font-size: 23px; }
+  .fj-pause-lesson-picker { grid-template-columns: 1fr 1fr; }
+  .fj-pause-lesson { grid-template-columns: 1fr; justify-items: start; min-height: 80px; }
+  .fj-pause-lesson svg { display: none; }
+  .fj-lesson-selection { grid-template-columns: 1fr; }
+  .fj-lesson-selection > svg { width: 100%; height: 60px; }
+  .fj-lesson-steps li { grid-template-columns: 22px minmax(0, 1fr) 30px; }
+  .fj-lesson-steps kbd { grid-column: 2 / -1; justify-self: start; }
+  .training .fj-coach strong { font-size: 22px; }
+  .training .fj-coach .fj-coach-cue { font-size: 13px; }
+  .training .fj-coach-lesson { padding: 10px 12px 0; font-size: 9px; gap: 5px; letter-spacing: .04em; }
+  .fj-coach-stages { gap: 3px; }
+  .fj-coach-stages > i { width: 7px; height: 5px; }
+  .training .fj-coach-main { padding: 10px 12px; gap: 8px; }
+  .training .fj-coach .fj-action-symbol { flex-basis: 24px; font-size: 26px; }
+  .fj-handle-callout, .fj-handle-callout[data-side='right'], .fj-handle-callout[data-side='both'] { top: 50px; right: auto; left: 50%; width: min(150px, calc(100vw - 184px)); transform: translateX(-50%); padding: 8px; box-sizing: border-box; text-align: center; }
+  .fj-handle-callout b { font-size: 12px; }
+  .fj-handle-callout span { margin-top: 3px; font-size: 10px; }
+}
+@media (max-height: 480px) and (min-width: 600px) {
+  .fj-hud > dl, .training .fj-hud > dl { width: 330px; min-height: 52px; padding: 6px 9px; grid-template-columns: 1.2fr 1fr 1fr; }
+  .fj-hud .fj-mode-identity { position: static; border-right: 1px solid #24405f; }
+  .fj-hud .fj-destination-metric { display: none; }
+  .fj-hud > nav { top: 0; }
+  .fj-hud > nav > button { height: 52px; }
+  .fj-hud > nav > .fj-play-good-lift { position: static; height: 52px; }
+  .fj-challenge-hint { top: 80px; width: 260px; }
+  .fj-launch.fj-launch-game { inset: 12px; width: calc(100% - 24px); height: calc(100% - 24px); padding: 12px 18px; }
+  .fj-launch-game .fj-launch-scroll { display: flex; }
+  .fj-hub-cards { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .fj-hub-card { padding: 14px; }
+  .fj-keys.fj-arcade-pause { inset: 8px; width: calc(100% - 16px); height: calc(100% - 16px); padding: 12px 18px; gap: 8px; }
+  .fj-arcade-pause .fj-pause-heading > div { flex-direction: row; }
+  .fj-arcade-pause .fj-menu-footer > .fj-keys-more { flex: 1; }
+  .fj-arcade-pause .fj-menu-footer > button { flex: 0 1 auto; }
+  .fj-pause-lesson-picker { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .training .fj-coach { left: 50%; transform: translateX(-50%); width: min(350px, calc(100% - 200px)); }
+  .training .fj-coach-main { padding: 7px 10px; }
+  .training .fj-coach strong { font-size: 20px; }
+  .training .fj-coach .fj-coach-cue { font-size: 12px; margin-top: 4px; }
+  .training .fj-coach-lesson { padding: 7px 10px 0; font-size: 9px; }
+  .training .fj-coach [data-coach='progress'], .training .fj-coach-brake-position { padding: 0 10px 6px; }
+  .training .fj-coach [data-coach='acknowledgement'] { margin-top: 4px; }
+  .fj-handle-callout { top: 140px; left: 84px; right: auto; transform: none; width: 120px; padding: 5px; text-align: center; }
+  .fj-handle-callout[data-side='right'] { top: 140px; left: auto; right: 84px; transform: none; width: 120px; }
+  .fj-handle-callout[data-side='both'] { top: 140px; left: 50%; right: auto; transform: translateX(-50%); width: 160px; }
+  .fj-handle-callout span { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fj-coach *, .fj-hub-card *, .fj-challenge-hint * { transition: none; animation: none; }
+}

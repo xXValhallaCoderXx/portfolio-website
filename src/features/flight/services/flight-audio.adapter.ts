@@ -319,10 +319,11 @@ export function createFlightAudio(port: FlightAudioPort) {
 
   function toggleSound() {
     soundOn = !soundOn;
-    for (const button of stage.querySelectorAll('[data-do="sound"]')) button.textContent = `[ sound: ${soundOn ? 'on' : 'off'} ]`;
+    for (const button of stage.querySelectorAll('[data-do="sound"]')) { button.textContent = `SFX: ${soundOn ? 'on' : 'off'}`; button.setAttribute('aria-pressed', String(soundOn)); }
     audio?.master.gain.setTargetAtTime(soundOn ? 1 : 0, audio.ctx.currentTime, 0.05);
+    return soundOn;
   }
 
 
- return { start: startAudio, play, panned, slump, refill, playStall, playRefill, tock, chime, bing, snap, swoosh, update: updateAudio, toggle: toggleSound, get audio() { return audio; }, dispose() { void audio?.ctx.close(); } };
+ return { start: startAudio, play, panned, slump, refill, playStall, playRefill, tock, chime, bing, snap, swoosh, update: updateAudio, toggle: toggleSound, get on() { return soundOn; }, get available() { return !!(window.AudioContext ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext); }, get audio() { return audio; }, dispose() { void audio?.ctx.close(); } };
 }

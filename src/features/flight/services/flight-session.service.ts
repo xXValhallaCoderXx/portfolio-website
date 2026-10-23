@@ -10,10 +10,15 @@ import type { GameAddress, RunResult, BotResult, WorldResult, ResolvedSky, GoodL
 import type { FlightPanel } from '../flight.models.ts';
 import type { createGoodLift, createGoodLiftTraining } from '../../good-lift/services/good-lift-session.service.ts';
 import type { TrainingLessonId } from '../../../domains/good-lift/training-session.ts';
+import { compactCoachCue } from '../presentation/coach-cue.ts';
 import { createTrainingInputFeedback } from '../presentation/training-input-feedback.ts';
 import { createFlightAudio, type AudioVoice } from './flight-audio.adapter.ts';
 import { createFlightCamera } from './flight-camera.adapter.ts';
 import { createFlightScene } from '../../../adapters/rendering/flight-scene.adapter.ts';
+import { TRAINING_LESSONS, TRAINING_LESSON_INFO } from '../../../domains/coaching/training-catalog.ts';
+import { LESSON_ART } from '../presentation/lesson-art.ts';
+import { lessonGuidance } from '../presentation/menu-markup.ts';
+import { lessonSelection, lessonStage, menuContext } from '../presentation/menu-model.ts';
 import { FLIGHT_MARKUP } from '../presentation/flight-markup.ts';
 import * as THREE from 'three';
 import { WORLD, ZONES, STONES, THERMALS, START, GATEWAY, centerX, heightAt, surfaceAt } from '../../../adapters/rendering/terrain.ts';
@@ -48,6 +53,7 @@ import { createThermalAir, showThermalAir } from '../presentation/thermal-air.ts
 import { sameGame } from '../../../domains/good-lift/good-lift-address.ts';
 import { normalizeKit } from '../../../domains/progression/wing-kit.ts';
 import '../game.css';
+import '../flight-revamp.css';
 
 type Zone = (typeof ZONES)[number];
 const { clamp } = THREE.MathUtils;
@@ -91,7 +97,7 @@ export interface FlightHooks {
   onExit?(): void; onProgress?(progress: ReturnType<typeof readProgress>): void;
   onLost?(stage: string): void; onResult?(result: RunResult | null): void;
   onMusic?(on: boolean): void; onBots?(bots: BotResult): void; onWorld?(world: WorldResult): void;
-  onPortal?(address?: GameAddress): void; onFjord?(): void; onPanel?(panel: FlightPanel | null): void;
+  onTraining?(lesson?: TrainingLessonId): void; onPortal?(address?: GameAddress): void; onFjord?(): void; onPanel?(panel: FlightPanel | null): void;
 }
 export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   stage.insertAdjacentHTML('beforeend', FLIGHT_MARKUP);
@@ -220,6 +226,9 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   // and the key that ended it, which does nothing until it is let go.
   let briefing = false;
   let swallowed: string | null = null;
+  let selectedLesson: TrainingLessonId = 'steering';
+  let challengeDismissed = false;
+  let freeFormMenuReturn = false;
   let auto: { label: string; place: string; x: number; h: number; id: string; z: number; side: number; off: number; r: number; }|null = null; // the place the glider is flying itself to, if any
   let hot: { label: string; place: string; x: number; h: number; id: string; z: number; side: number; off: number; r: number; }|null = null; // the place under the pointer
   let panel: FlightPanel | null = null;
@@ -299,17 +308,60 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   }
 
   function syncCloudbaseEntry() {
-    for (const button of stage.querySelectorAll<HTMLElement>('[data-do="cloudbase"]')) button.hidden = mode === 'cloudbase' || mode === 'training';
-    for (const button of stage.querySelectorAll<HTMLElement>('[data-do="quit-cloudbase"]')) button.hidden = mode !== 'cloudbase';
-    for (const button of stage.querySelectorAll<HTMLElement>('[data-do="training"]')) {
-      button.hidden = mode === 'training'; button.textContent = mode === 'cloudbase' ? 'End run & open training' : 'Training';
-    }
-    for (const button of stage.querySelectorAll<HTMLElement>('[data-do="back-to-game"], .fj-menu-footer [data-do="training-choose"]')) button.hidden = mode !== 'training';
-    // In Good Lift the places are out of reach, and the way to them is back to the fjord.
-    const running = mode === 'cloudbase' || mode === 'cloudbase-ended' || mode === 'training';
+    const context = menuContext(mode), active = context === 'game' && mode === 'cloudbase';
+    for (const button of stage.querySelectorAll<HTMLButtonElement>('.fj-keys [data-do="resume"]')) button.disabled = context === 'training' && training?.state.status !== 'flying';
+    stage.dataset.flightContext = context;
+    $('.fj-keys').dataset.menuContext = context;
+    $('[data-flight-mode]').textContent = context === 'training' ? 'TRAINING' : context === 'game' ? 'GOOD LIFT' : 'FREE FORM';
+    $('[data-do="keys"] span').textContent = context === 'training' ? 'lessons & menu' : 'menu';
+    $('[data-flight-purpose]').textContent = context === 'training' ? 'unranked practice' : context === 'game' ? flownSky?.kind === 'practice' ? 'Practice Sky · unranked' : 'climb the lines' : 'explore the website';
+    for (const element of stage.querySelectorAll<HTMLElement>('[data-free-form-menu]')) element.hidden = context !== 'free-form';
+    for (const element of stage.querySelectorAll<HTMLElement>('[data-training-menu]')) element.hidden = context !== 'training';
+    $('[data-hub-menu]').hidden = context === 'training';
+    for (const button of stage.querySelectorAll<HTMLElement>('[data-do="cloudbase"]')) button.hidden = context !== 'free-form';
+    $('.fj-run-resume').hidden = !active;
+    $('.fj-run-end-actions').hidden = !active;
+    for (const button of stage.querySelectorAll<HTMLElement>('[data-do="training"]')) button.textContent = active ? 'End run & open Training ›' : 'Train a lesson ›';
+    $('[data-game-menu-title]').textContent = context === 'game' ? flownSky?.kind === 'practice' ? 'PRACTICE SKY' : gameSky?.kind === 'daily' ? 'DAILY SKY' : 'CHALLENGE SKY' : 'DAILY SKY';
+    $('[data-game-menu-rank]').textContent = context === 'game' && flownSky?.kind !== 'daily' ? 'UNRANKED' : 'RANKED';
+    for (const button of stage.querySelectorAll<HTMLElement>('[data-do="back-to-game"]')) button.hidden = context !== 'training';
+    const running = context !== 'free-form';
     for (const button of stage.querySelectorAll<HTMLElement>('[data-do="fjord"]')) button.hidden = !running;
     for (const button of stage.querySelectorAll<HTMLElement>('.fj-map-list [data-place]')) button.hidden = running;
     $('.fj-keys-run').hidden = !running;
+    $('.fj-challenge-hint').hidden = context !== 'free-form' || challengeDismissed || !isAirborne();
+    $('[data-music-unavailable]').hidden = context === 'game' && !!run;
+    for (const button of stage.querySelectorAll<HTMLButtonElement>('[data-do="sound"]')) { button.disabled = !flightAudio.available; button.textContent = flightAudio.available ? `SFX: ${flightAudio.on ? 'on' : 'off'}` : 'SFX unavailable'; }
+  }
+
+  function syncLessonSelection() {
+    if (!training) return;
+    const active = training.state.lesson, selected = TRAINING_LESSON_INFO[selectedLesson];
+    const selection = lessonSelection(active, selectedLesson, training.state.status === 'flying');
+    for (const radio of stage.querySelectorAll<HTMLInputElement>('input[name="paused-lesson"]')) {
+      radio.checked = radio.value === selectedLesson;
+      radio.closest('label')?.classList.toggle('selected', radio.checked);
+    }
+    for (const tag of stage.querySelectorAll<HTMLElement>('[data-active-lesson]')) tag.hidden = tag.dataset.activeLesson !== active;
+    $('[data-selected-lesson]').textContent = selected.label;
+    $('[data-selected-description]').textContent = selected.description;
+    $('[data-selected-art]').setAttribute('d', LESSON_ART[selectedLesson].path);
+    $('[data-switch-notice]').textContent = selection.same ? 'Your current lesson. Restart is separate.' : `${TRAINING_LESSON_INFO[active].label} stays paused until you choose Start.`;
+    $('[data-do="training-start"]').textContent = `${selection.resume ? '▶' : '↗'} ${selection.action}`;
+  }
+
+  function syncTrainingMenu() {
+    if (!training) return;
+    const lesson = training.state.lesson, info = TRAINING_LESSON_INFO[lesson];
+    const phase = lesson === 'steering' || lesson === 'thermal' ? training.foundationState.phase : training.lessonState.phase;
+    const stage = lessonStage(lesson, phase, training.state.status);
+    $('[data-current-lesson]').textContent = info.label;
+    $('[data-current-description]').textContent = info.description;
+    $('[data-lesson-stage]').textContent = training.state.status === 'flying' ? `Phase ${Math.max(1, stage.index + 1)} of ${stage.count} · ${stage.label}` : training.state.status === 'complete' ? 'Complete' : 'Attempt ended';
+    $('[data-current-guidance]').innerHTML = lessonGuidance(lesson);
+    $('[data-paused-instruction]').textContent = training.message?.detail ?? '';
+    for (const button of $('.fj-keys').querySelectorAll<HTMLButtonElement>('[data-do="resume"]')) button.disabled = training.state.status !== 'flying';
+    syncLessonSelection();
   }
 
   // Opens the wing, clears the picture and forgets what the last run taught. Every way out of a
@@ -418,6 +470,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     if (mode === 'training') training?.leave();
     if (address.kind !== 'training') returnGame = address;
     portal = true;
+    stage.classList.add('preparing-sky');
     clearInput();
     closeMap();
     showKeys(false);
@@ -426,6 +479,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   }
 
   function cancelPreparedSky() {
+    stage.classList.remove('preparing-sky');
     skyPreparation.cancel();
     run?.cancelReplays();
     portal = false;
@@ -438,6 +492,8 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     if (disposed) return false;
     const prepared = skyPreparation.consume(expected);
     if (!prepared) return false;
+    if (activationKey) { brakeInput.state.device = 'keyboard'; stage.dataset.flightDevice = 'keyboard'; }
+    stage.classList.remove('preparing-sky');
     startAudio();
     if (prepared.address.kind === 'training') {
       if (!training) return false;
@@ -449,8 +505,8 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
       stage.classList.add('playing', 'training');
       stage.classList.remove('cloudbase', 'cloudbase-ended');
       mode = 'training'; briefing = portal = false;
-      training.begin(lesson);
-      flightView.capture(); vario.reset(g.vy); resetCoach();
+      training.begin(lesson); selectedLesson = lesson;
+      flightView.capture(); vario.reset(g.vy); resetCoach(); stepCoach(0);
       thermals.group.visible = false;
       syncCloudbaseEntry(); snapCamera(); syncFlightOverlay(false);
       swallowed = activationKey ?? null;
@@ -503,6 +559,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   // day's sky starts here.
   function enterPortal() {
     if (portal) return;
+    if (menuContext(mode) === 'free-form') { freeFormMenuReturn = keysOpen; challengeDismissed = true; }
     portal = true;
     clearInput();
     setAuto(null);
@@ -561,12 +618,14 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     hooks.onExit?.();
   }
 
-  function openTraining() {
+  function openTraining(initialLesson?: TrainingLessonId) {
+    if (menuContext(mode) === 'free-form') { freeFormMenuReturn = keysOpen; challengeDismissed = true; }
     if (game && game.kind !== 'training') returnGame = game;
     finishCloudbase('quit', false, true);
     showKeys(false); closeMap(); clearInput();
     portal = true;
-    if (hooks.onPortal) hooks.onPortal(TRAINING);
+    if (hooks.onTraining) hooks.onTraining(initialLesson);
+    else if (hooks.onPortal) hooks.onPortal(TRAINING);
     else void playGame(TRAINING);
   }
 
@@ -576,11 +635,14 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     else void playGame(returnGame);
   }
 
-  function restartTraining(next = false) {
+  function restartTraining(next = false, lesson?: TrainingLessonId) {
     if (mode !== 'training' || !training) return;
     clearInput(); resetCoach(); clearRunEffects();
-    if (next) training.next(); else training.retry();
-    flightView.capture(); vario.reset(g.vy); snapCamera(); syncFlightOverlay(false);
+    showKeys(false, false);
+    if (lesson) training.begin(lesson); else if (next) training.next(); else training.retry();
+    selectedLesson = training.state.lesson;
+    stepCoach(0);
+    flightView.capture(); vario.reset(g.vy); snapCamera(); syncCloudbaseEntry(); syncFlightOverlay(false);
   }
 
   function simulateTraining(dt: number) {
@@ -590,11 +652,11 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     if (training.state.status !== 'flying') {
       clearInput(); coachView.reset();
       const complete = training.state.status === 'complete';
-      $('#fj-training-title').textContent = complete ? 'Lesson complete' : 'Try that again';
+      $('#fj-training-title').textContent = `${TRAINING_LESSON_INFO[training.state.lesson].label} · ${complete ? 'complete' : 'try again'}`;
       $('[data-training-detail]').textContent = complete ? 'Lesson completed. Take another turn, or choose what to learn next.' :
         training.state.failure === 'clearance' ? 'More height needed. Retry starts you high with a settled wing.' : 'The attempt ended before banking. Retry with a settled wing.';
-      $('[data-do="training-retry"]').textContent = complete ? 'Repeat lesson' : 'Try again';
-      $('[data-do="training-next"]').hidden = !complete;
+      $('.fj-training-result [data-do="training-retry"]').textContent = complete ? 'Repeat lesson' : 'Try again';
+      $('.fj-training-result [data-do="training-next"]').hidden = !complete;
       syncFlightOverlay(false);
     }
   }
@@ -1155,10 +1217,26 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   });
   const trainingInputFeedback = createTrainingInputFeedback();
   const coachView = createCoachView({ element: $('.fj-coach'), input: () => input, device: () => brakeInput.state.device,
-    brakeFeedback: () => trainingInputFeedback.state,
+    brakeFeedback: () => trainingInputFeedback.state, lessonProgress: trainingProgress,
     canAnnounce: () => stage.dataset.messageOwner === 'coach' && !overlayOpen() && !briefing });
   const coachIntent = createCoachIntent();
   let coachMessage: ReturnType<typeof coachIntent.resolve> = null;
+  function trainingProgress() {
+    if (mode !== 'training' || !training) return null;
+    const lesson = training.state.lesson, message = training.message;
+    const foundation = training.foundationState;
+    const phase = lesson === 'steering' || lesson === 'thermal' ? foundation.phase : training.lessonState.phase;
+    const stage = lessonStage(lesson, phase, training.state.status), value = message?.progress ?? null;
+    let caption = message?.progressLabel ?? '';
+    if (lesson === 'steering') {
+      if (phase.startsWith('turn-')) caption = `TURN ${Math.max(0, Math.round(foundation.course * 180 / Math.PI))}° / 15°${phase === 'turn-sharp' ? ` · BANK ${Math.round(Math.abs(g.bank) * 180 / Math.PI)}° / 20°` : ''}`;
+      else if (phase === 'brake') caption = `SPEED DROP ${Math.max(0, foundation.speedDrop).toFixed(1)} / 1 m/s`;
+      else { const seconds = phase === 'recovery' ? 3 : phase === 'level' ? 1 : .5; caption = `STEADY ${((value ?? 0) * seconds).toFixed(1)} / ${seconds.toFixed(1)} s`; }
+    } else if (lesson === 'thermal' && foundation.qualified) caption = `CIRCLE ${Math.max(0, Math.round(foundation.orbit * 180 / Math.PI))}° / 360° · CLIMB ${Math.max(0, foundation.gain).toFixed(1)} / 10 m`;
+    else if (lesson === 'spiral' && phase === 'turn') caption = `TURN ${Math.round((training.watch.state.spiralArc ?? 0) * 180 / Math.PI)}° / 360°`;
+    else if (!caption) caption = `OBSERVED · BANK ${Math.round(Math.abs(g.bank) * 180 / Math.PI)}° · PITCH ${Math.round(g.pitch * 180 / Math.PI)}°`;
+    return { stage, caption, value };
+  }
   function resetCoach() {
     trainingInputFeedback.reset();
     thermalAir.reset();
@@ -1211,6 +1289,14 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     const eligible = isAirborne() && !overlayOpen() && !auto && !controls.steered && !briefing;
     const presented = presentedCoach();
     coachView.update(eligible ? presented : null);
+    const callout = $('.fj-handle-callout');
+    callout.hidden = !eligible || mode !== 'training' || !presented;
+    if (!callout.hidden && presented) {
+      const cue = compactCoachCue(presented, input, brakeInput.state.device);
+      callout.dataset.side = cue.side;
+      $('[data-handle-cue]').textContent = cue.callout;
+      $('[data-handle-gesture]').textContent = brakeInput.state.device === 'keyboard' ? cue.cue : 'to the glowing mark';
+    }
     if (eligible) hintEl.hidden = mode === 'cloudbase' || mode === 'training' || !!presented;
     else hintEl.hidden = false;
     brakeMeter(g.brake, g.stallLoad, g.stall, effects.meter, g.ears, g);
@@ -1352,11 +1438,14 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
       clearInput();
       setHot(null);
       closeMap(false);
+      for (const button of stage.querySelectorAll<HTMLElement>('[data-destination]')) button.querySelector('small')!.textContent = progress.visited.includes(button.dataset.destination!) ? '✓ visited' : 'not visited yet';
+      syncCloudbaseEntry();
+      if (mode === 'training' && training) { selectedLesson = training.state.lesson; syncTrainingMenu(); }
       const summary = stage.querySelector<HTMLElement>('[data-pause-summary]');
       if (summary) {
         const climb = Math.abs(vario.value) < .05 ? 0 : vario.value;
         const bar = mode === 'cloudbase' ? ` · ${hud('bar').textContent}` : '';
-        summary.textContent = `${Math.max(0, Math.floor(g.pos.y))} m · ${climb >= 0 ? '+' : '−'}${Math.abs(climb).toFixed(1)} m/s · ${Math.round(g.speed * 3.6)} km/h${bar}`;
+        summary.textContent = `${menuContext(mode) === 'free-form' ? 'Free Form' : mode === 'training' ? 'Training · unranked' : flownSky?.kind === 'practice' ? 'Practice Sky · unranked' : 'Good Lift'} · ${Math.max(0, Math.floor(g.pos.y))} m · ${climb >= 0 ? '+' : '−'}${Math.abs(climb).toFixed(1)} m/s · ${Math.round(g.speed * 3.6)} km/h${bar}`;
       }
     }
     keysOpen = open;
@@ -1415,6 +1504,19 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     on(button, 'click', () => teleportTo(zone));
     $('.fj-map-list').append(button);
   }
+  for (const zone of ZONES) {
+    const button = document.createElement('button');
+    const name = document.createElement('b'), status = document.createElement('small');
+    name.textContent = zone.label;
+    status.textContent = progress.visited.includes(zone.id) ? '✓ visited' : 'not visited yet';
+    button.append(name, status); button.dataset.destination = zone.id;
+    on(button, 'click', () => { clearInput(); showKeys(false); teleportTo(zone); });
+    $('.fj-destination-shortcuts').append(button);
+  }
+  for (const radio of stage.querySelectorAll<HTMLInputElement>('input[name="paused-lesson"]')) on(radio, 'change', () => {
+    if (!keysOpen || mode !== 'training' || !TRAINING_LESSONS.includes(radio.value as TrainingLessonId)) return;
+    selectedLesson = radio.value as TrainingLessonId; syncLessonSelection();
+  });
   const cloudMapButton = document.createElement('button');
   cloudMapButton.dataset.do = 'cloudbase';
   cloudMapButton.textContent = 'Game · Good Lift';
@@ -1441,6 +1543,8 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
 
   /** Hands the glider to the visitor. With a place id, starts on final approach to that place. */
   function fly(zoneId?: string | null) {
+    const returnToMenu = freeFormMenuReturn;
+    freeFormMenuReturn = false;
     const zone = ZONES.find((candidate) => candidate.id === zoneId);
     if (mode === 'lost') idle();
     // Back from Good Lift: the flight starts again from the launch.
@@ -1451,6 +1555,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     }
     if (zone) teleportTo(zone);
     syncCloudbaseEntry();
+    if (returnToMenu && !zone) showKeys(true);
   }
 
   // Out of the backdrop and into the visitor's hands: the readouts, the sound, a fresh clock.
@@ -1469,8 +1574,10 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
 
   /** Takes control back: the glider returns to circling as a backdrop. */
   function idle() {
+    freeFormMenuReturn = false;
     cancelPreparedSky();
     if (mode === 'intro') return;
+    challengeDismissed = true;
     finishCloudbase('quit', false);
     training?.leave();
     clearTimeout(fadeTimer);
@@ -1568,7 +1675,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     else if (event.code === 'KeyL') toggleSound();
     else if (event.code === 'KeyF') toggleFullscreen();
     else if (event.code === 'KeyR') respawn();
-    else if (event.code === 'Escape') mapOpen ? closeMap() : keysOpen ? showKeys(false) : mode === 'training' ? showKeys(true) : mode === 'cloudbase' ? finishCloudbase('quit') : exitFlight();
+    else if (event.code === 'Escape') { event.preventDefault(); showKeys(true); }
     else if (['Enter', 'Space'].includes(event.code) && mode === 'landed') { event.preventDefault(); takeOff(); }
     else if (event.code === 'KeyN' && mode === 'landed') flyToNext();
   });
@@ -1583,7 +1690,10 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     swallowed = null;
   });
   on(window, 'pagehide', () => finishCloudbase('quit', false));
-  on(stage, 'pointerdown', () => {
+  on(stage.parentElement ?? stage, 'pointerdown', (event) => {
+    brakeInput.state.device = event.pointerType === 'touch' ? 'touch' : 'mouse';
+    stage.dataset.flightDevice = brakeInput.state.device;
+    if (isAirborne() && !flightPaused()) startAudio();
     run?.nudgeMusic();
   });
   on(stage, 'click', (event) => {
@@ -1607,10 +1717,17 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     sound: toggleSound,
     fullscreen: toggleFullscreen,
     exit: exitFlight,
-    cloudbase: retryCloudbase,
+    cloudbase: enterPortal,
+    'dismiss-challenge': () => { challengeDismissed = true; $('.fj-challenge-hint').hidden = true; },
+    'restart-cloudbase': () => { showKeys(false); finishCloudbase('quit', false, true); retryCloudbase(); },
     'quit-cloudbase': () => { showKeys(false); finishCloudbase('quit'); },
     training: openTraining,
-    'training-choose': openTraining,
+    'training-choose': () => showKeys(true),
+    'training-start': () => {
+      if (!training || !keysOpen) return;
+      if (lessonSelection(training.state.lesson, selectedLesson, training.state.status === 'flying').resume) showKeys(false);
+      else restartTraining(false, selectedLesson);
+    },
     'training-retry': () => restartTraining(),
     'training-next': () => restartTraining(true),
     'back-to-game': backToGame,
@@ -1637,7 +1754,15 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   // Through the arch the buttons wait for Good Lift as the keys do, but for sound and fullscreen.
   for (const button of stage.querySelectorAll<HTMLElement>('[data-do]')) {
     const { do: name } = button.dataset;
-    on(button, 'click', () => (portal && name !== 'sound' && name !== 'fullscreen' ? undefined : actions[name as keyof typeof actions]()));
+    let activation: string | null = null;
+    on(button, 'keydown', event => { if (['Space', 'Enter'].includes(event.code)) activation = event.code; });
+    on(button, 'keyup', () => { activation = null; });
+    on(button, 'pointerdown', () => { activation = null; });
+    on(button, 'click', () => {
+      if (portal && name !== 'sound' && name !== 'fullscreen') return;
+      actions[name as keyof typeof actions]?.();
+      if (activation) swallowed = activation;
+    });
   }
 
   // ---------------------------------------------------------------- loop
@@ -1929,6 +2054,10 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   };
 
   return {
+    get sound() { return { on: flightAudio.on, available: flightAudio.available }; },
+    get music() { return run?.musicState ?? null; },
+    toggleSound,
+    launchStats: (prepared: ResolvedSky) => run?.launchStats(prepared) ?? null,
     fly,
     play: playGame,
     prepareSky,

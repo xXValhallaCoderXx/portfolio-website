@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ROUGH_LANDINGS, SECTIONS } from '../../../domains/portfolio/content.ts';
 import type { ComponentType } from 'react';
 import type { SectionId } from '../../../domains/portfolio/portfolio.types.ts';
+import type { TrainingLessonId } from '../../../domains/coaching/training-catalog.ts';
 import type { GameAddress } from '../../good-lift/good-lift.models.ts';
 import type { readProgress } from '../../../adapters/browser/flight-progress.service.ts';
 import { useFjordFlight } from '../hooks/useFjordFlight.ts';
@@ -157,7 +158,21 @@ function FlightControlHelp({ navigation = false }: { navigation?: boolean }) {
  * to Free Fly. The rune arch is scenery.
  */
 export default function Fjord({ flying, armed, target, lost, game: address, warping, onArm, onExit, onFly, onPortal, onFjord, onProgress, sectionBodies }: FjordProps) {
-  const { stage, game, live, panel, result, music, bots, world, sky, preparedSky, startSky, lostStage, retrySky, skipMissingPage, retryMissingPage } = useFjordFlight({ flying, armed, target, lost, game: address, warping, onArm, onExit, onFly, onPortal, onFjord, onProgress, sectionBodies });
+  const [initialLesson, setInitialLesson] = useState<TrainingLessonId>('steering');
+  const previousScreen = useRef({ address, flying });
+  const launchReturn = useRef<'free-form' | 'website'>('website');
+  const trainingReturn = useRef<'game' | 'free-form' | 'website'>(address?.kind === 'training' ? 'website' : 'game');
+  useEffect(() => {
+    const previous = previousScreen.current;
+    if (address && !previous.address) launchReturn.current = previous.flying ? 'free-form' : 'website';
+    previousScreen.current = { address, flying };
+  }, [address, flying]);
+  const openTraining = (lesson?: TrainingLessonId) => {
+    setInitialLesson(lesson ?? 'steering');
+    trainingReturn.current = address ? 'game' : 'free-form';
+    onPortal({ kind: 'training', sky: null, vs: null, bad: null });
+  };
+  const { stage, game, live, panel, result, music, bots, world, sky, preparedSky, startSky, lostStage, retrySky, skipMissingPage, retryMissingPage } = useFjordFlight({ flying, armed, target, lost, game: address, warping, onArm, onExit, onFly, onPortal, onFjord, onProgress, sectionBodies }, openTraining);
   const returnAddress = useRef<GameAddress>({ kind: 'daily', sky: null, vs: null, bad: null });
   useEffect(() => { if (address && address.kind !== 'training') returnAddress.current = address; }, [address]);
 
@@ -182,9 +197,17 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
       {flying && !lost && address && sky !== '' && (live || sky === 'failed') && (
         <GoodLiftLaunch sky={preparedSky} address={address} state={sky} stage={stage}
           onFly={startSky} onRetry={retrySky}
-          onTraining={() => onPortal({ kind: 'training', sky: null, vs: null, bad: null })}
+          onTraining={openTraining}
+          initialLesson={initialLesson}
+          stats={preparedSky ? game.current?.launchStats(preparedSky) : null}
+          backLabel={address.kind === 'training' ? trainingReturn.current === 'game' ? 'Back to Game' : trainingReturn.current === 'free-form' ? 'Back to Free Form' : 'Back to website' : launchReturn.current === 'free-form' ? 'Back to Free Form' : 'Back to website'}
+          audio={() => ({ sound: game.current?.sound.on ?? true, available: game.current?.sound.available ?? false, music: game.current?.music?.on ?? null })}
+          onSound={() => { game.current?.toggleSound(); }} onMusic={() => { game.current?.toggleMusic(); }}
+          onFreeForm={onFjord} onPage={() => onExit(null)}
           onExit={() => {
-            if (address.kind !== 'training') onExit(null);
+            if (address.kind !== 'training') { if (launchReturn.current === 'free-form') onFjord(); else onExit(null); }
+            else if (trainingReturn.current === 'free-form') onFjord();
+            else if (trainingReturn.current === 'website') onExit(null);
             else if (game.current) game.current.backToGame();
             else onPortal(returnAddress.current);
           }} />
@@ -218,10 +241,10 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
       )}
       {flying && !panel && result && MeetSheet && (
         <MeetSheet
-          result={result}
+          key={`${result.at}-${result.seed}`} result={result}
           onRetry={() => game.current?.retryCloudbase()}
           onSky={(kind) => onPortal({ kind, sky: null, vs: null, bad: null })}
-          onTraining={() => onPortal({ kind: 'training', sky: null, vs: null, bad: null })}
+          onTraining={openTraining}
           onFjord={() => onFjord()}
           onPage={() => onExit(null)}
           onInitials={(text) => game.current?.setInitials(text)}

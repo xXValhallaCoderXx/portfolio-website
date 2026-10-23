@@ -114,7 +114,7 @@ export function createFlightHud(port: FlightHudPort) {
    } else if (port.mode === 'training') {
      const practice = port.trainingReadouts?.();
      const lesson = TRAINING_LESSON_INFO[practice?.lesson as TrainingLessonId]?.label ?? (practice?.lesson ?? '').toUpperCase();
-     label.textContent = 'TRAINING';
+     label.textContent = 'ALT';
      hud('destination').textContent = lesson;
      hud('speed').textContent = `${Math.round(g.speed * 3.6)} km/h`;
      hud('belt').textContent = 'unranked practice';

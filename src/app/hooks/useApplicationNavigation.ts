@@ -15,7 +15,7 @@ export function useApplicationNavigation() {
   const [flight, setFlight] = useState<FlightViewState>(() => ({
     on: isFlightAddress() || !!missingAddress(),
     target: null,
-    armed: false,
+    armed: isFlightAddress() && !gameAddress(),
     lost: missingAddress(),
     game: gameAddress(),
   }));

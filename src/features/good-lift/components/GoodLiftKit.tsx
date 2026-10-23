@@ -71,7 +71,7 @@ export default function GoodLiftKit({ sheet, onKit }: { sheet?: KitSheet; onKit?
   const [part, setPart] = useState<'wing' | 'harness'>('wing');
   useEffect(() => {
     if (sheet?.worn) setWorn(sheet.worn);
-  }, [sheet]);
+  }, [sheet?.worn.wing, sheet?.worn.harness, sheet?.worn.helmet, sheet?.worn.chalk]);
   if (!sheet) return <p className="dim">// the kit comes with a run.</p>;
 
   const calm = calmDevice();

@@ -46,7 +46,7 @@ export function createGoodLiftTraining(host: Pick<GoodLiftHost, 'g' | 'controls'
 import { createChalk } from '../presentation/meet-chalk.ts';
 import { addRow, boardKey, outranks, rowsFor } from '../../../domains/good-lift/board.ts';
 import { scoreOf } from '../../../domains/good-lift/score.ts';
-import { BOTS, createBots, landing, owing } from '../../../domains/good-lift/meet-bots.ts';
+import { BOTS, createBots, landing, medalsOf, owing } from '../../../domains/good-lift/meet-bots.ts';
 import { bynameFor } from '../../../domains/good-lift/meet-bynames.ts';
 import { verseFor } from '../../../domains/good-lift/meet-verse.ts';
 import { isBlocked } from '../../../domains/good-lift/meet-initials.ts';
@@ -348,7 +348,8 @@ export function createGoodLift(host: GoodLiftHost) {
   function labelMusic(shown: boolean) {
     for (const button of musicButtons) {
       button.hidden = !shown;
-      button.textContent = `[ music: ${music.on ? 'on' : 'off'} ]`;
+      button.textContent = `Music: ${music.on ? 'on' : 'off'}`;
+      button.setAttribute('aria-pressed', String(music.on));
     }
   }
 
@@ -1250,6 +1251,15 @@ export function createGoodLift(host: GoodLiftHost) {
     MeetSheet: GoodLiftResult,
     /** The sky an address asks for: { kind, seed, day }, and a challenge's `target`. */
     resolveSky: skyFor,
+    /** Existing local facts only. Opening a hub never starts bots or writes a record. */
+    launchStats: (prepared: ResolvedSky) => {
+      const stored = readStore();
+      const cached = stored.bots;
+      const scores = prepared.kind === 'daily' && cached?.key === boardKey(SIM_VERSION, prepared.day) && cached.seed === prepared.seed ? cached.scores : null;
+      return { best: stored.best.score ?? scoreOf(stored.best),
+        streak: stored.daily.last >= dayOf(Date.now()) - 1 ? stored.daily.streak : 0,
+        medals: scores ? medalsOf(scores).map(mark => ({ medal: mark.medal, score: scoreOf(mark), by: mark.by })) : [] };
+    },
     challenge,
     cancelReplays: cancelChecks,
     replay,

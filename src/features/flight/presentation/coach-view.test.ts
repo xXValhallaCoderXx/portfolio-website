@@ -94,7 +94,7 @@ test('Steering position feedback shares the acknowledgement row and preserves me
   assert.equal(f.parts.acknowledgement.textContent, position.label);
   assert.equal(f.parts.announce.textContent, announcement, 'position updates do not repeat screen-reader instructions');
   f.view.update({ ...demand, lessonId: 'thermal' });
-  assert.equal(f.parts.acknowledgement.hidden, true, 'other lessons cannot inherit Steering feedback');
+  assert.equal(f.parts.acknowledgement.textContent, 'PULL ↓', 'other lessons derive their own status rather than inheriting Steering feedback');
   assert.equal(f.element.dataset.brakeFeedback, '');
   f.view.update(demand); f.view.update(null);
   assert.equal(f.element.dataset.brakeFeedback, '', 'hiding the coach clears the handle highlight');

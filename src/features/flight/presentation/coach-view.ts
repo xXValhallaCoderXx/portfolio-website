@@ -1,6 +1,8 @@
 import type { CoachFields } from '../../../domains/coaching/models.ts';
 import type { FlightInput } from '../../../domains/flight/models.ts';
 import type { BrakeDevice } from '../../../domains/flight/brake-input.ts';
+import { compactCoachCue } from './coach-cue.ts';
+import type { lessonStage } from './menu-model.ts';
 import type { TrainingInputFeedback } from './training-input-feedback.ts';
 // The coach only presents resolved instructions and raw held inputs. It never changes flight.
 import { summarizeControls } from '../../../domains/flight/brake-controls.ts';
@@ -36,12 +38,19 @@ const attribute = (node: { getAttribute(name: string): string | null; setAttribu
 const hide = (node: { hidden: string | boolean }, value: boolean) => { if (node.hidden !== value) node.hidden = value; };
 
 /** `now` is a presentation clock, injectable for announcement tests; no simulation clock advances. */
-export function createCoachView<T extends CoachNode<T>>({ element, input = () => ({}), device = () => 'mouse', now = () => performance.now(), canAnnounce = () => true, brakeFeedback = () => null }: { element: T; input?: () => FlightInput; device?: () => BrakeDevice; now?: () => number; canAnnounce?: () => boolean; brakeFeedback?: () => Readonly<TrainingInputFeedback> | null }) {
+export function createCoachView<T extends CoachNode<T>>({ element, input = () => ({}), device = () => 'mouse', now = () => performance.now(), canAnnounce = () => true, brakeFeedback = () => null, lessonProgress = () => null }: { element: T; input?: () => FlightInput; device?: () => BrakeDevice; now?: () => number; canAnnounce?: () => boolean; brakeFeedback?: () => Readonly<TrainingInputFeedback> | null; lessonProgress?: () => { stage: ReturnType<typeof lessonStage>; caption: string; value: number | null } | null }) {
   const query = (root: T, selector: string): T => { const node = root.querySelector(selector); if (!node) throw new Error(`Coach view is missing ${selector}`); return node as T; };
   const kicker = query(element, '.fj-coach-kicker');
   const warningStrip = element.querySelector('[data-coach="warning"]') as T | null;
   const action = query(element, '[data-coach="action"]');
   const reason = query(element, '[data-coach="reason"]');
+  const cue = element.querySelector('[data-coach="cue"]') as T | null;
+  const lesson = element.querySelector('[data-coach="lesson"]') as T | null;
+  const stages = element.querySelector('[data-coach="stages"]') as T | null;
+  const phaseLabel = element.querySelector('[data-coach="stage"]') as T | null;
+  const brakePosition = element.querySelector('[data-coach="brake-position"]') as T | null;
+  const pips: T[] = [];
+  let phaseCount = 0;
   const controls = query(element, '[data-coach="controls"]');
   const feedback = query(element, '[data-coach="feedback"]');
   const acknowledgement = query(element, '[data-coach="acknowledgement"]');
@@ -134,6 +143,29 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
       hide(warningStrip, !message.warning);
     }
     write(kicker, activity || (message.owner !== 'navigation' && phase && phase.toLowerCase() !== context.toLowerCase() ? `${context} · ${phase}` : context));
+    const compact = compactCoachCue(message, input() ?? {}, device());
+    const measured = lessonProgress();
+    if (cue) write(cue, compact.cue);
+    element.dataset.lesson = message.lessonId ?? '';
+    if (lesson) write(lesson, message.lessonId ? message.lessonId === 'thermal' ? 'THERMAL CLIMB' : message.context ?? '' : '');
+    if (phaseLabel) write(phaseLabel, measured ? `${Math.max(1, measured.stage.index + 1)}/${measured.stage.count}` : '');
+    if (stages && measured) {
+      const { index, count, label } = measured.stage;
+      // Counts belong to the physical lesson phases; these pips are indicators, never controls.
+      if (phaseCount !== count) {
+        for (const pip of pips) hide(pip, true);
+        while (pips.length < count) { const pip = element.ownerDocument.createElement('i'); stages.append(pip); pips.push(pip); }
+        phaseCount = count;
+      }
+      pips.forEach((pip, n) => { hide(pip, n >= count); pip.dataset.phase = n < index ? 'done' : n === index ? 'active' : 'pending'; });
+      attribute(stages, 'aria-label', `Phase ${Math.max(1, index + 1)} of ${count}: ${label}`);
+    }
+    if (brakePosition) {
+      hide(brakePosition, compact.position === null || !message.lessonId);
+      const label = brakePosition.querySelector('span') as T | null, bar = brakePosition.querySelector('i > b') as T | null;
+      if (label) write(label, `BRAKE POSITION · ${Math.round((compact.position ?? 0) * 100)}% of target`);
+      if (bar) bar.style.transform = `scaleX(${compact.position ?? 0})`;
+    }
     write(action, title); write(reason, detail); hide(reason, !detail);
     const accepted = !!message.acknowledged && !!message.action && message.action !== 'none' &&
       !message.action.startsWith('prepare-') && !message.warning;
@@ -142,8 +174,8 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
     const position = message.lessonId === 'steering' && !message.warning ? brakeFeedback() : null;
     const positionVisible = !!position && position.status !== 'idle';
     element.dataset.brakeFeedback = acknowledgement.dataset.brakeFeedback = positionVisible ? position.status : '';
-    write(acknowledgement, positionVisible ? position.label : accepted ? acceptance : '');
-    hide(acknowledgement, !positionVisible && !accepted);
+    write(acknowledgement, positionVisible ? position.label : message.lessonId && message.brakeTargets ? compact.callout : accepted ? acceptance : '');
+    hide(acknowledgement, !!cue && !!message.lessonId && compact.status === 'pull' || !positionVisible && !accepted && !(message.lessonId && message.brakeTargets));
     write(feedback, secondary); hide(feedback, !secondary);
     const state = message.state || '';
     if (element.dataset.state !== state) element.dataset.state = state;
@@ -151,10 +183,11 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
     if (element.dataset.warning !== warning) element.dataset.warning = warning;
     const intent = message.action || 'none';
     if (element.dataset.action !== intent) element.dataset.action = intent;
-    const caption = message.progressLabel || '';
+    const measurement = lessonProgress();
+    const caption = measurement?.caption || message.progressLabel || '';
     hide(progress, !caption);
     if (caption) {
-      const value = clamp(message.progress);
+      const value = clamp(measurement?.value ?? message.progress);
       // A duration-labelled steady-flight bar reports elapsed time, never an unlabeled percent.
       const duration = caption.match(/^(.*?)\s*·\s*(\d+(?:\.\d+)?)\s*s$/i);
       const seconds = duration ? Number(duration[2]) : 0;
@@ -164,6 +197,8 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
       attribute(progress, 'aria-valuenow', String(Math.round(value * 100)));
       const transform = `scaleX(${value})`;
       if (fill !== transform) { progressFill.style.transform = transform; fill = transform; }
+      if (measurement?.value === null) { hide(progressFill, true); attribute(progress, 'role', 'group'); }
+      else { hide(progressFill, false); attribute(progress, 'role', 'progressbar'); }
     }
     // Acceptance, progress and preparation/hold wording are not new flying instructions.
     const identity = `${message.intentId || `${state}|${context}|${phase}|${intent}|${message.brakeDepth || ''}|${(message.hold ?? []).join(',')}|${(message.release ?? []).join(',')}`}|${message.warning ? warningLabel || 'warning' : ''}`;

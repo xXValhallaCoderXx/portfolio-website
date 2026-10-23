@@ -4,34 +4,42 @@ import type { GameAddress, ResolvedSky } from '../../good-lift/good-lift.models.
 import { createFlightOverlay } from '../presentation/flight-overlay.ts';
 import { TRAINING_LESSONS, TRAINING_LESSON_INFO, type TrainingLessonId } from '../../../domains/coaching/training-catalog.ts';
 import TrainingPreview, { BrakeDiagram, LESSON_ART } from './TrainingPreview.tsx';
+import type { MenuStats } from '../presentation/menu-model.ts';
 import '../game.css';
+import '../flight-revamp.css';
 
 interface Props {
   sky: ResolvedSky | null; address: GameAddress; state: string;
   stage: React.RefObject<HTMLDivElement | null>;
-  onFly(key?: string, lesson?: TrainingLessonId): void; onRetry(): void; onExit(): void; onTraining?(): void;
+  onFly(key?: string, lesson?: TrainingLessonId): void; onRetry(): void; onExit(): void;
+  initialLesson?: TrainingLessonId; backLabel?: string; onTraining?(lesson?: TrainingLessonId): void; onFreeForm?(): void; onPage?(): void;
+  audio?(): { sound: boolean; available: boolean; music: boolean | null }; onSound?(): void; onMusic?(): void;
+  stats?: MenuStats | null;
 }
 
 /** Preparing the hub, selecting a lesson and playing previews never begin a run. */
-export function GoodLiftLaunch({ sky, address, state, stage, onFly, onRetry, onExit, onTraining }: Props) {
+export function GoodLiftLaunch({ sky, address, state, stage, onFly, onRetry, onExit, onTraining, initialLesson = 'steering', backLabel = 'Back to website', onFreeForm, onPage, audio, onSound, onMusic, stats }: Props) {
   const element = useRef<HTMLDivElement>(null);
   const activation = useRef<string | undefined>(undefined);
-  const [lesson, setLesson] = useState<TrainingLessonId>('steering');
+  const [lesson, setLesson] = useState<TrainingLessonId>(initialLesson);
   const training = address.kind === 'training';
+  const [, refreshAudio] = useState(0);
+  const settings = audio?.();
+  useEffect(() => setLesson(initialLesson), [initialLesson, training]);
   useEffect(() => {
     if (!element.current || !stage.current) return;
     const abort = new AbortController(), focus = createFlightOverlay(stage.current, abort.signal);
     focus.activate(element.current);
     return () => { abort.abort(); focus.deactivate(false); };
-  }, [stage]);
+  }, [stage, training]);
   const target = sky?.target, selected = TRAINING_LESSON_INFO[lesson];
   const notice = address.bad ? "That sky could not be read, so here is today's."
     : sky?.notice ? `${sky.notice === 'version' ? 'That challenge was flown under older rules' : 'That challenge could not be read'}, so here is today's sky.` : '';
   const label = training ? 'UNRANKED · STARTS AT 1,100 m' : sky ? sky.kind === 'daily' ? `DAILY SKY #${dailyNumber(sky.day)} · ${new Date(sky.day * DAY_MS).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).toUpperCase()}`
-    : `${sky.kind === 'practice' ? 'PRACTICE · ' : ''}SKY ${(sky.seed >>> 0).toString(16).padStart(8, '0')}`
+    : `${sky.kind === 'practice' ? 'PRACTICE SKY · UNRANKED · ' : ''}SKY ${(sky.seed >>> 0).toString(16).padStart(8, '0')}`
     : address.kind === 'vs' ? 'READING THE CHALLENGE…' : 'PREPARING THE SKY…';
   const fly = <>{state === 'failed' ? <><p role="alert">The sky did not load.</p><button type="button" className="primary" onClick={onRetry}>Try again</button></>
-    : <button type="button" className={`primary ${training ? 'fj-train-fly' : ''}`} data-launch-action="fly" disabled={state !== 'ready'} onClick={() => onFly(activation.current, lesson)}>{state === 'ready' ? training ? `▶ Fly: ${selected.label}` : '▶ Fly' : 'Loading the sky…'}</button>}</>;
+    : <button type="button" className={`primary ${training ? 'fj-train-fly' : ''}`} data-launch-action="fly" disabled={state !== 'ready'} onClick={() => onFly(activation.current, lesson)}>{state === 'ready' ? training ? `▶ Start ${selected.label}` : sky?.kind === 'practice' ? '▶ Play Practice Sky' : sky?.kind === 'daily' ? '▶ Play Daily Sky' : '▶ Play this sky' : 'Loading the sky…'}</button>}</>;
   return <div ref={element} className={`fj-brief fj-launch fj-arcade ${training ? 'fj-launch-training' : 'fj-launch-game'}`} data-flight-launch={state} role="dialog" aria-modal="true" aria-labelledby="fj-launch-title" aria-describedby="fj-launch-objective" tabIndex={-1}
     onPointerDown={() => { activation.current = undefined; }}
     onKeyDown={event => {
@@ -46,7 +54,7 @@ export function GoodLiftLaunch({ sky, address, state, stage, onFly, onRetry, onE
     }}
     onKeyUp={event => { if (activation.current === event.code) activation.current = undefined; }}>
     <header className="fj-launch-heading">
-      {training && <button type="button" className="fj-launch-back" onClick={onExit} aria-label="Back to game">‹</button>}
+      {training && <button type="button" className="fj-launch-back" onClick={onExit} aria-label={backLabel}>‹</button>}
       <div><small>{label}</small><h1 id="fj-launch-title" data-overlay-focus tabIndex={-1}>{training ? 'TRAINING' : 'GOOD_LIFT'}</h1>{!training && <p>climb the lines · bank the tricks</p>}</div>
       {!training && <svg className="fj-launch-wing" viewBox="0 0 100 50" width="100" height="50" aria-hidden="true"><path d="M6 28Q50-10 94 28" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" /><path d="M20 19 50 45 80 19M50 8V45" stroke="#9fb2c6" fill="none" /><circle cx="50" cy="45" r="3" fill="#29c7e3" /></svg>}
     </header>
@@ -61,19 +69,25 @@ export function GoodLiftLaunch({ sky, address, state, stage, onFly, onRetry, onE
         <section className="fj-selected-lesson" aria-labelledby="fj-selected-lesson"><div className="fj-lesson-title"><h2 id="fj-selected-lesson">{selected.label}</h2><span>{LESSON_ART[lesson].level}</span></div><p>{selected.description}</p><TrainingPreview lesson={lesson} steps={selected.steps} /></section>
         <p className="fj-brief-note">Same flight controls. Your scores, records and kit stay separate.</p>
       </> : <>
-        <section className="fj-hub-card fj-hub-fly"><div className="fj-hub-card-heading"><h2>{sky?.kind === 'daily' ? 'DAILY SKY' : address.kind === 'vs' ? 'CHALLENGE SKY' : 'FREE SKY'}</h2><span>{sky?.kind === 'daily' ? 'RANKED' : 'FREE FLIGHT'}</span></div>
+        <div className="fj-hub-cards"><section className="fj-hub-card fj-hub-fly"><div className="fj-hub-card-heading"><h2>{sky?.kind === 'daily' ? 'DAILY SKY' : address.kind === 'vs' ? 'CHALLENGE SKY' : 'PRACTICE SKY'}</h2><span>{sky?.kind === 'daily' ? 'RANKED' : 'UNRANKED'}</span></div>
           <p id="fj-launch-objective">A line every <b>150 m</b>. Three judges per lift.<br />Link tricks. Fly level for <b>3 s</b> to bank them.</p>
           {target && <div className="fj-hub-target"><span>TO BEAT · {target.who || 'A PILOT'}</span><strong>{(target.score ?? target.total ?? 0).toLocaleString('en-GB')} <small>PTS</small></strong><span>{target.peak.toLocaleString('en-GB')} m · verified</span></div>}
+          {stats && <div className="fj-hub-stats"><span>BEST ON DEVICE <b>{stats.best.toLocaleString('en-GB')} pts</b></span>{sky?.kind === 'daily' && <span>DAILY STREAK <b>{stats.streak} days</b></span>}{stats.medals.length > 0 && <p>{stats.medals.map(mark => <span key={mark.medal} className={mark.medal}>● {mark.medal} {mark.score.toLocaleString('en-GB')}{mark.by === 'tst' ? ' · TST' : ''}</span>)}</p>}</div>}
           {fly}
         </section>
         <section className="fj-hub-card fj-hub-training"><div className="fj-hub-card-heading"><h2>TRAINING</h2><span>UNRANKED</span></div><p>Find your first thermal. Learn a new move.<br />Start high, at <b>1,100 m</b>.</p>
           <div className="fj-hub-moves" aria-label="Six guided lessons">{TRAINING_LESSONS.map(id => <span key={id}><svg viewBox="0 0 200 86" width="40" height="24" aria-hidden="true"><path d={LESSON_ART[id].path} fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" /></svg><span>{id === 'steering' ? 'STEER' : id === 'thermal' ? 'CLIMB' : id.toUpperCase()}</span></span>)}</div>
-          {onTraining && <button type="button" className="fj-train-action" data-launch-action="training" onClick={onTraining}>Train a lesson ›</button>}
+          {onTraining && <button type="button" className="fj-train-action" data-launch-action="training" onClick={() => onTraining?.()}>Train a lesson ›</button>}
         </section>
+        </div>
+        {onFreeForm && <section className="fj-hub-explore"><div><h2>FREE FORM</h2><p>Just fly. Visit the website’s pages as places. No score.</p></div><button type="button" onClick={onFreeForm}>Explore ›</button></section>}
         <section className="fj-hub-controls" aria-label="How to fly"><h2>HOW TO FLY <span>TWO BRAKES · ONE WING</span></h2><ol>{[[.3, 0, 'PULL ONE', 'turn · A / D'], [.6, .6, 'PULL BOTH', 'brake · Space'], [0, 0, 'LET GO', 'hands up']] .map(([left, right, title, description]) => <li key={title}><BrakeDiagram left={left as number} right={right as number} /><strong>{title}</strong><span>{description}</span></li>)}</ol></section>
       </>}
       {notice && <p className="fj-brief-note" role="status">{notice}</p>}
     </div>
-    <footer className="fj-brief-actions">{training && fly}<button type="button" onClick={onExit}>{training ? 'Back to game' : 'Back to the page'}</button></footer>
+    <footer className="fj-brief-actions">{training && fly}<div className="fj-launch-settings">
+      {settings?.available && onSound && <button type="button" aria-pressed={settings.sound} onClick={() => { onSound(); refreshAudio(n => n + 1); }}>SFX: {settings.sound ? 'on' : 'off'}</button>}
+      {settings?.music != null && onMusic ? <button type="button" aria-pressed={settings.music} onClick={() => { onMusic(); refreshAudio(n => n + 1); }}>Music: {settings.music ? 'on' : 'off'}</button> : <span>Music · available in Game</span>}
+    </div><button type="button" onClick={onExit}>← {backLabel}</button>{onPage && backLabel !== 'Back to website' && <button type="button" onClick={onPage}>Back to website</button>}</footer>
   </div>;
 }
