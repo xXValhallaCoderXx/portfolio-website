@@ -1,14 +1,12 @@
 import { EXPERIENCE } from '../../../domains/portfolio/content.ts';
 import { yearSpan } from '../../../domains/portfolio/portfolio.service.ts';
-import CompactRidge from './CompactRidge.tsx';
 import ExperienceDetail from './ExperienceDetail.tsx';
 import Ridge from './Ridge.tsx';
 import Sheet from '../../../components/molecules/Sheet.tsx';
 import { useExperience } from '../hooks/useExperience.ts';
 
 export default function Experience() {
-  const { root, list, heading, swipe, suppressClick, compact, selected, view, setView,
-    reading, close, index, current, lit, choose, pickCamp, step, read, startSwipe, endSwipe, setPointed } = useExperience();
+  const { root, list, compact, selected, reading, close, lit, pickCamp, read, setPointed } = useExperience();
   return (
     <div className="experience" ref={root}
       onKeyDown={(event) => { if (event.key !== 'Escape') event.stopPropagation(); }}
@@ -16,58 +14,19 @@ export default function Experience() {
     >
       {compact ? (
         <div className="experience-mobile">
-          <div className="experience-toolbar">
-            <div className="experience-view" role="group" aria-label="Experience view">
-              <button type="button" aria-pressed={view === 'ridge'} onClick={() => setView('ridge')}>ridge</button>
-              <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>list</button>
-            </div>
-          </div>
-          <p className="experience-announcement" role="status">
-            Camp {EXPERIENCE.length - index} of {EXPERIENCE.length}: {current.company}, {current.role}, {current.years}
-          </p>
-          {view === 'list' ? (
-            <ol className="experience-list">
-              {EXPERIENCE.map((entry, entryIndex) => (
-                <li key={entry.hash}>
-                  <a href={`/experience/${entry.hash}`} onClick={(event) => read(event, entry)}>
-                    <span className="experience-list-dates">
-                      <span>camp {EXPERIENCE.length - entryIndex}</span>{yearSpan(entry.years)}
-                    </span>
-                    <span className="experience-list-role"><span>{entry.company}</span><b>{entry.role}</b></span>
-                    <span aria-hidden="true">›</span>
-                  </a>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <>
-              <CompactRidge roles={EXPERIENCE} selected={selected} onSelect={choose} />
-              <nav className="experience-nav" aria-label="Career camps">
-                <button type="button" aria-label="Older camp" disabled={index === EXPERIENCE.length - 1} onClick={() => step(1)}>← older</button>
-                <span>camp <b>{EXPERIENCE.length - index}</b> of {EXPERIENCE.length}</span>
-                <button type="button" aria-label="Newer camp" disabled={index === 0} onClick={() => step(-1)}>newer →</button>
-              </nav>
-              <article className="experience-card"
-                onPointerDown={startSwipe} onPointerUp={endSwipe}
-                onPointerCancel={() => { swipe.current = null; suppressClick.current = true; }}
-                onClickCapture={(event) => {
-                  if (suppressClick.current && event.detail !== 0) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                  }
-                  suppressClick.current = false;
-                }}
-              >
-                <a className="experience-entry-link" href={`/experience/${current.hash}`} onClick={(event) => read(event, current)}>
-                  <p className="experience-when"><span className="camp-tag">camp {EXPERIENCE.length - index}</span> · {current.years}</p>
-                  <h3 className="experience-current-heading" tabIndex={-1} ref={heading}>
-                    {current.company} <span className="dim">·</span> <b>{current.role}</b>
-                  </h3>
-                  <span className="experience-read">[ view role → ]</span>
+          <ol className="experience-list">
+            {EXPERIENCE.map((entry, entryIndex) => (
+              <li key={entry.hash}>
+                <a href={`/experience/${entry.hash}`} onClick={(event) => read(event, entry)}>
+                  <span className="experience-list-dates">
+                    <span>camp {EXPERIENCE.length - entryIndex}</span>{yearSpan(entry.years)}
+                  </span>
+                  <span className="experience-list-role"><span>{entry.company}</span><b>{entry.role}</b></span>
+                  <span aria-hidden="true">›</span>
                 </a>
-              </article>
-            </>
-          )}
+              </li>
+            ))}
+          </ol>
         </div>
       ) : (
         <div className="experience-desktop">

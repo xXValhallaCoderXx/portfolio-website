@@ -20,11 +20,12 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
   the path as the page scrolls, and the top bar counts its height down. Scrolling is never taken
   over. As the hero scrolls away the fjord's camera climbs until the scene reads as a map, and
   the path starts where the glider hangs.
-- On a phone, Experience reads one career camp at a time: pick from the compact ridge or list,
-  use Older/Newer or swipe the role card. Compact views show titles and dates; desktop adds
+- On a phone, Experience is a list of positions with companies, roles and dates; desktop adds
   each role's summary beside the rune ridge. Opening a role goes to `/experience/<hash>` with
-  its full report and sketches. Older/Newer links above and below the report switch positions;
-  returning to Experience restores the original card, scroll position and ridge/list view.
+  its full report and sketches. Clickable horizontal ridges above and below the report let
+  visitors jump to any position. Hover or keyboard focus reveals the role, company and dates;
+  on phones, swipe the ridge and tap a point to open it. Returning to Experience restores
+  the original position and scroll position.
   Flight landings open the same reports in a reading window, without the page navigation.
 - Three projects have a playable preview: a scripted model of what the product does, never the
   product itself. Each project also has its own address, `/projects/<id>`, with the full report.
