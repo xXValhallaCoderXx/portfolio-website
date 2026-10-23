@@ -14,6 +14,7 @@ concurrency:
 
 env:
   FIREBASE_PROJECT_ID: renate-gouveia-portfolio
+  VITE_BOARD_URL: https://us-central1-renate-gouveia-portfolio.cloudfunctions.net/board
 
 jobs:
   deploy:
