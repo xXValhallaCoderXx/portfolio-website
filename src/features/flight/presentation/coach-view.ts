@@ -2,6 +2,7 @@ import type { CoachFields } from '../../../domains/coaching/models.ts';
 import type { FlightInput } from '../../../domains/flight/models.ts';
 import type { BrakeDevice } from '../../../domains/flight/brake-input.ts';
 import { compactCoachCue } from './coach-cue.ts';
+import { safetyAlertText } from './flight-message.ts';
 import type { lessonStage } from './menu-model.ts';
 import type { TrainingInputFeedback } from './training-input-feedback.ts';
 // The coach only presents resolved instructions and raw held inputs. It never changes flight.
@@ -15,6 +16,7 @@ export interface CoachNode<T> {
   setAttribute(name: string, value: string): void; getAttribute(name: string): string | null;
 }
 type PresentedCoach = CoachFields & { canCancelLesson?: boolean; intentId?: string; acknowledged?: boolean };
+export type CoachPresentation = 'lesson' | 'safety';
 export function coachGesture(message: PresentedCoach | null, name: 'left' | 'right' | 'brake', advice: string, device: BrakeDevice, soften = false) {
   if (device === 'mouse') return soften ? 'ease toward center' : advice === 'release' ? name === 'brake' ? 'slide up / let go' : `ease ${name}` : name === 'brake' ? 'drag down' : `drag ${name}`;
   if (device === 'touch') return soften ? 'ease both handles up' : advice === 'release' ? name === 'brake' ? 'lift both thumbs' : `lift ${name} thumb` : name === 'brake' ? 'pull both handles down' : `pull ${name} handle down`;
@@ -38,9 +40,11 @@ const attribute = (node: { getAttribute(name: string): string | null; setAttribu
 const hide = (node: { hidden: string | boolean }, value: boolean) => { if (node.hidden !== value) node.hidden = value; };
 
 /** `now` is a presentation clock, injectable for announcement tests; no simulation clock advances. */
-export function createCoachView<T extends CoachNode<T>>({ element, input = () => ({}), device = () => 'mouse', now = () => performance.now(), canAnnounce = () => true, brakeFeedback = () => null, lessonProgress = () => null }: { element: T; input?: () => FlightInput; device?: () => BrakeDevice; now?: () => number; canAnnounce?: () => boolean; brakeFeedback?: () => Readonly<TrainingInputFeedback> | null; lessonProgress?: () => { stage: ReturnType<typeof lessonStage>; caption: string; value: number | null } | null }) {
+export function createCoachView<T extends CoachNode<T>>({ element, input = () => ({}), device = () => 'mouse', presentation = () => 'lesson', now = () => performance.now(), canAnnounce = () => true, brakeFeedback = () => null, lessonProgress = () => null }: { element: T; input?: () => FlightInput; device?: () => BrakeDevice; presentation?: () => CoachPresentation; now?: () => number; canAnnounce?: () => boolean; brakeFeedback?: () => Readonly<TrainingInputFeedback> | null; lessonProgress?: () => { stage: ReturnType<typeof lessonStage>; caption: string; value: number | null } | null }) {
   const query = (root: T, selector: string): T => { const node = root.querySelector(selector); if (!node) throw new Error(`Coach view is missing ${selector}`); return node as T; };
   const kicker = query(element, '.fj-coach-kicker');
+  const symbol = element.querySelector('.fj-action-symbol') as T | null;
+  const lessonHeader = element.querySelector('.fj-coach-lesson') as T | null;
   const warningStrip = element.querySelector('[data-coach="warning"]') as T | null;
   const action = query(element, '[data-coach="action"]');
   const reason = query(element, '[data-coach="reason"]');
@@ -120,6 +124,20 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
 
   function update(message: PresentedCoach | null) {
     if (disposed) return;
+    const format = presentation();
+    if (element.dataset.presentation !== format) {
+      reset();
+      element.dataset.presentation = format;
+      attribute(element, 'aria-label', format === 'safety' ? 'Flight safety' : 'Flight coach');
+      if (symbol) write(symbol, format === 'safety' ? '⚠' : '◇');
+    }
+    if (format === 'safety') {
+      updateSafety(message);
+      return;
+    }
+    hide(kicker, false);
+    if (lessonHeader) hide(lessonHeader, false);
+    if (cue) hide(cue, false);
     syncInputs(message, input() ?? {});
     if (cancel) hide(cancel, !message?.canCancelLesson);
     if (!message) {
@@ -202,12 +220,34 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
     }
     // Acceptance, progress and preparation/hold wording are not new flying instructions.
     const identity = `${message.intentId || `${state}|${context}|${phase}|${intent}|${message.brakeDepth || ''}|${(message.hold ?? []).join(',')}|${(message.release ?? []).join(',')}`}|${message.warning ? warningLabel || 'warning' : ''}`;
-    if (identity !== semantic) {
-      semantic = identity;
-      pending = `${context}. ${phase ? `${phase}. ` : ''}${title}${detail ? `. ${detail}` : ''}${message.warning ? `. ${[warningLabel, message.feedback || ''].filter(Boolean).join(' · ')}` : ''}`;
+    announceMessage(identity, `${context}. ${phase ? `${phase}. ` : ''}${title}${detail ? `. ${detail}` : ''}${message.warning ? `. ${[warningLabel, message.feedback || ''].filter(Boolean).join(' · ')}` : ''}`, !!message.warning || !!message.urgent);
+  }
+
+  function updateSafety(message: PresentedCoach | null) {
+    if (!message) {
+      if (visible || semantic || pending) reset();
+      return;
     }
+    hide(kicker, true);
+    if (lessonHeader) hide(lessonHeader, true);
+    if (cue) { write(cue, ''); hide(cue, true); }
+    if (cancel) hide(cancel, true);
+    syncInputs(null, {});
+    for (const node of [reason, feedback, acknowledgement, progress]) hide(node, true);
+    if (warningStrip) hide(warningStrip, true);
+    if (brakePosition) hide(brakePosition, true);
+    const text = safetyAlertText(message);
+    write(action, text);
+    element.dataset.state = message.state ?? '';
+    element.dataset.action = message.action ?? 'none';
+    element.dataset.warning = String(!!message.warning);
+    if (!visible) { element.hidden = false; visible = true; }
+    announceMessage(`safety|${text}`, text, true);
+  }
+
+  function announceMessage(identity: string, text: string, urgent: boolean) {
+    if (identity !== semantic) { semantic = identity; pending = text; }
     const clock = now();
-    const urgent = !!message.warning || !!message.urgent;
     if (!canAnnounce()) write(announce, '');
     if (pending && canAnnounce() && (urgent || clock - announcedAt >= 800)) {
       write(announce, pending); pending = ''; announcedAt = clock;
@@ -218,9 +258,14 @@ export function createCoachView<T extends CoachNode<T>>({ element, input = () =>
     if (cancel) hide(cancel, true);
     element.hidden = true; visible = false; semantic = pending = ''; announcedAt = -Infinity;
     element.dataset.state = element.dataset.action = element.dataset.warning = '';
+    element.dataset.lesson = '';
     element.dataset.brakeFeedback = acknowledgement.dataset.brakeFeedback = '';
     for (const node of [kicker, action, reason, feedback, acknowledgement, progressLabel, announce]) write(node, '');
     if (warningStrip) { write(warningStrip, ''); hide(warningStrip, true); }
+    for (const node of [cue, lesson, phaseLabel]) if (node) write(node, '');
+    if (lessonHeader) hide(lessonHeader, true);
+    if (brakePosition) hide(brakePosition, true);
+    for (const pip of pips) hide(pip, true);
     reason.hidden = feedback.hidden = acknowledgement.hidden = progress.hidden = controls.hidden = released.hidden = true;
     progressFill.style.transform = ''; fill = '';
     for (const { chip } of chips) chip.hidden = true;

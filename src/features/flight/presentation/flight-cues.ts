@@ -165,7 +165,7 @@ export function createFlightCues({ element, stage, camera, reducedMotion = () =>
   const handleBounds: CueBounds[] = [];
   const motion = createTravelCue(), suggestion: CoachTarget = { dx: 0, dy: 0, leftBrake: 0, rightBrake: 0, handsUp: false, accepted: false }, markerBox = emptyBounds();
   const obstacles: CueBounds[] = [];
-  const exclusions = '.fj-hud > dl, .fj-telemetry, .fj-hud nav, .fj-coach, .fj-lights, .fj-gauge, .fj-cue, .fj-hint, .fj-toasts > *, .fj-title, .fj-style';
+  const exclusions = '.fj-hud-card, .fj-telemetry, .fj-coach, .fj-lights, .fj-gauge, .fj-cue, .fj-hint, .fj-toasts > *, .fj-title, .fj-style';
   function reset() { motion.reset(); travel.hidden = true; if (handles) handles.hidden = true; handleBounds.length = 0; }
   function update({ pose, facts, message, input, dt, quiet = false }: { pose: CuePose | null; facts: CueFacts; message: CueMessage | null; input: FlightInput; dt: number; quiet?: boolean }) {
     if (facts.blocked) { reset(); return; }

@@ -8,15 +8,22 @@ export function essentialFlightMessage<T extends CoachFields>(message: T | null,
   return message?.warning || message?.state === 'hazard' || physicalSafety && message?.owner === 'safety' ? message : null;
 }
 
+/** An attached warning must not expose the routine instruction it interrupted. */
+export function safetyAlertText(message: CoachFields): string {
+  const label = message.warningLabel?.trim() ?? '', title = message.title?.trim() ?? '';
+  const safetyAction = message.owner === 'safety' || message.state === 'hazard';
+  if (message.warning && !safetyAction) return label || 'Flight safety';
+  return [...new Set([label, title].filter(Boolean))].join(' · ') || 'Flight safety';
+}
+
 /** Presentation priority only: choosing a visible card cannot change an instruction or a run. */
 export interface FlightMessageFacts {
-  blocked: boolean; urgent: boolean; coach: boolean; judges: boolean; notice: boolean; hint: boolean; intro: boolean;
+  blocked: boolean; urgent: boolean; coach: boolean; judges: boolean; notice: boolean; hint: boolean;
 }
-export function flightMessageOwner(facts: FlightMessageFacts): 'none' | 'coach' | 'judges' | 'notice' | 'hint' | 'intro' {
+export function flightMessageOwner(facts: FlightMessageFacts): 'none' | 'coach' | 'judges' | 'notice' | 'hint' {
   if (facts.blocked) return 'none';
   if (facts.coach) return 'coach';
   if (facts.judges) return 'judges';
-  if (facts.intro) return 'intro';
   if (facts.notice) return 'notice';
   return facts.hint ? 'hint' : 'none';
 }

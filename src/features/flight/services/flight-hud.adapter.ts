@@ -5,6 +5,7 @@ import type { CoachFields } from '../../../domains/coaching/models.ts';
 import { THERMAL_AIR } from '../presentation/thermal-air.ts';
 import { windReadout } from '../presentation/wind-feedback.ts';
 import { flightMessageOwner, flightSecondaryOwner } from '../presentation/flight-message.ts';
+import { freeFormStatus } from '../presentation/free-form-status.ts';
 import { TRAINING_LESSON_INFO, type TrainingLessonId } from '../../../domains/coaching/training-catalog.ts';
 import type { FlightZone } from './flight-navigation.service.ts';
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
@@ -17,18 +18,18 @@ interface FlightHudPort {
  stage: HTMLElement; g: FlightState; input: FlightInput; air: AirSample;
  vario: { readonly value: number }; thermalAir: { readonly fill: number; readonly value: number; readonly trend: string };
  progress: ReturnType<typeof readProgress>; zoneLabels: { zone: FlightZone; el: HTMLElement }[]; autoHaste: number;
- readonly mode: string; readonly auto: FlightZone | null; readonly mapOpen: boolean; readonly keysOpen: boolean; readonly briefing: boolean; readonly hasDragged: boolean; readonly portal: boolean; readonly held: boolean; readonly coachMessage: CoachFields | null;
+ readonly mode: string; readonly auto: FlightZone | null; readonly outOfBounds: boolean; readonly mapOpen: boolean; readonly keysOpen: boolean; readonly briefing: boolean; readonly portal: boolean; readonly held: boolean; readonly coachMessage: CoachFields | null;
  isAirborne(): boolean; compact(): boolean; runHud(quiet: boolean): string; runReadouts?(): RunReadouts | null;
  clearComboFeedback?(): void;
  trainingReadouts?(): {lesson: string; points: number} | null;
- nearestZone(onlyUnvisited: boolean): { zone: FlightZone; dist: number } | null; hintText(): string; drawMap(): void;
+ nearestZone(onlyUnvisited: boolean): { zone: FlightZone; dist: number } | null; drawMap(): void;
 }
 /** DOM readouts only sample the session; all flight and coaching state remains owned upstream. */
 export function createFlightHud(port: FlightHudPort) {
  const { stage, g, input, air, vario, thermalAir, progress, zoneLabels } = port;
  const $ = (selector: string): HTMLElement => { const node = stage.querySelector<HTMLElement>(selector); if (!node) throw new Error(`Flight HUD is missing ${selector}`); return node; };
  const hud = (name: string) => $(`[data-hud="${name}"]`);
- const brakePair = $('.fj-brake-pair'), brakeTracks = [...stage.querySelectorAll<HTMLElement>('[data-brake-side]')], dragTip = $('.fj-drag-tip');
+ const brakePair = $('.fj-brake-pair'), brakeTracks = [...stage.querySelectorAll<HTMLElement>('[data-brake-side]')];
  const thermalTrack = $('.fj-thermal-track'), thermalFill = thermalTrack.querySelector('i')!, thermalTrend = $('[data-thermal-trend]');
  const label = $('[data-alt-label]'), altitudeProgress = $('.fj-alt-progress'), status = $('[data-flight-status]');
  const styleReadout = document.createElement('span'); styleReadout.dataset.styleReadout = ''; styleReadout.hidden = true; $('.fj-telemetry').append(styleReadout);
@@ -44,8 +45,7 @@ export function createFlightHud(port: FlightHudPort) {
    const urgent = !!message?.warning || !!message?.urgent;
    const judges = !!stage.querySelector('.fj-lights:not([hidden])');
    const owner = flightMessageOwner({ blocked, urgent, coach: !!message, judges,
-     notice: !!stage.querySelector('.fj-toast'), hint: !!$('.fj-hint').textContent,
-     intro: port.mode !== 'cloudbase' && port.mode !== 'training' && !port.hasDragged && !port.auto });
+     notice: !!stage.querySelector('.fj-toast'), hint: !!$('.fj-hint').textContent });
    stage.dataset.messageOwner = owner;
    const secondary = flightSecondaryOwner({ blocked, urgent, judges });
    stage.dataset.secondaryOwner = secondary;
@@ -53,14 +53,14 @@ export function createFlightHud(port: FlightHudPort) {
    stage.dataset.comboLayout = comboLayout;
    stage.dataset.comboSuppressed = String(comboLayout === 'hidden');
    if (comboLayout === 'hidden') port.clearComboFeedback?.();
-   dragTip.hidden = owner !== 'intro';
    const said = stage.querySelector('.fj-said');
    said?.setAttribute('aria-live', secondary === 'judges' ? 'polite' : 'off');
    $('.fj-toasts').setAttribute('aria-hidden', String(secondary !== 'judges' && owner !== 'notice'));
  }
  function layoutMessages() {
+   const card = $('.fj-hud-card').getBoundingClientRect();
    const telemetry = $('.fj-telemetry').getBoundingClientRect();
-   const top = Math.ceil(telemetry.bottom - stage.getBoundingClientRect().top + 12);
+   const top = Math.ceil(Math.max(card.bottom, telemetry.bottom) - stage.getBoundingClientRect().top + 12);
    stage.style.setProperty('--coach-top', `${top}px`);
    stage.style.setProperty('--message-top', `${top}px`);
    const coachHeight = stage.dataset.messageOwner === 'coach' ? $('.fj-coach').getBoundingClientRect().height : 0;
@@ -124,7 +124,9 @@ export function createFlightHud(port: FlightHudPort) {
      $('.fj-hint').textContent = '';
    } else {
      hud('next').classList.remove('fj-fog-close');
-     status.textContent = g.stall > 0 ? 'stalled' : ''; status.hidden = !status.textContent;
+     status.textContent = freeFormStatus({ stalled: g.stall > 0, collapsed: g.tuck > 0,
+       outside: port.outOfBounds, destination: port.auto?.label ?? null });
+     status.hidden = !status.textContent;
      const pace = port.auto ? ` · auto ×${port.autoHaste}` : g.brake > 0.05 ? ' · brake' : '';
      hud('speed').textContent = `${Math.round(g.speed * 3.6)} km/h${port.mode === 'flying' ? pace : ''}`;
      const next = port.nearestZone(true) ?? port.nearestZone(false);
@@ -140,7 +142,7 @@ export function createFlightHud(port: FlightHudPort) {
        el.children[1].textContent = `${zone.place} · ${dist} m${progress.visited.includes(zone.id) ? ' · visited' : ''}`;
        el.children[2].textContent = zone === port.auto ? 'flying there' : '▶ fly here';
      }
-     $('.fj-hint').textContent = port.hintText();
+     $('.fj-hint').textContent = '';
    }
    $('.fj-toasts').style.removeProperty('top');
    messages();

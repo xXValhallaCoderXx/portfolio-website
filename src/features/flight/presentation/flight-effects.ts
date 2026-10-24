@@ -5,7 +5,7 @@ export function createFlightEffects() {
     fold: 0, veil: 0, veilShown: 0, shake: 0, gaze: 0, want: { fold: 0, veil: 0, shake: 0, gaze: 0 }, floor: -Infinity, stop: 0,
     foldLeft: 0, foldRight: 0, luff: 0, stall: { left: 0, right: 0, luff: 0, shake: 0, tuck: 0 }, stalled: false,
     tuck: 0, heave: 0,
-    meter: { fill: 0, red: 0, state: '' }, meterShown: { fill: -1, red: -1, state: null as string | null }, fjordHint: { line: '', since: 0 },
+    meter: { fill: 0, red: 0, state: '' }, meterShown: { fill: -1, red: -1, state: null as string | null },
     // The swing gauge (swing-gauge.js) and what of it was last written to the page; the catches and
     // the swings through the bottom already heard.
     gauge: { on: false, left: 0, mode: 'pitch', cue: 0, coming: 0, soon: 1, x: 0, y: 0, band: 0, near: false, round: 0, loopable: false, safe: true },

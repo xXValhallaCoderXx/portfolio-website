@@ -44,8 +44,6 @@ import { FLIGHT, createFlight, releaseFlight, settleFlight, stepFlight } from '.
 import { stallEffects, brakeMeter } from '../presentation/stall-effects.ts';
 import { createSwingWatch } from '../../../domains/coaching/swing-watch.ts';
 import { swingGauge } from '../presentation/swing-gauge.ts';
-import { holdHint } from '../presentation/hints.ts';
-import { fjordHint } from '../presentation/fjord-hints.ts';
 import { createLost } from '../presentation/lost.ts';
 import { createWindStreaks } from '../../../adapters/rendering/wind-streaks.ts';
 import { createVario } from '../presentation/vario.ts';
@@ -199,8 +197,6 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   let flightControls: ReturnType<typeof connectFlightControls> | null = null;
   const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
   const flightCues = createFlightCues({ element: $('.fj-flight-cues'), stage, camera, reducedMotion: () => motionPreference.matches });
-  const dragTip = $('.fj-drag-tip');
-  let hasDragged = false;
   let skipFlightClick = false;
   function releaseDrag({ confirm = false } = {}) {
     const id = brakeDrag.state.pointerId;
@@ -227,7 +223,6 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   let briefing = false;
   let swallowed: string | null = null;
   let selectedLesson: TrainingLessonId = 'steering';
-  let challengeDismissed = false;
   let freeFormMenuReturn = false;
   let auto: { label: string; place: string; x: number; h: number; id: string; z: number; side: number; off: number; r: number; }|null = null; // the place the glider is flying itself to, if any
   let hot: { label: string; place: string; x: number; h: number; id: string; z: number; side: number; off: number; r: number; }|null = null; // the place under the pointer
@@ -329,7 +324,6 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     for (const button of stage.querySelectorAll<HTMLElement>('[data-do="fjord"]')) button.hidden = !running;
     for (const button of stage.querySelectorAll<HTMLElement>('.fj-map-list [data-place]')) button.hidden = running;
     $('.fj-keys-run').hidden = !running;
-    $('.fj-challenge-hint').hidden = context !== 'free-form' || challengeDismissed || !isAirborne();
     $('[data-music-unavailable]').hidden = context === 'game' && !!run;
     for (const button of stage.querySelectorAll<HTMLButtonElement>('[data-do="sound"]')) { button.disabled = !flightAudio.available; button.textContent = flightAudio.available ? `SFX: ${flightAudio.on ? 'on' : 'off'}` : 'SFX unavailable'; }
   }
@@ -559,7 +553,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   // day's sky starts here.
   function enterPortal() {
     if (portal) return;
-    if (menuContext(mode) === 'free-form') { freeFormMenuReturn = keysOpen; challengeDismissed = true; }
+    if (menuContext(mode) === 'free-form') freeFormMenuReturn = keysOpen;
     portal = true;
     clearInput();
     setAuto(null);
@@ -619,7 +613,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   }
 
   function openTraining(initialLesson?: TrainingLessonId) {
-    if (menuContext(mode) === 'free-form') { freeFormMenuReturn = keysOpen; challengeDismissed = true; }
+    if (menuContext(mode) === 'free-form') freeFormMenuReturn = keysOpen;
     if (game && game.kind !== 'training') returnGame = game;
     finishCloudbase('quit', false, true);
     showKeys(false); closeMap(); clearInput();
@@ -867,7 +861,6 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
 
   function launchFrom(x: number, y: number, z: number, yaw: number, assisted = false) {
     clearInput();
-    hasDragged = false;
     closePanel();
     clearCloudResult();
     landingLeg.begin(assisted);
@@ -882,8 +875,6 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     climbStart = null;
     effects.gaze = 0;
     // A new flight starts with fresh controls and nothing of the last stall still showing.
-    effects.fjordHint.line = '';
-    effects.fjordHint.since = 0;
     effects.stalled = false; effects.heard.frontal = false;
     mode = 'flying';
   }
@@ -1179,25 +1170,6 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     kit: () => ({ ...kit }),
     wear,
   };
-  const fjordMoment = { auto: '', arch: false, nearArch: false, outside: false, nearRing: false, unvisited: false, agl: 0, airtime: 0, touch: false };
-
-  function hintText() {
-    if (!isAirborne() || overlayOpen()) return '';
-    const near = nearestZone(false)!;
-    fjordMoment.auto = auto ? auto.label : '';
-    fjordMoment.arch = false;
-    fjordMoment.nearArch = false;
-    fjordMoment.outside = outOfBounds;
-    fjordMoment.nearRing = near.dist < near.zone.r * 2.5;
-    fjordMoment.unvisited = !progress.visited.includes(near.zone.id);
-    fjordMoment.agl = g.pos.y - surfaceAt(g.pos.x, g.pos.z);
-    fjordMoment.airtime = airtime;
-    fjordMoment.touch = touch;
-    // Held on the frame clock, not the flight's: under boost the flight's runs three times as fast,
-    // and a line has to stay up long enough to read in real time.
-    return holdHint(effects.fjordHint, fjordHint(fjordMoment), time);
-  }
-
   // Only simulation steps advance coach intent, targets and cue timing. Rendering reads the result.
   const gaugeHands = { brake: false, fold: 0, held: 0, pumps: 0 };
   const flightCoach = createFlightCoach();
@@ -1217,6 +1189,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   });
   const trainingInputFeedback = createTrainingInputFeedback();
   const coachView = createCoachView({ element: $('.fj-coach'), input: () => input, device: () => brakeInput.state.device,
+    presentation: () => mode === 'training' ? 'lesson' : 'safety',
     brakeFeedback: () => trainingInputFeedback.state, lessonProgress: trainingProgress,
     canAnnounce: () => stage.dataset.messageOwner === 'coach' && !overlayOpen() && !briefing });
   const coachIntent = createCoachIntent();
@@ -1317,10 +1290,10 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
 
   const hudView = createFlightHud({ stage, g, input, air, vario, thermalAir, progress, zoneLabels, autoHaste: HASTE,
     get mode() { return mode; }, get auto() { return auto; }, get mapOpen() { return mapOpen; }, get keysOpen() { return keysOpen; },
-    get briefing() { return briefing; }, get hasDragged() { return hasDragged; }, get portal() { return portal; }, get held() { return held || trainingOutcome(); }, get coachMessage() { return presentedCoach(); },
+    get briefing() { return briefing; }, get outOfBounds() { return outOfBounds; }, get portal() { return portal; }, get held() { return held || trainingOutcome(); }, get coachMessage() { return presentedCoach(); },
     trainingReadouts: () => mode === 'training' && training ? { lesson: training.state.lesson, points: training.style.state.total } : null,
     isAirborne, compact: () => host.compact(), runHud: quiet => requireRun().hud(quiet), runReadouts: () => run?.readouts ?? null,
-    clearComboFeedback: () => run?.clearComboFeedback(), nearestZone, hintText, drawMap });
+    clearComboFeedback: () => run?.clearComboFeedback(), nearestZone, drawMap });
   const updateHud = () => hudView.update();
 
 
@@ -1577,7 +1550,6 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     freeFormMenuReturn = false;
     cancelPreparedSky();
     if (mode === 'intro') return;
-    challengeDismissed = true;
     finishCloudbase('quit', false);
     training?.leave();
     clearTimeout(fadeTimer);
@@ -1613,7 +1585,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   flightControls = connectFlightControls({ canvas: flightCanvas, stage, handles: $('.fj-brake-handles'), input, drag: brakeDrag, controller: brakeInput, signal: listeners.signal,
     canStart: () => isAirborne() && !flightPaused(),
     beforeStart: () => { clearInput(); setAuto(null); setHot(null); skipFlightClick = false; },
-    onActive: () => { hasDragged = true; dragTip.hidden = true; }, releaseMouse: releaseDrag });
+    releaseMouse: releaseDrag });
 
   on(window, 'keydown', (event) => {
     if (mode === 'intro' || event.metaKey || event.ctrlKey || event.altKey) return;
@@ -1718,7 +1690,6 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     fullscreen: toggleFullscreen,
     exit: exitFlight,
     cloudbase: enterPortal,
-    'dismiss-challenge': () => { challengeDismissed = true; $('.fj-challenge-hint').hidden = true; },
     'restart-cloudbase': () => { showKeys(false); finishCloudbase('quit', false, true); retryCloudbase(); },
     'quit-cloudbase': () => { showKeys(false); finishCloudbase('quit'); },
     training: openTraining,
@@ -1933,8 +1904,8 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
       updateHud();
     }
 
-    // Drop the glow and the extra pixels on machines that cannot hold a playable frame rate.
-    if (useBloom && isAirborne()) {
+    // Drop the glow and extra pixels when either the hero or flight cannot hold a smooth frame rate.
+    if (useBloom && (mode === 'intro' || isAirborne())) {
       slowFrames = elapsed > 1 / 28 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
       if (slowFrames > 90) {
         useBloom = false;

@@ -5,11 +5,11 @@ import { BRAKE_HANDLE, createBrakeInput, FLIGHT_KEYS, type BrakeSide } from '../
 interface ControlsPort {
   canvas: HTMLElement; stage: HTMLElement; handles: HTMLElement; input: FlightInput;
   drag: ReturnType<typeof createBrakeDrag>; controller: ReturnType<typeof createBrakeInput>; signal: AbortSignal;
-  canStart(): boolean; beforeStart(): void; onActive(): void; releaseMouse(options: { confirm: boolean }): void;
+  canStart(): boolean; beforeStart(): void; releaseMouse(options: { confirm: boolean }): void;
 }
 
 /** Events store intent only. The fixed-step boundary quantizes both physical brakes. */
-export function connectFlightControls({ canvas, stage, handles, input, drag, controller, signal, canStart, beforeStart, onActive, releaseMouse }: ControlsPort) {
+export function connectFlightControls({ canvas, stage, handles, input, drag, controller, signal, canStart, beforeStart, releaseMouse }: ControlsPort) {
   const buttons = [...handles.querySelectorAll<HTMLElement>('[data-brake-handle]')];
   const syncInput = () => {
     input.controlMode = 'brakes'; input.leftBrake = controller.state.leftBrake; input.rightBrake = controller.state.rightBrake;
@@ -23,7 +23,7 @@ export function connectFlightControls({ canvas, stage, handles, input, drag, con
     if (!canStart() || drag.state.active || controller.state.source === 'handles' || event.button !== 0 || event.pointerType === 'touch') return;
     beforeStart();
     if (!controller.startMouse() || !drag.start(event)) return;
-    event.preventDefault(); onActive(); sync(); canvas.setPointerCapture(event.pointerId);
+    event.preventDefault(); sync(); canvas.setPointerCapture(event.pointerId);
   }, { signal });
   canvas.addEventListener('pointermove', (event) => {
     if (!drag.move(event)) return;
@@ -43,7 +43,7 @@ export function connectFlightControls({ canvas, stage, handles, input, drag, con
       if (controller.state.source !== 'handles') beforeStart();
       const travel = Number.parseFloat(getComputedStyle(handles).getPropertyValue('--brake-travel')) || BRAKE_HANDLE.travel;
       if (!controller.startHand(side, event, travel)) return;
-      event.preventDefault(); event.stopPropagation(); button.setPointerCapture(event.pointerId); onActive(); sync();
+      event.preventDefault(); event.stopPropagation(); button.setPointerCapture(event.pointerId); sync();
     }, { signal });
     button.addEventListener('pointermove', event => {
       if (!controller.moveHand(event)) return;
@@ -61,7 +61,7 @@ export function connectFlightControls({ canvas, stage, handles, input, drag, con
       event.preventDefault(); event.stopPropagation();
       if (event.repeat || controller.state.source === 'mouse' || controller.state.source === 'handles') return;
       beforeStart(); controller.keyDown(side === 'left' ? 'KeyA' : 'KeyD');
-      if (event.shiftKey) controller.keyDown('ShiftLeft'); onActive(); sync();
+      if (event.shiftKey) controller.keyDown('ShiftLeft'); sync();
     }, { signal });
     button.addEventListener('keyup', event => {
       if (!['Space', 'Enter'].includes(event.code)) return;
@@ -88,7 +88,7 @@ export function connectFlightControls({ canvas, stage, handles, input, drag, con
       event.preventDefault();
       if (event.repeat || controller.state.source === 'mouse' || controller.state.source === 'handles') return true;
       if (controller.state.source !== 'keyboard') beforeStart();
-      controller.keyDown(event.code); if (!event.code.startsWith('Shift')) onActive(); sync(); return true;
+      controller.keyDown(event.code); sync(); return true;
     },
     keyUp(event: KeyboardEvent) {
       if (!controller.keyUp(event.code)) return false;

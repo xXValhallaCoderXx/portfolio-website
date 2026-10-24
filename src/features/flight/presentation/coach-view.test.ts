@@ -1,7 +1,7 @@
 import type { FlightInput } from '../../../domains/flight/models.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { coachGesture, createCoachView } from './coach-view.ts';
+import { coachGesture, createCoachView, type CoachPresentation } from './coach-view.ts';
 import { actionMessage } from '../../../domains/coaching/coach-actions.ts';
 import { keyboardBrakes } from '../../../domains/flight/brake-input.ts';
 import type { TrainingInputFeedback } from './training-input-feedback.ts';
@@ -57,20 +57,28 @@ class Node {
   setAttribute(name: string, value: string) { this.writes++; this.attributes.set(name, value); }
   getAttribute(name: string) { return this.attributes.get(name) ?? null; }
 }
-function fixture(warning = false, canAnnounce = () => true, brakeFeedback: () => Readonly<TrainingInputFeedback> | null = () => null) {
+function fixture(warning = false, canAnnounce = () => true, brakeFeedback: () => Readonly<TrainingInputFeedback> | null = () => null, lessonNodes = false) {
   const document = { createElement: () => new Node(document) };
   const element = new Node(document), parts: Record<string, Node> = {};
   for (const name of ['action', 'reason', 'controls', 'feedback', 'acknowledgement', 'progress', 'announce', 'cancel']) {
     parts[name] = new Node(document); element.selectors.set(`[data-coach="${name}"]`, parts[name]);
   }
   if (warning) { parts.warning = new Node(document); element.selectors.set('[data-coach="warning"]', parts.warning); }
+  if (lessonNodes) {
+    for (const name of ['cue', 'lesson', 'stages', 'stage', 'brake-position']) {
+      parts[name] = new Node(document); element.selectors.set(`[data-coach="${name}"]`, parts[name]);
+    }
+    parts.lessonHeader = new Node(document); element.selectors.set('.fj-coach-lesson', parts.lessonHeader);
+    parts.symbol = new Node(document); element.selectors.set('.fj-action-symbol', parts.symbol);
+  }
   parts.kicker = new Node(document); element.selectors.set('.fj-coach-kicker', parts.kicker);
   parts.caption = new Node(document); parts.fill = new Node(document);
   parts.progress.selectors.set('span', parts.caption); parts.progress.selectors.set('i > b', parts.fill);
   let raw: FlightInput = {}, time = 0;
-  const view = createCoachView({ element, input: () => raw, now: () => time, canAnnounce, brakeFeedback });
+  let presentation: CoachPresentation = 'lesson';
+  const view = createCoachView({ element, input: () => raw, now: () => time, canAnnounce, brakeFeedback, presentation: () => presentation });
   const chip = (name: string) => parts.controls.children.find((child) => child.dataset.control === name)!;
-  return { view, element, parts, chip, raw: (value: FlightInput) => { raw = value; }, time: (value: number) => { time = value; } };
+  return { view, element, parts, chip, raw: (value: FlightInput) => { raw = value; }, time: (value: number) => { time = value; }, presentation: (value: CoachPresentation) => { presentation = value; } };
 }
 const reverse = Object.freeze({ state: 'timing', context: 'Wingover', phase: 'Reverse now', action: 'left', title: 'RELEASE RIGHT, THEN LEFT', detail: 'Swap with the swing.', hold: Object.freeze(['left']), release: Object.freeze(['right']) });
 
@@ -390,4 +398,63 @@ test('a modal or judges result suppresses coach announcements until the current 
   assert.match(f.parts.announce.textContent, /RELEASE RIGHT, THEN LEFT/);
   canSpeak = false; f.view.update({ ...reverse, state: 'recover' });
   assert.equal(f.parts.announce.textContent, '');
+});
+
+test('compact safety shows and announces only the alert, without lesson or control details', () => {
+  const f = fixture(true, () => true, () => null, true);
+  f.presentation('safety'); f.raw({ controlMode: 'brakes', leftBrake: .3, rightBrake: .2 });
+  const warning = { ...reverse, owner: 'acro' as const, warning: true, warningLabel: 'FOG CLOSING',
+    feedback: 'A longer explanation', acknowledged: true, progress: .5, progressLabel: 'STEADY FLIGHT · 1s' };
+  f.view.update(warning);
+  assert.equal(f.element.hidden, false);
+  assert.equal(f.element.getAttribute('aria-label'), 'Flight safety');
+  assert.equal(f.parts.action.textContent, 'FOG CLOSING');
+  assert.equal(f.parts.announce.textContent, 'FOG CLOSING');
+  for (const name of ['kicker', 'warning', 'cue', 'reason', 'controls', 'feedback', 'acknowledgement', 'progress', 'cancel', 'lessonHeader', 'brake-position'])
+    assert.equal(f.parts[name].hidden, true, `${name} stays out of the compact alert`);
+  assert.equal(f.parts.reason.textContent, '');
+  assert.equal(f.parts.feedback.textContent, '');
+  const writes = f.parts.announce.writes;
+  for (let i = 0; i < 20; i++) f.view.update({ ...warning, progress: i / 20, intentId: String(i), acknowledged: i > 10 });
+  assert.equal(f.parts.announce.writes, writes, 'intent/progress changes do not repeat the same safety alert');
+  f.view.update(null);
+  assert.equal(f.element.hidden, true); assert.equal(f.parts.action.textContent, ''); assert.equal(f.parts.announce.textContent, '');
+});
+
+test('compact recovery preserves the required action and respects the announcement boundary', () => {
+  let canAnnounce = false;
+  const f = fixture(true, () => canAnnounce);
+  f.presentation('safety');
+  const recovery = { owner: 'safety' as const, state: 'recover', title: 'HOLD DEEP BRAKE · WAIT UNDER THE WING',
+    action: 'deep-brake', hold: ['brake'], release: ['left', 'right', 'bar', 'ears'], detail: 'The canopy is behind you.' };
+  f.view.update(recovery);
+  assert.equal(f.parts.action.textContent, recovery.title); assert.equal(f.parts.announce.textContent, '');
+  canAnnounce = true; f.view.update(recovery);
+  assert.equal(f.parts.announce.textContent, recovery.title);
+  f.view.update({ ...recovery, title: 'NORMAL BRAKE FOR BACKFLY', action: 'brake', warning: true, warningLabel: 'FOG CLOSE' });
+  assert.equal(f.parts.action.textContent, 'FOG CLOSE · NORMAL BRAKE FOR BACKFLY');
+  assert.equal(f.parts.announce.textContent, f.parts.action.textContent);
+  f.view.reset(); assert.equal(f.parts.announce.textContent, ''); assert.equal(f.element.hidden, true);
+});
+
+test('switching between full Training and compact safety clears stale content and restores the lesson', () => {
+  const f = fixture(true, () => true, () => null, true);
+  const lesson = { state: 'lesson', lessonId: 'steering', phase: 'turn-first', action: 'left', title: 'TURN LEFT',
+    detail: 'Pull the left handle to the mark.', brakeTargets: { left: .3, right: 0, tolerance: .07 },
+    progress: .25, progressLabel: 'TURN THE COURSE · 15°', canCancelLesson: true };
+  f.view.update(lesson);
+  assert.equal(f.parts.lessonHeader.hidden, false); assert.equal(f.parts.progress.hidden, false);
+  assert.equal(f.parts.fill.style.transform, 'scaleX(0.25)'); assert.match(f.parts.cue.textContent, /Drag left/);
+  f.presentation('safety');
+  f.view.update({ state: 'hazard', warning: true, title: 'RAVENS APPROACHING' });
+  assert.equal(f.element.dataset.lesson, ''); assert.equal(f.parts.cue.textContent, '');
+  assert.equal(f.parts.caption.textContent, ''); assert.equal(f.parts.progress.hidden, true);
+  assert.equal(f.parts.action.textContent, 'RAVENS APPROACHING');
+  f.presentation('lesson'); f.view.update(lesson);
+  assert.equal(f.element.getAttribute('aria-label'), 'Flight coach');
+  assert.equal(f.parts.action.textContent, lesson.title); assert.equal(f.parts.reason.textContent, lesson.detail);
+  assert.equal(f.parts.kicker.hidden, false); assert.equal(f.parts.lessonHeader.hidden, false); assert.equal(f.parts.cue.hidden, false);
+  assert.equal(f.parts.progress.hidden, false); assert.equal(f.parts.fill.style.transform, 'scaleX(0.25)');
+  assert.equal(f.parts.cancel.hidden, false); assert.equal(f.parts.symbol.textContent, '◇');
+  assert.doesNotMatch(f.parts.announce.textContent, /RAVENS/);
 });

@@ -4,7 +4,7 @@ Local implementation of the eight After screens in `game-ui-update.html`. Change
 
 ## Behavior
 
-- `fly.sh` and `/fly` enter Free Form. Its HUD identifies website exploration and offers Play Good Lift. The challenge hint is dismissible for the page visit. The paused menu has the four actual destinations, Resume, Game and Training cards, controls, sound availability, and a separate website exit.
+- `fly.sh` and `/fly` enter Free Form. Its HUD identifies website exploration and offers Play Good Lift. The HUD is one integrated card on phones; the former challenge popup is removed. The paused menu has the four actual destinations, Resume, Game and Training cards, controls, sound availability, and a separate website exit.
 - Game opens its prepared hub. Play starts the run. Escape toggles pause in Free Form, Game and Training. Practice Sky is explicitly unranked. Back remembers whether Free Form was paused; a direct entry has a website fallback.
 - Training retains its six lessons and animated/static previews. Pause shows the active lesson and observed phase. Selecting a different lesson changes only the preview; Resume continues the active attempt, Restart repeats it, and Start begins the selected lesson afresh. Opening menus and previews earns no progress.
 - The coach separates measured lesson progress from brake position. Its action, device cue, passive phase indicators, release instructions and handle callout use the existing structured requests. Original announcements, warnings, target feedback and bing remain. The actual nine steering phases include the intervening releases; preview steps cannot advance them.
@@ -26,3 +26,11 @@ Browser artifacts are in ignored `.artifacts/ui-revamp/`:
 | `candidate.json`, `verify-final.log`, `typecheck-final.log`, `focused-final.log`, `final-smoke-report.json` | Revision, source/build hashes and final verification output. |
 
 These are local Chromium and native emulated-touch receipts. Online behavior uses isolated UI fixtures and the repository's existing service/server tests; no public board data was submitted. Physical-device, hosted and release checks are separate.
+
+## Mobile hero and HUD follow-up
+
+The animated hero now loads on fresh mobile visits, with the poster retained for reduced motion, loading and failures. The HUD uses an integrated grid card on phones and a compact horizontal row on wider screens. The challenge popup is removed; paused Free Form return behavior is preserved. See [mobile hero and HUD QA](mobile-hero-hud-qa.md) for the current candidate and browser receipts.
+
+## Safety-only flight messages
+
+Free Form and Game now use compact safety alerts, with routine entry and navigation instruction overlays removed. Training keeps its full coach. Automatic travel and boundary correction use existing HUD telemetry. See [safety-only flight QA](safety-only-flight-qa.md) for the current implementation and acceptance receipts.

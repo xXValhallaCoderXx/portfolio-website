@@ -1,21 +1,18 @@
 /* The hub, pause and coaching share a hierarchy while the session owns every action. */
-.fj-hud { width: auto; }
-.fj-hud > dl { width: min(630px, calc(100% - 300px)); grid-template-columns: 1.1fr .8fr 1fr 1.1fr; min-height: 62px; gap: 12px; }
-.fj-mode-identity { display: flex; flex-direction: column; gap: 5px; padding-right: 10px; border-right: 1px solid #24405f; }
+.fj-hud-card { width: min(960px, 100%); grid-template-areas: 'identity instruments play tools'; grid-template-columns: max-content minmax(0, 1fr) max-content max-content; min-height: 62px; gap: 12px; padding: 8px 10px; }
+.fj-hud-heading, .fj-hud-readouts { display: contents; }
+.fj-instruments { grid-template-columns: .8fr 1.2fr 1fr; }
+.fj-mode-identity { grid-area: identity; display: flex; flex-direction: column; min-width: 0; gap: 5px; padding-right: 12px; border-right: 1px solid #24405f; }
 .fj-mode-identity b { color: #3ee6b0; font-size: 11px; letter-spacing: .14em; white-space: nowrap; }
 .fj-mode-identity span { color: #9fb2c6; font-size: 9px; line-height: 1.4; }
-.fj-hud > nav > .fj-play-good-lift { flex-direction: row; width: 174px; height: 62px; padding: 10px 14px; border: 1px solid #69b8ff; color: #04101f; background: #3b9eff; box-shadow: 0 4px #1c65a6; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .035em; }
-.fj-hud > nav > button { height: 62px; }
-.training .fj-hud > dl { width: 350px; grid-template-columns: 1.2fr 1fr 1.2fr; }
-.training .fj-hud > nav > [data-do='keys'] { width: 154px; flex-direction: row; gap: 8px; color: #3ee6b0; }
+.fj-hud .fj-play-good-lift { grid-area: play; flex-direction: row; gap: 6px; width: 174px; padding: 6px 10px; border-color: #69b8ff; color: #04101f; background: #3b9eff; box-shadow: 0 3px #1c65a6; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .035em; }
+.training .fj-hud-card, .cloudbase .fj-hud-card { width: min(640px, 100%); grid-template-areas: 'identity instruments tools'; grid-template-columns: max-content minmax(0, 1fr) max-content; }
+.training .fj-hud-card { width: min(540px, 100%); }
+.training .fj-instruments { grid-template-columns: .8fr 1.2fr; }
+.training .fj-hud nav > [data-do='keys'] { width: 124px; flex-direction: row; gap: 8px; color: #3ee6b0; }
 .training .fj-destination-metric, .training .fj-hud [data-do='map'] { display: none; }
-.cloudbase .fj-hud > dl { grid-template-columns: 1fr 1fr 1.1fr 1fr; }
-.fj-challenge-hint { position: absolute; z-index: 5; right: 12px; top: 88px; display: flex; gap: 12px; width: min(300px, calc(100% - 24px)); padding: 12px; box-sizing: border-box; border: 1px solid #3b9eff; border-radius: 12px; background: #071323f2; color: #b9c8d8; font-size: 12px; }
-.fj-challenge-hint b { color: #8cc6ff; font-size: 10px; letter-spacing: .1em; }
-.fj-challenge-hint p { margin: 6px 0 0; line-height: 1.5; }
-.fj-challenge-hint button { flex: 0 0 44px; width: 44px; height: 44px; border: 1px solid #24405f; border-radius: 8px; background: transparent; color: #b9c8d8; cursor: pointer; }
-.flight-paused .fj-challenge-hint, .fjord-stage:not([data-flight-context='free-form']) .fj-challenge-hint { display: none; }
-.fjord-stage:not(.playing) .fj-challenge-hint { display: none; }
+.cloudbase .fj-instruments { grid-template-columns: .9fr 1.2fr 1fr; }
+.fj-hud-card:has(.fj-instruments[hidden]) .fj-mode-identity { display: none; }
 .fj-launch.fj-launch-game { width: min(1000px, calc(100% - 40px)); height: min(720px, calc(100% - 40px)); }
 .fj-hub-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .fj-hub-card { display: flex; flex-direction: column; min-width: 0; padding: 20px; }
@@ -41,7 +38,7 @@
 .fj-launch.fj-arcade .fj-brief-actions { flex-direction: row; align-items: center; }
 .fj-launch.fj-arcade .fj-brief-actions > button { width: auto; flex: 0 1 auto; }
 .fj-launch.fj-launch-training .fj-brief-actions > .primary { flex: 1 1 100%; }
-.preparing-sky .fj-hud, .preparing-sky .fj-challenge-hint { visibility: hidden; }
+.preparing-sky .fj-hud { visibility: hidden; }
 .fj-arcade-pause .fj-keys-more > button { width: auto; padding: 8px 14px; }
 .fj-arcade-pause .fj-train-action { background: #3ee6b0; color: #04140f; border-color: #3ee6b0; box-shadow: 0 4px #1e9b74; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; }
 .fj-keys.fj-arcade-pause { display: flex; flex-direction: column; gap: 16px; width: min(1060px, calc(100% - 40px)); height: min(800px, calc(100% - 40px)); max-height: none; padding: 24px 28px; background: #050a13f5; }
@@ -129,25 +126,38 @@
 .fj-handle-callout b { display: block; font-size: 14px; letter-spacing: .1em; }
 .fj-handle-callout span { display: block; margin-top: 6px; color: #9fb2c6; font-size: 10px; line-height: 1.4; }
 @media (min-width: 1200px) and (min-height: 600px) {
-  .training .fj-coach { top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); }
+  .training .fj-coach { left: 50%; transform: translateX(-50%); }
+}
+@media (max-width: 1000px) {
+  .fj-hud .fj-destination-metric { display: none; }
+  .fj-instruments { grid-template-columns: .8fr 1.2fr; }
+  .fj-hud .fj-play-good-lift { width: 140px; font-size: 10px; }
+}
+@media (max-width: 767px) and (min-height: 481px) {
+  .fj-hud-card, .training .fj-hud-card, .cloudbase .fj-hud-card { width: 100%; grid-template-areas: none; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 9px; }
+  .fj-hud-heading, .fj-hud-readouts { display: grid; grid-template-columns: minmax(0, 1fr) max-content; align-items: center; gap: 10px; min-width: 0; }
+  .fj-mode-identity, .fj-play-good-lift, .fj-instruments, .fj-hud nav { grid-area: auto; }
+  .fj-mode-identity { padding: 0; border: 0; gap: 3px; }
+  .fj-mode-identity b { font-size: 10px; }
+  .fj-mode-identity span { font-size: 9px; }
+  .fj-instruments { gap: 8px; }
+  .fj-instruments dd { font-size: 15px; }
+  .fj-hud .fj-play-good-lift { grid-area: auto; width: 140px; justify-self: end; }
+  .training .fj-hud-card, .cloudbase .fj-hud-card { grid-template-areas: 'identity tools' 'instruments instruments'; grid-template-columns: minmax(0, 1fr) max-content; }
+  .training .fj-hud-heading, .training .fj-hud-readouts, .cloudbase .fj-hud-heading, .cloudbase .fj-hud-readouts { display: contents; }
+  .training .fj-mode-identity, .cloudbase .fj-mode-identity { grid-area: identity; }
+  .training .fj-instruments, .cloudbase .fj-instruments { grid-area: instruments; }
+  .training .fj-hud nav, .cloudbase .fj-hud nav { grid-area: tools; }
+  .cloudbase .fj-hud nav [data-do='map'] { display: none; }
+  .training .fj-hud nav > [data-do='keys'] { width: 124px; }
+  .fj-telemetry { font-size: 10px; }
+}
+@media (max-width: 360px) and (min-height: 481px) {
+  .fj-hud-heading, .fj-hud-readouts { column-gap: 8px; }
+  .fj-hud .fj-play-good-lift { width: 126px; }
+  .fj-instruments dd { font-size: 14px; }
 }
 @media (max-width: 767px) {
-  .fj-hud > dl, .training .fj-hud > dl, .cloudbase .fj-hud > dl { width: calc(100% - 104px); min-height: 104px; padding: 50px 9px 9px; grid-template-columns: 1fr 1.25fr; gap: 6px; }
-  .fj-hud .fj-mode-identity { position: absolute; top: 7px; left: 9px; right: 0; padding: 0; border: 0; gap: 3px; }
-  .fj-mode-identity b { font-size: 10px; }
-  .fj-mode-identity span { max-width: 130px; font-size: 9px; }
-  .fj-hud .fj-destination-metric { display: none; }
-  .fj-hud > nav { top: 52px; gap: 6px; }
-  .fj-hud > nav > button { width: 44px; height: 52px; }
-  .fj-hud > nav > .fj-play-good-lift { position: absolute; top: -52px; right: 0; width: 140px; height: 44px; padding: 6px; font-size: 10px; }
-  .cloudbase .fj-hud > dl { grid-template-columns: 1fr 1.1fr 1fr; width: calc(100% - 54px); }
-  .cloudbase .fj-hud > nav [data-do='map'] { display: none; }
-  .training .fj-hud > dl { width: calc(100% - 54px); }
-  .training .fj-hud > nav > [data-do='keys'] { width: 44px; flex-direction: column; gap: 3px; }
-  .training .fj-hud > nav > [data-do='keys'] > span { max-width: 42px; white-space: normal; font-size: 8px; }
-  .fj-telemetry { font-size: 10px; }
-  .fj-challenge-hint { top: 155px; right: 12px; width: min(300px, calc(100% - 24px)); }
-  .fjord-stage:has(.fj-challenge-hint:not([hidden])) .fj-drag-tip { display: none; }
   .fj-hub-cards { grid-template-columns: 1fr; gap: 16px; }
   .fj-hub-card { padding: 16px; }
   .fj-hub-card h2 { font-size: 18px; }
@@ -187,13 +197,13 @@
   .fj-handle-callout span { margin-top: 3px; font-size: 10px; }
 }
 @media (max-height: 480px) and (min-width: 600px) {
-  .fj-hud > dl, .training .fj-hud > dl { width: 330px; min-height: 52px; padding: 6px 9px; grid-template-columns: 1.2fr 1fr 1fr; }
-  .fj-hud .fj-mode-identity { position: static; border-right: 1px solid #24405f; }
+  .fj-hud-card { min-height: 54px; gap: 8px; padding: 4px 8px; }
+  .fj-mode-identity { gap: 3px; padding-right: 8px; }
+  .fj-mode-identity b { font-size: 10px; }
+  .fj-mode-identity span { font-size: 8px; }
+  .fj-instruments { gap: 8px; }
+  .fj-instruments dd { font-size: 15px; }
   .fj-hud .fj-destination-metric { display: none; }
-  .fj-hud > nav { top: 0; }
-  .fj-hud > nav > button { height: 52px; }
-  .fj-hud > nav > .fj-play-good-lift { position: static; height: 52px; }
-  .fj-challenge-hint { top: 80px; width: 260px; }
   .fj-launch.fj-launch-game { inset: 12px; width: calc(100% - 24px); height: calc(100% - 24px); padding: 12px 18px; }
   .fj-launch-game .fj-launch-scroll { display: flex; }
   .fj-hub-cards { grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -216,5 +226,5 @@
   .fj-handle-callout span { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .fj-coach *, .fj-hub-card *, .fj-challenge-hint * { transition: none; animation: none; }
+  .fj-coach *, .fj-hub-card * { transition: none; animation: none; }
 }

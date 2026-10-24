@@ -7,25 +7,30 @@ export const FLIGHT_MARKUP = /* html */ `
   <canvas class="fj-scene"></canvas>
   <div class="fj-veil"></div><div class="fj-strike"></div><div class="fj-labels"></div>
   <div class="fj-hud" hidden>
-    <dl aria-label="Flight instruments">
-      <div class="fj-mode-identity"><b data-flight-mode>FREE FORM</b><span data-flight-purpose>explore the website</span></div>
-      <div class="fj-metric"><dt data-alt-label>ALT</dt><dd data-hud="alt"></dd></div>
-      <div class="fj-metric"><dt>CLIMB</dt><dd data-hud="vario"></dd></div>
-      <div class="fj-metric fj-destination-metric"><dt>NEXT</dt><dd data-hud="destination"></dd></div>
-      <div class="fj-alt-progress" role="progressbar" aria-label="Altitude to next banking line" aria-valuemin="0" aria-valuemax="100" hidden><i></i></div>
-    </dl>
-    <nav aria-label="Flight tools">
-      <button class="fj-play-good-lift" data-do="cloudbase">▶ <span>Play Good Lift</span></button>
-      <button data-do="map" aria-label="Map, pauses the flight" aria-haspopup="dialog">${mapIcon}<span>map</span></button>
-      <button data-do="keys" aria-label="Menu, pauses the flight" aria-expanded="false" aria-haspopup="dialog">${menuIcon}<span>menu</span></button>
-    </nav>
+    <div class="fj-hud-card">
+      <div class="fj-hud-heading">
+        <div class="fj-mode-identity"><b data-flight-mode>FREE FORM</b><span data-flight-purpose>explore the website</span></div>
+        <button class="fj-play-good-lift" data-do="cloudbase">▶ <span>Play Good Lift</span></button>
+      </div>
+      <div class="fj-hud-readouts">
+        <dl class="fj-instruments" aria-label="Flight instruments">
+          <div class="fj-metric"><dt data-alt-label>ALT</dt><dd data-hud="alt"></dd></div>
+          <div class="fj-metric"><dt>CLIMB</dt><dd data-hud="vario"></dd></div>
+          <div class="fj-metric fj-destination-metric"><dt>NEXT</dt><dd data-hud="destination"></dd></div>
+          <div class="fj-alt-progress" role="progressbar" aria-label="Altitude to next banking line" aria-valuemin="0" aria-valuemax="100" hidden><i></i></div>
+        </dl>
+        <nav aria-label="Flight tools">
+          <button data-do="map" aria-label="Map, pauses the flight" aria-haspopup="dialog">${mapIcon}<span>map</span></button>
+          <button data-do="keys" aria-label="Menu, pauses the flight" aria-expanded="false" aria-haspopup="dialog">${menuIcon}<span>menu</span></button>
+        </nav>
+      </div>
+    </div>
     <div class="fj-telemetry" aria-label="Secondary flight instruments">
       <span data-hud="belt"></span><span data-hud="speed"></span><span data-hud="wind"></span><span data-hud="next"></span><span data-flight-status hidden></span>
       <span class="fj-thermal-air" hidden><span>THERMAL AIR</span><span class="fj-thermal-track" role="meter" aria-label="Thermal air strength" aria-valuemin="0" aria-valuemax="6"><i></i></span><span data-thermal-trend>STEADY</span></span>
       <span class="fj-brake-pair" hidden><span>L <span data-brake-side="left" role="meter" aria-label="Left brake" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></span></span><span>R <span data-brake-side="right" role="meter" aria-label="Right brake" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></span></span></span>
     </div>
   </div>
-  <aside class="fj-challenge-hint" hidden><div><b>WANT A CHALLENGE?</b><p>Climb a line every 150 m, bank tricks, beat the bot.</p></div><button data-do="dismiss-challenge" aria-label="Dismiss challenge hint">×</button></aside>
   <section class="fj-keys fj-arcade-pause" role="dialog" aria-modal="true" aria-labelledby="fj-pause-title" tabindex="-1" hidden>
     <header class="fj-pause-heading"><div><b id="fj-pause-title" class="fj-paused-badge">❚❚ PAUSED</b><span class="fj-pause-summary" data-pause-summary></span></div><button data-do="resume" aria-label="Resume flight">×</button></header>
     <div class="fj-menu-content">
@@ -85,7 +90,6 @@ export const FLIGHT_MARKUP = /* html */ `
     <button data-do="training-choose" data-coach="cancel" hidden>Choose lesson</button>
     <span data-coach="announce" class="fj-visually-hidden" aria-live="polite" aria-atomic="true"></span>
   </section>
-  <div class="fj-drag-tip" role="status" hidden><span class="fj-action-symbol" aria-hidden="true">◇</span><div><small>AIRBORNE</small><strong>Small pulls, smooth flight</strong><span class="fj-touch-help">pull either handle down · lift your thumb to release</span><span class="fj-key-help">A / D turn · Space brakes · Q / E swing · release to glide</span><span class="fj-mouse-help">drag sideways to turn · down to brake · let go to glide</span></div></div>
   <div class="fj-brake-handles" aria-label="Flight brake handles" hidden>
     ${(['left', 'right'] as const).map(side => `<div class="fj-brake-handle" data-hand="${side}">
       <span class="fj-handle-label">${side.toUpperCase()} BRAKE</span>

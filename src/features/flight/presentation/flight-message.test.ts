@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { essentialFlightMessage, flightMessageOwner, flightSecondaryOwner, type FlightMessageFacts } from './flight-message.ts';
-const facts: FlightMessageFacts = { blocked: false, urgent: false, coach: true, judges: false, notice: true, hint: true, intro: false };
+import { essentialFlightMessage, safetyAlertText, flightMessageOwner, flightSecondaryOwner, type FlightMessageFacts } from './flight-message.ts';
+const facts: FlightMessageFacts = { blocked: false, urgent: false, coach: true, judges: false, notice: true, hint: true };
 const flying = { stallLoad: 0, stall: 0, tuck: 0, wingPhase: 'flying' as const };
 test('normal flight keeps real hazards and preventive physical safety before a full stall', () => {
   const safety = { state: 'recover', owner: 'safety' as const };
@@ -21,13 +21,28 @@ test('urgent catch and reversal teaching do not return to normal flight', () => 
     assert.equal(essentialFlightMessage(instruction, { ...flying, stallLoad: .8 }), null);
   }
 });
-test('a valid flight instruction stays visible through judging and introduction', () => {
-  assert.equal(flightMessageOwner({ ...facts, urgent: true, judges: true, intro: true }), 'coach');
+test('a valid safety alert takes precedence over judging and notices', () => {
+  assert.equal(flightMessageOwner({ ...facts, urgent: true, judges: true }), 'coach');
   assert.equal(flightMessageOwner({ ...facts, judges: true }), 'coach');
-  assert.equal(flightMessageOwner({ ...facts, intro: true }), 'coach');
   assert.equal(flightMessageOwner(facts), 'coach');
   assert.equal(flightMessageOwner({ ...facts, coach: false, judges: true }), 'judges');
-  assert.equal(flightMessageOwner({ ...facts, coach: false, intro: true }), 'intro');
+});
+
+test('hazard labels do not expose the routine coaching instruction they interrupt', () => {
+  assert.equal(safetyAlertText({ warning: true, warningLabel: 'FOG CLOSING', owner: 'navigation', title: 'CIRCLE LEFT',
+    detail: 'Keep working brake and follow the thermal.', feedback: 'Climb above the fog.' }), 'FOG CLOSING');
+  assert.equal(safetyAlertText({ warning: true, owner: 'acro', title: 'REVERSE NOW' }), 'Flight safety');
+  assert.equal(safetyAlertText({ state: 'hazard', title: 'RAVENS APPROACHING' }), 'RAVENS APPROACHING');
+});
+
+test('safety text preserves phase-specific full-stall actions, including an attached warning', () => {
+  for (const title of ['HOLD DEEP BRAKE · WAIT UNDER THE WING', 'NORMAL BRAKE FOR BACKFLY',
+    'BACKFLY STABLE · RELEASE TO EXIT', 'FRONTAL COLLAPSE · HANDS UP', 'WING REOPENING · KEEP BRAKE RELEASED']) {
+    const recovery = { owner: 'safety' as const, state: 'recover', title };
+    assert.equal(safetyAlertText(recovery), title);
+    assert.equal(safetyAlertText({ ...recovery, warning: true, warningLabel: 'FOG CLOSE' }), `FOG CLOSE · ${title}`);
+  }
+  assert.equal(safetyAlertText({ state: 'hazard', title: 'FOG CLOSE', warningLabel: 'FOG CLOSE' }), 'FOG CLOSE');
 });
 
 test('judges use secondary feedback while safety and overlays suppress it without a queue', () => {

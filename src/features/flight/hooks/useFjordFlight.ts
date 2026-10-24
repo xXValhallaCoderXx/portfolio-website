@@ -7,9 +7,8 @@ import type { FlightPanel } from '../flight.models.ts';
 import type { TrainingLessonId } from '../../../domains/good-lift/training-session.ts';
 type FlightEngine = ReturnType<typeof createGame>;
 
-// The live backdrop is only worth its download where it will run well and is wanted.
-const wantsBackdrop = () =>
-  !matchMedia('(prefers-reduced-motion: reduce)').matches && !matchMedia('(pointer: coarse)').matches && innerWidth >= 760;
+// The same scene frames the hero on every screen; reduced motion keeps its poster.
+const wantsBackdrop = () => !matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** React lifecycle owns subscriptions and stale-load cancellation; engine services own flight. */
 export function useFjordFlight({ flying, armed, target, lost, game: address, warping, onArm, onExit, onPortal, onFjord, onProgress, sectionBodies }: FjordProps, onTraining?: (lesson?: TrainingLessonId) => void) {
@@ -17,6 +16,7 @@ export function useFjordFlight({ flying, armed, target, lost, game: address, war
   const game = useRef<FlightEngine | null>(null);
   const loading = useRef<Promise<FlightEngine | null> | null>(null);
   const engineLoadFailed = useRef(false);
+  const visible = useRef(true);
   const mount = useRef(0);
   const lastPlace = useRef<SectionId | null>(null);
   const skipped = useRef(false); // the visitor skipped the missing page's cutscene before it could start
@@ -62,6 +62,7 @@ export function useFjordFlight({ flying, armed, target, lost, game: address, war
           setPanel(next);
         },
       });
+      game.current.setVisible(visible.current);
       engineLoadFailed.current = false;
       setLive(true);
       return game.current;
@@ -73,9 +74,12 @@ export function useFjordFlight({ flying, armed, target, lost, game: address, war
   }, []);
 
   useEffect(() => {
-    if (wantsBackdrop()) void load().catch(() => { /* An optional backdrop can remain still. */ });
-    const seen = new IntersectionObserver(([entry]) => game.current?.setVisible(entry.isIntersecting));
+    const seen = new IntersectionObserver(([entry]) => {
+      visible.current = entry.isIntersecting;
+      game.current?.setVisible(visible.current);
+    });
     if (stage.current) seen.observe(stage.current);
+    if (wantsBackdrop()) void load().catch(() => { /* An optional backdrop can remain still. */ });
     return () => {
       mount.current += 1;
       seen.disconnect();

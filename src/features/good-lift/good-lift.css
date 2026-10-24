@@ -4,35 +4,43 @@
    the rune stones, and the glow of Gjallarhorn once it has sounded. */
 
 /* The bar's row only shows in a run. */
-.fj-hud > dl .fj-run {
+.fj-instruments .fj-run {
   display: none;
 }
 
-.cloudbase .fj-hud > dl .fj-bar-metric {
+.cloudbase .fj-instruments .fj-bar-metric {
   display: block;
 }
 
-.fj-hud > dl .fj-trick { display: none !important; }
+.fj-instruments .fj-trick { display: none !important; }
 
-.cloudbase .fj-hud > dl [data-hud='bar'] {
+.cloudbase .fj-instruments [data-hud='bar'] {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 .25em;
+  white-space: normal;
   color: var(--text);
 }
 
-.cloudbase .fj-hud > dl [data-hud='bar'].doubled {
+.cloudbase .fj-instruments [data-hud='bar'] .fj-metric-unit { white-space: nowrap; }
+
+.cloudbase .fj-instruments [data-hud='bar'].doubled {
   color: var(--ember);
 }
 
 /* The style's row, once a set of tricks has landed: never part of the lifting, so in plain white,
    flaring cyan as a set lands. */
-.cloudbase .fj-hud > dl:not([data-style]) .fj-trick {
+.cloudbase .fj-instruments:not([data-style]) .fj-trick {
   display: none;
 }
 
-.cloudbase .fj-hud > dl [data-hud='style'] {
+.cloudbase .fj-instruments [data-hud='style'] {
   color: var(--text);
 }
 
-.cloudbase .fj-hud > dl [data-hud='style'].lifted {
+.cloudbase .fj-instruments [data-hud='style'].lifted {
   animation: fj-lifted 0.6s ease-out both;
 }
 
@@ -94,7 +102,7 @@
 /* ---- feeling for the core: a surge flares the vario, and a rep to depth stamps the bar */
 
 /* For whoever has the sound off: the climb's readout flares white as the lift surges. */
-.cloudbase .fj-hud > dl [data-hud='vario'].surge {
+.cloudbase .fj-instruments [data-hud='vario'].surge {
   animation: fj-surge 0.7s ease-out both;
 }
 
@@ -106,7 +114,7 @@
 }
 
 /* The moment to turn into a core: the climb's readout flares cyan, unlike the surge's ember. */
-.cloudbase .fj-hud > dl [data-hud='vario'].lifted {
+.cloudbase .fj-instruments [data-hud='vario'].lifted {
   animation: fj-lifted 0.6s ease-out both;
 }
 
@@ -117,25 +125,27 @@
   }
 }
 
-/* DEPTH, stamped just after the bar's weight and gone again. It takes no room of its own, so the
-   readouts never shift for it. Hidden or shown, it is not read out with the bar: the hint says it. */
-.cloudbase .fj-hud > dl [data-hud='bar']::after {
+/* DEPTH shares the label row, keeping the stamp inside even the narrowest bar metric. It takes
+   no room of its own and is not read out with the weight: the hint says it. */
+.cloudbase .fj-instruments [data-hud='bar']::after {
   content: 'depth';
   content: 'depth' / '';
-  display: inline-block;
-  width: 0;
-  margin-left: 0.8em;
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 3px);
+  font-size: 8px;
+  line-height: 1;
   color: var(--cyan);
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.04em;
   text-shadow: 0 0 8px rgba(45, 212, 238, 0.7);
   text-transform: uppercase;
   white-space: nowrap;
   opacity: 0;
-  transform-origin: left center;
+  transform-origin: right center;
 }
 
-.cloudbase .fj-hud > dl [data-hud='bar'].depth::after {
+.cloudbase .fj-instruments [data-hud='bar'].depth::after {
   animation: fj-depth 1.4s ease-out both;
 }
 
@@ -169,7 +179,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cloudbase .fj-hud > dl [data-hud='bar'].depth::after {
+  .cloudbase .fj-instruments [data-hud='bar'].depth::after {
     animation-name: fj-depth-still;
   }
 }
@@ -178,11 +188,11 @@
 
 /* Its own words for whoever hears the readouts, where the browser can say them; the rune alone
    where it cannot. It is not part of the bar's text, which stays the weight alone. */
-.cloudbase .fj-hud > dl [data-hud='bar'][data-rune]::before {
+.cloudbase .fj-instruments [data-hud='bar'][data-rune]::before {
   content: attr(data-rune);
   content: attr(data-rune) / attr(data-name);
   display: inline-block;
-  margin-right: 0.55em;
+  flex: 0 0 auto;
   color: #5ee6ff;
   font-weight: 700;
   text-shadow: 0 0 8px rgba(94, 230, 255, 0.75);
@@ -190,7 +200,7 @@
 }
 
 /* Taken: the rune lands beside the bar with a flash, as DEPTH does. */
-.cloudbase .fj-hud > dl [data-hud='bar'].blessed::before {
+.cloudbase .fj-instruments [data-hud='bar'].blessed::before {
   animation: fj-blessed 1.2s ease-out both;
 }
 
@@ -207,7 +217,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cloudbase .fj-hud > dl [data-hud='bar'].blessed::before {
+  .cloudbase .fj-instruments [data-hud='bar'].blessed::before {
     animation: none;
   }
 }
@@ -858,7 +868,7 @@
 /* Everywhere else a rune shows (the blessing beside the bar, the hint line, the stones' labels, the
    sheet), the game's runes come first for those characters alone, and the page's own type for the
    rest. */
-.cloudbase .fj-hud > dl [data-hud='bar'][data-rune]::before,
+.cloudbase .fj-instruments [data-hud='bar'][data-rune]::before,
 .cloudbase .fj-hint,
 .fj-gate b,
 .good-lift-rune {
