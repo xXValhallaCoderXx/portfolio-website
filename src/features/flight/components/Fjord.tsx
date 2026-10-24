@@ -247,7 +247,7 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
           onTraining={openTraining}
           onFjord={() => onFjord()}
           onPage={() => onExit(null)}
-          onInitials={(text) => game.current?.setInitials(text)}
+          onSubmitScore={(text) => game.current?.submitScore(text, { at: result.at, seed: result.seed }) ?? Promise.resolve(undefined)}
           music={music}
           onMusic={() => game.current?.toggleMusic()}
           bots={bots}

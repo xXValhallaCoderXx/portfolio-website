@@ -28,6 +28,11 @@ export interface WorldResult {
   at: number; seed: number; day: number; rows: WorldRow[]; rank: number;
   sent?: { ok: boolean; why?: string; rank?: number } | null;
   removed?: boolean; stays?: boolean; failed?: boolean;
+  loading?: boolean; readFailed?: boolean;
+}
+export interface ScoreSubmission {
+  phase: 'submitting' | 'submitted' | 'not-best' | 'rejected' | 'failed' | 'withdrawn';
+  initials: string; why?: string; rank?: number;
 }
 export interface RunResult extends RunSheet {
   kind: string; day: number; label: string; at: number;
@@ -36,7 +41,7 @@ export interface RunResult extends RunSheet {
   board: { rows: BoardRow[]; mine: string } | null;
   target: ChallengeTarget | null; log: string; link: string; verified: boolean; verifying: boolean;
   byname: string; verse: string; score?: number; newBest?: boolean;
-  initials?: string; pilot?: string; online?: boolean; optIn?: boolean;
+  initials?: string; pilot?: string; online?: boolean; submission?: ScoreSubmission;
   kit?: KitSheet; music?: boolean;
   blessing?: { rune: number; sign: string; name: string; line: number } | null;
   runes?: { rune: number; sign: string; name: string }[]; beast?: string | null;

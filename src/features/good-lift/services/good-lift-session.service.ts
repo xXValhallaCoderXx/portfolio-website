@@ -6,10 +6,10 @@ import { randomSeed } from '../../../adapters/browser/random-seed.ts';
 import type { RunLog } from '../../../domains/good-lift/recorder.ts';
 import type { FlightInput } from '../../../domains/flight/models.ts';
 import type { ReplayResult } from './replay-work.service.ts';
-import type { RunSheet, ChallengeOutcome, BoardRow } from '../good-lift.models.ts';
+import type { RunSheet, ChallengeOutcome } from '../good-lift.models.ts';
 import { clearStore, learnTrainingLesson, readStore, recordRun, updateStore } from '../../../adapters/browser/good-lift-storage.service.ts';
 import { readKit, writeKit } from '../../../adapters/browser/kit-storage.service.ts';
-import type { GoodLiftHost, RunResult, BotResult, WorldResult, ResolvedSky, KitChoice, GameAddress } from '../good-lift.models.ts';
+import type { GoodLiftHost, RunResult, BotResult, ResolvedSky, KitChoice, GameAddress } from '../good-lift.models.ts';
 import { createRunVoices } from './run-audio.adapter.ts';
 // Good Lift: the game beyond the arch. Everything a run needs that the fjord does not (the run's
 // sky, ravens and storm clouds with their lightning, its gusts, the glide ring on its fog, the meet
@@ -31,7 +31,7 @@ import { createMeetView } from '../presentation/meet-view.ts';
 import { resolveSky, seedFor, skyId } from '../../../domains/good-lift/daily.ts';
 import { featsFor } from '../../../domains/good-lift/meet-card.ts';
 import { DAY_MS, dailyNumber, dayOf, gameHref } from '../../../domains/good-lift/good-lift-address.ts';
-import { earnFeats, keepEarned, kitAfterRun, kitSheet, setInitials as nameRuns } from '../../../domains/progression/good-lift-store.ts';
+import { earnFeats, keepEarned, kitAfterRun, kitSheet } from '../../../domains/progression/good-lift-store.ts';
 import { createFlightCoach } from '../../../domains/coaching/flight-coach.ts';
 import { createTrainingSession } from '../../../domains/good-lift/training-session.ts';
 import { createTrainingAir } from '../presentation/training-air.ts';
@@ -61,7 +61,8 @@ import { summariseRun } from '../../../domains/good-lift/meet-sheet.ts';
 import { createMusic } from '../presentation/music.ts';
 import { createSurge } from '../../../domains/good-lift/run-surge.ts';
 import { createEntry } from '../../../domains/good-lift/run-entry.ts';
-import { createOnlineBoard, placeOf, takenOff } from './board-online.service.ts';
+import { createOnlineBoard } from './board-online.service.ts';
+import { createResultBoard } from './result-board.service.ts';
 import { createLightning } from '../presentation/run-lightning.ts';
 import { createGlideRing } from '../presentation/run-glide.ts';
 import { createRunCoachEnvironment, runCoachHazard, runCoachWarning, thermalRideIdentity } from './coach-run.service.ts';
@@ -139,7 +140,7 @@ const TITLE = Object.freeze({ full: 3.6, short: 2.2 });
  *                           for its board and any feat that earned (see askBots)
  *   onWorld(world)          the world board has answered for the Daily Sky the meet sheet shows: its
  *                           best runs, where this browser stands and what became of the run sent
- *                           (see shareWorld)
+ *                           (see result-board.service.ts)
  *   kit(), wear(kit)        what the visitor flies in ({ wing, harness, helmet, chalk }, wing-kit.js), and
  *                           dressing the glider in another; wear returns the kit now worn
  */
@@ -192,7 +193,7 @@ export function createGoodLift(host: GoodLiftHost) {
   // The last run's log and sheet, for whoever wants to check it (QA replays it elsewhere).
   let lastRun: { log: string; written: string; again: ReplayResult | null; result: RunSheet; recorded: number; steps: number } | null = null;
   // The result the meet sheet was handed. The map opened over the sheet and closed draws it again
-  // from this, so what the pilot changes there (initials, the opt-in, the kit) is kept in it too.
+  // from this, so the submitted name, submission state and kit are kept in it too.
   let shownResult: RunResult | null = null;
   // Events already answered with sound, a flare or an animation this run.
   const seen = {
@@ -223,13 +224,9 @@ export function createGoodLift(host: GoodLiftHost) {
   let owed: (RankedScore & { seed: number }) | null = null;
   let botsSaid: BotResult | null = null;
 
-  // The world board (board-online.js), if the build names its function; off, nothing is fetched.
-  // `worldAsks` counts the sheets it has been asked for, so an answer that comes back after its
-  // sheet was put away (a run begun, the pilot gone) is dropped; `worldSaid` is what it last told a
-  // sheet, for QA and for taking this browser's run off again.
+  // Leaderboard reads and explicit submissions share the result's lifetime, never its physics.
   const online = createOnlineBoard({ url: import.meta.env.VITE_BOARD_URL });
-  let worldAsks = 0;
-  let worldSaid: WorldResult | null = null;
+  const resultBoard = createResultBoard({ online, onResult: result => host.onResultUpdate?.(result), onWorld: value => host.onWorld?.(value) });
 
   // The run's own readouts, made once and taken away by dispose().
   const rows = $('.fj-hud dl');
@@ -285,7 +282,7 @@ export function createGoodLift(host: GoodLiftHost) {
     // the world board's answer for the last one, which has no sheet left to show it.
     bots.pause();
     shownResult = null;
-    worldAsks += 1;
+    resultBoard.show(null);
     startRun(world, seed);
     recorder.reset();
     whole = true;
@@ -341,7 +338,7 @@ export function createGoodLift(host: GoodLiftHost) {
     bots.pause();
     cancelChecks();
     shownResult = null;
-    worldAsks += 1;
+    resultBoard.show(null);
   }
 
   // The music's switch: shown only in the game, and saying whether the music is on.
@@ -848,9 +845,8 @@ export function createGoodLift(host: GoodLiftHost) {
       verse: verseFor(sheet),
     };
     const { total, peak, lifts } = result;
-    // The initials the run goes under, read once: its log names its pilot by them, and only a run
-    // flown under initials its pilot opted in to the world board with goes up to it.
-    const { initials, optIn } = readStore();
+    // Remembered initials prefill the result form; publishing still requires an explicit Submit.
+    const { initials } = readStore();
     // A run recorded whole is its own proof: its log, replayed here and now, must come to the very
     // same sheet. Only then is it a link to race and a row on the board. (A touchdown's own step is
     // in the log but not in the run's count of steps flown, and a replay counts it the same way.)
@@ -901,13 +897,10 @@ export function createGoodLift(host: GoodLiftHost) {
     result.feats = { earned: stored.feats, fresh: outcome.feats, streak };
     result.board = kind === 'daily' ? { rows: rowsFor(stored.board, boardKey(SIM_VERSION, result.day)), mine: result.log } : null;
     result.initials = stored.initials;
-    // Who flew it, for the sheet's header: initials typed on the sheet name the runs after it, and
-    // change `initials` (setInitials), never this.
+    // A later explicit submission can name this finished recording without changing its flight.
     result.pilot = stored.initials;
-    // Whether the sheet has a world board to show beside this browser's, which is asked for below,
-    // and whether the initials are the pilot's opt-in to it, or were set before it was offered.
+    // Whether the build can read and publish to the Daily world leaderboard.
     result.online = online.on && kind === 'daily';
-    result.optIn = stored.optIn;
     // The kit it earned, announced by the sheet like the feats: a rung of tonnage crossed, or a feat
     // (kitAfterRun, which also holds the kit kept to what has been earned here). It is worked out
     // from the kit kept, never from one tried on from the console (fjord.wear), which is never
@@ -945,8 +938,8 @@ export function createGoodLift(host: GoodLiftHost) {
     // The bots fly the sky for the sheet; with no sheet to show, those still flying wait.
     if (record) askBots(result, stored.bots);
     else bots.pause();
-    if (record && result.online && !pendingReplay) shareWorld(result, result.board!.rows, !!initials && optIn).catch((error) => console.warn('Good Lift: the world board could not be asked.', error));
     shownResult = result;
+    resultBoard.show(record ? result : null);
     if (pendingReplay) pendingReplay.then((checked) => {
       receipt.again = checked;
       if ('error' in checked && checked.error === 'cancelled') return;
@@ -965,69 +958,9 @@ export function createGoodLift(host: GoodLiftHost) {
       // that run's sheet, start a world request, or move the player's focus.
       if (shownResult !== result) return;
       host.onResultUpdate?.(result);
-      if (result.online) shareWorld(result, result.board!.rows, !!initials && optIn).catch((error) => console.warn('Good Lift: the world board could not be asked.', error));
+      void resultBoard.refresh();
     });
     return result;
-  }
-
-  /**
-   * The world board for the sheet of a Daily Sky run (board-online.js): the run sent up first if its
-   * pilot opted in, then the day's board handed to the sheet through host.onWorld as { at, seed, day,
-   * rows, rank, sent, removed, stays }: the board's best runs, where this browser stands on it (0 for
-   * nowhere), what the function said of the run sent (null if none was), and (removeWorldRun) whether
-   * this browser's run was taken off or stays. `rows` is the day's local board, best first, and
-   * `optedIn` whether the run was flown under initials its pilot opted in with
-   * (good-lift-store.js setInitials). The run is sent only then, and only if it replayed here to its
-   * own sheet, was judged by the fog or a touchdown, and is this browser's best named run of the day
-   * so far: the world board keeps each device's best, so no other could better this browser's place
-   * on it. Never throws; offline or refused, the sheet just gets no world board.
-   */
-  async function shareWorld(result: RunResult, rows: readonly BoardRow[], optedIn: boolean) {
-    const ask = ++worldAsks;
-    const own = rows.filter((row) => row.via === 'me' && row.who);
-    const judged = isJudgedEnding(result.reason);
-    const sending = judged && optedIn && result.verified && own[0]?.log === result.log;
-    const sent = sending ? await online.send(result.log, result.day) : null;
-    if (ask !== worldAsks) return;
-    const board = sent?.board ?? (await online.board(result.day));
-    if (!board || ask !== worldAsks) return;
-    const found = await placeOf(board.rows, own.map((row) => row.log!));
-    if (ask !== worldAsks) return;
-    // A better run this device sent that its own board no longer holds (Reset progress clears it,
-    // and keeps the device token): the function names its place when it turns this one away.
-    const rank = found || (sent?.why === 'not-best' ? sent.rank : 0);
-    worldSaid = {
-      at: result.at, seed: result.seed, day: result.day, rows: board.rows, rank,
-      sent: sent && { ok: sent.ok, why: sent.why, rank: sent.rank },
-      removed: false,
-      stays: false,
-    };
-    host.onWorld?.(worldSaid!);
-  }
-
-  /**
-   * Takes this browser's run off the world board, for the day the sheet's world board shows, and
-   * tells the sheet: whether it went. A run of this browser's that went up from another browser
-   * stays, and the sheet says only that one can take it off (board-online.js takenOff). The
-   * initials still stand, so this browser's next best goes up again unless they are cleared.
-   */
-  async function removeWorldRun(): Promise<boolean> {
-    const shown = worldSaid;
-    if (!shown || shown.removed || shown.stays) return false;
-    const ask = worldAsks;
-    // A browser that has never sent a run has no token to take one down with: the row the sheet
-    // matched to it is a copy another browser sent, and it stays.
-    const taken = online.token ? await online.remove(shown.day).catch(() => null) : { ok: true, removed: 0, board: null };
-    if (ask !== worldAsks) return false;
-    // Offline, slow or refused, the sheet says it could not be done, and the button asks again.
-    if (!taken?.ok) {
-      worldSaid = { ...shown, failed: true };
-      host.onWorld?.(worldSaid!);
-      return false;
-    }
-    worldSaid = { ...shown, ...takenOff(shown, taken), sent: null, failed: false };
-    host.onWorld?.(worldSaid!);
-    return !!worldSaid!.removed;
   }
 
   /**
@@ -1066,21 +999,6 @@ export function createGoodLift(host: GoodLiftHost) {
     }
     botsSaid = landing(result, scores, fresh);
     host.onBots?.(botsSaid!);
-  }
-
-  /**
-   * The initials the day's board writes this browser's runs under: '' or three letters. Typed where
-   * the sheet says they put this browser's best of each day on the world board, as it says whenever
-   * the build names one, they are the pilot's opt-in to it (good-lift-store.js setInitials).
-   */
-  function setInitials(text: string|number|null|undefined) {
-    const named = updateStore((store) => nameRuns(store, text, { world: online.on }));
-    if (shownResult) {
-      const stored = readStore();
-      shownResult.initials = stored.initials;
-      shownResult.optIn = stored.optIn;
-    }
-    return named;
   }
 
   /**
@@ -1155,6 +1073,7 @@ export function createGoodLift(host: GoodLiftHost) {
   function dispose() {
     cancelChecks();
     shownResult = null;
+    resultBoard.show(null);
     bots.dispose();
     music.dispose();
     view.dispose();
@@ -1241,7 +1160,8 @@ export function createGoodLift(host: GoodLiftHost) {
   }
 
   return {
-    begin, step, want, draw, sounds, hud, finish, dispose, last, setInitials, leave, toggleMusic, removeWorldRun, chooseKit,
+    begin, step, want, draw, sounds, hud, finish, dispose, last, leave, toggleMusic, chooseKit,
+    submitScore: resultBoard.submit, removeWorldRun: resultBoard.remove,
     /** A touch or a key: a play of the music the browser refused is tried again. */
     nudgeMusic: () => music.nudge(),
     get readouts() { return readouts(); },
@@ -1270,7 +1190,7 @@ export function createGoodLift(host: GoodLiftHost) {
      * The world board: whether the build names one, whether this browser has a device token yet (it
      * makes one as it first sends a run), the sheets asked for and what it last told one.
      */
-    get worldBoard() { return { on: online.on, device: online.token !== null, asks: worldAsks, said: worldSaid }; },
+    get worldBoard() { return { on: online.on, device: online.token !== null, asks: resultBoard.asks, said: resultBoard.world }; },
     get sky() { return sky; },
     get meet() { return meet; },
     get bells() { return bells; },

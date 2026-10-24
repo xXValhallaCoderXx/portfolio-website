@@ -392,8 +392,6 @@
 .good-lift-result .good-lift-board li.mine { border: 2px solid #29c7e3; background: #29c7e30d; }
 .good-lift-result .good-lift-board li.bot { border-style: dashed; }
 .good-lift-result .good-lift-board-head { margin-bottom: 10px; color: #8cc6ff; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
-.good-lift-result .good-lift-initials { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; color: #29c7e3; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
-.good-lift-result .good-lift-initials > input { width: 5.5ch; min-height: 48px; padding: 4px 10px; border: 2px solid #29c7e3; border-radius: 9px; background: #0b1424; color: #e8f1fa; font-size: 23px; font-weight: 800; letter-spacing: .15em; }
 .good-lift-result .good-lift-kit-progress { margin-bottom: 16px; padding: 14px; border: 1px solid #24405f; border-radius: 12px; background: #0b1424; }
 .good-lift-result .good-lift-tonnage { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px !important; }
 .good-lift-tonnage > span { color: #9fb2c6; font-size: 9px; letter-spacing: .1em; }

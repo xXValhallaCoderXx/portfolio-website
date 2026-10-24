@@ -5,8 +5,8 @@
 // Firebase SDK, every request given up after ONLINE.wait, and offline, refused, slow or broken,
 // what comes back is null and the sheet shows this browser's board alone, as it always has.
 //
-// Which runs are sent is good-lift.js's to decide: only those flown under initials, which is how a
-// pilot opts in. Asking for a day's board sends nothing of anyone's but the day.
+// The result controller sends only after the player explicitly submits a finished score. Asking
+// for a day's board sends nothing of anyone's but the day.
 import { runId } from '../../../adapters/crypto/run-identity.service.ts';
 import type { WorldRow } from '../../../domains/good-lift/board.types.ts';
 import type { StoragePort } from '../../../adapters/browser/storage.port.ts';
@@ -136,7 +136,7 @@ const base64url = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).rep
  *                 at once and without asking for a device that has never sent a run
  *   token         this device's token as it stands, or null before it has sent anything
  *
- * The token is made the first time a run is sent: a visitor who never opts in never has one.
+ * The token is made the first time a run is submitted: reading a board never creates one.
  */
 export type BoardFetch = (url: string, init: RequestInit) => Promise<{ json(): Promise<unknown> }>;
 export interface OnlineBoardOptions {

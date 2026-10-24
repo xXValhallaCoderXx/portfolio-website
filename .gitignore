@@ -2,6 +2,10 @@ node_modules/
 dist/
 .artifacts/
 
+# Local Vite configuration, including the leaderboard used by this checkout.
+.env.local
+.env.*.local
+
 # The world board's function: its packages, and the bundle tools/build-functions.ts makes of it.
 functions/node_modules/
 functions/lib/

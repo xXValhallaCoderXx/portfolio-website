@@ -89,7 +89,7 @@ const TRAINING = Object.freeze({ kind: 'training', sky: null, vs: null, bad: nul
  *                                     askBots); apart from onResult, so the sheet keeps its focus
  * hooks.onWorld(world)                the world board answered for the Daily Sky a meet sheet shows:
  *                                     its best runs, where this browser stands and what became of
- *                                     the run sent (good-lift.js shareWorld); apart from onResult too
+ *                                     the run submitted; apart from onResult too
  */
 export interface FlightHooks {
   onExit?(): void; onProgress?(progress: ReturnType<typeof readProgress>): void;
@@ -2036,8 +2036,8 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     backToGame,
     cancelPreparedSky,
     get skyNeedsReload() { return runModuleFailed; },
-    /** The initials Good Lift's board writes this browser's runs under. */
-    setInitials: (text: string) => run?.setInitials(text),
+    /** Publish only the finished result the player explicitly submitted. */
+    submitScore: (text: string, expected: Pick<RunResult, 'at' | 'seed'>) => run?.submitScore(text, expected) ?? Promise.resolve(undefined),
     /** Good Lift's music switched over, from the meet sheet: whether it is now on. */
     toggleMusic: () => run?.toggleMusic() ?? false,
     /** This browser's run taken off the world board the meet sheet shows: whether it went. */

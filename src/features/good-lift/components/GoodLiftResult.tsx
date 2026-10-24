@@ -1,10 +1,11 @@
 import type { TrainingLessonId } from '../../../domains/coaching/training-catalog.ts';
 import type { GameKind } from '../../../domains/good-lift/good-lift-address.ts';
-import { verdict, buildResultView, worldBoardView, resultSummary, medalTrack } from '../services/result-view.service.ts';
-import type { BoardRow as BoardRowData, RunResult, BotResult, WorldResult, KitChoice } from '../good-lift.models.ts';
+import { verdict, buildResultView, worldBoardView, resultSummary, medalTrack, submissionUnavailable, submissionSaid } from '../services/result-view.service.ts';
+import type { BoardRow as BoardRowData, RunResult, BotResult, WorldResult, KitChoice, ScoreSubmission } from '../good-lift.models.ts';
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
-import { FEATS, JUDGES, barogram, bestComboSaid, kilos, metres, points, shareText, trickSaid, worldSaid } from '../../../domains/good-lift/meet-card.ts';
+import { FEATS, JUDGES, barogram, bestComboSaid, kilos, metres, points, trickSaid, worldSaid } from '../../../domains/good-lift/meet-card.ts';
 import { scoreOf } from '../../../domains/good-lift/score.ts';
+import { isJudgedEnding } from '../../../domains/good-lift/run-rules.ts';
 import { bynameOf } from '../../../domains/good-lift/meet-bynames.ts';
 import { isBlocked, runesOf } from '../../../domains/good-lift/meet-initials.ts';
 import GoodLiftKit,{ KitNews } from './GoodLiftKit.tsx';
@@ -19,8 +20,8 @@ const ENDINGS: Record<string, string> = {
   quit: 'Run ended; the bar was forfeit.',
 };
 const TABS = [
-  { key: 'result', label: 'Result' },
   { key: 'board', label: 'Board' },
+  { key: 'result', label: 'Result' },
   { key: 'kit', label: 'Kit' },
 ];
 /** One judge's light: a filled white disc or a hollow red ring, and the word for whoever cannot see either. */
@@ -140,7 +141,7 @@ function BoardRow({ row, place, className = '', tag = '' }: { row: BoardRowData;
 }
 
 /**
- * The world board beside this browser's (good-lift.js shareWorld): its best runs of the day, with
+ * The world board beside this browser's: its best runs of the day, with
  * TST (`tst`, once the bots have flown) pinned where it ranks among them as on this browser's board,
  * and this browser's own run further down if it is not among them; then a line on where this
  * browser stands and what became of the run sent, and a way to take this browser's run off again.
@@ -148,19 +149,19 @@ function BoardRow({ row, place, className = '', tag = '' }: { row: BoardRowData;
  * is found to have been sent from another browser and so to stay, the button stays where it is, the
  * focus with it, but asks nothing more.
  */
-function WorldBoard({ world, tst, id, onWithdraw }: { world: WorldResult; tst?: BoardRowData | null; id: string; onWithdraw?: () => Promise<boolean> | undefined }) {
+function WorldBoard({ world, tst, id, busy = false, onWithdraw }: { world: WorldResult; tst?: BoardRowData | null; id: string; busy?: boolean; onWithdraw?: () => Promise<boolean> | undefined }) {
   const { shown, mine } = worldBoardView(world, tst);
   // While its request is out, the button says so and asks nothing more: one press, one request.
   const [taking, setTaking] = useState(false);
-  const asked = world.removed || world.stays || taking;
+  const asked = world.removed || world.stays || taking || world.loading || busy;
   let place = 0;
   return (
     <section className="good-lift-world" aria-labelledby={`${id}-world`}>
       <h3 className="good-lift-board-head" id={`${id}-world`}>
-        world
+        World leaderboard
       </h3>
       <BoardColumns />
-      {!world.rows.length && <p className="good-lift-board-empty">No shared scores yet.</p>}
+      {!world.rows.length && !world.loading && !world.readFailed && <p className="good-lift-board-empty">No submitted scores yet.</p>}
       {world.rows.length > 0 && (
         <ol className="good-lift-board">
           {shown.map((row: BoardRowData) => {
@@ -179,7 +180,7 @@ function WorldBoard({ world, tst, id, onWithdraw }: { world: WorldResult; tst?: 
         </ol>
       )}
       <p className="dim" role="status">
-        // {worldSaid(world)}
+        {world.loading ? 'Loading world scores…' : world.readFailed ? 'World scores could not be loaded. Your local scores are available above.' : worldSaid({ ...world, sent: null })}
       </p>
       {(world.rank > 0 || world.removed) && (
         <p>
@@ -192,7 +193,7 @@ function WorldBoard({ world, tst, id, onWithdraw }: { world: WorldResult; tst?: 
               Promise.resolve(onWithdraw?.()).finally(() => setTaking(false));
             }}
           >
-            {world.removed ? '[ taken off ]' : taking ? '[ taking it off… ]' : '[ take mine off ]'}
+            {world.removed ? 'Entry removed' : taking ? 'Removing entry…' : 'Remove my leaderboard entry'}
           </button>
         </p>
       )}
@@ -254,20 +255,16 @@ function Barogram({ result }: { result: RunResult }) {
  * shown only on the sheet of the run it was flown for. Its medals and any feat it earned are said
  * through a status line that is always there.
  *
- * `world` is the world board's word on a Daily Sky (good-lift.js shareWorld), which comes the same
- * way and is shown, beside this browser's board, only on the sheet of its run; `result.online` says
- * the build has a world board at all, so the sheet can say how to get onto it before it answers,
- * `result.optIn` whether the initials are the pilot's opt-in to it (initials set before it was
- * offered are not, until the pilot says so here), and `onWithdraw` takes this browser's run off it.
+ * `world` is a read of the Daily leaderboard. `onSubmitScore` explicitly publishes the current
+ * verified result; typing initials is only a draft. `onWithdraw` removes this device's entry.
  */
-export default function GoodLiftResult({ result, music = null, bots = null, world = null, onRetry, onSky, onFjord, onPage, onInitials, onMusic, onWithdraw, onKit, onTraining }: {
+export default function GoodLiftResult({ result, music = null, bots = null, world = null, onRetry, onSky, onFjord, onPage, onSubmitScore, onMusic, onWithdraw, onKit, onTraining }: {
   result: RunResult; music?: boolean | null; bots?: BotResult | null; world?: WorldResult | null;
   onRetry(): void; onSky(kind: GameKind): void; onFjord(): void; onPage(): void; onTraining?(lesson?: TrainingLessonId): void;
-  onInitials?(text: string): string | undefined; onMusic?(): boolean | undefined;
+  onSubmitScore?(initials: string): Promise<ScoreSubmission | undefined>; onMusic?(): boolean | undefined;
   onWithdraw?(): Promise<boolean>; onKit?(choice: Partial<KitChoice>): KitChoice | undefined;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
-  const words = useRef<HTMLTextAreaElement>(null);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const moreButton = useRef<HTMLButtonElement>(null);
   const moreMenu = useRef<HTMLDivElement>(null);
@@ -275,44 +272,62 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
   const menuStart = useRef(0);
   const panelScroll = useRef<HTMLDivElement>(null);
   const id = useId();
-  const [tab, setTab] = useState('result');
+  const [tab, setTab] = useState('board');
   const [shared, setShared] = useState('');
+  const [copying, setCopying] = useState(false);
+  const copyAttempt = useRef(0);
+  const submitAttempt = useRef(0);
+  const [sending, setSending] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
-  // The initials as typed; they are kept (onInitials) once they are three letters the board will
-  // show, or none.
   const [initials, setInitials] = useState(result.initials ?? '');
   const blocked = /^[A-Z]{3}$/.test(initials) && isBlocked(initials);
-  const initialSlots = useRef<(HTMLInputElement | null)[]>([]);
-  // Whether the initials are the pilot's opt-in to the world board: typed under the line that says
-  // they put runs on it, or, where they were set before it was offered (`asking`), confirmed with
-  // [ opt in ], which then stays, saying so, with the focus on it.
-  const [optedIn, setOptedIn] = useState(!!result.optIn);
   const named = /^[A-Z]{3}$/.test(initials) && !blocked;
-  // Decided once as the sheet opens: opting in here turns the button to '[ opted in ]' where it
-  // stands, the focus kept on it, and a sheet drawn again after the map opens with it gone.
-  const [asking] = useState(() => !!result.online && !result.optIn && !!result.initials);
-  const updateInitials = (value: string) => {
-    const typed = value.toUpperCase().replace(/[^A-Z ]/g, '').slice(0, 3).trimEnd();
-    setInitials(typed);
-    if (!typed || /^[A-Z]{3}$/.test(typed) && !isBlocked(typed)) {
-      onInitials?.(typed);
-      if (result.online || !typed) setOptedIn(!!typed);
-    }
+  const unavailable = submissionUnavailable(result);
+  const ranked = result.kind === 'daily' && isJudgedEnding(result.reason) && result.online;
+  const submission = result.submission;
+  const locked = sending || !!submission && submission.phase !== 'failed';
+  const submitLabels: Record<ScoreSubmission['phase'], string> = {
+    submitting: 'Submitting…', submitted: 'Score submitted', failed: 'Try submitting again',
+    'not-best': 'Higher score on board', withdrawn: 'Entry removed', rejected: 'Not submitted',
   };
-  const updateSlot = (index: number, letter: string) => {
-    const slots = initials.padEnd(3, ' ').split(''); slots[index] = letter || ' ';
-    updateInitials(slots.join(''));
+  const submitLabel = sending ? 'Submitting…' : submission ? submitLabels[submission.phase] : submitError ? 'Try submitting again' : 'Submit score';
+  const submitStatus = blocked ? 'Please choose different initials.' : submitError || submissionSaid(submission) || unavailable || (!named ? 'Enter three letters to submit this score.' : 'Saved here. Press Submit score to publish this result.');
+  const submit = async () => {
+    if (!named || unavailable || locked || !onSubmitScore) return;
+    const attempt = ++submitAttempt.current;
+    setSending(true);
+    setSubmitError('');
+    try {
+      const response = await onSubmitScore(initials);
+      if (!response && attempt === submitAttempt.current) setSubmitError('Couldn’t submit this score. Please try again.');
+    } catch {
+      if (attempt === submitAttempt.current) setSubmitError('Couldn’t submit this score. Please try again.');
+    } finally {
+      if (attempt === submitAttempt.current) setSending(false);
+    }
   };
   const musicOn = music ?? result.music ?? true;
   const switchMusic = () => onMusic?.();
-  const text = shareText(result, { label: result.label, link: result.link });
 
   useEffect(() => {
     heading.current?.focus();
-    setShared('');
-    setTab('result');
+    setTab('board');
     setMoreOpen(false);
+    setInitials(result.initials ?? '');
+    submitAttempt.current += 1;
+    setSending(false);
+    setSubmitError('');
   }, [result.at, result.seed]);
+
+  useEffect(() => {
+    copyAttempt.current += 1;
+    setShared('');
+    setCopying(false);
+    return () => { copyAttempt.current += 1; };
+  }, [result.at, result.seed, result.link]);
+
+  useEffect(() => () => { submitAttempt.current += 1; }, []);
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -375,23 +390,18 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
     setTab(TABS[next].key);
   };
 
-  // Shared where the device can share, copied where it cannot, and left selected if even that fails.
-  const share = async () => {
+  const copyLink = async () => {
+    if (copying || result.verifying || !result.verified || !result.link) return;
+    const attempt = ++copyAttempt.current;
+    setCopying(true);
+    setShared('');
     try {
-      if (navigator.share) {
-        await navigator.share({ text });
-        setShared('shared');
-        return;
-      }
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') return;
-    }
-    try {
-      await navigator.clipboard.writeText(text);
-      setShared('copied');
+      await navigator.clipboard.writeText(result.link);
+      if (attempt === copyAttempt.current) setShared('Link copied');
     } catch {
-      words.current?.select();
-      setShared('selected: copy it from here');
+      if (attempt === copyAttempt.current) setShared('Couldn’t copy the link. Try again.');
+    } finally {
+      if (attempt === copyAttempt.current) setCopying(false);
     }
   };
 
@@ -414,14 +424,13 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
           />
         );
       })}
-      {Array.from({ length: Math.max(0, 3 - place) }, (_, index) => <li key={`empty-${index}`} className="good-lift-empty-row"><span>{place + index + 1}</span><b>—<small>{index === 0 ? 'Your next run lands here' : 'No score yet'}</small></b><span>—</span><span>—</span><span>—</span></li>)}
-    </ol></>
+    </ol>{!rows.some(row => row.via !== 'bot') && <p className="dim">{result.verifying ? 'Checking this flight before it joins your scores…' : 'No ranked runs saved here for this sky yet.'}</p>}</>
   );
   return (
     <section
       className="window good-lift-result"
       aria-labelledby={`${id}-heading`}
-      aria-describedby={`${id}-ending ${id}-total`}
+      aria-describedby={`${id}-total`}
       onKeyDown={guardKeys}
       onKeyUp={guardKeys}
     >
@@ -433,34 +442,20 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
       </header>
       <div className="good-lift-result-layout">
         <div className="good-lift-result-summary">
-          <h2 className="shout" id={`${id}-heading`} ref={heading} tabIndex={-1}>
-            FLIGHT COMPLETE
-          </h2>
-          <h3 className={`good-lift-ending ${result.reason}`} id={`${id}-ending`}>{summary.ending}</h3>
-          <p className="dim">
-            {ENDINGS[result.reason] ?? 'Run complete.'}
-          </p>
-          {result.verse && <p className="dim good-lift-verse">{result.verse}</p>}
-          <section className="good-lift-peak-card" aria-label="Peak altitude"><div><strong>{metres(result.peak)}</strong><span>m peak</span>{summary.shortfall > 0 && <b>{summary.shortfall} m short</b>}</div>{summary.shortfall > 0 && <><progress max={150} value={Math.max(0, result.peak)} aria-label="Altitude toward the first line" /><p>The first line is at <b>150 m</b>. Cross it to lock out a lift.</p></>}</section>
-          <dl className="good-lift-result-metrics" id={`${id}-total`}>
-            <div className="good-lift-score-metric"><dt>score</dt><dd>{points(result)}<span> PTS</span></dd>{result.newBest && <b className="good-lift-new-best">Personal best</b>}</div>
-            <div><dt>banked</dt><dd>{kilos(result.total)}<span> kg</span></dd></div>
-            <div><dt>best on device</dt><dd>{(best.score ?? scoreOf(best)).toLocaleString('en-GB')}<span> pts</span></dd></div>
-          </dl>
-          {summary.shortfall > 0 && onTraining && <aside className="good-lift-next-time"><h3>NEXT TIME</h3><p>Circle in rising air to reach the first line. Thermal climb shows you how.</p><button type="button" onClick={() => onTraining('thermal')}>Train: Thermal climb ›</button></aside>}
-          {((result.pilot ?? result.initials) || bynameOf(result.byname)) && (
-            <p className="good-lift-who">
-              <Pilot who={result.pilot ?? result.initials} via="me" byname={result.byname} told />
-            </p>
-          )}
-          <p className="good-lift-cost">
-            {result.label}
-            {result.newBest ? ' · a new best' : ''}
-            {' · '}
-            {result.stats.strikes ? `${result.stats.strikes} strike${result.stats.strikes === 1 ? '' : 's'}` : 'no strikes'}
-            {' · '}
-            <span role="status">{result.verifying ? 'Flight saved · preparing your challenge link…' : result.verified ? 'Flight saved · challenge ready.' : 'Flight saved on this device.'}</span>
-          </p>
+          <h2 className="good-lift-hide" id={`${id}-heading`} ref={heading} tabIndex={-1}>Flight complete</h2>
+          <div className="good-lift-score-card" id={`${id}-total`}>
+            <div className="good-lift-score-main"><strong>{points(result)}</strong><span>PTS</span>{result.newBest && <b className="good-lift-new-best">New best</b>}</div>
+            <dl className="good-lift-score-facts">
+              <div><dt>Lifted</dt><dd>{kilos(result.total)} kg</dd></div>
+              <div><dt>Peak</dt><dd>{metres(result.peak)} m</dd></div>
+              <div><dt>Strikes</dt><dd>{result.stats.strikes || 'None'}</dd></div>
+            </dl>
+          </div>
+          <div className="good-lift-result-tools">
+            <p className="good-lift-save-status" id={`${id}-saved`} role="status">{result.verifying ? 'Saved here · checking flight…' : '✓ Saved on this device'}</p>
+            <button type="button" onClick={copyLink} disabled={copying || result.verifying || !result.verified || !result.link} aria-describedby={`${id}-copy-status`}>{copying ? 'Copying…' : 'Copy link'}</button>
+            <span className="good-lift-copy-status" id={`${id}-copy-status`} role="status">{shared || (result.verifying ? 'Challenge link is being checked.' : !result.verified || !result.link ? 'Challenge link unavailable for this flight.' : '')}</span>
+          </div>
           <p className="good-lift-hide" role="status">{said}</p>
         </div>
 
@@ -488,6 +483,12 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
 
           <div className="fjord-panel-body good-lift-result-panels" ref={panelScroll}>
             <div role="tabpanel" id={`${id}-panel-result`} aria-labelledby={`${id}-tab-result`} hidden={tab !== 'result'} tabIndex={0}>
+              <h3 className={`good-lift-ending ${result.reason}`} id={`${id}-ending`}>{summary.ending}</h3>
+              <p className="dim">{ENDINGS[result.reason] ?? 'Run complete.'}</p>
+              <p className="dim">Best on this device: {(best.score ?? scoreOf(best)).toLocaleString('en-GB')} pts.</p>
+              {((result.pilot ?? result.initials) || bynameOf(result.byname)) && <p className="good-lift-who"><Pilot who={result.pilot ?? result.initials} via="me" byname={result.byname} told /></p>}
+              <section className="good-lift-peak-card" aria-label="Peak altitude"><div><strong>{metres(result.peak)}</strong><span>m peak</span>{summary.shortfall > 0 && <b>{summary.shortfall} m short</b>}</div>{summary.shortfall > 0 && <><progress max={150} value={Math.max(0, result.peak)} aria-label="Altitude toward the first line" /><p>The first line is at <b>150 m</b>. Cross it to lock out a lift.</p></>}</section>
+              {summary.shortfall > 0 && onTraining && <aside className="good-lift-next-time"><h3>NEXT TIME</h3><p>Circle in rising air to reach the first line. Thermal climb shows you how.</p><button type="button" onClick={() => onTraining('thermal')}>Train: Thermal climb ›</button></aside>}
               {result.verse && <p className="dim good-lift-verse good-lift-result-verse-detail">{result.verse}</p>}
               <Medals result={result} bots={landed} />
               <section className="good-lift-flight-chart"><h3 className="good-lift-section-title">YOUR FLIGHT <span>{result.lifts.length ? `${result.lifts.length} judged lifts` : 'no line reached'}</span></h3><Barogram result={result} /></section>
@@ -564,77 +565,39 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
                 ))}
               </ul>
 
-              <div className="good-lift-share">
-                <textarea ref={words} readOnly value={text} rows={text.includes('\n') ? 3 : 2} aria-label="The line to share this run by" />
-                <p>
-                  <button type="button" onClick={share}>
-                    [ share ]
-                  </button>{' '}
-                  <span className="dim" role="status">
-                    {shared}
-                  </span>
-                </p>
-              </div>
             </div>
 
             <div role="tabpanel" id={`${id}-panel-board`} aria-labelledby={`${id}-tab-board`} hidden={tab !== 'board'} tabIndex={0}>
               <h3 className="good-lift-section-title">HIGH SCORES <span>{result.label}</span></h3>
-              {result.board ? (
-                <>
-                  {worldFor ? (
-                    <div className="good-lift-boards">
-                      <section aria-labelledby={`${id}-here`}>
-                        <h3 className="good-lift-board-head" id={`${id}-here`}>
-                          this browser
-                        </h3>
-                        {here}
-                      </section>
-                      <WorldBoard world={worldFor} tst={landed?.tst ?? null} id={id} onWithdraw={onWithdraw} />
-                    </div>
-                  ) : (
-                    here
-                  )}
-                  <p className="dim">
-                    // this browser's best runs of {result.label}, and TST, the bot to beat
-                    {result.online ? (worldFor ? "; with them, the world's best of the day." : '.') : '; a shared board comes later.'}
-                  </p>
-                  <fieldset className="good-lift-initials"><legend>ENTER INITIALS</legend><p>Touch: tap a slot to cycle. Keyboard: type three letters.</p><div className="good-lift-initial-slots">{[0, 1, 2].map(index => <input key={index} ref={node => { initialSlots.current[index] = node; }} aria-label={`Initial ${index + 1}`} aria-describedby={`${id}-initials`} aria-invalid={blocked || undefined} autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={1} placeholder="_" value={initials[index]?.trim() ?? ''}
-                    onPointerDown={event => { if (event.pointerType !== 'touch') return; event.preventDefault(); const alphabet = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ'; const current = initials[index] || ' '; updateSlot(index, alphabet[(alphabet.indexOf(current) + 1) % alphabet.length]); }}
-                    onFocus={event => event.target.select()}
-                    onChange={event => { const value = event.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(-1); updateSlot(index, value); if (value) initialSlots.current[Math.min(2, index + 1)]?.focus(); }}
-                    onPaste={event => { event.preventDefault(); const letters = event.clipboardData.getData('text').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3 - index); const slots = initials.padEnd(3, ' ').split(''); [...letters].forEach((letter, n) => { slots[index + n] = letter; }); updateInitials(slots.join('')); initialSlots.current[Math.min(2, index + letters.length)]?.focus(); }}
-                    onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); initialSlots.current[Math.max(0, Math.min(2, index + (event.key === 'ArrowLeft' ? -1 : 1)))]?.focus(); } else if (event.key === 'Backspace' && !initials[index]?.trim() && index > 0) { event.preventDefault(); updateSlot(index - 1, ''); initialSlots.current[index - 1]?.focus(); } }}
-                  />)}</div><button type="button" onClick={() => updateInitials('')}>Clear initials</button></fieldset>
-                  <span className="dim" id={`${id}-initials`} role="status">
-                    {blocked
-                      ? '// not those three: the board will not show them'
-                      : !result.online
-                        ? '// three letters to name your next runs'
-                        : named && !optedIn
-                          ? '// these name your runs here only; opt in to put your best of each day on the world board'
-                          : '// three letters name your next runs and put your best of each day on the world board; none keeps them here'}
-                  </span>
-                  {asking && named && (
-                    <>
-                      {' '}
-                      <button
-                        type="button"
-                        className="good-lift-opt-in"
-                        aria-disabled={optedIn || undefined}
-                        onClick={() => {
-                          if (optedIn) return;
-                          onInitials?.(initials);
-                          setOptedIn(true);
-                        }}
-                      >
-                        {optedIn ? '[ opted in ]' : '[ opt in ]'}
-                      </button>
-                    </>
-                  )}
-                </>
-              ) : (
-                <p className="dim">// only the Daily Sky keeps a board: practice is yours alone.</p>
-              )}
+              {result.board ? <section aria-labelledby={`${id}-here`}>
+                <h3 className="good-lift-board-head" id={`${id}-here`}>This browser</h3>
+                {here}
+                <p className="dim good-lift-board-caption">Your best runs on this device. TST is the bot to beat.</p>
+              </section> : <p className="dim">This sky is unranked. Your score and progress are saved on this device.</p>}
+
+              {ranked ? <form className="good-lift-submit" onSubmit={event => { event.preventDefault(); void submit(); }} aria-labelledby={`${id}-submit-heading`}>
+                <h3 id={`${id}-submit-heading`}>Submit this score</h3>
+                <p id={`${id}-submit-help`}>Your three initials will appear on the world leaderboard. Each result needs its own submission.</p>
+                <div className="good-lift-submit-controls">
+                  <label htmlFor={`${id}-initials`}>Initials
+                    <input
+                      id={`${id}-initials`}
+                      aria-describedby={`${id}-submit-help ${id}-submit-status`}
+                      aria-invalid={blocked || undefined}
+                      autoComplete="off" autoCapitalize="characters" spellCheck={false}
+                      maxLength={3} placeholder="ABC" pattern="[A-Za-z]{3}" required
+                      value={initials} readOnly={locked}
+                      onChange={event => {
+                        setInitials(event.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3));
+                        setSubmitError('');
+                      }}
+                    />
+                  </label>
+                  <button type="submit" disabled={!named || !!unavailable || locked || !onSubmitScore}>{submitLabel}</button>
+                </div>
+                <p id={`${id}-submit-status`} className={`good-lift-submit-status${blocked || submitError || submission?.phase === 'failed' || submission?.phase === 'rejected' ? ' error' : ''}`} role="status">{submitStatus}</p>
+              </form> : <p className="dim good-lift-local-only" role="status">{unavailable}</p>}
+              {worldFor && <WorldBoard world={worldFor} tst={landed?.tst ?? null} id={id} busy={sending || submission?.phase === 'submitting'} onWithdraw={onWithdraw} />}
             </div>
 
             <div role="tabpanel" id={`${id}-panel-kit`} aria-labelledby={`${id}-tab-kit`} hidden={tab !== 'kit'} tabIndex={0}>

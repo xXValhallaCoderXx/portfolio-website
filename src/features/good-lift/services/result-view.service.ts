@@ -2,7 +2,9 @@ import { rankOf, scoreOf } from '../../../domains/good-lift/score.ts';
 import { medalsSaid } from '../../../domains/good-lift/meet-card.ts';
 import { outranks, withBot } from '../../../domains/good-lift/board.ts';
 import type { RankedScore } from '../../../domains/good-lift/board.types.ts';
-import type { BoardRow, BotResult, RunResult, WorldResult } from '../good-lift.models.ts';
+import type { BoardRow, BotResult, RunResult, ScoreSubmission, WorldResult } from '../good-lift.models.ts';
+import { isJudgedEnding } from '../../../domains/good-lift/run-rules.ts';
+import { WORLD_BOARD } from '../../../domains/good-lift/board-world.ts';
 
 // Keep the world's leading rows, followed by this browser's place if it is further down.
 const WORLD_SHOWN = 10;
@@ -55,6 +57,35 @@ export function resultSummary(result: RunResult) {
   return { ending: endings[result.reason] ?? 'FLIGHT COMPLETE',
     shortfall: result.peak < 150 ? Math.ceil(150 - result.peak) : 0,
     banked: result.total, score: scoreOf(result), personalBest: !!result.newBest };
+}
+
+/** A local save, a verified challenge and a published score are separate outcomes. */
+export function submissionUnavailable(result: RunResult) {
+  if (result.kind !== 'daily') return 'Practice and challenge skies are unranked. Play the Daily Sky to submit a score.';
+  if (!isJudgedEnding(result.reason)) return 'Runs ended early are unranked. Your banked rewards stay on this device.';
+  if (!result.online) return 'The world leaderboard is unavailable here. Your score stays on this device.';
+  if (result.verifying) return 'Checking your flight before it can be submitted…';
+  if (!result.verified || !result.log) return 'This flight could not be verified, so it cannot be submitted. Your local progress is saved.';
+  return null;
+}
+
+export function submissionSaid(submission?: ScoreSubmission) {
+  if (!submission) return '';
+  const { phase, initials, rank, why } = submission;
+  if (phase === 'submitting') return `Submitting this score as ${initials}…`;
+  if (phase === 'submitted') return `Submitted as ${initials}${rank ? ` · #${rank} on the world board` : ` · outside the top ${WORLD_BOARD.keep}`}.`;
+  if (phase === 'not-best') return `Your higher score is already on this board${rank ? ` at #${rank}` : ''}. This result stays on this device.`;
+  if (phase === 'withdrawn') return 'Your leaderboard entry was removed. Your score stays on this device.';
+  if (phase === 'failed') return why === 'rate' || why === 'full' ? 'The leaderboard is busy. Your score is saved here; try submitting again shortly.' : 'Couldn’t submit your score. It is saved here; check your connection and try again.';
+  const reasons: Record<string, string> = {
+    duplicate: 'This flight is already on the leaderboard from another browser. No new entry was submitted.',
+    day: 'This Daily Sky is too old to submit. Play today’s sky for a ranked result.',
+    version: 'The leaderboard’s flight rules have changed. Play a new Daily Sky to submit a score.',
+    mismatch: 'The leaderboard could not verify this flight. Your local progress is saved.',
+    quota: 'You have reached today’s submission limit. Your score stays on this device.',
+    initials: 'The leaderboard did not accept these initials. Your score stays on this device.',
+  };
+  return reasons[why ?? ''] ?? 'The leaderboard did not accept this result. Your score stays on this device.';
 }
 
 export function medalTrack(result: RunResult, bots: BotResult | null) {

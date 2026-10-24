@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { createRunWorld, startRun } from '../../../domains/good-lift/run-step.ts';
 import { summariseRun } from '../../../domains/good-lift/meet-sheet.ts';
 import type { BotResult } from '../good-lift.models.ts';
-import { buildResultView, verdict, resultSummary, medalTrack } from './result-view.service.ts';
+import { buildResultView, verdict, resultSummary, medalTrack, submissionUnavailable, submissionSaid } from './result-view.service.ts';
 
 const result = () => ({
   ...summariseRun(startRun(createRunWorld({ sky: createCloudbaseRun() }), 1), 'quit'),
@@ -46,4 +46,30 @@ test('medal tracks wait for correlated targets and compare score rather than kil
   assert.equal(medalTrack(sheet, { ...bots, failed: true }), null);
   assert.equal(medalTrack(sheet, bots)?.caption, '30 to silver');
   assert.equal(medalTrack(sheet, bots)?.score, 70);
+});
+
+test('submission availability explains local-only and pending results without suggesting they were published', () => {
+  const daily = { ...result(), kind: 'daily', reason: 'fog', online: true, verified: true, log: 'verified' };
+  assert.equal(submissionUnavailable(daily), null);
+  assert.match(submissionUnavailable({ ...daily, kind: 'practice' })!, /unranked/);
+  assert.match(submissionUnavailable({ ...daily, reason: 'quit' })!, /ended early/);
+  assert.match(submissionUnavailable({ ...daily, online: false })!, /unavailable/);
+  assert.match(submissionUnavailable({ ...daily, verifying: true })!, /Checking/);
+  assert.match(submissionUnavailable({ ...daily, verified: false })!, /could not be verified/);
+  assert.match(submissionUnavailable({ ...daily, log: '' })!, /could not be verified/);
+  // A judged zero-point flight remains eligible under the existing rules.
+  assert.equal(daily.total, 0);
+});
+
+test('submission messages distinguish publication, higher scores, failures and removal', () => {
+  assert.equal(submissionSaid(), '');
+  assert.match(submissionSaid({ phase: 'submitting', initials: 'REN' }), /Submitting this score as REN/);
+  assert.match(submissionSaid({ phase: 'submitted', initials: 'REN', rank: 2 }), /Submitted as REN · #2/);
+  assert.match(submissionSaid({ phase: 'submitted', initials: 'REN', rank: 0 }), /outside the top/);
+  assert.match(submissionSaid({ phase: 'not-best', initials: 'REN', rank: 1 }), /higher score.*#1/);
+  assert.match(submissionSaid({ phase: 'rejected', initials: 'REN', why: 'duplicate' }), /already on the leaderboard.*No new entry/);
+  assert.match(submissionSaid({ phase: 'rejected', initials: 'REN', why: 'day' }), /too old/);
+  assert.match(submissionSaid({ phase: 'failed', initials: 'REN' }), /Couldn’t submit/);
+  assert.match(submissionSaid({ phase: 'failed', initials: 'REN', why: 'rate' }), /busy/);
+  assert.match(submissionSaid({ phase: 'withdrawn', initials: 'REN' }), /entry was removed/);
 });

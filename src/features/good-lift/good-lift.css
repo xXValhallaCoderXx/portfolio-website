@@ -1064,23 +1064,6 @@
   font-style: normal;
 }
 
-.good-lift-share textarea {
-  display: block;
-  width: 100%;
-  max-width: 480px;
-  padding: 6px 8px;
-  border: 1px solid var(--rule);
-  background: rgba(6, 10, 19, 0.7);
-  color: var(--text);
-  font: inherit;
-  font-size: 12px;
-  resize: none;
-}
-
-.good-lift-share p {
-  margin: 8px 0 0;
-}
-
 .good-lift-board {
   display: grid;
   gap: 4px;
@@ -1156,15 +1139,13 @@
 
 /* A button that has done what it asks, kept where it is so the focus stays with it: it keeps its
    resting fill under the pointer or the focus, which a ring shows instead, so it stays readable. */
-.good-lift-world button[aria-disabled='true'],
-.good-lift-opt-in[aria-disabled='true'] {
+.good-lift-world button[aria-disabled='true'] {
   background: rgba(6, 10, 19, 0.6);
   color: var(--dim);
   cursor: default;
 }
 
-.good-lift-world button[aria-disabled='true']:focus-visible,
-.good-lift-opt-in[aria-disabled='true']:focus-visible {
+.good-lift-world button[aria-disabled='true']:focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: 2px;
 }
@@ -1188,28 +1169,6 @@
 
 .good-lift-row-lights .none {
   border: 2px solid #ff546b;
-}
-
-.good-lift-initials input {
-  width: 4.5ch;
-  padding: 2px 6px;
-  border: 1px solid var(--rule);
-  background: rgba(6, 10, 19, 0.7);
-  color: var(--text);
-  font: inherit;
-  text-transform: uppercase;
-}
-
-/* Three letters the board will not show: the field says so in its border as well as in words. */
-.good-lift-initials input[aria-invalid='true'] {
-  border-color: #ff546b;
-}
-
-/* What is typed, in runes, as the board will show it. */
-.good-lift-typed {
-  display: inline-block;
-  min-width: 3em;
-  margin-left: 8px;
 }
 
 .good-lift-result footer button {

@@ -8,7 +8,7 @@ Local implementation of the eight After screens in `game-ui-update.html`. Change
 - Game opens its prepared hub. Play starts the run. Escape toggles pause in Free Form, Game and Training. Practice Sky is explicitly unranked. Back remembers whether Free Form was paused; a direct entry has a website fallback.
 - Training retains its six lessons and animated/static previews. Pause shows the active lesson and observed phase. Selecting a different lesson changes only the preview; Resume continues the active attempt, Restart repeats it, and Start begins the selected lesson afresh. Opening menus and previews earns no progress.
 - The coach separates measured lesson progress from brake position. Its action, device cue, passive phase indicators, release instructions and handle callout use the existing structured requests. Original announcements, warnings, target feedback and bing remain. The actual nine steering phases include the intervening releases; preview steps cannot advance them.
-- Result shows the actual ending, peak, first-line shortfall, banked kilograms, score and personal best. The Thermal climb action preselects the lesson without starting. Medal targets are correlated to the displayed run; feats are a separate section. The Board preserves initials validation, future-run naming, online consent, submission status and withdrawal. Kit keeps independent wing/harness choices, locked equipment, gear, reduced motion and lazy pictures.
+- Result shows the actual ending, peak, first-line shortfall, banked kilograms, score and personal best. The Thermal climb action preselects the lesson without starting. Medal targets are correlated to the displayed run; feats are a separate section. The current result flow opens Board first and uses a normal initials field with explicit per-result submission and withdrawal; see [Board-first result QA](result-board-qa.md). Kit keeps independent wing/harness choices, locked equipment, gear, reduced motion and lazy pictures.
 - Available launch statistics are read from existing local records after the lazy Game entry has loaded. Best on device is labelled as such. Opening a Free Form menu does not load the Game runtime. Physics, lesson thresholds, scoring, simulation version and URLs are unchanged.
 
 ## Verification
@@ -34,3 +34,7 @@ The animated hero now loads on fresh mobile visits, with the poster retained for
 ## Safety-only flight messages
 
 Free Form and Game now use compact safety alerts, with routine entry and navigation instruction overlays removed. Training keeps its full coach. Automatic travel and boundary correction use existing HUD telemetry. See [safety-only flight QA](safety-only-flight-qa.md) for the current implementation and acceptance receipts.
+
+## Board-first result follow-up
+
+The compact score summary now opens on Board. Initials are a draft until Submit score explicitly names and publishes the finished verified Daily run; legacy opt-in no longer publishes later runs. Copy link replaces the visible share URL. The original fixtures above describe the earlier result flow; [Board-first result QA](result-board-qa.md) contains the current behavior and receipts.

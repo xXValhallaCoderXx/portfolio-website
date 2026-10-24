@@ -10,6 +10,17 @@ npm run dev
 
 Then open http://localhost:5173. `npm run build` writes the static site to `dist/`.
 
+To use the live Good Lift leaderboard locally, create the ignored `.env.local` file:
+
+```dotenv
+VITE_BOARD_URL=https://us-central1-renate-gouveia-portfolio.cloudfunctions.net/board
+```
+
+Restart the development server after changing it, or rebuild before using `npm run preview`.
+The live board accepts localhost origins. Completing a Daily Sky opens Board, where the player
+enters three initials and presses **Submit score** to publish that result to the live board.
+Opening the board and typing initials only read data or edit a draft; each result needs its own submission.
+
 ## How the page and the flight fit together
 
 - The page is the website. The fjord idles behind the hero; its glider can be pulled about with
@@ -250,12 +261,10 @@ Then open http://localhost:5173. `npm run build` writes the static site to `dist
     reads the same key, without loading the game store.
   - **The world board.** Where the build names the online board's function (see
     [Online board](#online-board)), the board tab shows the world's best runs of the day beside
-    this browser's, with where this browser stands. Initials typed under the sheet's line that says
-    they put runs on it are the opt-in: from then on, each Daily Sky run flown under them that is
-    this browser's best of the day goes up, and `[ take mine off ]` takes it down again. Initials
-    set where the world board was not offered (all of them, before it existed) keep runs here
-    until the pilot opts in with `[ opt in ]` beside them; clearing initials opts out. Without the
-    function, nothing is fetched and the sheet is as above.
+    this browser's, with where this browser stands. After a verified Daily result, the player
+    enters three initials and presses **Submit score** to publish that finished run. Remembered
+    initials prefill the next result; it still requires its own submission. **Remove my leaderboard
+    entry** takes this browser's entry down. Without a configured function, results stay local.
   - **The kit.** Every kilo ever banked here (the tonnage) unlocks looks, never lift, and there is
     no shop: chalk at 1 t, then the Raven wing at 2.5 t, Calibrated at 5 t, Sheetless at 10 t,
     Flyte at 20 t and Hird at 40 t. A clean meet earns the Valkyrie wing and the 1,000 lb club the
@@ -511,17 +520,18 @@ release workflow warrants it.
 
 ## Online board
 
-The world board is the best runs of each Daily Sky from every browser whose pilot opts in, shown on
+The world board is the best runs of each Daily Sky that pilots explicitly submit, shown on
 the meet sheet's board tab beside this browser's own. One Firebase function, `board`
 (`functions/`), takes each run as its log, flies it again through the very step the game flies
 (`src/domains/good-lift/replay.ts`) and ranks only what that replay comes to. It keeps each day's top 100 in one
 Firestore document, at most one run from each device: its best. The page reaches it with plain
-`fetch` at the address the build is given as `VITE_BOARD_URL`. While that is unset, as it is until
-the setup below is done, the world board is off: nothing is fetched and the game is as it was.
+`fetch` at the address the build is given as `VITE_BOARD_URL`. If that is unset, the world board is
+off: no leaderboard requests are made, and results stay local. The local configuration above can
+use the existing live function; the setup below describes provisioning or deploying that function.
 
 A run goes up only if it was flown on today's or yesterday's (UTC) Daily Sky under the current
-`SIM_VERSION`, was ended by the fog, a touchdown or the ten-minute limit, was flown under initials the board shows (and
-the page sends one only once its pilot has opted in), replays to the very total and peak its log
+`SIM_VERSION`, was ended by the fog, a touchdown or the ten-minute limit, is named with initials the board shows (and
+the page sends it only after the pilot presses **Submit score** for that result), replays to the very total and peak its log
 claims, and is not on the board already from another device (a run is known by its controls as
 the step reads them and by what its replay flew, so neither renaming its link nor rewriting keys
 the wing cannot feel, both arrows for the bar, the bar under the brake or anything pressed while
@@ -541,7 +551,7 @@ Mac and on an iPhone against the deployed function before relying on it.
 
 ### What it keeps
 
-- **Sent:** for a Daily Sky run flown under initials its pilot opted in with, and only then, the
+- **Sent:** only after the pilot explicitly submits a named, verified Daily Sky result, the
   run's log (its controls step by step, its initials and what it claims) and this browser's device
   token: 32 random bytes, made the first time a run is sent and kept in localStorage under
   `good-lift-device`. Asking for a day's board sends nothing but the day.
@@ -554,7 +564,7 @@ Mac and on an iPhone against the deployed function before relying on it.
   them until Cloud Run lets it go). Google Cloud's own request logs, as for any Cloud Run service,
   do record each request's address, for 30 days.
 - **Shown:** anyone may read a day's board: initials, bynames and numbers, never the devices.
-- **Taken down:** `[ take mine off ]` on the meet sheet takes this browser's run off that day's
+- **Taken down:** **Remove my leaderboard entry** on the meet sheet takes this browser's run off that day's
   board, and clearing the initials stops any more going up. Only the device that sent a run can
   take it off: a copy of this browser's run that went up from another (its challenge link, renamed
   and sent) stays, and the sheet says so. The sheet finds this browser's run by the runs it keeps
@@ -614,10 +624,10 @@ Mac and on an iPhone against the deployed function before relying on it.
    # {"ok":true,"board":{"version":<SIM_VERSION>,"day":…,"rows":[]}}
    ```
 
-   Then run the site against it (`VITE_BOARD_URL=https://… npm run dev`), set initials on the meet
-   sheet's board tab (or `[ opt in ]` beside initials set before), fly the Daily Sky until the fog
-   takes you and open `[ board ]` again: the world column lists the run with `you: #1`, and
-   Firestore holds `boards/<SIM_VERSION>:<day>`. `[ take mine off ]` takes it down. The function's
+   Then run the site against it (`VITE_BOARD_URL=https://… npm run dev`) and complete a Daily Sky.
+   On Board, enter three initials and press **Submit score**. The world leaderboard shows the
+   accepted run and its place; Firestore holds `boards/<SIM_VERSION>:<day>`.
+   **Remove my leaderboard entry** takes it down. The function's
    logs (Firebase console → Functions → `board`) note any run whose replay there came to another
    sheet than its browser's.
 
