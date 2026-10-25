@@ -1,4 +1,4 @@
-import { brakeDiagram, lessonTiles, menuMoves } from './menu-markup.ts';
+import { HUB_LESSONS, brakeDiagram, lessonTiles, menuMoves } from './menu-markup.ts';
 
 const mapIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2Zm6-2v16m6-14v16"/></svg>';
 const menuIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h14"/></svg>';
@@ -26,7 +26,7 @@ export const FLIGHT_MARKUP = /* html */ `
       </div>
     </div>
     <div class="fj-telemetry" aria-label="Secondary flight instruments">
-      <span data-hud="belt"></span><span data-hud="speed"></span><span data-hud="wind"></span><span data-hud="next"></span><span data-flight-status hidden></span>
+      <span data-hud="belt"></span><span data-hud="speed"></span><span data-hud="load"></span><span data-hud="wind"></span><span data-hud="next"></span><span data-flight-status hidden></span>
       <span class="fj-thermal-air" hidden><span>THERMAL AIR</span><span class="fj-thermal-track" role="meter" aria-label="Thermal air strength" aria-valuemin="0" aria-valuemax="6"><i></i></span><span data-thermal-trend>STEADY</span></span>
       <span class="fj-brake-pair" hidden><span>L <span data-brake-side="left" role="meter" aria-label="Left brake" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></span></span><span>R <span data-brake-side="right" role="meter" aria-label="Right brake" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></span></span></span>
     </div>
@@ -53,13 +53,13 @@ export const FLIGHT_MARKUP = /* html */ `
           <section class="fj-hub-card fj-hub-fly"><div class="fj-hub-card-heading"><h2 data-game-menu-title>DAILY SKY</h2><span data-game-menu-rank>RANKED</span></div><p>A line every <b>150 m</b>. Three judges per lift.<br>Link tricks. Fly level for <b>3 s</b> to bank them.</p>
             <button class="primary" data-do="cloudbase">▶ Play Good Lift</button><button class="primary fj-run-resume" data-do="resume" hidden>▶ Resume run</button><div class="fj-run-end-actions" hidden><button data-do="restart-cloudbase">End run &amp; restart</button><button data-do="quit-cloudbase">End run · see result</button></div>
           </section>
-          <section class="fj-hub-card fj-hub-training"><div class="fj-hub-card-heading"><h2>TRAINING</h2><span>UNRANKED</span></div><p>Find your first thermal. Learn a new move.<br>Six lessons · start at <b>1,100 m</b>.</p><div class="fj-hub-moves" aria-label="Six guided lessons">${menuMoves}</div><button class="fj-train-action" data-do="training">Train a lesson ›</button></section>
+          <section class="fj-hub-card fj-hub-training"><div class="fj-hub-card-heading"><h2>TRAINING</h2><span>UNRANKED</span></div><p>Find your first thermal. Learn a new move.<br>${HUB_LESSONS.length} lessons · start at <b>1,100 m</b>.</p><div class="fj-hub-moves" aria-label="${HUB_LESSONS.length} guided lessons">${menuMoves}</div><button class="fj-train-action" data-do="training">Train a lesson ›</button></section>
         </div>
       </section>
       <section class="fj-pause-guide" aria-labelledby="fj-pause-guide-title"><h2 id="fj-pause-guide-title">HOW TO FLY <span>· TWO BRAKES · ONE WING</span></h2>
         <div class="fj-pause-basics"><div>${brakeDiagram(.3,0)}<b>PULL ONE</b><span>turn · A / D</span></div><div>${brakeDiagram(.6,.6)}<b>PULL BOTH</b><span>brake · Space</span></div><div>${brakeDiagram(0,0)}<b>LET GO</b><span>hands up</span></div></div>
-        <details><summary>keyboard controls</summary><dl class="fj-control-rows"><div><dt>A / D · ← / →</dt><dd>turn gently</dd></div><div><dt>Space · S · ↓</dt><dd>pull both to working brake</dd></div><div><dt>Q / E</dt><dd>pull one hand into the swing range</dd></div><div><dt>Shift + direction</dt><dd>build a full side pull for a loop</dd></div><div><dt>Shift + Space</dt><dd>both full · can stall</dd></div></dl></details>
-        <details><summary>touch &amp; mouse controls</summary><p>Touch: pull either side handle down. Use both thumbs to brake together; lift a thumb to release that hand.</p><p>Mouse: press and drag anywhere. Sideways turns; down pulls both brakes. Let go to release. Full pulls can stall.</p></details>
+        <details><summary>keyboard controls</summary><dl class="fj-control-rows"><div><dt>A / D · ← / →</dt><dd>turn gently</dd></div><div><dt>Space · S · ↓</dt><dd>pull both to working brake</dd></div><div><dt>Q / E</dt><dd>pull one hand into the swing range</dd></div><div><dt>Shift + direction</dt><dd>build a full side pull for a loop</dd></div><div><dt>Shift + Space</dt><dd>both full · can stall</dd></div><div><dt>↑</dt><dd>hold the speed bar · hands up</dd></div><div><dt>X</dt><dd>hold big ears to sink faster · hands up</dd></div></dl></details>
+        <details><summary>touch &amp; mouse controls</summary><p>Touch: pull either side handle down. Use both thumbs to brake together; lift a thumb to release that hand.</p><p>Mouse: press and drag anywhere. Sideways turns; down pulls both brakes; up pushes the speed bar. Let go to release. Full pulls can stall.</p><p>BAR and EARS: hold either button with both brakes released, to fly faster or to sink faster.</p></details>
       </section>
       <p class="fj-score-flow">TRICK + TRICK → LEVEL <b>3 s</b> → <b>BANKED</b></p>
       <details><summary>thermals &amp; climbing</summary><p>Keep a little brake on both hands and pull the inside hand farther to circle in rising air. Ease the difference to widen. On keyboard, W holds both gently; W + A / D circles, then W alone widens. Brake slows the wing; rising air provides lift.</p><p class="fj-keys-fjord">Land inside a lit ring to read that part of the page. Select a pillar or map destination for automatic travel.</p><p class="fj-keys-goal fj-keys-run" hidden>Bank the bar every 150 m. Raven warnings, gusts and storms begin above 500 m; kettlebells join at 700 m and the Beast at 1,000 m. Fog rises slowly below; a surviving flight completes at ten.</p></details>
@@ -97,8 +97,9 @@ export const FLIGHT_MARKUP = /* html */ `
         <button type="button" data-brake-handle="${side}" aria-label="${side} brake. Hold and pull down; release to let go." aria-describedby="fj-handle-help"><span>≡</span></button>
       </div><span class="fj-handle-key">${side === 'left' ? 'A / ← · Q swing' : 'D / → · E swing'}</span><span class="fj-handle-depth">HANDS UP</span>
     </div>`).join('')}
+    <div class="fj-config-buttons"><button type="button" data-config="ears" aria-pressed="false" aria-label="Big ears. Hold to fold the wingtips and sink faster; works with both brakes released.">EARS</button><button type="button" data-config="bar" aria-pressed="false" aria-label="Speed bar. Hold to fly faster; works with both brakes released.">BAR ▲</button></div>
     <div class="fj-handle-callout" hidden><b data-handle-cue></b><span data-handle-gesture></span></div>
     <span id="fj-handle-help" class="fj-visually-hidden">Pull each handle down independently. The broad cyan range is for ordinary flight; purple builds a swing, and the bottom is a full pull. Lift your thumb to release. With a focused handle, hold Space or Enter to pull it; release the key to let go.</span>
-    <span class="fj-brake-key-help">SPACE · BOTH BRAKES <span>SHIFT · FULL PULL</span></span>
+    <span class="fj-brake-key-help">SPACE · BOTH BRAKES <span>SHIFT · FULL PULL</span> <span>↑ · BAR</span> <span>X · EARS</span></span>
   </div>
   <div class="fj-flight-cues" aria-hidden="true"></div><div class="fj-fade"></div>`;

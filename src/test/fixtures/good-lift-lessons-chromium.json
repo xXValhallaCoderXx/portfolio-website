@@ -1,34 +1,46 @@
 {
+  "engine": "Chromium 143.0.7499.4",
   "node": "v24.21.0",
-  "command": "node --import tsx .artifacts/fun-acro-v4/browser-lesson-goldens.mjs",
+  "generated": "2026-10-25T04:08:14.043Z",
+  "command": "npx tsx tools/capture-goldens.ts lessons",
+  "simVersion": 6,
+  "sourceDigest": "6956ae66f4601a43fe1c15e5474e457ae1279734633ae2378824528ef095b97e",
   "sourceManifest": [
     {
-      "path": ".artifacts/fun-acro-v4/browser-lesson-goldens.mjs",
-      "sha256": "0c2eff8f4ea00d918ab0816379107bc7d20714f7183ff6d909f83e359d7c1f87"
-    },
-    {
-      "path": ".artifacts/fun-acro-v4/capture-source.mjs",
-      "sha256": "978a72289bb8641895f5e09aeeef068f695cc36d18b88ae8c31955537cd745ff"
+      "path": "functions/src/runs.ts",
+      "sha256": "cfc6c837e2619da270cb6852bfcd502e59239af85efd6957cbffd4d8712d3171"
     },
     {
       "path": "src/adapters/browser/good-lift-storage.service.ts",
-      "sha256": "79aceb0881b9c93399f10ba28c5381d0576d34327bd82db8a007315e394d2ba1"
+      "sha256": "251100e61a0e0961a18a2ac045203efc8bc6906fad9410078de14fd888ac50a2"
     },
     {
       "path": "src/adapters/browser/storage.port.ts",
       "sha256": "8ad2eb0bc340104eb5c9f47d3373203eb57b7fef4d8d9c7832a5249243b60854"
     },
     {
+      "path": "src/adapters/crypto/run-identity.service.ts",
+      "sha256": "f28ceff57ad463d0164a56ed600813b7b415dfad7372d87097224273325bae17"
+    },
+    {
       "path": "src/domains/coaching/coach-actions.ts",
-      "sha256": "b6eb1a7ea575b60d791d94de5d37a541ce33d9a869803972c617316d6b71a406"
+      "sha256": "cfd3531de46d98fc0e0dbb709b20e30f1ab6dc08293c9a199adb47a084dbf887"
     },
     {
       "path": "src/domains/coaching/coach-intent.ts",
       "sha256": "002287d862bc7ce05a6b74acbb3d74f936b35b8f6588414b5d78ffd9dcd8974a"
     },
     {
+      "path": "src/domains/coaching/coach-routing.ts",
+      "sha256": "01b029a67ca53f9a1e5d45ddca6b17aefb64ed9e581f6d145ebe9467b37c6eab"
+    },
+    {
+      "path": "src/domains/coaching/coach-wing.ts",
+      "sha256": "2211940df7ca4a41a8a66087cfe260ca267af6d1eeff238bafe3a56ade72c587"
+    },
+    {
       "path": "src/domains/coaching/direct-acro-guide.ts",
-      "sha256": "a293626d7505f355ff2d602038c8842f29d9ecca604d05b4ca6386cdb4e8ba72"
+      "sha256": "81aacc9ac5aee1c7bb9c13d9aae0191d68cb76fd04c265770357b3e9c02202ef"
     },
     {
       "path": "src/domains/coaching/flight-coach.ts",
@@ -36,39 +48,55 @@
     },
     {
       "path": "src/domains/coaching/lift-activity.ts",
-      "sha256": "3754ed0e8241af3e34acd10e9f7f65754a3e6bf149cecaf6983042de8f8ea8f2"
+      "sha256": "0481e6bca16be8c875574fa548cc7c94d8a3d680410ea0a08e29935357166d8a"
     },
     {
       "path": "src/domains/coaching/lift-guide.ts",
-      "sha256": "8937f5c936c38055af81c45b39c4db852ee86fda3ad2876e149424d72a7aad14"
+      "sha256": "216f00d6de3e9854ceb827c111a03a57926d350a9301b22b70488de3b9f301e6"
+    },
+    {
+      "path": "src/domains/coaching/recovery-guide.ts",
+      "sha256": "55adbe37cfcd47405231279109e841e2fb9cd7046116529cb1898c5d996099c4"
     },
     {
       "path": "src/domains/coaching/ridge-transfer.ts",
-      "sha256": "40cbe3a44abaaa64ee247ff3b10995dc600ffef204527fa751cab3e5deeb53d5"
+      "sha256": "ec1d57e9f195ed7c3ce2f2fb2644decd602007f9cff2c3b3dec7c189c9b9a938"
     },
     {
       "path": "src/domains/coaching/soaring-turn.ts",
-      "sha256": "22546a010746edf968db0827fce4285730c50319b742f0090da79f3d5965d0d3"
+      "sha256": "7561578ae758b9d09c24763dc7944d305d58af0df0c63c1006380a2f6b8c9a80"
     },
     {
       "path": "src/domains/coaching/swing-watch.ts",
       "sha256": "ba8cc2cfd7eecf83dfb0810e711c21355357c18ab10c9bfa6e764019c25ee5c0"
     },
     {
+      "path": "src/domains/coaching/training-catalog.ts",
+      "sha256": "8dd7eddf58feede743974c88e390516e42b5528b2bad326f5f937b56e3b8819b"
+    },
+    {
       "path": "src/domains/flight/atmosphere.ts",
-      "sha256": "70b639b8231820d7a372b341eb302c2a3232895777d93764b729fb59c01478f2"
+      "sha256": "06ad14e08ab0dfbd8060b93698b6ff9b5e7f0c6330dc569f72ca9fb6f96f7629"
     },
     {
       "path": "src/domains/flight/brake-controls.ts",
       "sha256": "6c9954891801590aaff902c9270b0ab12a1670de8f112859b6c4ac9dca14d231"
     },
     {
+      "path": "src/domains/flight/cloud-weather.ts",
+      "sha256": "505a6af4005083de3ba728be92bfe99f7db194fe527d37d47c6333aa8da7c531"
+    },
+    {
       "path": "src/domains/flight/flight-physics.ts",
-      "sha256": "814189dfeacf8ad41712cdc07d807c17f707b892b2a38cf303fbfbca03a2db21"
+      "sha256": "b1109394e711498924d864b020a3922c0d2724ece40df67df0531b001a63de33"
     },
     {
       "path": "src/domains/flight/flight.ts",
-      "sha256": "16ed9d5385f4b88dcc30d1f92d8624fe4e0281165caef33ab3b55f836d1f6292"
+      "sha256": "cbcec1b8cbc5e7c7a39548239bbe3856879652fafa7b756822b3ee5ef555cd63"
+    },
+    {
+      "path": "src/domains/flight/gateway.ts",
+      "sha256": "39b88ce1964ee1f3afe028c97b0739c9002361cdbfa327fe18bfc174d9ef74e9"
     },
     {
       "path": "src/domains/flight/glide-math.ts",
@@ -83,12 +111,52 @@
       "sha256": "685b53f65cdbf3dbf3c497a5fdea4ca4f433f39c8e00102d92749273d60a84d3"
     },
     {
+      "path": "src/domains/flight/thermal-flow.ts",
+      "sha256": "f6767a4637fcc5f19c75c86d80b26c89098dad986a44ee1382c46e0dc64b45b1"
+    },
+    {
       "path": "src/domains/flight/wing-envelope.ts",
-      "sha256": "e6240df898b15b265624150d89867207a2da6e73b455c5e0a6325016b83432af"
+      "sha256": "686b8f3c052d44e34a5e4a918c086157e60ada51f51e0642fdf16923faae926f"
+    },
+    {
+      "path": "src/domains/flight/wing-folds.ts",
+      "sha256": "2697654704fa60700d51411e96b66fd15e1bc1614b609921e4332ed50358e953"
+    },
+    {
+      "path": "src/domains/flight/wings.ts",
+      "sha256": "5b34ecfade4dd49de27e73611e3fdd153b745835acc1e12e0710f1c5e5cafd0a"
+    },
+    {
+      "path": "src/domains/good-lift/air-feel.ts",
+      "sha256": "c3e4407215ad7cc64d2b00e91f56f6785aaa0d05930a86eeaa529dce5d397044"
+    },
+    {
+      "path": "src/domains/good-lift/bells.ts",
+      "sha256": "eb3e3b8fb751d75af703dd3bd5cadcdbbd0b285201f2c31d2b6c98aa2e1fb67a"
+    },
+    {
+      "path": "src/domains/good-lift/board-world.ts",
+      "sha256": "4dced93e26c00aba74c9d24c07815c08d21cf264ed4db99186a845e0c71de6fa"
     },
     {
       "path": "src/domains/good-lift/board.ts",
-      "sha256": "f1780751d2b4cb36653a9f658734b5f801def0f132a5bc67786bd021ba3b9535"
+      "sha256": "c3a02c7de16fd27355a8ffe94d470afbbc031212da7e56ecec266b531f87565c"
+    },
+    {
+      "path": "src/domains/good-lift/cloudbase-state.ts",
+      "sha256": "b3aeb95d31525990ffa6d63b5688eb3b66ad94be3a52743ce917e09606ee25e3"
+    },
+    {
+      "path": "src/domains/good-lift/daily.ts",
+      "sha256": "37e8bd1221f08aca3ba6255235e614ceb756fc2780032bba2e7e3013278ab5fc"
+    },
+    {
+      "path": "src/domains/good-lift/glider-ids.ts",
+      "sha256": "f0f42f91c922306affac40674d19c32c1d66d8d7bd0fcd89d726ac4b371dafa4"
+    },
+    {
+      "path": "src/domains/good-lift/gliders.ts",
+      "sha256": "e78992873c4ea7d106b48aa9267fdd28eea33496a130b9ac496f45d945dfbb71"
     },
     {
       "path": "src/domains/good-lift/good-lift-address.ts",
@@ -96,23 +164,55 @@
     },
     {
       "path": "src/domains/good-lift/meet-bynames.ts",
-      "sha256": "c35a761abb53bc35b7897f5c931e01ac2b52959f4ba2c493e731ff537addbe19"
+      "sha256": "5d9cb45323551dce16bda1eef31397f295ffd8697e75c2ec58d0907419192253"
+    },
+    {
+      "path": "src/domains/good-lift/meet-card.ts",
+      "sha256": "ec7d3cbc9db2c2113762e559d2340c0379f99c7899b1ab7d4bad45d8a001092b"
+    },
+    {
+      "path": "src/domains/good-lift/meet-combo.ts",
+      "sha256": "df7fb29e116e091e59e335ab05a2163b2249ab77bc43a1b4b210a19883796233"
     },
     {
       "path": "src/domains/good-lift/meet-initials.ts",
       "sha256": "286c5ffc1208ad6aaecad51837dae552dda5d05d17f0bd0f89d9f229ac413f46"
     },
     {
+      "path": "src/domains/good-lift/meet-runes.ts",
+      "sha256": "4330699eafd5f3c3bc9266c8b6cce686bc45e9aa99d45b8e1477fae5224f0506"
+    },
+    {
+      "path": "src/domains/good-lift/meet-sheet.ts",
+      "sha256": "d07b37366b1222f17247d739acf362acbabea22ab92c42e09d979b7a97957c18"
+    },
+    {
+      "path": "src/domains/good-lift/meet-state.ts",
+      "sha256": "78f8778c3ccc64b3bc709f7525aff9ac222eca9035f84f55c08a4e361f9665f0"
+    },
+    {
       "path": "src/domains/good-lift/meet-style.ts",
       "sha256": "3972f39b1debd37d97c4bcff25cc7672c042c79fb15ad71bf9d60d14588d5b55"
     },
     {
+      "path": "src/domains/good-lift/pilots.ts",
+      "sha256": "180942a10a6ee4372bfcb14fe9a61495c057c1e07a744e401f76c4f11fd4bbf8"
+    },
+    {
       "path": "src/domains/good-lift/recorder.ts",
-      "sha256": "9760809a7a9287588498f68c8852886a3380444dc57ec04a7ec0fc558aa27126"
+      "sha256": "65c29552264c44cdc15cf224cd2f05d0b492a8e0e287f60456a0f5412d586685"
+    },
+    {
+      "path": "src/domains/good-lift/replay.ts",
+      "sha256": "e707d52237df46a037abe76331e6f9911e9883007c08637804166b07c66586fa"
     },
     {
       "path": "src/domains/good-lift/run-rules.ts",
       "sha256": "f7879719bf2d62bc10110304e1e5434569db1945ae425b349a4272ef5337f8e2"
+    },
+    {
+      "path": "src/domains/good-lift/run-step.ts",
+      "sha256": "24e41962697c5a80ba807a80c68723bd66a46b00c2f22f56496323e331f00de6"
     },
     {
       "path": "src/domains/good-lift/score.ts",
@@ -120,11 +220,27 @@
     },
     {
       "path": "src/domains/good-lift/sim-version.ts",
-      "sha256": "5a4a73224754aa54fd9d73b3e41d54697b689d8ead65649b2fd4f6666a01e261"
+      "sha256": "b9ec831f2f50b5c4fde1bbcb56439ac2d1113d671ec5394ec7949ecffb112677"
+    },
+    {
+      "path": "src/domains/good-lift/strike-fold.ts",
+      "sha256": "8f703454e9fd8714d2ac2f68ffb3c803b425657d785dd8a8c9797613096d13b7"
     },
     {
       "path": "src/domains/good-lift/trick-lessons.ts",
-      "sha256": "138d55040879b13c913e053d02914f761a50efbf63603f63254667056097473a"
+      "sha256": "96f3a93f1db39546599e699f2ad3b846a824c3e91881e10fd2818ba72ebed8e3"
+    },
+    {
+      "path": "src/domains/good-lift/trick-tables.ts",
+      "sha256": "876af33b5903a5dfa835976b77a8fda014538498f6e4fc62d43df8028ca65f9b"
+    },
+    {
+      "path": "src/domains/good-lift/trick-watch.ts",
+      "sha256": "022f861bcb759ec37d311420281ba1ff6ca4e5c544feb7079a3cd9bf8e05254c"
+    },
+    {
+      "path": "src/domains/progression/foundation-learning.ts",
+      "sha256": "69c19c8cd1daffff316cb0e9425ce15376c79e529d7ab2da4c6aa9b76c7a8d67"
     },
     {
       "path": "src/domains/progression/good-lift-key.ts",
@@ -132,68 +248,67 @@
     },
     {
       "path": "src/domains/progression/good-lift-store.ts",
-      "sha256": "1cc9ff167ef25f57d924fb7b1e41098ee9a82bcfa060503310a598b528c3f309"
+      "sha256": "1489972d1db0186f57afa66819aa2b818358dea89446e2fe1d2a68eaeb78ca7a"
     },
     {
       "path": "src/domains/progression/trick-learning.ts",
-      "sha256": "0127fc180de511bf9dba8faa9c13f95e060d1ab3b370e8e41b9ec9fe5dde6f2d"
+      "sha256": "95cf2af6aab8efa262167f727bf41020ff0cd663059c900028aa256cca9350cb"
     },
     {
       "path": "src/domains/progression/wing-kit.ts",
-      "sha256": "d12fc60a3222b86b572b38f7322a68b4b682a52f211d2c0bd12244633c381f08"
+      "sha256": "29bcf114a9e6a4bb33763f1e782972d893067bf8ca2f6ed44a541d1ab24056d9"
+    },
+    {
+      "path": "src/features/flight/presentation/swing-gauge.ts",
+      "sha256": "2cc4f0b3e3c54fdf4019b7326452172c3a5d2b8372b5bcdf1190b6acd4908548"
+    },
+    {
+      "path": "src/features/good-lift/services/coach-run.service.ts",
+      "sha256": "0c25b087276b672b7bc775edcc19b7541aa937c13bbafcaa8cb09e60e0088427"
+    },
+    {
+      "path": "src/test/helpers/test-brake-replay.ts",
+      "sha256": "a3a3d6239e877b6865d09fde7091d7d1a43ebcd7b258939a1188dba15dd6beef"
+    },
+    {
+      "path": "src/test/helpers/test-direct-flight.ts",
+      "sha256": "a974e95fbbb2011c8fbcd9f23cc3ef0e232a37e6175cd877717068e2d56ccec8"
+    },
+    {
+      "path": "src/test/helpers/test-direct-lessons.ts",
+      "sha256": "ff1c12c18b10c98704564a8e48503c6a060983e027a13c132af6f3ea986e997b"
+    },
+    {
+      "path": "src/test/helpers/test-goldens.ts",
+      "sha256": "a8ff2eecdb9af448477abc82a5946586cb9a964dad5866490724bd3b3d4028c2"
+    },
+    {
+      "path": "src/test/helpers/test-guided-opening.ts",
+      "sha256": "69a7a7b4cc222f8df0ad99e7f1d9c8914657d2568ea498dbc48d2ee12374b96a"
+    },
+    {
+      "path": "src/test/helpers/test-recovery-flight.ts",
+      "sha256": "f9837f65cd0da3d0378a08b87b972612e621b99f30285a8dc600069ab6e96c7f"
+    },
+    {
+      "path": "src/test/helpers/test-spiral-combo.ts",
+      "sha256": "c4de07dd47bf13ad34e797fae57918c7044c08bc0703f5b8bfe395478210e340"
+    },
+    {
+      "path": "tools/capture-goldens.ts",
+      "sha256": "b3fd30bae74309a450f5e65e6e0b2c3c0165edbd2320508a87fbf09e874b8375"
     },
     {
       "path": "tools/source-graph.ts",
       "sha256": "adb3a49c01b82b591cb81c531b21a8a7b7dd917cf996f0c72d3d6c43618611b9"
     }
   ],
-  "engine": "Chromium 143.0.7499.4",
-  "generated": "2026-10-22T09:18:02.969Z",
-  "sourceFiles": [
-    ".artifacts/fun-acro-v4/browser-lesson-goldens.mjs",
-    ".artifacts/fun-acro-v4/capture-source.mjs",
-    "src/adapters/browser/good-lift-storage.service.ts",
-    "src/adapters/browser/storage.port.ts",
-    "src/domains/coaching/coach-actions.ts",
-    "src/domains/coaching/coach-intent.ts",
-    "src/domains/coaching/direct-acro-guide.ts",
-    "src/domains/coaching/flight-coach.ts",
-    "src/domains/coaching/lift-activity.ts",
-    "src/domains/coaching/lift-guide.ts",
-    "src/domains/coaching/ridge-transfer.ts",
-    "src/domains/coaching/soaring-turn.ts",
-    "src/domains/coaching/swing-watch.ts",
-    "src/domains/flight/atmosphere.ts",
-    "src/domains/flight/brake-controls.ts",
-    "src/domains/flight/flight-physics.ts",
-    "src/domains/flight/flight.ts",
-    "src/domains/flight/glide-math.ts",
-    "src/domains/flight/ground.ts",
-    "src/domains/flight/thermal-centering.ts",
-    "src/domains/flight/wing-envelope.ts",
-    "src/domains/good-lift/board.ts",
-    "src/domains/good-lift/good-lift-address.ts",
-    "src/domains/good-lift/meet-bynames.ts",
-    "src/domains/good-lift/meet-initials.ts",
-    "src/domains/good-lift/meet-style.ts",
-    "src/domains/good-lift/recorder.ts",
-    "src/domains/good-lift/run-rules.ts",
-    "src/domains/good-lift/score.ts",
-    "src/domains/good-lift/sim-version.ts",
-    "src/domains/good-lift/trick-lessons.ts",
-    "src/domains/progression/good-lift-key.ts",
-    "src/domains/progression/good-lift-store.ts",
-    "src/domains/progression/trick-learning.ts",
-    "src/domains/progression/wing-kit.ts",
-    "tools/source-graph.ts"
-  ],
-  "sourceDigest": "1adbfb4b119cb8a59030449c999e9809bf3430e6098cf65c2f86fb99f2785e4d",
   "records": [
     {
       "kind": "pitch",
       "side": -1,
       "delay": 0,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -205,7 +320,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgUAAAAAAAAAAAAM6AewDpQFBfQBAGkUhQEAiwEErwQA",
+      "link": "AwYAAAAAAAAAAAAADOgHsA6UBQX0AQBpFIUBAIsBBK8EAA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -244,6 +359,24 @@
             }
           },
           "physical": {
+            "wing": "classic",
+            "sepL": 0,
+            "sepR": 0,
+            "sideAlphaL": 0,
+            "sideAlphaR": 0,
+            "sideAlongL": 0,
+            "sideAlongR": 0,
+            "foldL": 0,
+            "foldR": 0,
+            "tipL": 0,
+            "tipR": 0,
+            "pumpL": 0,
+            "pumpR": 0,
+            "deepStall": 0,
+            "creep": 0,
+            "twist": 0,
+            "twistRate": 0,
+            "twistYaw": 0,
             "steer": -1.9876466848274246e-21,
             "differential": 0.0000894772676308605,
             "brake": 2.1864695878815945e-45,
@@ -252,8 +385,8 @@
             "bar": 0,
             "ears": 0,
             "controlMode": "legacy",
-            "leftBrake": 2.1864695878815945e-45,
-            "rightBrake": 0.0000894772676308605,
+            "leftBrake": 0,
+            "rightBrake": 0.00008947727,
             "leftBrakeTarget": 0,
             "rightBrakeTarget": 0,
             "acro": false,
@@ -307,11 +440,11 @@
               "alpha": 0.1002678708052506,
               "forward": 11.703657691746088,
               "pilotForward": 12.09446883506617,
-              "pitch": 0.12851134549987434,
-              "pitchRate": 0.04568944300028341,
+              "pitch": 0.1285113455,
+              "pitchRate": 0.045689443,
               "load": 1.0480353495470618,
               "under": true,
-              "bank": 0.000028430282951110595
+              "bank": 0.00002843028
             },
             "work": [
               {
@@ -402,10 +535,10 @@
             "z": 27.9821897
           },
           "yaw": -4.641267192770394,
-          "yawRate": -0.0002971382743202486,
+          "yawRate": -0.00029713827,
           "track": 1.64206432241764,
-          "trackRate": 0.00006137826485730358,
-          "bank": 0.000011164384080831154,
+          "trackRate": 0.00006137826,
+          "bank": 0.00001116438,
           "speed": 12.09166918651808,
           "sink": 0,
           "vy": 0.2951383,
@@ -419,19 +552,19 @@
           "bar": 0,
           "ears": 0,
           "controlMode": "legacy",
-          "leftBrake": 2.1864695878815945e-45,
-          "rightBrake": 0.0000894772676308605,
+          "leftBrake": 0,
+          "rightBrake": 0.00008947727,
           "leftBrakeTarget": 0,
           "rightBrakeTarget": 0,
           "coordination": 5.00777951299069e-33,
           "coordinatedLean": -9.95369634734264e-54,
           "pilotLean": -2.1898131964153808e-54,
           "bankTarget": -1.3118468119861003e-21,
-          "pitch": 0.12870029961039353,
-          "pitchRate": 0.045862743296340436,
+          "pitch": 0.12870029961,
+          "pitchRate": 0.0458627433,
           "lean": -1.3118468119861003e-21,
           "roll": 0.000011164384080831155,
-          "rollRate": 0.00010956084565228167,
+          "rollRate": 0.00010956085,
           "stallLoad": 0,
           "stall": 0,
           "windX": 0,
@@ -443,6 +576,13 @@
           "inflation": 1,
           "forwardAirspeed": 11.699761165562425,
           "frontalRisk": 0,
+          "foldLeft": 0,
+          "foldRight": 0,
+          "cravatLeft": 0,
+          "cravatRight": 0,
+          "deepStall": 0,
+          "twist": 0,
+          "twisted": 0,
           "loop": 0,
           "loopAngle": 0.000047908782417944144,
           "loopRate": -0.0002850186823696923,
@@ -486,7 +626,7 @@
           "spiralSide": 0,
           "spirals": 0,
           "spiralAt": null,
-          "rollAcceleration": -0.00012934301655566745,
+          "rollAcceleration": -0.00012934302,
           "moves": 1,
           "moveKind": 1,
           "moveBand": 3,
@@ -559,7 +699,7 @@
       "kind": "pitch",
       "side": -1,
       "delay": 0.1,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -571,7 +711,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgUAAAAAAAAAAAAM6AfBDpoFBfkBAG4UgwEAjQEEsAQA",
+      "link": "AwYAAAAAAAAAAAAADOgHwQ6aBQX5AQBuFIMBAI0BBLAEAA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -610,6 +750,24 @@
             }
           },
           "physical": {
+            "wing": "classic",
+            "sepL": 0,
+            "sepR": 0,
+            "sideAlphaL": 0,
+            "sideAlphaR": 0,
+            "sideAlongL": 0,
+            "sideAlongR": 0,
+            "foldL": 0,
+            "foldR": 0,
+            "tipL": 0,
+            "tipR": 0,
+            "pumpL": 0,
+            "pumpR": 0,
+            "deepStall": 0,
+            "creep": 0,
+            "twist": 0,
+            "twistRate": 0,
+            "twistYaw": 0,
             "steer": -1.2997710987822678e-21,
             "differential": 0.00010146335903527059,
             "brake": 1.8220579990014878e-45,
@@ -618,8 +776,8 @@
             "bar": 0,
             "ears": 0,
             "controlMode": "legacy",
-            "leftBrake": 1.8220579990014878e-45,
-            "rightBrake": 0.00010146335903527059,
+            "leftBrake": 0,
+            "rightBrake": 0.00010146336,
             "leftBrakeTarget": 0,
             "rightBrakeTarget": 0,
             "acro": false,
@@ -673,11 +831,11 @@
               "alpha": 0.10264015498528002,
               "forward": 11.520440520774823,
               "pilotForward": 11.807310374213865,
-              "pitch": 0.15572790253433944,
-              "pitchRate": 0.03252714732684192,
+              "pitch": 0.15572790253,
+              "pitchRate": 0.03252714733,
               "load": 1.0282215884404344,
               "under": true,
-              "bank": 0.000022266929193477746
+              "bank": 0.00002226693
             },
             "work": [
               {
@@ -768,10 +926,10 @@
             "z": 19.4147568
           },
           "yaw": -4.684553576242768,
-          "yawRate": -0.000376162916350383,
+          "yawRate": -0.00037616292,
           "track": 1.598773182321048,
-          "trackRate": 0.00009400734634734677,
-          "bank": 0.0000017716272659897335,
+          "trackRate": 0.00009400735,
+          "bank": 0.00000177163,
           "speed": 11.813518831848903,
           "sink": 0,
           "vy": 0.5666656,
@@ -785,19 +943,19 @@
           "bar": 0,
           "ears": 0,
           "controlMode": "legacy",
-          "leftBrake": 1.8220579990014878e-45,
-          "rightBrake": 0.00010146335903527059,
+          "leftBrake": 0,
+          "rightBrake": 0.00010146336,
           "leftBrakeTarget": 0,
           "rightBrakeTarget": 0,
           "coordination": 2.3444973271915398e-33,
           "coordinatedLean": -3.047309867055838e-54,
           "pilotLean": -6.704081707522843e-55,
           "bankTarget": -8.578489251962968e-22,
-          "pitch": 0.155861725240278,
-          "pitchRate": 0.032730998730636784,
+          "pitch": 0.15586172524,
+          "pitchRate": 0.03273099873,
           "lean": -8.578489251962968e-22,
           "roll": 0.0000017716272659897343,
-          "rollRate": 0.00010096895205643362,
+          "rollRate": 0.00010096895,
           "stallLoad": 0,
           "stall": 0,
           "windX": 0,
@@ -809,6 +967,13 @@
           "inflation": 1,
           "forwardAirspeed": 11.516011514000542,
           "frontalRisk": 0,
+          "foldLeft": 0,
+          "foldRight": 0,
+          "cravatLeft": 0,
+          "cravatRight": 0,
+          "deepStall": 0,
+          "twist": 0,
+          "twisted": 0,
           "loop": 0,
           "loopAngle": 0.00007528935978777579,
           "loopRate": -0.00029891878118396144,
@@ -852,7 +1017,7 @@
           "spiralSide": 0,
           "spirals": 0,
           "spiralAt": null,
-          "rollAcceleration": -0.0002144564613265041,
+          "rollAcceleration": -0.00021445646,
           "moves": 1,
           "moveKind": 1,
           "moveBand": 3,
@@ -925,7 +1090,7 @@
       "kind": "pitch",
       "side": -1,
       "delay": 0.2,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -937,7 +1102,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgUAAAAAAAAAAAAM6AfUDqAFBf4BAHMUgQEAkAEE0gEADQTTAgA",
+      "link": "AwYAAAAAAAAAAAAADOgH1A6gBQX-AQBzFIEBAJABBNIBAA0E0wIA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -976,6 +1141,24 @@
             }
           },
           "physical": {
+            "wing": "classic",
+            "sepL": 0,
+            "sepR": 0,
+            "sideAlphaL": 0,
+            "sideAlphaR": 0,
+            "sideAlongL": 0,
+            "sideAlongR": 0,
+            "foldL": 0,
+            "foldR": 0,
+            "tipL": 0,
+            "tipR": 0,
+            "pumpL": 0,
+            "pumpR": 0,
+            "deepStall": 0,
+            "creep": 0,
+            "twist": 0,
+            "twistRate": 0,
+            "twistYaw": 0,
             "steer": -7.867815056259661e-22,
             "differential": 0.00008030329166744755,
             "brake": 4.6427127628896515e-28,
@@ -984,8 +1167,8 @@
             "bar": 0,
             "ears": 0,
             "controlMode": "legacy",
-            "leftBrake": 4.6427127628896515e-28,
-            "rightBrake": 0.00008030329166744755,
+            "leftBrake": 0,
+            "rightBrake": 0.00008030329,
             "leftBrakeTarget": 0,
             "rightBrakeTarget": 0,
             "acro": false,
@@ -1039,11 +1222,11 @@
               "alpha": 0.10394580498594945,
               "forward": 11.420074238542565,
               "pilotForward": 11.652902400746367,
-              "pitch": 0.17254644864093927,
-              "pitchRate": 0.026268210653176444,
+              "pitch": 0.17254644864,
+              "pitchRate": 0.02626821065,
               "load": 1.017353061677293,
               "under": true,
-              "bank": 0.000056445189370084114
+              "bank": 0.00005644519
             },
             "work": [
               {
@@ -1134,10 +1317,10 @@
             "z": 10.591518
           },
           "yaw": -4.7281645301857065,
-          "yawRate": -0.00016945132418703853,
+          "yawRate": -0.00016945132,
           "track": 1.5552345076806295,
-          "trackRate": 0.000003875431722200062,
-          "bank": 0.00002134692443477432,
+          "trackRate": 0.00000387543,
+          "bank": 0.00002134692,
           "speed": 11.667874436702723,
           "sink": 0,
           "vy": 0.7316546,
@@ -1151,19 +1334,19 @@
           "bar": 0,
           "ears": 0,
           "controlMode": "legacy",
-          "leftBrake": 4.6427127628896515e-28,
-          "rightBrake": 0.00008030329166744755,
+          "leftBrake": 0,
+          "rightBrake": 0.00008030329,
           "leftBrakeTarget": 0,
           "rightBrakeTarget": 0,
           "coordination": 9.561539820442922e-34,
           "coordinatedLean": -7.522842696030712e-55,
           "pilotLean": -1.6550253931267567e-55,
           "bankTarget": -5.1927579371313765e-22,
-          "pitch": 0.17265404472786167,
-          "pitchRate": 0.026490016113494552,
+          "pitch": 0.17265404473,
+          "pitchRate": 0.02649001611,
           "lean": -5.1927579371313765e-22,
           "roll": 0.00002134692443477432,
-          "rollRate": 0.000058347737976389446,
+          "rollRate": 0.00005834774,
           "stallLoad": 0,
           "stall": 0,
           "windX": 0,
@@ -1175,6 +1358,13 @@
           "inflation": 1,
           "forwardAirspeed": 11.41528921262304,
           "frontalRisk": 0,
+          "foldLeft": 0,
+          "foldRight": 0,
+          "cravatLeft": 0,
+          "cravatRight": 0,
+          "deepStall": 0,
+          "twist": 0,
+          "twisted": 0,
           "loop": 0,
           "loopAngle": -0.000021159050594113533,
           "loopRate": -0.00032708707827862365,
@@ -1218,7 +1408,7 @@
           "spiralSide": 0,
           "spirals": 0,
           "spiralAt": null,
-          "rollAcceleration": -0.00022377136766331312,
+          "rollAcceleration": -0.00022377137,
           "moves": 1,
           "moveKind": 1,
           "moveBand": 3,
@@ -1291,7 +1481,7 @@
       "kind": "pitch",
       "side": -1,
       "delay": 0.3,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -1303,7 +1493,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgUAAAAAAAAAAAAM6AetEqYFBYICAHgUgQEAkQEEzgEAEwSaBgA",
+      "link": "AwYAAAAAAAAAAAAADOgHrRKmBQWCAgB4FIEBAJEBBM4BABMEmgYA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -1342,6 +1532,24 @@
             }
           },
           "physical": {
+            "wing": "classic",
+            "sepL": 0,
+            "sepR": 0,
+            "sideAlphaL": 0,
+            "sideAlphaR": 0,
+            "sideAlongL": 0,
+            "sideAlongR": 0,
+            "foldL": 0,
+            "foldR": 0,
+            "tipL": 0,
+            "tipR": 0,
+            "pumpL": 0,
+            "pumpR": 0,
+            "deepStall": 0,
+            "creep": 0,
+            "twist": 0,
+            "twistRate": 0,
+            "twistYaw": 0,
             "steer": -1.1379222320856112e-29,
             "differential": 0.000012306308412968372,
             "brake": 4.911413338911141e-64,
@@ -1350,8 +1558,8 @@
             "bar": 0,
             "ears": 0,
             "controlMode": "legacy",
-            "leftBrake": 4.911413338911141e-64,
-            "rightBrake": 0.000012306308412968372,
+            "leftBrake": 0,
+            "rightBrake": 0.00001230631,
             "leftBrakeTarget": 0,
             "rightBrakeTarget": 0,
             "acro": false,
@@ -1405,11 +1613,11 @@
               "alpha": 0.10075192397723237,
               "forward": 11.665814099619123,
               "pilotForward": 12.035285260027068,
-              "pitch": 0.13466568528094844,
-              "pitchRate": 0.04294139701727934,
+              "pitch": 0.13466568528,
+              "pitchRate": 0.04294139702,
               "load": 1.0439630920568088,
               "under": true,
-              "bank": 0.0000013602856410692805
+              "bank": 0.00000136029
             },
             "work": [
               {
@@ -1500,10 +1708,10 @@
             "z": -3.4156925
           },
           "yaw": -4.771339666644949,
-          "yawRate": -0.00004404555793562,
+          "yawRate": -0.00004404556,
           "track": 1.511860062771563,
-          "trackRate": 0.000011090417464387768,
-          "bank": -2.7596068497684745e-7,
+          "trackRate": 0.00001109042,
+          "bank": -2.7596e-7,
           "speed": 12.033998474548065,
           "sink": 0,
           "vy": 0.3586647,
@@ -1517,19 +1725,19 @@
           "bar": 0,
           "ears": 0,
           "controlMode": "legacy",
-          "leftBrake": 4.911413338911141e-64,
-          "rightBrake": 0.000012306308412968372,
+          "leftBrake": 0,
+          "rightBrake": 0.00001230631,
           "leftBrakeTarget": 0,
           "rightBrakeTarget": 0,
           "coordination": 1.041515515821618e-47,
           "coordinatedLean": -1.1851636605155322e-76,
           "pilotLean": -2.6073600531341708e-77,
           "bankTarget": -7.510286731765035e-30,
-          "pitch": 0.13484311741147578,
-          "pitchRate": 0.043120091981659336,
+          "pitch": 0.13484311741,
+          "pitchRate": 0.04312009198,
           "lean": -7.510286731765035e-30,
           "roll": -2.7596068497684745e-7,
-          "rollRate": 0.00003053372398232167,
+          "rollRate": 0.00003053372,
           "stallLoad": 0,
           "stall": 0,
           "windX": 0,
@@ -1541,6 +1749,13 @@
           "inflation": 1,
           "forwardAirspeed": 11.661795181529126,
           "frontalRisk": 0,
+          "foldLeft": 0,
+          "foldRight": 0,
+          "cravatLeft": 0,
+          "cravatRight": 0,
+          "deepStall": 0,
+          "twist": 0,
+          "twisted": 0,
           "loop": 0,
           "loopAngle": 0.000009662993657520924,
           "loopRate": -0.00003317944629100538,
@@ -1584,7 +1799,7 @@
           "spiralSide": 0,
           "spirals": 0,
           "spiralAt": null,
-          "rollAcceleration": 0.00012350957842284784,
+          "rollAcceleration": 0.00012350958,
           "moves": 1,
           "moveKind": 1,
           "moveBand": 3,
@@ -1657,7 +1872,7 @@
       "kind": "pitch",
       "side": 1,
       "delay": 0,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -1669,7 +1884,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgUAAAAAAAAAAAAM6AewDpQFBvQBAGkUhQEAiwEErwQA",
+      "link": "AwYAAAAAAAAAAAAADOgHsA6UBQb0AQBpFIUBAIsBBK8EAA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -1708,6 +1923,24 @@
             }
           },
           "physical": {
+            "wing": "classic",
+            "sepL": 0,
+            "sepR": 0,
+            "sideAlphaL": 0,
+            "sideAlphaR": 0,
+            "sideAlongL": 0,
+            "sideAlongR": 0,
+            "foldL": 0,
+            "foldR": 0,
+            "tipL": 0,
+            "tipR": 0,
+            "pumpL": 0,
+            "pumpR": 0,
+            "deepStall": 0,
+            "creep": 0,
+            "twist": 0,
+            "twistRate": 0,
+            "twistYaw": 0,
             "steer": 1.9876466848274246e-21,
             "differential": -0.0000894772676308605,
             "brake": 2.1864695878815945e-45,
@@ -1716,8 +1949,8 @@
             "bar": 0,
             "ears": 0,
             "controlMode": "legacy",
-            "leftBrake": 0.0000894772676308605,
-            "rightBrake": 2.1864695878815945e-45,
+            "leftBrake": 0.00008947727,
+            "rightBrake": 0,
             "leftBrakeTarget": 0,
             "rightBrakeTarget": 0,
             "acro": false,
@@ -1771,11 +2004,11 @@
               "alpha": 0.1002678708052506,
               "forward": 11.703657691746088,
               "pilotForward": 12.09446883506617,
-              "pitch": 0.12851134549987434,
-              "pitchRate": 0.04568944300028341,
+              "pitch": 0.1285113455,
+              "pitchRate": 0.045689443,
               "load": 1.0480353495470618,
               "under": true,
-              "bank": -0.000028430282951110595
+              "bank": -0.00002843028
             },
             "work": [
               {
@@ -1866,10 +2099,10 @@
             "z": 27.9821897
           },
           "yaw": 4.641267192770394,
-          "yawRate": 0.0002971382743202486,
+          "yawRate": 0.00029713827,
           "track": -1.64206432241764,
-          "trackRate": -0.00006137826485730358,
-          "bank": -0.000011164384080831154,
+          "trackRate": -0.00006137826,
+          "bank": -0.00001116438,
           "speed": 12.09166918651808,
           "sink": 0,
           "vy": 0.2951383,
@@ -1883,19 +2116,19 @@
           "bar": 0,
           "ears": 0,
           "controlMode": "legacy",
-          "leftBrake": 0.0000894772676308605,
-          "rightBrake": 2.1864695878815945e-45,
+          "leftBrake": 0.00008947727,
+          "rightBrake": 0,
           "leftBrakeTarget": 0,
           "rightBrakeTarget": 0,
           "coordination": 5.00777951299069e-33,
           "coordinatedLean": 9.95369634734264e-54,
           "pilotLean": 2.1898131964153808e-54,
           "bankTarget": 1.3118468119861003e-21,
-          "pitch": 0.12870029961039353,
-          "pitchRate": 0.045862743296340436,
+          "pitch": 0.12870029961,
+          "pitchRate": 0.0458627433,
           "lean": 1.3118468119861003e-21,
           "roll": -0.000011164384080831155,
-          "rollRate": -0.00010956084565228167,
+          "rollRate": -0.00010956085,
           "stallLoad": 0,
           "stall": 0,
           "windX": 0,
@@ -1907,6 +2140,13 @@
           "inflation": 1,
           "forwardAirspeed": 11.699761165562425,
           "frontalRisk": 0,
+          "foldLeft": 0,
+          "foldRight": 0,
+          "cravatLeft": 0,
+          "cravatRight": 0,
+          "deepStall": 0,
+          "twist": 0,
+          "twisted": 0,
           "loop": 0,
           "loopAngle": -0.000047908782417944144,
           "loopRate": 0.0002850186823696923,
@@ -1950,7 +2190,7 @@
           "spiralSide": 0,
           "spirals": 0,
           "spiralAt": null,
-          "rollAcceleration": 0.00012934301655566745,
+          "rollAcceleration": 0.00012934302,
           "moves": 1,
           "moveKind": 1,
           "moveBand": 3,
@@ -2023,7 +2263,7 @@
       "kind": "pitch",
       "side": 1,
       "delay": 0.1,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -2035,7 +2275,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgUAAAAAAAAAAAAM6AfBDpoFBvkBAG4UgwEAjQEEsAQA",
+      "link": "AwYAAAAAAAAAAAAADOgHwQ6aBQb5AQBuFIMBAI0BBLAEAA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -2074,6 +2314,24 @@
             }
           },
           "physical": {
+            "wing": "classic",
+            "sepL": 0,
+            "sepR": 0,
+            "sideAlphaL": 0,
+            "sideAlphaR": 0,
+            "sideAlongL": 0,
+            "sideAlongR": 0,
+            "foldL": 0,
+            "foldR": 0,
+            "tipL": 0,
+            "tipR": 0,
+            "pumpL": 0,
+            "pumpR": 0,
+            "deepStall": 0,
+            "creep": 0,
+            "twist": 0,
+            "twistRate": 0,
+            "twistYaw": 0,
             "steer": 1.2997710987822678e-21,
             "differential": -0.00010146335903527059,
             "brake": 1.8220579990014878e-45,
@@ -2082,8 +2340,8 @@
             "bar": 0,
             "ears": 0,
             "controlMode": "legacy",
-            "leftBrake": 0.00010146335903527059,
-            "rightBrake": 1.8220579990014878e-45,
+            "leftBrake": 0.00010146336,
+            "rightBrake": 0,
             "leftBrakeTarget": 0,
             "rightBrakeTarget": 0,
             "acro": false,
@@ -2137,11 +2395,11 @@
               "alpha": 0.10264015498528002,
               "forward": 11.520440520774823,
               "pilotForward": 11.807310374213865,
-              "pitch": 0.15572790253433944,
-              "pitchRate": 0.03252714732684192,
+              "pitch": 0.15572790253,
+              "pitchRate": 0.03252714733,
               "load": 1.0282215884404344,
               "under": true,
-              "bank": -0.000022266929193477746
+              "bank": -0.00002226693
             },
             "work": [
               {
@@ -2232,10 +2490,10 @@
             "z": 19.4147568
           },
           "yaw": 4.684553576242768,
-          "yawRate": 0.000376162916350383,
+          "yawRate": 0.00037616292,
           "track": -1.598773182321048,
-          "trackRate": -0.00009400734634734677,
-          "bank": -0.0000017716272659897335,
+          "trackRate": -0.00009400735,
+          "bank": -0.00000177163,
           "speed": 11.813518831848903,
           "sink": 0,
           "vy": 0.5666656,
@@ -2249,19 +2507,19 @@
           "bar": 0,
           "ears": 0,
           "controlMode": "legacy",
-          "leftBrake": 0.00010146335903527059,
-          "rightBrake": 1.8220579990014878e-45,
+          "leftBrake": 0.00010146336,
+          "rightBrake": 0,
           "leftBrakeTarget": 0,
           "rightBrakeTarget": 0,
           "coordination": 2.3444973271915398e-33,
           "coordinatedLean": 3.047309867055838e-54,
           "pilotLean": 6.704081707522843e-55,
           "bankTarget": 8.578489251962968e-22,
-          "pitch": 0.155861725240278,
-          "pitchRate": 0.032730998730636784,
+          "pitch": 0.15586172524,
+          "pitchRate": 0.03273099873,
           "lean": 8.578489251962968e-22,
           "roll": -0.0000017716272659897343,
-          "rollRate": -0.00010096895205643362,
+          "rollRate": -0.00010096895,
           "stallLoad": 0,
           "stall": 0,
           "windX": 0,
@@ -2273,6 +2531,13 @@
           "inflation": 1,
           "forwardAirspeed": 11.516011514000542,
           "frontalRisk": 0,
+          "foldLeft": 0,
+          "foldRight": 0,
+          "cravatLeft": 0,
+          "cravatRight": 0,
+          "deepStall": 0,
+          "twist": 0,
+          "twisted": 0,
           "loop": 0,
           "loopAngle": -0.00007528935978777579,
           "loopRate": 0.00029891878118396144,
@@ -2316,7 +2581,7 @@
           "spiralSide": 0,
           "spirals": 0,
           "spiralAt": null,
-          "rollAcceleration": 0.0002144564613265041,
+          "rollAcceleration": 0.00021445646,
           "moves": 1,
           "moveKind": 1,
           "moveBand": 3,
@@ -2389,7 +2654,7 @@
       "kind": "pitch",
       "side": 1,
       "delay": 0.2,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -2401,7 +2666,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgUAAAAAAAAAAAAM6AfUDqAFBv4BAHMUgQEAkAEE0gEADQTTAgA",
+      "link": "AwYAAAAAAAAAAAAADOgH1A6gBQb-AQBzFIEBAJABBNIBAA0E0wIA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -2440,6 +2705,24 @@
             }
           },
           "physical": {
+            "wing": "classic",
+            "sepL": 0,
+            "sepR": 0,
+            "sideAlphaL": 0,
+            "sideAlphaR": 0,
+            "sideAlongL": 0,
+            "sideAlongR": 0,
+            "foldL": 0,
+            "foldR": 0,
+            "tipL": 0,
+            "tipR": 0,
+            "pumpL": 0,
+            "pumpR": 0,
+            "deepStall": 0,
+            "creep": 0,
+            "twist": 0,
+            "twistRate": 0,
+            "twistYaw": 0,
             "steer": 7.867815056259661e-22,
             "differential": -0.00008030329166744755,
             "brake": 4.6427127628896515e-28,
@@ -2448,8 +2731,8 @@
             "bar": 0,
             "ears": 0,
             "controlMode": "legacy",
-            "leftBrake": 0.00008030329166744755,
-            "rightBrake": 4.6427127628896515e-28,
+            "leftBrake": 0.00008030329,
+            "rightBrake": 0,
             "leftBrakeTarget": 0,
             "rightBrakeTarget": 0,
             "acro": false,
@@ -2503,11 +2786,11 @@
               "alpha": 0.10394580498594945,
               "forward": 11.420074238542565,
               "pilotForward": 11.652902400746367,
-              "pitch": 0.17254644864093927,
-              "pitchRate": 0.026268210653176444,
+              "pitch": 0.17254644864,
+              "pitchRate": 0.02626821065,
               "load": 1.017353061677293,
               "under": true,
-              "bank": -0.000056445189370084114
+              "bank": -0.00005644519
             },
             "work": [
               {
@@ -2598,10 +2881,10 @@
             "z": 10.591518
           },
           "yaw": 4.7281645301857065,
-          "yawRate": 0.00016945132418703853,
+          "yawRate": 0.00016945132,
           "track": -1.5552345076806295,
-          "trackRate": -0.000003875431722200062,
-          "bank": -0.00002134692443477432,
+          "trackRate": -0.00000387543,
+          "bank": -0.00002134692,
           "speed": 11.667874436702723,
           "sink": 0,
           "vy": 0.7316546,
@@ -2615,19 +2898,19 @@
           "bar": 0,
           "ears": 0,
           "controlMode": "legacy",
-          "leftBrake": 0.00008030329166744755,
-          "rightBrake": 4.6427127628896515e-28,
+          "leftBrake": 0.00008030329,
+          "rightBrake": 0,
           "leftBrakeTarget": 0,
           "rightBrakeTarget": 0,
           "coordination": 9.561539820442922e-34,
           "coordinatedLean": 7.522842696030712e-55,
           "pilotLean": 1.6550253931267567e-55,
           "bankTarget": 5.1927579371313765e-22,
-          "pitch": 0.17265404472786167,
-          "pitchRate": 0.026490016113494552,
+          "pitch": 0.17265404473,
+          "pitchRate": 0.02649001611,
           "lean": 5.1927579371313765e-22,
           "roll": -0.00002134692443477432,
-          "rollRate": -0.000058347737976389446,
+          "rollRate": -0.00005834774,
           "stallLoad": 0,
           "stall": 0,
           "windX": 0,
@@ -2639,6 +2922,13 @@
           "inflation": 1,
           "forwardAirspeed": 11.41528921262304,
           "frontalRisk": 0,
+          "foldLeft": 0,
+          "foldRight": 0,
+          "cravatLeft": 0,
+          "cravatRight": 0,
+          "deepStall": 0,
+          "twist": 0,
+          "twisted": 0,
           "loop": 0,
           "loopAngle": 0.000021159050594113533,
           "loopRate": 0.00032708707827862365,
@@ -2682,7 +2972,7 @@
           "spiralSide": 0,
           "spirals": 0,
           "spiralAt": null,
-          "rollAcceleration": 0.00022377136766331312,
+          "rollAcceleration": 0.00022377137,
           "moves": 1,
           "moveKind": 1,
           "moveBand": 3,
@@ -2755,7 +3045,7 @@
       "kind": "pitch",
       "side": 1,
       "delay": 0.3,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -2767,7 +3057,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgUAAAAAAAAAAAAM6AetEqYFBoICAHgUgQEAkQEEzgEAEwSaBgA",
+      "link": "AwYAAAAAAAAAAAAADOgHrRKmBQaCAgB4FIEBAJEBBM4BABMEmgYA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -2806,6 +3096,24 @@
             }
           },
           "physical": {
+            "wing": "classic",
+            "sepL": 0,
+            "sepR": 0,
+            "sideAlphaL": 0,
+            "sideAlphaR": 0,
+            "sideAlongL": 0,
+            "sideAlongR": 0,
+            "foldL": 0,
+            "foldR": 0,
+            "tipL": 0,
+            "tipR": 0,
+            "pumpL": 0,
+            "pumpR": 0,
+            "deepStall": 0,
+            "creep": 0,
+            "twist": 0,
+            "twistRate": 0,
+            "twistYaw": 0,
             "steer": 1.1379222320856112e-29,
             "differential": -0.000012306308412968372,
             "brake": 4.911413338911141e-64,
@@ -2814,8 +3122,8 @@
             "bar": 0,
             "ears": 0,
             "controlMode": "legacy",
-            "leftBrake": 0.000012306308412968372,
-            "rightBrake": 4.911413338911141e-64,
+            "leftBrake": 0.00001230631,
+            "rightBrake": 0,
             "leftBrakeTarget": 0,
             "rightBrakeTarget": 0,
             "acro": false,
@@ -2869,11 +3177,11 @@
               "alpha": 0.10075192397723237,
               "forward": 11.665814099619123,
               "pilotForward": 12.035285260027068,
-              "pitch": 0.13466568528094844,
-              "pitchRate": 0.04294139701727934,
+              "pitch": 0.13466568528,
+              "pitchRate": 0.04294139702,
               "load": 1.0439630920568088,
               "under": true,
-              "bank": -0.0000013602856410692805
+              "bank": -0.00000136029
             },
             "work": [
               {
@@ -2964,10 +3272,10 @@
             "z": -3.4156925
           },
           "yaw": 4.771339666644949,
-          "yawRate": 0.00004404555793562,
+          "yawRate": 0.00004404556,
           "track": -1.511860062771563,
-          "trackRate": -0.000011090417464387768,
-          "bank": 2.7596068497684745e-7,
+          "trackRate": -0.00001109042,
+          "bank": 2.7596e-7,
           "speed": 12.033998474548065,
           "sink": 0,
           "vy": 0.3586647,
@@ -2981,19 +3289,19 @@
           "bar": 0,
           "ears": 0,
           "controlMode": "legacy",
-          "leftBrake": 0.000012306308412968372,
-          "rightBrake": 4.911413338911141e-64,
+          "leftBrake": 0.00001230631,
+          "rightBrake": 0,
           "leftBrakeTarget": 0,
           "rightBrakeTarget": 0,
           "coordination": 1.041515515821618e-47,
           "coordinatedLean": 1.1851636605155322e-76,
           "pilotLean": 2.6073600531341708e-77,
           "bankTarget": 7.510286731765035e-30,
-          "pitch": 0.13484311741147578,
-          "pitchRate": 0.043120091981659336,
+          "pitch": 0.13484311741,
+          "pitchRate": 0.04312009198,
           "lean": 7.510286731765035e-30,
           "roll": 2.7596068497684745e-7,
-          "rollRate": -0.00003053372398232167,
+          "rollRate": -0.00003053372,
           "stallLoad": 0,
           "stall": 0,
           "windX": 0,
@@ -3005,6 +3313,13 @@
           "inflation": 1,
           "forwardAirspeed": 11.661795181529126,
           "frontalRisk": 0,
+          "foldLeft": 0,
+          "foldRight": 0,
+          "cravatLeft": 0,
+          "cravatRight": 0,
+          "deepStall": 0,
+          "twist": 0,
+          "twisted": 0,
           "loop": 0,
           "loopAngle": -0.000009662993657520924,
           "loopRate": 0.00003317944629100538,
@@ -3048,7 +3363,7 @@
           "spiralSide": 0,
           "spirals": 0,
           "spiralAt": null,
-          "rollAcceleration": -0.00012350957842284784,
+          "rollAcceleration": -0.00012350958,
           "moves": 1,
           "moveKind": 1,
           "moveBand": 3,
@@ -3121,7 +3436,7 @@
       "kind": "wingover",
       "side": -1,
       "delay": 0,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -3133,7 +3448,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgUAAAAAAAAAAAAE6AfjDpQFBfQBAA8VgwIB8QECmAEBVAAnBEwAAQR4AA",
+      "link": "AwYAAAAAAAAAAAAABOgH4w6UBQX0AQAPFYMCAfEBApgBAVQAJwRMAAEEeAA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -3172,6 +3487,24 @@
             }
           },
           "physical": {
+            "wing": "classic",
+            "sepL": 0,
+            "sepR": 0,
+            "sideAlphaL": 0,
+            "sideAlphaR": 0,
+            "sideAlongL": 0,
+            "sideAlongR": 0,
+            "foldL": 0,
+            "foldR": 0,
+            "tipL": 0,
+            "tipR": 0,
+            "pumpL": 0,
+            "pumpR": 0,
+            "deepStall": 0,
+            "creep": 0,
+            "twist": 0,
+            "twistRate": 0,
+            "twistYaw": 0,
             "steer": -9.300857167104959e-7,
             "differential": 0.03757173158940963,
             "brake": 1.49980308452571e-11,
@@ -3180,8 +3513,8 @@
             "bar": 0,
             "ears": 0,
             "controlMode": "legacy",
-            "leftBrake": 1.49980308452571e-11,
-            "rightBrake": 0.03757173160440766,
+            "leftBrake": 1e-11,
+            "rightBrake": 0.0375717316,
             "leftBrakeTarget": 0,
             "rightBrakeTarget": 0,
             "acro": false,
@@ -3235,11 +3568,11 @@
               "alpha": 0.09948872831668386,
               "forward": 11.258930215021248,
               "pilotForward": 10.729645226578807,
-              "pitch": -0.12776753320217907,
-              "pitchRate": -0.04771479530001052,
+              "pitch": -0.1277675332,
+              "pitchRate": -0.0477147953,
               "load": 0.9453049201292925,
               "under": true,
-              "bank": -0.01623465186145138
+              "bank": -0.01623465186
             },
             "work": [
               {
@@ -3330,10 +3663,10 @@
             "z": -91.1282843
           },
           "yaw": -5.746312116395328,
-          "yawRate": -0.20165016612773506,
+          "yawRate": -0.20165016613,
           "track": 0.531762331412415,
-          "trackRate": 0.07009043073074928,
-          "bank": -0.016445419854154836,
+          "trackRate": 0.07009043073,
+          "bank": -0.01644541985,
           "speed": 10.9792265525728,
           "sink": 2.3063575,
           "vy": -2.3063575,
@@ -3347,19 +3680,19 @@
           "bar": 0,
           "ears": 0,
           "controlMode": "legacy",
-          "leftBrake": 1.49980308452571e-11,
-          "rightBrake": 0.03757173160440766,
+          "leftBrake": 1e-11,
+          "rightBrake": 0.0375717316,
           "leftBrakeTarget": 0,
           "rightBrakeTarget": 0,
           "coordination": 6.898559141752388e-8,
           "coordinatedLean": -6.416251323626513e-14,
           "pilotLean": -1.4115752911978328e-14,
           "bankTarget": -6.138565640461755e-7,
-          "pitch": -0.12791071183744035,
-          "pitchRate": -0.03558604798173604,
+          "pitch": -0.12791071184,
+          "pitchRate": -0.03558604798,
           "lean": -6.138565640461755e-7,
           "roll": -0.01644480599759079,
-          "rollRate": 0.10980090146689875,
+          "rollRate": 0.10980090147,
           "stallLoad": 0,
           "stall": 0,
           "windX": 0,
@@ -3371,6 +3704,13 @@
           "inflation": 1,
           "forwardAirspeed": 11.257815307457435,
           "frontalRisk": 0,
+          "foldLeft": 0,
+          "foldRight": 0,
+          "cravatLeft": 0,
+          "cravatRight": 0,
+          "deepStall": 0,
+          "twist": 0,
+          "twisted": 0,
           "loop": 0,
           "loopAngle": 0.0512098406467732,
           "loopRate": -0.05315663194773691,
@@ -3414,7 +3754,7 @@
           "spiralSide": 0,
           "spirals": 0,
           "spiralAt": null,
-          "rollAcceleration": 0.07129945650802126,
+          "rollAcceleration": 0.07129945651,
           "moves": 1,
           "moveKind": 2,
           "moveBand": 1,
@@ -3488,7 +3828,7 @@
       "kind": "wingover",
       "side": -1,
       "delay": 0.1,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -3500,7 +3840,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgUAAAAAAAAAAAAE6AeND5oFBfkBABUVgwIB_AECnwEBWwAsBMABAA",
+      "link": "AwYAAAAAAAAAAAAABOgHjQ-aBQX5AQAVFYMCAfwBAp8BAVsALATAAQA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -3539,6 +3879,24 @@
             }
           },
           "physical": {
+            "wing": "classic",
+            "sepL": 0,
+            "sepR": 0,
+            "sideAlphaL": 0,
+            "sideAlphaR": 0,
+            "sideAlongL": 0,
+            "sideAlongR": 0,
+            "foldL": 0,
+            "foldR": 0,
+            "tipL": 0,
+            "tipR": 0,
+            "pumpL": 0,
+            "pumpR": 0,
+            "deepStall": 0,
+            "creep": 0,
+            "twist": 0,
+            "twistRate": 0,
+            "twistYaw": 0,
             "steer": -6.967553694221039e-7,
             "differential": 0.038147421224662165,
             "brake": 2.498126521059982e-16,
@@ -3547,8 +3905,8 @@
             "bar": 0,
             "ears": 0,
             "controlMode": "legacy",
-            "leftBrake": 2.498126521059982e-16,
-            "rightBrake": 0.038147421224662414,
+            "leftBrake": 0,
+            "rightBrake": 0.03814742122,
             "leftBrakeTarget": 0,
             "rightBrakeTarget": 0,
             "acro": false,
@@ -3602,11 +3960,11 @@
               "alpha": 0.10028673899225049,
               "forward": 11.23369456221731,
               "pilotForward": 10.716801430642276,
-              "pitch": -0.1327209381236525,
-              "pitchRate": -0.0439811191060345,
+              "pitch": -0.13272093812,
+              "pitchRate": -0.04398111911,
               "load": 0.9439488459297678,
               "under": true,
-              "bank": -0.008860947302052469
+              "bank": -0.0088609473
             },
             "work": [
               {
@@ -3697,10 +4055,10 @@
             "z": -97.7974673
           },
           "yaw": -5.807864769534685,
-          "yawRate": -0.1776982517490358,
+          "yawRate": -0.17769825175,
           "track": 0.4910113680628956,
-          "trackRate": 0.05669191013996322,
-          "bank": -0.006795139797206646,
+          "trackRate": 0.05669191014,
+          "bank": -0.0067951398,
           "speed": 10.98007581257366,
           "sink": 2.3638598,
           "vy": -2.3638598,
@@ -3714,19 +4072,19 @@
           "bar": 0,
           "ears": 0,
           "controlMode": "legacy",
-          "leftBrake": 2.498126521059982e-16,
-          "rightBrake": 0.038147421224662414,
+          "leftBrake": 0,
+          "rightBrake": 0.03814742122,
           "leftBrakeTarget": 0,
           "rightBrakeTarget": 0,
           "coordination": 4.56018561955415e-8,
           "coordinatedLean": -3.1773338159858174e-14,
           "pilotLean": -6.990134395168798e-15,
           "bankTarget": -4.598585393703212e-7,
-          "pitch": -0.13286101452000085,
-          "pitchRate": -0.03476482195804875,
+          "pitch": -0.13286101452,
+          "pitchRate": -0.03476482196,
           "lean": -4.598585393703212e-7,
           "roll": -0.0067946799386672755,
-          "rollRate": 0.1004782611055771,
+          "rollRate": 0.10047826111,
           "stallLoad": 0,
           "stall": 0,
           "windX": 0,
@@ -3738,6 +4096,13 @@
           "inflation": 1,
           "forwardAirspeed": 11.232795402966548,
           "frontalRisk": 0,
+          "foldLeft": 0,
+          "foldRight": 0,
+          "cravatLeft": 0,
+          "cravatRight": 0,
+          "deepStall": 0,
+          "twist": 0,
+          "twisted": 0,
           "loop": 0,
           "loopAngle": 0.07531317008436952,
           "loopRate": -0.07179379382841355,
@@ -3781,7 +4146,7 @@
           "spiralSide": 0,
           "spirals": 0,
           "spiralAt": null,
-          "rollAcceleration": 0.024125286231093494,
+          "rollAcceleration": 0.02412528623,
           "moves": 1,
           "moveKind": 2,
           "moveBand": 1,
@@ -3855,7 +4220,7 @@
       "kind": "wingover",
       "side": -1,
       "delay": 0.2,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -3867,7 +4232,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgUAAAAAAAAAAAAI6AfOD6AFBf4BABsVgwIBiQICqAEBYAAxBF8ADQRkAA",
+      "link": "AwYAAAAAAAAAAAAACOgHzg-gBQX-AQAbFYMCAYkCAqgBAWAAMQRfAA0EZAA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -3906,6 +4271,24 @@
             }
           },
           "physical": {
+            "wing": "classic",
+            "sepL": 0,
+            "sepR": 0,
+            "sideAlphaL": 0,
+            "sideAlphaR": 0,
+            "sideAlongL": 0,
+            "sideAlongR": 0,
+            "foldL": 0,
+            "foldR": 0,
+            "tipL": 0,
+            "tipR": 0,
+            "pumpL": 0,
+            "pumpR": 0,
+            "deepStall": 0,
+            "creep": 0,
+            "twist": 0,
+            "twistRate": 0,
+            "twistYaw": 0,
             "steer": -2.460081535031095e-7,
             "differential": 0.03406979719318854,
             "brake": 3.900224659937122e-9,
@@ -3914,8 +4297,8 @@
             "bar": 0,
             "ears": 0,
             "controlMode": "legacy",
-            "leftBrake": 3.900224659937122e-9,
-            "rightBrake": 0.0340698010934132,
+            "leftBrake": 3.9e-9,
+            "rightBrake": 0.03406980109,
             "leftBrakeTarget": 0,
             "rightBrakeTarget": 0,
             "acro": false,
@@ -3969,11 +4352,11 @@
               "alpha": 0.1045397593509995,
               "forward": 10.922661937278702,
               "pilotForward": 10.404195682570547,
-              "pitch": -0.1413439797781554,
-              "pitchRate": -0.04170809447710358,
+              "pitch": -0.14134397978,
+              "pitchRate": -0.04170809448,
               "load": 0.906388701944737,
               "under": true,
-              "bank": 0.013147141504228759
+              "bank": 0.0131471415
             },
             "work": [
               {
@@ -4064,10 +4447,10 @@
             "z": -108.4356386
           },
           "yaw": -5.9464872151533115,
-          "yawRate": -0.07292630013617489,
+          "yawRate": -0.07292630014,
           "track": 0.4131384406267834,
-          "trackRate": 0.003119211113780107,
-          "bank": 0.022128756467240936,
+          "trackRate": 0.00311921111,
+          "bank": 0.02212875647,
           "speed": 10.70176397955735,
           "sink": 2.3557893,
           "vy": -2.3557893,
@@ -4081,19 +4464,19 @@
           "bar": 0,
           "ears": 0,
           "controlMode": "legacy",
-          "leftBrake": 3.900224659937122e-9,
-          "rightBrake": 0.0340698010934132,
+          "leftBrake": 3.9e-9,
+          "rightBrake": 0.03406980109,
           "leftBrakeTarget": 0,
           "rightBrakeTarget": 0,
           "coordination": 8.707048914683904e-9,
           "coordinatedLean": -2.1420050259626406e-15,
           "pilotLean": -4.71241105711781e-16,
           "bankTarget": -1.623653810121716e-7,
-          "pitch": -0.14150909596695033,
-          "pitchRate": -0.04077563041266774,
+          "pitch": -0.14150909597,
+          "pitchRate": -0.04077563041,
           "lean": -1.623653810121716e-7,
           "roll": 0.022128918832621948,
-          "rollRate": 0.05112477882185398,
+          "rollRate": 0.05112477882,
           "stallLoad": 0,
           "stall": 0,
           "windX": 0,
@@ -4105,6 +4488,13 @@
           "inflation": 1,
           "forwardAirspeed": 10.92221884878622,
           "frontalRisk": 0,
+          "foldLeft": 0,
+          "foldRight": 0,
+          "cravatLeft": 0,
+          "cravatRight": 0,
+          "deepStall": 0,
+          "twist": 0,
+          "twisted": 0,
           "loop": 0,
           "loopAngle": 0.11719570197861416,
           "loopRate": -0.1126261808520462,
@@ -4148,7 +4538,7 @@
           "spiralSide": 0,
           "spirals": 0,
           "spiralAt": null,
-          "rollAcceleration": -0.10978064360643518,
+          "rollAcceleration": -0.10978064361,
           "moves": 1,
           "moveKind": 2,
           "moveBand": 2,
@@ -4222,7 +4612,7 @@
       "kind": "wingover",
       "side": -1,
       "delay": 0.3,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": 21,
         "y": 1000,
@@ -4234,7 +4624,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgUAAAAAAAAAAAAM6Af-EaYFBYICACEVgwIBlwICtgEBXgA4BM8DAA",
+      "link": "AwYAAAAAAAAAAAAADOgH_hGmBQWCAgAhFYMCAZcCArYBAV4AOATPAwA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -4273,6 +4663,24 @@
             }
           },
           "physical": {
+            "wing": "classic",
+            "sepL": 0,
+            "sepR": 0,
+            "sideAlphaL": 0,
+            "sideAlphaR": 0,
+            "sideAlongL": 0,
+            "sideAlongR": 0,
+            "foldL": 0,
+            "foldR": 0,
+            "tipL": 0,
+            "tipR": 0,
+            "pumpL": 0,
+            "pumpR": 0,
+            "deepStall": 0,
+            "creep": 0,
+            "twist": 0,
+            "twistRate": 0,
+            "twistYaw": 0,
             "steer": -9.965109701123072e-12,
             "differential": -0.0014300928782262304,
             "brake": 8.725370981831508e-38,
@@ -4281,8 +4689,8 @@
             "bar": 0,
             "ears": 0,
             "controlMode": "legacy",
-            "leftBrake": 0.0014300928782262304,
-            "rightBrake": 8.725370981831508e-38,
+            "leftBrake": 0.00143009288,
+            "rightBrake": 0,
             "leftBrakeTarget": 0,
             "rightBrakeTarget": 0,
             "acro": false,
@@ -4336,11 +4744,11 @@
               "alpha": 0.09957956428134046,
               "forward": 11.813637418197617,
               "pilotForward": 12.268960592543483,
-              "pitch": 0.10238795624889102,
-              "pitchRate": 0.054033827558715206,
+              "pitch": 0.10238795625,
+              "pitchRate": 0.05403382756,
               "load": 1.0652957137346502,
               "under": true,
-              "bank": -0.009079385279280396
+              "bank": -0.00907938528
             },
             "work": [
               {
@@ -4431,10 +4839,10 @@
             "z": -168.0627027
           },
           "yaw": -6.001138564932846,
-          "yawRate": -0.023668542923186695,
+          "yawRate": -0.02366854292,
           "track": 0.2588564828606704,
-          "trackRate": 0.01316935949666198,
-          "bank": -0.006878292703267961,
+          "trackRate": 0.0131693595,
+          "bank": -0.0068782927,
           "speed": 12.266914546183456,
           "sink": 0.0310171,
           "vy": -0.0310171,
@@ -4448,19 +4856,19 @@
           "bar": 0,
           "ears": 0,
           "controlMode": "legacy",
-          "leftBrake": 0.0014300928782262304,
-          "rightBrake": 8.725370981831508e-38,
+          "leftBrake": 0.00143009288,
+          "rightBrake": 0,
           "leftBrakeTarget": 0,
           "rightBrakeTarget": 0,
           "coordination": 1.8590627025492783e-16,
           "coordinatedLean": -1.852576377216989e-27,
           "pilotLean": -4.075668029877376e-28,
           "bankTarget": -6.576972402741228e-12,
-          "pitch": 0.10261281025980164,
-          "pitchRate": 0.054541024168218155,
+          "pitch": 0.10261281026,
+          "pitchRate": 0.05454102417,
           "lean": -6.576972402741228e-12,
           "roll": -0.006878292696690988,
-          "rollRate": 0.004725957703095672,
+          "rollRate": 0.0047259577,
           "stallLoad": 0,
           "stall": 0,
           "windX": 0,
@@ -4472,6 +4880,13 @@
           "inflation": 1,
           "forwardAirspeed": 11.811044380346306,
           "frontalRisk": 0,
+          "foldLeft": 0,
+          "foldRight": 0,
+          "cravatLeft": 0,
+          "cravatRight": 0,
+          "deepStall": 0,
+          "twist": 0,
+          "twisted": 0,
           "loop": 0,
           "loopAngle": -0.12444277782999848,
           "loopRate": 0.024891453748732584,
@@ -4515,7 +4930,7 @@
           "spiralSide": 0,
           "spirals": 0,
           "spiralAt": null,
-          "rollAcceleration": 0.04331918605767791,
+          "rollAcceleration": 0.04331918606,
           "moves": 1,
           "moveKind": 2,
           "moveBand": 3,
@@ -4589,7 +5004,7 @@
       "kind": "wingover",
       "side": 1,
       "delay": 0,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -4601,7 +5016,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgUAAAAAAAAAAAAE6AfjDpQFBvQBAA8WgwIC8QEBmAECVAAnBEwAAQR4AA",
+      "link": "AwYAAAAAAAAAAAAABOgH4w6UBQb0AQAPFoMCAvEBAZgBAlQAJwRMAAEEeAA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -4640,6 +5055,24 @@
             }
           },
           "physical": {
+            "wing": "classic",
+            "sepL": 0,
+            "sepR": 0,
+            "sideAlphaL": 0,
+            "sideAlphaR": 0,
+            "sideAlongL": 0,
+            "sideAlongR": 0,
+            "foldL": 0,
+            "foldR": 0,
+            "tipL": 0,
+            "tipR": 0,
+            "pumpL": 0,
+            "pumpR": 0,
+            "deepStall": 0,
+            "creep": 0,
+            "twist": 0,
+            "twistRate": 0,
+            "twistYaw": 0,
             "steer": 9.300857167104959e-7,
             "differential": -0.03757173158940963,
             "brake": 1.49980308452571e-11,
@@ -4648,8 +5081,8 @@
             "bar": 0,
             "ears": 0,
             "controlMode": "legacy",
-            "leftBrake": 0.03757173160440766,
-            "rightBrake": 1.49980308452571e-11,
+            "leftBrake": 0.0375717316,
+            "rightBrake": 1e-11,
             "leftBrakeTarget": 0,
             "rightBrakeTarget": 0,
             "acro": false,
@@ -4703,11 +5136,11 @@
               "alpha": 0.09948872831668386,
               "forward": 11.258930215021248,
               "pilotForward": 10.729645226578807,
-              "pitch": -0.12776753320217907,
-              "pitchRate": -0.04771479530001052,
+              "pitch": -0.1277675332,
+              "pitchRate": -0.0477147953,
               "load": 0.9453049201292925,
               "under": true,
-              "bank": 0.01623465186145138
+              "bank": 0.01623465186
             },
             "work": [
               {
@@ -4798,10 +5231,10 @@
             "z": -91.1282843
           },
           "yaw": 5.746312116395328,
-          "yawRate": 0.20165016612773506,
+          "yawRate": 0.20165016613,
           "track": -0.531762331412415,
-          "trackRate": -0.07009043073074928,
-          "bank": 0.016445419854154836,
+          "trackRate": -0.07009043073,
+          "bank": 0.01644541985,
           "speed": 10.9792265525728,
           "sink": 2.3063575,
           "vy": -2.3063575,
@@ -4815,19 +5248,19 @@
           "bar": 0,
           "ears": 0,
           "controlMode": "legacy",
-          "leftBrake": 0.03757173160440766,
-          "rightBrake": 1.49980308452571e-11,
+          "leftBrake": 0.0375717316,
+          "rightBrake": 1e-11,
           "leftBrakeTarget": 0,
           "rightBrakeTarget": 0,
           "coordination": 6.898559141752388e-8,
           "coordinatedLean": 6.416251323626513e-14,
           "pilotLean": 1.4115752911978328e-14,
           "bankTarget": 6.138565640461755e-7,
-          "pitch": -0.12791071183744035,
-          "pitchRate": -0.03558604798173604,
+          "pitch": -0.12791071184,
+          "pitchRate": -0.03558604798,
           "lean": 6.138565640461755e-7,
           "roll": 0.01644480599759079,
-          "rollRate": -0.10980090146689875,
+          "rollRate": -0.10980090147,
           "stallLoad": 0,
           "stall": 0,
           "windX": 0,
@@ -4839,6 +5272,13 @@
           "inflation": 1,
           "forwardAirspeed": 11.257815307457435,
           "frontalRisk": 0,
+          "foldLeft": 0,
+          "foldRight": 0,
+          "cravatLeft": 0,
+          "cravatRight": 0,
+          "deepStall": 0,
+          "twist": 0,
+          "twisted": 0,
           "loop": 0,
           "loopAngle": 0.0512098406467732,
           "loopRate": 0.05315663194773691,
@@ -4882,7 +5322,7 @@
           "spiralSide": 0,
           "spirals": 0,
           "spiralAt": null,
-          "rollAcceleration": -0.07129945650802126,
+          "rollAcceleration": -0.07129945651,
           "moves": 1,
           "moveKind": 2,
           "moveBand": 1,
@@ -4956,7 +5396,7 @@
       "kind": "wingover",
       "side": 1,
       "delay": 0.1,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -4968,7 +5408,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgUAAAAAAAAAAAAE6AeND5oFBvkBABUWgwIC_AEBnwECWwAsBMABAA",
+      "link": "AwYAAAAAAAAAAAAABOgHjQ-aBQb5AQAVFoMCAvwBAZ8BAlsALATAAQA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -5007,6 +5447,24 @@
             }
           },
           "physical": {
+            "wing": "classic",
+            "sepL": 0,
+            "sepR": 0,
+            "sideAlphaL": 0,
+            "sideAlphaR": 0,
+            "sideAlongL": 0,
+            "sideAlongR": 0,
+            "foldL": 0,
+            "foldR": 0,
+            "tipL": 0,
+            "tipR": 0,
+            "pumpL": 0,
+            "pumpR": 0,
+            "deepStall": 0,
+            "creep": 0,
+            "twist": 0,
+            "twistRate": 0,
+            "twistYaw": 0,
             "steer": 6.967553694221039e-7,
             "differential": -0.038147421224662165,
             "brake": 2.498126521059982e-16,
@@ -5015,8 +5473,8 @@
             "bar": 0,
             "ears": 0,
             "controlMode": "legacy",
-            "leftBrake": 0.038147421224662414,
-            "rightBrake": 2.498126521059982e-16,
+            "leftBrake": 0.03814742122,
+            "rightBrake": 0,
             "leftBrakeTarget": 0,
             "rightBrakeTarget": 0,
             "acro": false,
@@ -5070,11 +5528,11 @@
               "alpha": 0.10028673899225049,
               "forward": 11.23369456221731,
               "pilotForward": 10.716801430642276,
-              "pitch": -0.1327209381236525,
-              "pitchRate": -0.0439811191060345,
+              "pitch": -0.13272093812,
+              "pitchRate": -0.04398111911,
               "load": 0.9439488459297678,
               "under": true,
-              "bank": 0.008860947302052469
+              "bank": 0.0088609473
             },
             "work": [
               {
@@ -5165,10 +5623,10 @@
             "z": -97.7974673
           },
           "yaw": 5.807864769534685,
-          "yawRate": 0.1776982517490358,
+          "yawRate": 0.17769825175,
           "track": -0.4910113680628956,
-          "trackRate": -0.05669191013996322,
-          "bank": 0.006795139797206646,
+          "trackRate": -0.05669191014,
+          "bank": 0.0067951398,
           "speed": 10.98007581257366,
           "sink": 2.3638598,
           "vy": -2.3638598,
@@ -5182,19 +5640,19 @@
           "bar": 0,
           "ears": 0,
           "controlMode": "legacy",
-          "leftBrake": 0.038147421224662414,
-          "rightBrake": 2.498126521059982e-16,
+          "leftBrake": 0.03814742122,
+          "rightBrake": 0,
           "leftBrakeTarget": 0,
           "rightBrakeTarget": 0,
           "coordination": 4.56018561955415e-8,
           "coordinatedLean": 3.1773338159858174e-14,
           "pilotLean": 6.990134395168798e-15,
           "bankTarget": 4.598585393703212e-7,
-          "pitch": -0.13286101452000085,
-          "pitchRate": -0.03476482195804875,
+          "pitch": -0.13286101452,
+          "pitchRate": -0.03476482196,
           "lean": 4.598585393703212e-7,
           "roll": 0.0067946799386672755,
-          "rollRate": -0.1004782611055771,
+          "rollRate": -0.10047826111,
           "stallLoad": 0,
           "stall": 0,
           "windX": 0,
@@ -5206,6 +5664,13 @@
           "inflation": 1,
           "forwardAirspeed": 11.232795402966548,
           "frontalRisk": 0,
+          "foldLeft": 0,
+          "foldRight": 0,
+          "cravatLeft": 0,
+          "cravatRight": 0,
+          "deepStall": 0,
+          "twist": 0,
+          "twisted": 0,
           "loop": 0,
           "loopAngle": 0.07531317008436952,
           "loopRate": 0.07179379382841355,
@@ -5249,7 +5714,7 @@
           "spiralSide": 0,
           "spirals": 0,
           "spiralAt": null,
-          "rollAcceleration": -0.024125286231093494,
+          "rollAcceleration": -0.02412528623,
           "moves": 1,
           "moveKind": 2,
           "moveBand": 1,
@@ -5323,7 +5788,7 @@
       "kind": "wingover",
       "side": 1,
       "delay": 0.2,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -5335,7 +5800,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgUAAAAAAAAAAAAI6AfOD6AFBv4BABsWgwICiQIBqAECYAAxBF8ADQRkAA",
+      "link": "AwYAAAAAAAAAAAAACOgHzg-gBQb-AQAbFoMCAokCAagBAmAAMQRfAA0EZAA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -5374,6 +5839,24 @@
             }
           },
           "physical": {
+            "wing": "classic",
+            "sepL": 0,
+            "sepR": 0,
+            "sideAlphaL": 0,
+            "sideAlphaR": 0,
+            "sideAlongL": 0,
+            "sideAlongR": 0,
+            "foldL": 0,
+            "foldR": 0,
+            "tipL": 0,
+            "tipR": 0,
+            "pumpL": 0,
+            "pumpR": 0,
+            "deepStall": 0,
+            "creep": 0,
+            "twist": 0,
+            "twistRate": 0,
+            "twistYaw": 0,
             "steer": 2.460081535031095e-7,
             "differential": -0.03406979719318854,
             "brake": 3.900224659937122e-9,
@@ -5382,8 +5865,8 @@
             "bar": 0,
             "ears": 0,
             "controlMode": "legacy",
-            "leftBrake": 0.0340698010934132,
-            "rightBrake": 3.900224659937122e-9,
+            "leftBrake": 0.03406980109,
+            "rightBrake": 3.9e-9,
             "leftBrakeTarget": 0,
             "rightBrakeTarget": 0,
             "acro": false,
@@ -5437,11 +5920,11 @@
               "alpha": 0.1045397593509995,
               "forward": 10.922661937278702,
               "pilotForward": 10.404195682570547,
-              "pitch": -0.1413439797781554,
-              "pitchRate": -0.04170809447710358,
+              "pitch": -0.14134397978,
+              "pitchRate": -0.04170809448,
               "load": 0.906388701944737,
               "under": true,
-              "bank": -0.013147141504228759
+              "bank": -0.0131471415
             },
             "work": [
               {
@@ -5532,10 +6015,10 @@
             "z": -108.4356386
           },
           "yaw": 5.9464872151533115,
-          "yawRate": 0.07292630013617489,
+          "yawRate": 0.07292630014,
           "track": -0.4131384406267834,
-          "trackRate": -0.003119211113780107,
-          "bank": -0.022128756467240936,
+          "trackRate": -0.00311921111,
+          "bank": -0.02212875647,
           "speed": 10.70176397955735,
           "sink": 2.3557893,
           "vy": -2.3557893,
@@ -5549,19 +6032,19 @@
           "bar": 0,
           "ears": 0,
           "controlMode": "legacy",
-          "leftBrake": 0.0340698010934132,
-          "rightBrake": 3.900224659937122e-9,
+          "leftBrake": 0.03406980109,
+          "rightBrake": 3.9e-9,
           "leftBrakeTarget": 0,
           "rightBrakeTarget": 0,
           "coordination": 8.707048914683904e-9,
           "coordinatedLean": 2.1420050259626406e-15,
           "pilotLean": 4.71241105711781e-16,
           "bankTarget": 1.623653810121716e-7,
-          "pitch": -0.14150909596695033,
-          "pitchRate": -0.04077563041266774,
+          "pitch": -0.14150909597,
+          "pitchRate": -0.04077563041,
           "lean": 1.623653810121716e-7,
           "roll": -0.022128918832621948,
-          "rollRate": -0.05112477882185398,
+          "rollRate": -0.05112477882,
           "stallLoad": 0,
           "stall": 0,
           "windX": 0,
@@ -5573,6 +6056,13 @@
           "inflation": 1,
           "forwardAirspeed": 10.92221884878622,
           "frontalRisk": 0,
+          "foldLeft": 0,
+          "foldRight": 0,
+          "cravatLeft": 0,
+          "cravatRight": 0,
+          "deepStall": 0,
+          "twist": 0,
+          "twisted": 0,
           "loop": 0,
           "loopAngle": 0.11719570197861416,
           "loopRate": 0.1126261808520462,
@@ -5616,7 +6106,7 @@
           "spiralSide": 0,
           "spirals": 0,
           "spiralAt": null,
-          "rollAcceleration": 0.10978064360643518,
+          "rollAcceleration": 0.10978064361,
           "moves": 1,
           "moveKind": 2,
           "moveBand": 2,
@@ -5690,7 +6180,7 @@
       "kind": "wingover",
       "side": 1,
       "delay": 0.3,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": -21,
         "y": 1000,
@@ -5702,7 +6192,7 @@
         "r": 80,
         "s": 5.5
       },
-      "link": "AgUAAAAAAAAAAAAM6Af-EaYFBoICACEWgwIClwIBtgECXgA4BM8DAA",
+      "link": "AwYAAAAAAAAAAAAADOgH_hGmBQaCAgAhFoMCApcCAbYBAl4AOATPAwA",
       "snapshot": {
         "g": {
           "pilot": {
@@ -5741,6 +6231,24 @@
             }
           },
           "physical": {
+            "wing": "classic",
+            "sepL": 0,
+            "sepR": 0,
+            "sideAlphaL": 0,
+            "sideAlphaR": 0,
+            "sideAlongL": 0,
+            "sideAlongR": 0,
+            "foldL": 0,
+            "foldR": 0,
+            "tipL": 0,
+            "tipR": 0,
+            "pumpL": 0,
+            "pumpR": 0,
+            "deepStall": 0,
+            "creep": 0,
+            "twist": 0,
+            "twistRate": 0,
+            "twistYaw": 0,
             "steer": 9.965109701123072e-12,
             "differential": 0.0014300928782262304,
             "brake": 8.725370981831508e-38,
@@ -5749,8 +6257,8 @@
             "bar": 0,
             "ears": 0,
             "controlMode": "legacy",
-            "leftBrake": 8.725370981831508e-38,
-            "rightBrake": 0.0014300928782262304,
+            "leftBrake": 0,
+            "rightBrake": 0.00143009288,
             "leftBrakeTarget": 0,
             "rightBrakeTarget": 0,
             "acro": false,
@@ -5804,11 +6312,11 @@
               "alpha": 0.09957956428134046,
               "forward": 11.813637418197617,
               "pilotForward": 12.268960592543483,
-              "pitch": 0.10238795624889102,
-              "pitchRate": 0.054033827558715206,
+              "pitch": 0.10238795625,
+              "pitchRate": 0.05403382756,
               "load": 1.0652957137346502,
               "under": true,
-              "bank": 0.009079385279280396
+              "bank": 0.00907938528
             },
             "work": [
               {
@@ -5899,10 +6407,10 @@
             "z": -168.0627027
           },
           "yaw": 6.001138564932846,
-          "yawRate": 0.023668542923186695,
+          "yawRate": 0.02366854292,
           "track": -0.2588564828606704,
-          "trackRate": -0.01316935949666198,
-          "bank": 0.006878292703267961,
+          "trackRate": -0.0131693595,
+          "bank": 0.0068782927,
           "speed": 12.266914546183456,
           "sink": 0.0310171,
           "vy": -0.0310171,
@@ -5916,19 +6424,19 @@
           "bar": 0,
           "ears": 0,
           "controlMode": "legacy",
-          "leftBrake": 8.725370981831508e-38,
-          "rightBrake": 0.0014300928782262304,
+          "leftBrake": 0,
+          "rightBrake": 0.00143009288,
           "leftBrakeTarget": 0,
           "rightBrakeTarget": 0,
           "coordination": 1.8590627025492783e-16,
           "coordinatedLean": 1.852576377216989e-27,
           "pilotLean": 4.075668029877376e-28,
           "bankTarget": 6.576972402741228e-12,
-          "pitch": 0.10261281025980164,
-          "pitchRate": 0.054541024168218155,
+          "pitch": 0.10261281026,
+          "pitchRate": 0.05454102417,
           "lean": 6.576972402741228e-12,
           "roll": 0.006878292696690988,
-          "rollRate": -0.004725957703095672,
+          "rollRate": -0.0047259577,
           "stallLoad": 0,
           "stall": 0,
           "windX": 0,
@@ -5940,6 +6448,13 @@
           "inflation": 1,
           "forwardAirspeed": 11.811044380346306,
           "frontalRisk": 0,
+          "foldLeft": 0,
+          "foldRight": 0,
+          "cravatLeft": 0,
+          "cravatRight": 0,
+          "deepStall": 0,
+          "twist": 0,
+          "twisted": 0,
           "loop": 0,
           "loopAngle": -0.12444277782999848,
           "loopRate": -0.024891453748732584,
@@ -5983,7 +6498,7 @@
           "spiralSide": 0,
           "spirals": 0,
           "spiralAt": null,
-          "rollAcceleration": -0.04331918605767791,
+          "rollAcceleration": -0.04331918606,
           "moves": 1,
           "moveKind": 2,
           "moveBand": 3,

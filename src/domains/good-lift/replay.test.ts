@@ -5,13 +5,13 @@ import type { ReplayResult } from './replay.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createReplay, replayLog } from './replay.ts';
-import { INPUT, createRecorder, decodeLog, encodeLog } from './recorder.ts';
+import { INPUT, LOG_FORMAT, createRecorder, decodeLog, encodeLog } from './recorder.ts';
 import { createRunWorld, finishRun, startRun, stepBits } from './run-step.ts';
 import { TST, createReferenceKeys } from './pilots.ts';
 import { CLOUD_GATE, createCloudbaseRun } from './cloudbase-state.ts';
 import { createMeet } from './meet-state.ts';
 import { BELL_RESULT, createBells } from './bells.ts';
-import { createStyle } from './meet-style.ts';
+import { createComboStyle } from './meet-combo.ts';
 import { RUNE } from './meet-runes.ts';
 import { summariseRun } from './meet-sheet.ts';
 import { SIM_VERSION } from './sim-version.ts';
@@ -48,7 +48,7 @@ function lander() {
 // `bitsOf(world)` at the keys and a recorder taking every step down, until the run ends or the
 // pilot ends it at step `quit`. Returns the run's sheet and its link.
 function flyLive(seed: number, bitsOf: (world: RunWorld) => number, { quit = Infinity, meta = {} }: {quit?:number;meta?:LogMetadataInput;seed?:number} = {}) {
-  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle() }), seed);
+  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createComboStyle() }), seed);
   const recorder = createRecorder();
   let reason = null;
   while (!reason && world.steps < quit) {
@@ -59,7 +59,7 @@ function flyLive(seed: number, bitsOf: (world: RunWorld) => number, { quit = Inf
   reason ??= 'quit';
   finishRun(world, reason);
   const sheet = summariseRun(world, reason);
-  const text = encodeLog({ simVersion: SIM_VERSION, seed, total: sheet.total, peak: sheet.peak, ...meta }, recorder.bits, recorder.steps);
+  const text = encodeLog({ simVersion: SIM_VERSION, glider: 'en-a', seed, total: sheet.total, peak: sheet.peak, ...meta }, recorder.bits, recorder.steps);
   return { sheet, text };
 }
 
@@ -91,7 +91,8 @@ test('a recorded run replays to the same total, peak, lights, ending and barogra
     // The step that touches down is in the log, though the run never counts it as flown: the sky is
     // not stepped on it.
     const steps = sheet.steps + (sheet.reason === 'landed' ? 1 : 0);
-    assert.deepEqual({ ...read.log, bits: null }, { format: 2, simVersion: SIM_VERSION, seed, day: 0, touch: false, initials: '', ...meta, total: sheet.total, peak: sheet.peak, steps, bits: null });
+    assert.deepEqual({ ...read.log, bits: null }, { format: LOG_FORMAT, simVersion: SIM_VERSION, glider: 'en-a', seed, day: 0, touch: false, initials: '', ...meta,
+      total: sheet.total, peak: sheet.peak, steps, bits: null });
     const replayed = replayLog(read.log);
     assert.deepEqual(replayed, sheet, `seed ${seed}`);
     seen[sheet.reason] += 1;
@@ -104,7 +105,7 @@ test('a recorded run replays to the same total, peak, lights, ending and barogra
     assert.equal(sheet.trace.n, Math.floor(sheet.steps / 60) + 1);
     assert.equal(sheet.trace.alt[0], CLOUD_GATE.y);
   }
-  // Natural v5 flights cover ordinary soaring and endings. Rare high-altitude hazards are
+  // Natural flights cover ordinary soaring and endings. Rare high-altitude hazards are
   // exercised deliberately by their own fixtures rather than depending on a former balance seed.
   for (const what of ['fog', 'quit', 'landed', 'lines', 'reps']) assert.ok(seen[what] > 0, `${seen[what]} ${what}`);
 
@@ -145,7 +146,7 @@ test('two runs stepped side by side do not disturb each other', () => {
   const [one, other] = [runs[1], runs[8]].map(({ text }) => createReplay({ log: readLog(text) }));
   // A live run flown at the same time, a step of it between slices of the two replays.
   const live = SKIES[15];
-  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells() }), live.seed);
+  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createComboStyle() }), live.seed);
   const bitsOf = live.pilot();
   let reason = null;
   while (!one.done || !other.done || !reason) {
@@ -174,6 +175,15 @@ test('a log from another sim version is refused before anything is flown', () =>
   const old = decodeLog(encodeLog({ ...log, simVersion: SIM_VERSION + 1 }, log.bits, log.steps));
   assert.ok(old.ok);
   assert.deepEqual(replayLog(old.log), { error: 'version' });
+});
+
+test('a log is flown on the glider it names: the classic wing, which flies no run, is refused, and another glider flies another run', () => {
+  const { sheet, text } = recorded()[2];
+  const log = readLog(text);
+  assert.deepEqual(replayLog({ ...log, glider: 'classic' }), { error: 'glider' });
+  const replay = createReplay({ log: { ...log, glider: 'classic' } });
+  assert.deepEqual([replay.done, replay.result, replay.advance()], [true, { error: 'glider' }, true]);
+  assert.notDeepEqual(replayLog({ ...log, glider: 'en-d' }), sheet);
 });
 
 test('a log that flies on past the end of its run is corrupt, and one that stops short of it is a run its pilot ended', () => {

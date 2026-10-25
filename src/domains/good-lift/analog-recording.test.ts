@@ -5,7 +5,7 @@ import { RUN, createRunWorld, finishRun, startRun, stepBits, stepFrame } from '.
 import { CLOUD_STRIKE, CLOUD_ZONE, createCloudbaseRun } from './cloudbase-state.ts';
 import { createMeet } from './meet-state.ts';
 import { createBells } from './bells.ts';
-import { createStyle } from './meet-style.ts';
+import { createComboStyle } from './meet-combo.ts';
 import { summariseRun } from './meet-sheet.ts';
 import { replayLog } from './replay.ts';
 import { runId } from '../../adapters/crypto/run-identity.service.ts';
@@ -13,9 +13,9 @@ import { SIM_VERSION } from './sim-version.ts';
 import { settleFlight } from '../flight/flight.ts';
 import type { RunLog } from './recorder.ts';
 
-const meta = { simVersion: SIM_VERSION, seed: 7 };
+const meta = { simVersion: SIM_VERSION, glider: 'en-a', seed: 7 };
 const direct = (leftBrake: unknown = 0, rightBrake: unknown = leftBrake, extra = {}) => inputFrame({ controlMode: 'brakes', leftBrake, rightBrake, ...extra });
-const fresh = () => startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle() }), meta.seed);
+const fresh = () => startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createComboStyle() }), meta.seed);
 const textOf = (bytes: number[]): string => Buffer.from(bytes).toString('base64url');
 const bytesOf = (text: string): number[] => [...Buffer.from(text, 'base64url')];
 
@@ -42,7 +42,7 @@ test('canonical brake frames quantize each hand once and preserve direct neutral
   assert.deepEqual([threshold.leftBrake, threshold.rightBrake], [1 / 255, 0]);
 });
 
-test('format 2 retains mixed controller modes, all brake depths and recorder storage beyond eight bits', () => {
+test('the log format retains mixed controller modes, all brake depths and recorder storage beyond eight bits', () => {
   const recorder = createRecorder();
   const frames = [0, 0, direct(), direct(), direct(0.125, 0.875), direct(1, 0), direct(0, 1), direct(0, 0, { ears: true }), direct(0, 0, { bar: true }), 20];
   for (const frame of frames) recorder.push(frame);
@@ -68,7 +68,7 @@ test('every step of a noisy ten-minute independent brake run fits the shared bro
   assert.equal(decodeLog(`${text}${'A'.repeat(MAX_LINK - text.length + 1)}`).why, 'long');
 });
 
-test('format 2 refuses noncanonical spans, unsupported tags, mixed configuration depths and truncated pairs', () => {
+test('the log format refuses noncanonical spans, unsupported tags, mixed configuration depths and truncated pairs', () => {
   const whole = bytesOf(encodeLog(meta, [direct(0.25, 0.5)], 1));
   const header = whole.slice(0, -4);
   const malformed = [

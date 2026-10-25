@@ -11,6 +11,8 @@
     "build:functions": "tsx tools/build-functions.ts",
     "models": "tsx tools/optimize-models.ts",
     "check:split": "tsx tools/check-split.ts",
+    "bench:flight": "tsx tools/bench-flight.ts",
+    "recovery:matrix": "tsx tools/recovery-matrix.ts",
     "test:core": "tsx tools/test.ts core",
     "test:opening": "tsx tools/test.ts opening",
     "typecheck": "tsc -p tsconfig.browser.json && tsc -p tsconfig.worker.json && tsc -p tsconfig.node.json && tsc -p tsconfig.json",

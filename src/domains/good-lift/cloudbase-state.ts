@@ -7,9 +7,11 @@ type SkyAirOutput = AirSample & Partial<Vector3>;
 // distances are metres, all rates are metres/second and all angles are radians; only step()
 // advances the run, so opening the map really pauses it. A run is laid out from its seed alone:
 // the same seed and the same flight always give the same sky.
-import { sampleAtmosphere, thermalProfile } from '../flight/atmosphere.ts';
+import { ATMOSPHERE, sampleAtmosphere, thermalProfile } from '../flight/atmosphere.ts';
+import { AIR_FEEL, roughness, turbulenceAt, type Gusting } from './air-feel.ts';
 import { CLOUD_WEATHER, cloudWeatherAt } from '../flight/cloud-weather.ts';
 import { THERMAL_FLOW, createThermalFlowState, resetThermalFlow, stepThermalFlow } from '../flight/thermal-flow.ts';
+import { STRIKER } from './strike-fold.ts';
 export { CLOUD_WEATHER } from '../flight/cloud-weather.ts';
 export { THERMAL_FLOW as CLOUD_RAVEN_FLOW } from '../flight/thermal-flow.ts';
 
@@ -185,6 +187,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     gustCount: 0,
     ravenDue: -1, ravenCount: 0, ravenAttack: -1, ravenAt: -Infinity,
     flow: createThermalFlowState(CLOUD_POOL.thermals),
+    feel: false, physical: false, driftX: 0, driftZ: 0,
     // `x, y, z` is where the pilot was at the last step. `collapse` and `shield` count down in
     // seconds. `cloud` is depth inside a cloud from 0 to 1, `thermal` the slot the pilot is in (or
     // -1), `danger` 1 while a raven is about to cross, and `headroom` the clear air up to a cloud
@@ -194,12 +197,13 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     // the bands that is (-1 when none).
     pilot: {
       x: CLOUD_GATE.x, y: CLOUD_GATE.y, z: CLOUD_GATE.z, collapse: 0, shield: 0, cloud: 0, cloudTime: 0, strikes: 0, thermal: -1,
-      danger: 0, headroom: 999, gustAhead: 999, gustIn: 99, gustSlot: -1,
+      danger: 0, headroom: 999, gustAhead: 999, gustIn: 99, gustSlot: -1, hitX: 0, hitZ: 0, hitKind: 0,
     },
   };
   const felt = { x: 0, y: 0, z: 0, front: 0, rough: 0 };
   const point = { x: 0, y: 0, z: 0 };
-  const weather: WeatherField = { windX: 0, windZ: 0, thermals: state.thermals };
+  const weather: WeatherField = { windX: 0, windZ: 0, thermals: state.thermals, feel: undefined };
+  const gusting: Gusting = { w: 0, u: 0, v: 0, gradX: 0, gradZ: 0 };
 
   // The same generator the terrain scatters its forest with, kept as a bare counter in the state
   // so that a copied run carries on exactly where the original would.
@@ -254,7 +258,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
 
   // One environmental field for the wing, the streaks and the clouds. Bird strikes are wing
   // damage and remain a separate sink penalty; they never change the air drawn around the pilot.
-  function airAt(x: number, y: number, z: number, hx: number, hz: number, out: SkyAirOutput): AtmosphereSample & Vector3 {
+  function airAt(x: number, y: number, z: number, hx: number, hz: number, out: SkyAirOutput, calm = false): AtmosphereSample & Vector3 {
     point.x = x; point.y = y; point.z = z;
     out.front = 0;
     layerWind(y, out);
@@ -262,6 +266,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     weather.windZ = wind && state.active ? out.z! : 0;
     const ambientX = weather.windX!, ambientZ = weather.windZ!;
     weather.thermals = state.active && inside(point) ? state.thermals : EMPTY_THERMALS;
+    weather.feel = state.feel ? AIR_FEEL : undefined;
     let front = 0, gustRough = 0;
     const dx = x - Z.x, dz = z - Z.z;
     if (wind && state.active && y >= CLOUD_ENCOUNTERS.gust.from) for (let i = 0; i < state.gusts.length; i++) {
@@ -283,12 +288,30 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     if (!state.active) out.windX = out.windY = out.windZ = out.lift = out.sink = out.rough = 0;
     const depth = state.active && y >= S.floor ? depthAt(x, y + K.rise, z) : 0;
     out.windY = Math.min(0, out.windY!) + Math.max(0, out.windY!) * (1 - Math.min(1, depth * S.cap)) - S.sink * depth;
+    if (state.feel) feelAir(x, y, z, front, depth, out, calm);
     out.lift = Math.max(0, out.windY!); out.sink = Math.max(0, -out.windY!);
     out.x = out.windX; out.y = out.windY; out.z = out.windZ;
     return out as AtmosphereSample & Vector3;
   }
 
-  function windAt(x: number, y: number, z: number, out: SkyAirOutput = {}) { return airAt(x, y, z, 0, 0, out); }
+  /** The air at a point, as sample() gives the wing; `calm` leaves felt air's turbulence out, for plans. */
+  function windAt(x: number, y: number, z: number, out: SkyAirOutput = {}, calm = false) { return airAt(x, y, z, 0, 0, out, calm); }
+
+  // Felt air: the turbulence the place calls for, on top of the thermals (gentle over the launch
+  // climb, air-feel.js's TURBULENCE.low). Never when the sky is not flying, nor for a `calm` sample:
+  // what plans with the air (the coach, a kettlebell's aim, where plates are laid) plans in the air
+  // without its bumps.
+  function feelAir(x: number, y: number, z: number, front: number, depth: number, out: SkyAirOutput, calm: boolean) {
+    if (!state.active) { out.gradX = out.gradZ = out.turbulence = 0; return; }
+    if (calm) { out.turbulence = 0; return; }
+    const sigma = roughness(out.core ?? 0, out.edge ?? 0, out.rough ?? 0, front, depth, y);
+    turbulenceAt(state.seed | 0, x, y, z, state.elapsed, sigma, state.driftX, state.driftZ, gusting);
+    out.windX! += gusting.u; out.windZ! += gusting.v;
+    out.windY = clamp(out.windY! + gusting.w, -ATMOSPHERE.maximumSink, ATMOSPHERE.maximumLift);
+    out.gradX = (out.gradX ?? 0) + gusting.gradX;
+    out.gradZ = (out.gradZ ?? 0) + gusting.gradZ;
+    out.turbulence = sigma;
+  }
 
   // Sets a gust band off across the zone. The scheduled ones blow within a spread of the breeze
   // where the pilot is; gust() below sets one off by hand.
@@ -553,8 +576,11 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     }
   }
 
-  function reset(startAltitude: number = CLOUD_GATE.y, seed: number = CLOUD_DEFAULT_SEED) {
+  function reset(startAltitude: number = CLOUD_GATE.y, seed: number = CLOUD_DEFAULT_SEED, feel = false, physical = false) {
     state.seed = seed >>> 0;
+    state.feel = feel;
+    state.physical = physical;
+    state.driftX = state.driftZ = 0;
     state.rng = state.seed | 0;
     state.elapsed = state.fogHeight = 0;
     state.openingAt = -1;
@@ -568,6 +594,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     pilot.y = state.peak;
     pilot.z = CLOUD_GATE.z;
     pilot.collapse = pilot.shield = pilot.cloud = pilot.cloudTime = pilot.strikes = pilot.danger = 0;
+    pilot.hitX = pilot.hitZ = pilot.hitKind = 0;
     pilot.thermal = pilot.gustSlot = -1;
     pilot.headroom = pilot.gustAhead = 999;
     pilot.gustIn = 99;
@@ -645,11 +672,17 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     for (let i = 0; i < state.ravens.length; i++) state.ravens[i].threat = false;
   }
 
-  /** Folds the wing. `index` is the raven that did it, whose flock scatters; -1 strikes from nowhere. */
-  function strike(index = -1) {
+  /**
+   * Folds the wing. `index` is the raven that did it, whose flock scatters (-1 for none), `from` where
+   * the strike came from and `kind` what it was (strike-fold.js's STRIKER). A wing that folds by itself
+   * (`physical`) is folded by the run where it was hit (run-step.js); any other, for CLOUD_STRIKE's
+   * `collapse` seconds.
+   */
+  function strike(index = -1, from: Readonly<{ x: number; z: number }> | null = null, kind: number = STRIKER.nowhere) {
     const pilot = state.pilot;
     if (!state.active || pilot.shield > 0) return false;
-    pilot.collapse = K.collapse;
+    if (!state.physical) pilot.collapse = K.collapse;
+    pilot.hitX = from ? from.x : pilot.x; pilot.hitZ = from ? from.z : pilot.z; pilot.hitKind = kind;
     pilot.shield = K.shield;
     pilot.strikes += 1;
     for (let i = 0; i < state.ravens.length; i++) {
@@ -675,6 +708,8 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
     if (!state.active || !Number.isFinite(dt) || dt <= 0) return null;
     state.elapsed += dt;
     updateWeather();
+    // Felt air's turbulence drifts with the breeze, integrated so a turning wind never slides it.
+    if (state.feel) { state.driftX += state.ambientX * dt; state.driftZ += state.ambientZ * dt; }
     // Movement is stepped by the caller before this clock, so the final climb counts as well.
     if (Number.isFinite(pos.y)) state.peak = Math.max(state.peak, pos.y);
     if (state.openingAt < 0 && state.peak >= CLOUD_OPENING.height) {
@@ -795,7 +830,7 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
       if (raven.threat) pilot.danger = 1;
       if (striker < 0 && exposed && raven.hot && Math.abs(above) < K.half && flat < K.radius) striker = i;
     }
-    if (striker >= 0) strike(striker);
+    if (striker >= 0) strike(striker, state.ravens[striker], STRIKER.raven);
 
     if (pos.y <= state.fogHeight + 3) {
       finish();
@@ -809,8 +844,9 @@ export function createCloudbaseRun({ hazards = true, wind = true, fixedWind = nu
    * together, and `rough` how much of a gust band is on the glider's tail, from 0 to 1. Pass `out`
    * to have the answer written into an object of the caller's instead of a new one.
    */
-  function sample(pos: Vector3, yaw = 0, out: SkyAirOutput = {}): AirSample {
-    airAt(pos.x, pos.y, pos.z, Math.sin(yaw), -Math.cos(yaw), out);
+  /** The air the wing flies in at `pos`, its lift's side for a wing on `yaw`; `calm` for plans (windAt). */
+  function sample(pos: Vector3, yaw = 0, out: SkyAirOutput = {}, calm = false): AirSample {
+    airAt(pos.x, pos.y, pos.z, Math.sin(yaw), -Math.cos(yaw), out, calm);
     out.hazardSink = state.active && state.pilot.collapse > 0 ? K.sink : 0;
     let side = 0, rising = 0;
     for (let i = 0; i < state.thermals.length; i++) {

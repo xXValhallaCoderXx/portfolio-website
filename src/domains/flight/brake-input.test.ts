@@ -12,6 +12,10 @@ test('keyboard turns, bilateral catches and thermal turns resolve one direct bra
   assert.deepEqual(key('KeyS', 'ArrowRight'), { leftBrake: 0.2, rightBrake: 0.5 });
   assert.deepEqual(key('ShiftLeft', 'KeyD'), { leftBrake: 0, rightBrake: 1 });
   assert.deepEqual(key('ShiftRight', 'Space'), { leftBrake: 1, rightBrake: 1 });
+  // The helicopter's chord: a full stall's keys with one side added hold that side full and ease the other.
+  assert.deepEqual(key('ShiftLeft', 'KeyS', 'KeyA'), { leftBrake: 1, rightBrake: 0.6 });
+  assert.deepEqual(key('ShiftRight', 'Space', 'ArrowRight'), { leftBrake: 0.6, rightBrake: 1 });
+  assert.deepEqual(key('ShiftLeft', 'KeyQ', 'KeyE'), { leftBrake: 1, rightBrake: 1 });
   assert.deepEqual(key('ShiftLeft'), { leftBrake: 0, rightBrake: 0 });
   assert.deepEqual(key('KeyQ'), { leftBrake: 0.82, rightBrake: 0 });
   assert.deepEqual(key('KeyE'), { leftBrake: 0, rightBrake: 0.82 });
@@ -84,6 +88,17 @@ test('Shift builds each keyboard pull from its ordinary depth over 0.45 simulati
   input.step(.225); assert.ok(Math.abs(input.state.rightBrake - .91) < 1e-12);
 });
 
+test('easing one hand out of a held full stall keeps the other full and eases it at once', () => {
+  const input = createBrakeInput(); input.keyDown('ShiftLeft'); input.keyDown('KeyS');
+  input.step(.45); assert.equal(input.state.leftBrake, 1); assert.equal(input.state.rightBrake, 1);
+  input.keyDown('KeyA');
+  assert.equal(input.state.leftBrake, 1, 'the held side stays full');
+  assert.equal(input.state.rightBrake, .6, 'the other eases to the chord');
+  input.step(.45); assert.equal(input.state.rightBrake, .6);
+  input.keyUp('KeyA'); assert.equal(input.state.rightBrake, .6, 'letting the side go starts the eased hand\'s pull again');
+  input.step(.45); assert.equal(input.state.rightBrake, 1);
+});
+
 test('new full-pull hands have independent clocks and release or reversal clears their old buildup', () => {
   const input = createBrakeInput(); input.keyDown('KeyA'); input.keyDown('ShiftLeft');
   input.step(.225); const held = input.state.leftBrake;
@@ -139,4 +154,41 @@ test('only fixed-step samples advance the issued and recorded Shift curve regard
   assert.equal(frameInput(frames.at(-1)!).rightBrake, 1);
   assert.ok(frameInput(frames[0]!).rightBrake! < .31, 'the first recorded sample contains the issued progressive depth');
   assert.ok(frameInput(frames[13]!).rightBrake! > .65 && frameInput(frames[13]!).rightBrake! < .7);
+});
+
+test('↑ holds the speed bar and X the big ears, each recorded as the wing configuration it is', () => {
+  const input = createBrakeInput();
+  assert.equal(input.keyDown('ArrowUp'), true);
+  assert.equal(input.state.bar, true); assert.equal(input.state.ears, false);
+  assert.equal(input.state.leftBrake, 0); assert.equal(input.state.rightBrake, 0);
+  const frame = (state: typeof input.state) => frameInput(inputFrame({ controlMode: 'brakes', ...state }));
+  assert.equal(frame(input.state).bar, true, 'hands up with the bar records the bar');
+  input.keyDown('KeyA');
+  assert.equal(frame(input.state).bar, false, 'a pulled brake wins over the bar, as the wing flies it');
+  input.keyUp('KeyA'); input.keyUp('ArrowUp');
+  assert.equal(input.state.bar, false);
+  input.keyDown('KeyX');
+  assert.equal(input.state.ears, true);
+  assert.equal(frame(input.state).ears, true);
+  input.keyUp('KeyX'); assert.equal(input.state.ears, false); assert.equal(input.state.source, null);
+  input.keyDown('ArrowUp'); input.reset(); assert.equal(input.state.bar, false, 'pause and menus let go of the bar');
+});
+
+test('the touch bar and ears buttons are held like a handle and share the handles\' ownership', () => {
+  const input = createBrakeInput();
+  assert.equal(input.startConfig('ears', pointer(4)), true);
+  assert.equal(input.state.ears, true); assert.equal(input.state.source, 'handles');
+  assert.equal(input.startConfig('ears', pointer(5)), false, 'one thumb holds the ears');
+  assert.equal(input.startHand('left', pointer(4)), false, 'a thumb on the ears is not also on a handle');
+  assert.equal(input.keyDown('ArrowUp'), false, 'the keyboard cannot take over from held buttons');
+  assert.equal(input.startHand('right', pointer(6)), true, 'the other thumb can still pull a handle');
+  input.moveHand(pointer(6, 240)); assert.equal(input.state.ears, true, 'a held button stays held while a handle moves');
+  input.endHand(6); assert.equal(input.state.source, 'handles');
+  assert.equal(input.endConfig(9), false);
+  input.endConfig(4); assert.equal(input.state.ears, false); assert.equal(input.state.source, null);
+  input.startConfig('bar', pointer(7)); assert.equal(input.state.bar, true);
+  input.reset(); assert.equal(input.state.bar, false); assert.equal(input.held.bar, null);
+  assert.equal(input.startMouse(), true); assert.equal(input.startConfig('bar', pointer(8)), false, 'a drag owns the controls');
+  input.moveMouse(0, 0, true); assert.equal(input.state.bar, true, 'a drag pushed up holds the bar');
+  input.endMouse(); assert.equal(input.state.bar, false);
 });

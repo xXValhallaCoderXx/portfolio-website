@@ -5,11 +5,31 @@ import { GATES } from '../../../domains/good-lift/meet-runes.ts';
 // along the bottom once Gjallarhorn has sounded.
 export const BAR_ROW = /* html */ '<div class="fj-run fj-bar-metric"><dt>bar</dt><dd data-hud="bar"></dd></div>';
 
-// The run's style (meet-style.js), a row of its own that shows once a set of tricks has landed, and
-// the line above the swing gauge saying the set in hand, and stamping it landed or lost.
+// The run's banked combos (meet-combo.js), a row of its own that shows once a combo has banked.
 export const STYLE_ROW = /* html */ '<dt class="fj-run fj-trick">style</dt><dd class="fj-run fj-trick" data-hud="style"></dd>';
 
-export const STYLE_LINE = /* html */ '<p class="fj-style" aria-hidden="true" hidden><strong data-combo="label"></strong><span data-combo="detail"></span><span class="fj-combo-calm" data-combo="calm" hidden><i></i></span></p><p class="fj-combo-announcement fj-visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>';
+// The combo meter (combo-meter.js), beside the pilot: a link's banner on the card's top edge;
+// the chain and its multiplier, with the cap faint after it; what banking now would pay, the ring
+// that fills as the wing settles and BANK NOW; and the flight's word on the card's bottom edge. All
+// of it is for the eye: a combo banked or lost is said in a status line of its own, always there.
+export const METER_MARKUP = /* html */ `
+  <div class="fj-meter" aria-hidden="true" hidden>
+    <p class="fj-meter-banner" data-meter="banner" hidden></p>
+    <div class="fj-meter-card" data-meter="card" hidden>
+      <p class="fj-meter-chain"><span data-meter="trail"></span><b data-meter="hand"></b></p>
+      <p class="fj-meter-times"><b data-meter="multiplier"></b><small data-meter="cap"></small></p>
+      <p class="fj-meter-pay"><span data-meter="payout"></span><svg class="fj-meter-ring" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"></circle><circle data-meter="ring" cx="8" cy="8" r="6" pathLength="100"></circle></svg><em data-meter="hurry" hidden>BANK NOW</em></p>
+    </div>
+    <p class="fj-meter-word" data-meter="word" hidden></p>
+  </div>
+  <p class="fj-meter-announcement fj-visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>`;
+
+// The cue for a wing in trouble (wing-cue.js), over the pilot: what has happened, and on the A
+// and the B its fix with the key for its step; SAVED with what it cost; SOFT. For the eye; each is said
+// in a status line of its own as it begins.
+export const CUE_MARKUP = /* html */ `
+  <p class="fj-turn-cue" aria-hidden="true" hidden><b data-cue="name"></b><span data-cue="fix" hidden></span><kbd data-cue="keys" hidden></kbd></p>
+  <p class="fj-turn-cue-announcement fj-visually-hidden" role="status" aria-live="assertive" aria-atomic="true"></p>`;
 
 export const MARKUP = /* html */ `
   <div class="fj-horn" aria-hidden="true"></div>

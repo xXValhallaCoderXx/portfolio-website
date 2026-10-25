@@ -17,6 +17,10 @@ export interface AirSample {
   windX?: number; windY?: number; windZ?: number; hazardSink?: number;
   ridge?: number; lee?: number; thermal?: number; crestHeight?: number;
   ambientX?: number; ambientZ?: number; rough?: number; calm?: boolean; clearance?: number; front?: number;
+  /** The rising air's slope across the ground, (m/s)/m, for a wing to feel across its span (felt air only). */
+  gradX?: number; gradZ?: number;
+  /** How much of a thermal's middle and its edge the air is in, and how rough it is (σ, m/s): felt air only. */
+  core?: number; edge?: number; turbulence?: number;
 }
 
 export interface AtmosphereSample extends AirSample {
@@ -45,6 +49,18 @@ export interface FlowSample {
 }
 
 export interface PhysicalState {
+  /** The id of the wing being flown (flight-physics.js's registerWing): a plain string, so copies keep it. */
+  wing: string;
+  /** Each half's own separation (0–1), and what it flew at the last substep (a wing with SideFlow). */
+  sepL: number; sepR: number; sideAlphaL: number; sideAlphaR: number; sideAlongL: number; sideAlongR: number;
+  /**
+   * A wing with Recovery: each half's fold (0 open, 1 folded), each tip caught in the lines (a cravat:
+   * 1 caught, 0 free), the hand depth each half's next pump counts from, a deep stall (1, 0 out of it),
+   * the seconds a full stall's release has crept, and the line twist: the pilot turned against the wing
+   * (rad, positive left), how fast, and the wing's turn about the lines at the last substep.
+   */
+  foldL: number; foldR: number; tipL: number; tipR: number; pumpL: number; pumpR: number;
+  deepStall: number; creep: number; twist: number; twistRate: number; twistYaw: number;
   steer: number; differential: number; brake: number; brakeTarget: number; deepBrake: boolean;
   bar: number; ears: number; controlMode: ControlMode;
   leftBrake: number; rightBrake: number; leftBrakeTarget: number; rightBrakeTarget: number;
@@ -79,6 +95,8 @@ export interface FlightState extends PhysicsBodies {
   pitch: number; pitchRate: number; lean: number; roll: number; rollRate: number; stallLoad: number; stall: number;
   windX: number; windZ: number; felt: boolean; tuck: number; wingPhase: WingPhase; recoverySource: string;
   inflation: number; forwardAirspeed: number; frontalRisk: number;
+  /** Each half's fold and caught tip, a deep stall, the line twist (rad) and how bound it is (0–1): all 0 on the classic wing. */
+  foldLeft: number; foldRight: number; cravatLeft: number; cravatRight: number; deepStall: number; twist: number; twisted: number;
   loop: number; loopAngle: number; loopRate: number; loops: number; tension: number; load: number;
 }
 

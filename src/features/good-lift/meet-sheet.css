@@ -1,4 +1,4 @@
-/* Summary and actions stay available while Board, Result and Kit share the detail scroll. */
+/* Summary and actions stay available while Board, Result, Kit and Tricks share the detail scroll. */
 .window.good-lift-result { width: min(1180px, calc(100vw - 40px)); height: min(860px, calc(100svh - 40px)); max-height: calc(100svh - 40px); background: #050a13f7; }
 .good-lift-result > header { min-height: 52px; padding: 12px 24px; }
 .good-lift-result > header > span { color: #d6e2ef; font-size: 11px; font-weight: 700; letter-spacing: .1em; }
@@ -113,6 +113,15 @@
 .good-lift-result .good-lift-hangar > label:focus-within { outline: 2px solid #29c7e3; outline-offset: 2px; }
 .good-lift-result .good-lift-hangar > label.locked { opacity: .65; }
 .good-lift-result .good-lift-gear > label { min-height: 52px; padding: 8px; }
+/* The trick book: found pages lit in the game's cyan, beside the feats' gold; pages still to find
+   keep the feats' quiet card, a '?' over the hint of how to find them. */
+.good-lift-result .good-lift-trick-book > .good-lift-section-title { margin-top: 20px; }
+.good-lift-result .good-lift-trick-book > .good-lift-section-title:first-of-type { margin-top: 0; }
+.good-lift-result .good-lift-book-best { color: #e8f1fa; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.good-lift-result .good-lift-book > li.earned { border-color: #1f5f6d; background: #29c7e30a; }
+.good-lift-result .good-lift-book > li.earned > b { color: #29c7e3; }
+.good-lift-result .good-lift-book > li:not(.earned) > b { color: #9fb2c6; font-size: 14px; }
+.good-lift-result .good-lift-trick-book > .dim { font-size: 11px; line-height: 1.6; }
 @media (max-width: 1000px) {
   .good-lift-result .good-lift-feats, .good-lift-result .good-lift-hangar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -161,4 +170,8 @@
 
 @media (max-width: 767px), (max-height: 480px) {
   .window.good-lift-result { box-sizing: border-box; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+}
+/* Four tabs on the narrowest phones: their words keep inside them. */
+@media (max-width: 380px) {
+  .good-lift-result .good-lift-tabs[data-tabs='4'] > button { padding: 8px 2px; letter-spacing: .06em; }
 }

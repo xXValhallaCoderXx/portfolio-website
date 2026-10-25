@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createVario, varioTone } from './vario.ts';
+import { VARIO, createVario, varioTone } from './vario.ts';
 
 test('the shared soaring beep clearly separates a weak climb from a strong0–5m/s climb', () => {
   let last = varioTone(0.5, true);
@@ -34,4 +34,18 @@ test('tone output reuses its supplied object and invalid samples stay finite', (
   assert.equal(varioTone(3, true, out), out);
   for (const value of [NaN, Infinity]) { filter.step(value, 1 / 60); varioTone(value, true, out); }
   assert.ok(Number.isFinite(filter.value) && Number.isFinite(out.pitch) && Number.isFinite(out.gap));
+});
+
+test('the ear hears a climb sooner than the readout shows it, and both settle to it', () => {
+  const vario = createVario();
+  vario.reset(0);
+  for (let i = 0; i < 15; i++) vario.step(2, 1 / 60);
+  // A quarter second in: the beep has come 63% of the way, the readout far less.
+  assert.ok(Math.abs(vario.beep - 2 * (1 - Math.exp(-0.25 / VARIO.beep))) < 1e-9);
+  assert.ok(vario.value < vario.beep * 0.6);
+  for (let i = 0; i < 600; i++) vario.step(2, 1 / 60);
+  assert.ok(Math.abs(vario.value - 2) < 1e-3 && Math.abs(vario.beep - 2) < 1e-3);
+  vario.reset(-1);
+  assert.deepEqual([vario.value, vario.beep], [-1, -1]);
+  assert.ok(VARIO.stop < VARIO.start, 'the beep stops below where it starts, so it never chatters');
 });

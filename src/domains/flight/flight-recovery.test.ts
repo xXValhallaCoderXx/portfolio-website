@@ -163,8 +163,11 @@ test('stable backfly has quieter cloth while a frontal fold follows its actual i
   assert.equal(stallEffects('intro', g, {}).luff, 0);
 });
 
+// The flight coach's recovery cards, followed after a real guided climb on the classic wing. A
+// glider's failures are flown out by the recovery guide instead (recovery-runs.test.js), and the A and
+// the B never tuck from pulsed brakes at all.
 for (const scenario of ['stall', 'frontal'] as const) test(`canonical ${scenario} recovery after a real guided climb`, () => {
-  const r = recoveryRun({ scenario });
+  const r = recoveryRun({ scenario, wing: 'classic' });
   assert.equal(r.recovered, true); assert.equal(r.assisted, false);
   assert.ok(r.minimumClearance >= 30);
   assert.ok(r.phases.some(p => p.phase === (scenario === 'stall' ? WING.backfly : WING.frontal)));

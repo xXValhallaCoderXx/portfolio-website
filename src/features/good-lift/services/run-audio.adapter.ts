@@ -8,6 +8,8 @@ export interface RunAudioPort {
 }
 
 const PENTA=[0, 2, 4, 7, 9];
+// The ratios a banked set's arpeggio climbs, up a major chord from its root.
+const CHORD=[1, 1.5, 2, 2.5, 3];
 const clamp=(value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 /** Web Audio synthesis owns no run state; the session decides when each voice is heard. */
@@ -219,12 +221,14 @@ export function createRunVoices(sound: RunAudioPort) {
     note.stop(at+0.32);
   }
 
-  // A set of tricks landed: three bright notes up an arpeggio, and a faint shimmer.
-  function arpeggio(ctx: AudioContext, at: number) {
-    for(const [i, ratio] of [1, 1.5, 2].entries()) {
+  // A set of tricks landed: three bright notes up an arpeggio, and a faint shimmer as the last one
+  // sounds. Bigger combos climb on up the chord, to four `notes` or five.
+  function arpeggio(ctx: AudioContext, at: number, notes=3) {
+    const count=clamp(Math.round(notes), 1, CHORD.length);
+    for(let i=0;i<count;i++) {
       const note=ctx.createOscillator();
       note.type='triangle';
-      note.frequency.value=523.25*ratio;
+      note.frequency.value=523.25*CHORD[i];
       const ring=ctx.createGain();
       ring.gain.setValueAtTime(0.06, at+i*0.07);
       ring.gain.exponentialRampToValueAtTime(0.001, at+i*0.07+0.45);
@@ -232,17 +236,183 @@ export function createRunVoices(sound: RunAudioPort) {
       note.start(at+i*0.07);
       note.stop(at+i*0.07+0.5);
     }
+    const last=(count-1)*0.07;
     const shimmer=ctx.createBufferSource();
     shimmer.buffer=sound.audio.noise;
     const high=ctx.createBiquadFilter();
     high.type='highpass';
     high.frequency.value=5000;
     const shape=ctx.createGain();
-    shape.gain.setValueAtTime(0.015, at+0.14);
-    shape.gain.exponentialRampToValueAtTime(0.001, at+0.6);
+    shape.gain.setValueAtTime(0.015, at+last);
+    shape.gain.exponentialRampToValueAtTime(0.001, at+last+0.46);
     shimmer.connect(high).connect(shape).connect(sound.audio.master);
-    shimmer.start(at+0.14, Math.random());
-    shimmer.stop(at+0.62);
+    shimmer.start(at+last, Math.random());
+    shimmer.stop(at+last+0.48);
+  }
+
+  // A unit of the move in hand (another wingover pair, another turn of a spiral): a short dry
+  // tick, a pentatonic step higher for each unit, so a count is heard climbing as the plates' tings
+  // do, and quieter and shorter than they are.
+  function tick(ctx: AudioContext, at: number, units=2) {
+    const step=clamp(Math.round(units)-2, 0, 9);
+    const f=659.25*2**(PENTA[step%5]/12+Math.floor(step/5));
+    const tone=ctx.createOscillator();
+    tone.type='triangle';
+    tone.frequency.value=f;
+    const shape=ctx.createGain();
+    shape.gain.setValueAtTime(0, at);
+    shape.gain.linearRampToValueAtTime(0.05, at+0.003);
+    shape.gain.exponentialRampToValueAtTime(0.0001, at+0.09);
+    tone.connect(shape).connect(sound.audio.master);
+    tone.start(at);
+    tone.stop(at+0.1);
+    const click=ctx.createBufferSource();
+    click.buffer=sound.audio.noise;
+    const band=ctx.createBiquadFilter();
+    band.type='bandpass';
+    band.frequency.value=f*2;
+    band.Q.value=4;
+    const snap=ctx.createGain();
+    snap.gain.setValueAtTime(0.08, at);
+    snap.gain.exponentialRampToValueAtTime(0.001, at+0.025);
+    click.connect(band).connect(snap).connect(sound.audio.master);
+    click.start(at, Math.random());
+    click.stop(at+0.03);
+  }
+
+  // A move joining the chain by a named link, or flowing in: a fifth struck just after the
+  // swish of the move it joins with, and for a flow the octave over it and a shimmer of high air,
+  // the energy carried through.
+  function fifth(ctx: AudioContext, at: number, flow=false) {
+    const start=at+0.06;
+    const partials=flow? [[1, 0.05, 0.6], [1.5, 0.04, 0.5], [3, 0.015, 0.4]]:[[1, 0.05, 0.6], [1.5, 0.04, 0.5]];
+    for(const [ratio, level, ring] of partials) {
+      const tone=ctx.createOscillator();
+      tone.type='triangle';
+      tone.frequency.value=659.25*ratio;
+      const shape=ctx.createGain();
+      shape.gain.setValueAtTime(0, start);
+      shape.gain.linearRampToValueAtTime(level, start+0.01);
+      shape.gain.exponentialRampToValueAtTime(0.0001, start+ring);
+      tone.connect(shape).connect(sound.audio.master);
+      tone.start(start);
+      tone.stop(start+ring+0.02);
+    }
+    if(!flow) return;
+    const shimmer=ctx.createBufferSource();
+    shimmer.buffer=sound.audio.noise;
+    const high=ctx.createBiquadFilter();
+    high.type='highpass';
+    high.frequency.value=6000;
+    const wash=ctx.createGain();
+    wash.gain.setValueAtTime(0, start);
+    wash.gain.linearRampToValueAtTime(0.025, start+0.05);
+    wash.gain.exponentialRampToValueAtTime(0.001, start+0.5);
+    shimmer.connect(high).connect(wash).connect(sound.audio.master);
+    shimmer.start(start, Math.random());
+    shimmer.stop(start+0.52);
+  }
+
+  // BANK NOW, once a run: two quick high ticks, as a clock's.
+  function hurry(ctx: AudioContext, at: number) {
+    tick(ctx, at, 7);
+    tick(ctx, at+0.14, 7);
+  }
+
+  // HANDS UP: a spin has the wing; a low two-tone warble, twice, under the wind's own noise.
+  function warble(ctx: AudioContext, at: number) {
+    for(let i=0;i<4;i++) {
+      const tone=ctx.createOscillator();
+      tone.type='square';
+      tone.frequency.value=i%2? 330:392;
+      const low=ctx.createBiquadFilter();
+      low.type='lowpass';
+      low.frequency.value=1200;
+      const shape=ctx.createGain();
+      shape.gain.setValueAtTime(0, at+i*0.12);
+      shape.gain.linearRampToValueAtTime(0.03, at+i*0.12+0.01);
+      shape.gain.exponentialRampToValueAtTime(0.0001, at+i*0.12+0.11);
+      tone.connect(low).connect(shape).connect(sound.audio.master);
+      tone.start(at+i*0.12);
+      tone.stop(at+i*0.12+0.12);
+    }
+  }
+
+  // SAVED: the wing flown out of a spin; three bells rising, ringing on.
+  function rescue(ctx: AudioContext, at: number) {
+    for(const [i, freq] of [523.25, 659.25, 783.99].entries()) {
+      const tone=ctx.createOscillator();
+      tone.type='triangle';
+      tone.frequency.value=freq;
+      const shape=ctx.createGain();
+      shape.gain.setValueAtTime(0, at+i*0.09);
+      shape.gain.linearRampToValueAtTime(0.045, at+i*0.09+0.008);
+      shape.gain.exponentialRampToValueAtTime(0.0001, at+i*0.09+0.7);
+      tone.connect(shape).connect(sound.audio.master);
+      tone.start(at+i*0.09);
+      tone.stop(at+i*0.09+0.72);
+    }
+  }
+
+  // SOFT: a half near stalling by itself; a breathy fall of air, panned to that side, quieter than a warning.
+  function sigh(ctx: AudioContext, at: number, pan: number) {
+    const air=ctx.createBufferSource();
+    air.buffer=sound.audio.noise;
+    const band=ctx.createBiquadFilter();
+    band.type='bandpass';
+    band.Q.value=1.4;
+    band.frequency.setValueAtTime(900, at);
+    band.frequency.exponentialRampToValueAtTime(420, at+0.45);
+    const shape=ctx.createGain();
+    shape.gain.setValueAtTime(0, at);
+    shape.gain.linearRampToValueAtTime(0.05, at+0.06);
+    shape.gain.exponentialRampToValueAtTime(0.0001, at+0.5);
+    air.connect(band).connect(shape).connect(panned(ctx, pan));
+    air.start(at, Math.random());
+    air.stop(at+0.52);
+  }
+
+  // A half of the wing letting go by itself: a short rip of cloth, panned to that half, lighter than a fold's.
+  function tear(ctx: AudioContext, at: number, pan: number) {
+    const rip=ctx.createBufferSource();
+    rip.buffer=sound.audio.noise;
+    const high=ctx.createBiquadFilter();
+    high.type='highpass';
+    high.frequency.value=1800;
+    const shape=ctx.createGain();
+    shape.gain.setValueAtTime(0, at);
+    shape.gain.linearRampToValueAtTime(0.07, at+0.01);
+    shape.gain.exponentialRampToValueAtTime(0.0001, at+0.18);
+    rip.connect(high).connect(shape).connect(panned(ctx, pan));
+    rip.start(at, Math.random());
+    rip.stop(at+0.2);
+  }
+
+  // A core met hard: the lines and the harness creak under the load, a quick chopped band of cloth noise.
+  function creak(ctx: AudioContext, at: number, pan: number) {
+    const strain=ctx.createBufferSource();
+    strain.buffer=sound.audio.noise;
+    const band=ctx.createBiquadFilter();
+    band.type='bandpass';
+    band.frequency.value=1600;
+    band.Q.value=3;
+    const chop=ctx.createGain();
+    chop.gain.value=0.5;
+    const beat=ctx.createOscillator();
+    beat.type='square';
+    beat.frequency.value=35;
+    const depth=ctx.createGain();
+    depth.gain.value=0.5;
+    beat.connect(depth).connect(chop.gain);
+    const shape=ctx.createGain();
+    shape.gain.setValueAtTime(0, at+0.04);
+    shape.gain.linearRampToValueAtTime(0.04, at+0.06);
+    shape.gain.exponentialRampToValueAtTime(0.0001, at+0.16);
+    strain.connect(band).connect(chop).connect(shape).connect(panned(ctx, pan));
+    strain.start(at+0.04, Math.random());
+    strain.stop(at+0.17);
+    beat.start(at+0.04);
+    beat.stop(at+0.17);
   }
 
   // A set of tricks lost: two soft notes falling, after the fold's own sound has had its moment.
@@ -276,27 +446,30 @@ export function createRunVoices(sound: RunAudioPort) {
 
   // The moment to turn into a core: a low thump from its side, falling where the surge's swell
   // rises, so the one says turn and the other straighten.
-  function thump(ctx: AudioContext, at: number, pan: number) {
+  // `weight` is how hard the wing met the core (0 to 1, from the load's surge): heavier and lower the
+  // harder; at 0.5 it is the thump it has always been.
+  function thump(ctx: AudioContext, at: number, pan: number, weight=0.5) {
     const out=panned(ctx, pan);
     const tone=ctx.createOscillator();
-    tone.frequency.setValueAtTime(110, at);
-    tone.frequency.exponentialRampToValueAtTime(55, at+0.25);
+    const low=1-0.2*(weight-0.5);
+    tone.frequency.setValueAtTime(110*low, at);
+    tone.frequency.exponentialRampToValueAtTime(55*low, at+0.25);
     const shape=ctx.createGain();
     shape.gain.setValueAtTime(0, at);
-    shape.gain.linearRampToValueAtTime(0.16, at+0.008);
+    shape.gain.linearRampToValueAtTime(0.12+0.08*weight, at+0.008);
     shape.gain.exponentialRampToValueAtTime(0.001, at+0.3);
     tone.connect(shape).connect(out);
     tone.start(at);
     tone.stop(at+0.32);
     const puff=ctx.createBufferSource();
     puff.buffer=sound.audio.noise;
-    const low=ctx.createBiquadFilter();
-    low.type='lowpass';
-    low.frequency.value=380;
+    const muffle=ctx.createBiquadFilter();
+    muffle.type='lowpass';
+    muffle.frequency.value=380;
     const breath=ctx.createGain();
-    breath.gain.setValueAtTime(0.08, at);
+    breath.gain.setValueAtTime(0.06+0.04*weight, at);
     breath.gain.exponentialRampToValueAtTime(0.001, at+0.22);
-    puff.connect(low).connect(breath).connect(out);
+    puff.connect(muffle).connect(breath).connect(out);
     puff.start(at, Math.random());
     puff.stop(at+0.24);
   }
@@ -732,5 +905,5 @@ export function createRunVoices(sound: RunAudioPort) {
     tear.stop(at+0.14);
   }
 
-  return { caw, thud, whoosh, rush, ting, twice, sparkle, lurch, flap, swish, arpeggio, dud, thunk, thump, swell, grunt, growl, whistle, ricochet, chime, rubble, clatter, gale, lure, judges, clack, clank, buzz, horn, thunder };
+  return { caw, thud, whoosh, rush, ting, twice, sparkle, lurch, flap, swish, arpeggio, tick, fifth, hurry, warble, rescue, sigh, tear, creak, dud, thunk, thump, swell, grunt, growl, whistle, ricochet, chime, rubble, clatter, gale, lure, judges, clack, clank, buzz, horn, thunder };
 }

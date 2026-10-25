@@ -72,8 +72,8 @@ export function recoveryFlight({ scenario = 'stall', delay = 0, height = 1000, r
 
 // Canonical launch-to-recovery counterpart. The pilot climbs using visible directions, levels
 // through ordinary released controls, creates a failure manually and follows recovery advice.
-export function recoveryRun({ scenario = 'stall', seed = 1, delay = 0.3 } = {}) {
-  const pilot = createVisiblePilot(seed, delay, { learned: () => ['pitch', 'wingover'] });
+export function recoveryRun({ scenario = 'stall', seed = 1, delay = 0.3, wing = undefined as string | undefined } = {}) {
+  const pilot = createVisiblePilot(seed, delay, { learned: () => ['pitch', 'wingover'] }, { wing });
   const world = pilot.world, bits = [], phases = [];
   let stage = 'climb', stageAt = 0, stalledAt = null, backflyAt = null, handedAt = null, ended = null;
   while (world.sky.state.elapsed < 230 && !ended) {

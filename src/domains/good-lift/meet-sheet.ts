@@ -77,7 +77,12 @@ export function summariseRun(world: RunWorld, reason?: string) {
       pitch: style ? style.state.pitch : 0,
       loops: style ? style.state.mostLoops : 0,
       spirals: style ? style.state.mostSpirals : 0,
-      bestCombo: style && style.state.bestCombo.points > 0 ? { ...style.state.bestCombo, sequence: [...style.state.bestCombo.sequence] } : null,
+      bestCombo: style && style.state.bestCombo.points > 0 ? { ...style.state.bestCombo, sequence: [...style.state.bestCombo.sequence],
+        ...('links' in style.state.bestCombo ? { links: [...style.state.bestCombo.links], sides: [...style.state.bestCombo.sides] } : {}) } : null,
+      // The trick book for this run: what each move and named link banked, each move's best
+      // value, and the most flows and points in one banked combo, and whether one flew a move both ways.
+      ...(style && 'book' in style.state ? { tricks: { moves: [...style.state.book.moves], links: [...style.state.book.links],
+        best: [...style.state.book.best], flows: style.state.book.flows, points: style.state.book.points, mirror: style.state.book.mirror } } : {}),
     },
     trace: {
       alt: trace ? Array.from(trace.alt.subarray(0, n)) : [],

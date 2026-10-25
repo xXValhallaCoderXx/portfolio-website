@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PerspectiveCamera } from 'three';
-import { brakeDragPoint, brakeRegionPoints, coachDragTarget, createTravelCue, cueBrake, dragCuePoint, dragTravel, flightControlLayout, groundTurn } from './flight-cues.ts';
+import { brakeDragPoint, brakeRegionPoints, coachDragTarget, createTravelCue, cueBrake, dragCuePoint, dragTravel, flightControlLayout, groundTurn, recoveryTarget } from './flight-cues.ts';
 import { createFlightView } from './flight-view.ts';
 import { createFlight, stepFlight } from '../../../domains/flight/flight.ts';
 import { createBrakeDrag, dragBrakes } from '../../../domains/flight/brake-drag.ts';
@@ -296,4 +296,11 @@ test('varied render reads leave physical flight, coach and recorder state identi
     assert.deepEqual(observed, baseline);
   }
   assert.deepEqual(recorder.bits, plainRecorder.bits); assert.equal(recorder.steps, plainRecorder.steps);
+});
+
+test('a run\'s fix for a failure is lit on the handles as it asks, and met within the coach\'s own tolerance', () => {
+  const lit = recoveryTarget({ left: 0, right: 0.3 }, { controlMode: 'brakes', leftBrake: 0, rightBrake: 0.34 });
+  assert.deepEqual([lit.leftBrake, lit.rightBrake, lit.handsUp, lit.accepted], [0, 0.3, false, true]);
+  assert.equal(recoveryTarget({ left: 0.82, right: 0 }, { controlMode: 'brakes', leftBrake: 0.6, rightBrake: 0 }).accepted, false);
+  assert.equal(recoveryTarget({ left: 0, right: 0 }, {}).handsUp, true);
 });

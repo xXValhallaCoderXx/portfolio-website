@@ -16,9 +16,11 @@ const bearing = (from: Vector2, to: Vector2) => Math.atan2(to.x - from.x, -(to.z
 // thermal and physically fly across to it. Sources keep their seeded movement/lifetime; no
 // height, pose, weather or source is modified after startRun. Random hazards are excluded so this
 // regression measures the ridge/glide/capture height budget rather than a coincidental strike.
+// The route and its budgets were laid out for the classic wing's speed and circles, and it flies
+// that wing: a glider's own pilot would fly them otherwise.
 function ridgeToThermal(seed: number, departAt: number) {
   const sky = createCloudbaseRun({ hazards: false });
-  const world = createRunWorld({ sky });
+  const world = createRunWorld({ sky, wing: 'classic' });
   startRun(world, seed);
   const g = world.g, side = sky.state.weather.side;
   const activity = createLiftActivity({

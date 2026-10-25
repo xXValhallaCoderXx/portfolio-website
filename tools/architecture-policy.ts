@@ -6,7 +6,8 @@ export const GOOD_LIFT_ENTRY = resolve(SOURCE_ROOT, 'features/good-lift/services
 export const FLIGHT_ENTRY = resolve(SOURCE_ROOT, 'features/flight/services/flight-session.service.ts');
 export const RESULT = resolve(SOURCE_ROOT, 'features/good-lift/components/GoodLiftResult.tsx');
 export const KIT = resolve(SOURCE_ROOT, 'features/good-lift/components/GoodLiftKit.tsx');
-const leaves = new Set(['domains/good-lift/good-lift-address.ts', 'domains/good-lift/sim-version.ts']);
+// Good Lift's modules the page may hold before the game loads: each imports nothing.
+const leaves = new Set(['domains/good-lift/good-lift-address.ts', 'domains/good-lift/sim-version.ts', 'domains/good-lift/glider-ids.ts']);
 export const sourcePath = (file: string) => relative(SOURCE_ROOT, file.split('?')[0]).split(sep).join('/');
 export function runOnly(file: string): boolean {
   const name = sourcePath(file);

@@ -7,19 +7,20 @@ import type { WorldRow } from '../../src/domains/good-lift/board.types.ts';
 // (src/game), which it imports by path, into the one file the function deploys.
 //
 // A run is never taken at its word. Its log (recorder.js) is flown again here, through the very
-// step the game flies (replay.js), and only what that replay comes to is ranked. A run is turned
-// away unless it was flown under these rules (SIM_VERSION), on the Daily Sky of today or yesterday
-// (UTC), under initials the board will show, and ended by the fog or a touchdown; and unless the
-// total and peak its log claims are what its replay comes to, which they always are for a run the
-// game itself flew and checked (good-lift.js replays every run as it ends).
+// step the game flies (replay.js), on the glider it names, and only what that replay comes to is
+// ranked. A run is turned away unless it was flown under these rules (SIM_VERSION) and this log's
+// format, on a glider, on the Daily Sky of today or yesterday (UTC), under initials the board will
+// show, and ended by the fog or a touchdown; and unless the total and peak its log claims are what
+// its replay comes to, which they always are for a run the game itself flew and checked
+// (good-lift.js replays every run as it ends).
 //
 // A Daily Sky's board is one document for each version of the rules and UTC day: its best
 // WORLD_BOARD.keep rows, best first and at most one from each device (that device's best), and how
 // many runs each device has sent that day. It is changed only in a transaction, by a change that
 // reads the document and hands back the next one, never touching the one it was given, so a
 // transaction tried again comes to the same. A row (board-world.js) keeps the pilot's initials and
-// byname, what the run banked and its lights, when it came, its run's id and the device it came
-// from, as a digest of the device's token with the day's key, so nothing stored ties a device's days
+// byname, what the run banked and its lights, the glider it was flown on, when it came, its run's id
+// and the device it came from, as a digest of the device's token with the day's key, so nothing stored ties a device's days
 // together. Never the token, never the log, and never the address a request came from, which is
 // counted in this instance's memory for the clock minute it asks in, to limit how often it may ask,
 // and forgotten with the first request of a later minute (createLimiter), and kept nowhere else.
@@ -349,6 +350,8 @@ export function createBoard({ store, now = Date.now, log = () => {}, limits = LI
     if (!isRecord(sent) || typeof sent.log !== 'string' || typeof sent.token !== 'string') return refuse(400, 'body');
     if (!TOKEN.test(sent.token)) return refuse(400, 'token');
     const read = decodeLog(sent.log);
+    // A log of another format, or of a glider this build does not know, was flown under other rules.
+    if (!read.ok && (read.why === 'format' || read.why === 'glider')) return refuse(422, read.why === 'format' ? 'version' : 'glider');
     if (!read.ok) return refuse(read.why === 'long' ? 413 : 400, read.why);
     const { log: run } = read;
     if (run.simVersion !== SIM_VERSION) return refuse(422, 'version');
@@ -370,7 +373,8 @@ export function createBoard({ store, now = Date.now, log = () => {}, limits = LI
     const key = boardKey(SIM_VERSION, run.day);
     // The style is the replay's own: a log claims none, and the score the board ranks by is the total
     // lifted by it (score.js), so the board's order is this replay's, never a browser's say-so.
-    const row = { who: run.initials, byname: bynameFor(sheet), total: sheet.total, style: sheet.stats.style, peak: sheet.peak, red: sheet.lifts.map((lift: {red:number}) => lift.red), at, id, flight: await flightOf(sheet) };
+    const row = { who: run.initials, byname: bynameFor(sheet), total: sheet.total, style: sheet.stats.style, peak: sheet.peak, red: sheet.lifts.map((lift: {red:number}) => lift.red),
+      glider: run.glider, at, id, flight: await flightOf(sheet) };
     const entry = { row, device: await deviceOn(key, sent.token) };
     return change(key, (doc) => judge(doc, entry, { version: SIM_VERSION, day: run.day, at, limits }), at);
   }

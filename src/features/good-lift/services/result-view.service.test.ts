@@ -71,5 +71,6 @@ test('submission messages distinguish publication, higher scores, failures and r
   assert.match(submissionSaid({ phase: 'rejected', initials: 'REN', why: 'day' }), /too old/);
   assert.match(submissionSaid({ phase: 'failed', initials: 'REN' }), /Couldn’t submit/);
   assert.match(submissionSaid({ phase: 'failed', initials: 'REN', why: 'rate' }), /busy/);
+  assert.match(submissionSaid({ phase: 'failed', initials: 'REN', why: 'format' }), /updating its flight rules.*try submitting again/);
   assert.match(submissionSaid({ phase: 'withdrawn', initials: 'REN' }), /entry was removed/);
 });

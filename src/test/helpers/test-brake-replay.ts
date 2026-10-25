@@ -5,6 +5,8 @@ import type { RunWorld } from '../../domains/good-lift/models.ts';
 import { createFlight, stepFlight, WING } from '../../domains/flight/flight.ts';
 import { createSwingWatch } from '../../domains/coaching/swing-watch.ts';
 import { createStyle } from '../../domains/good-lift/meet-style.ts';
+import { createComboStyle } from '../../domains/good-lift/meet-combo.ts';
+import { GLIDERS, planFor } from '../../domains/good-lift/gliders.ts';
 import { createFlightCoach } from '../../domains/coaching/flight-coach.ts';
 import { createCloudbaseRun } from '../../domains/good-lift/cloudbase-state.ts';
 import { createMeet } from '../../domains/good-lift/meet-state.ts';
@@ -19,6 +21,8 @@ import { DAILY_EPOCH } from '../../domains/good-lift/good-lift-address.ts';
 import { seedFor } from '../../domains/good-lift/daily.ts';
 
 export const BRAKE_CAPTURE_DAY = DAILY_EPOCH + 30;
+// The runs fly the EN-A every pilot starts on, as the game does; the pure flights the classic wing.
+const RUN_WING = GLIDERS[0];
 const dt = 1 / 60;
 const pair = (leftBrake = 0, rightBrake = leftBrake, extra: FlightInput = {}): FlightInput => ({ controlMode: 'brakes', leftBrake, rightBrake, ...extra });
 const checkAt = new Set([1, 60, 300, 600, 900, 1200, 1800, 2700, 3600, 5400]);
@@ -55,8 +59,8 @@ function patternedPair(tick: number) {
 
 export function captureBrakeRun(kind: string) {
   const day = BRAKE_CAPTURE_DAY, seed = seedFor(day);
-  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle() }), seed);
-  const recorder = createRecorder(), keys = createReferenceKeys(TST), checkpoints = [];
+  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createComboStyle(), wing: RUN_WING }), seed);
+  const recorder = createRecorder(), keys = createReferenceKeys({ ...TST, plan: planFor(RUN_WING) }), checkpoints = [];
   let ending = null;
   while (!ending) {
     const tick = recorder.steps;
@@ -68,8 +72,8 @@ export function captureBrakeRun(kind: string) {
   }
   finishRun(world, ending);
   const sheet = summariseRun(world, ending);
-  const link = encodeLog({ simVersion: SIM_VERSION, seed, day, initials: 'REN', total: sheet.total, peak: sheet.peak }, recorder.bits, recorder.steps);
-  return { kind, pureFlight: false, simVersion: SIM_VERSION, seed, day, steps: recorder.steps, link, sheet,
+  const link = encodeLog({ simVersion: SIM_VERSION, glider: RUN_WING, seed, day, initials: 'REN', total: sheet.total, peak: sheet.peak }, recorder.bits, recorder.steps);
+  return { kind, pureFlight: false, simVersion: SIM_VERSION, glider: RUN_WING, seed, day, steps: recorder.steps, link, sheet,
     checkpoints, snapshot: brakeSnapshot(world) };
 }
 
@@ -114,7 +118,7 @@ export function captureBrakeRecovery(scenario: string) {
     }
   }
   if (recoveredAt === null || recoveredAt - handedAt! >= 30) throw new Error(`Direct ${scenario} did not recover`);
-  const link = encodeLog({ simVersion: SIM_VERSION, seed: 0, total: style.state.total, peak: origin.y }, recorder.bits, recorder.steps);
+  const link = encodeLog({ simVersion: SIM_VERSION, glider: 'classic', seed: 0, total: style.state.total, peak: origin.y }, recorder.bits, recorder.steps);
   return { kind: scenario, pureFlight: true, simVersion: SIM_VERSION, origin, steps: recorder.steps, link,
     metrics: { handedAt, recoveredAt, heightLoss: origin.y - g.pos.y }, phases, checkpoints, snapshot: brakeSnapshot(world) };
 }
@@ -123,7 +127,7 @@ export function captureBrakeRecovery(scenario: string) {
 export interface BrakeCaptureInput { pureFlight:boolean;origin?:Vector3;seed?:number;checkpoints: readonly {step:number}[] }
 export function replayBrakeCapture(record: BrakeCaptureInput, frames: ArrayLike<number>) {
   const world = record.pureFlight ? { g: createFlight({ ...record.origin! }), watch: createSwingWatch(), style: createStyle(), controls: {} } :
-    startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle() }), record.seed!);
+    startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createComboStyle(), wing: RUN_WING }), record.seed!);
   const summary = createControlSummary(), wanted = new Set(record.checkpoints.map(check => check.step)), checkpoints = [];
   let ending = null;
   for (let tick = 0; tick < frames.length; tick++) {
@@ -131,7 +135,7 @@ export function replayBrakeCapture(record: BrakeCaptureInput, frames: ArrayLike<
       frameInput(frames[tick], world.controls);
       Object.assign(world.controls, summary.step(world.controls));
       stepFlight(world.g, world.controls, {}, dt);
-      world.watch.step(dt, world.g, false, world.controls); world.style!.step(dt, world);
+      world.watch.step(dt, world.g, false, world.controls); world.style!.step(dt, world as RunWorld);
     } else ending = stepFrame(world as RunWorld, frames[tick]);
     if (wanted.has(tick + 1)) checkpoints.push({ step: tick + 1, snapshot: brakeSnapshot(world) });
   }

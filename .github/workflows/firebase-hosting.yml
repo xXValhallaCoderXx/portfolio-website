@@ -68,6 +68,11 @@ jobs:
           workload_identity_provider: projects/194838900506/locations/global/workloadIdentityPools/github-actions/providers/portfolio-main
           service_account: github-hosting-deploy@renate-gouveia-portfolio.iam.gserviceaccount.com
 
+      - name: Check the live board flies these rules
+        # Hosting never runs ahead of the board's function: a new SIM_VERSION deploys the function
+        # first (README: Releasing a flight-rules update). A board that cannot be asked passes.
+        run: npx tsx tools/check-live-board.ts
+
       - name: Build and deploy to Firebase Hosting
         # firebase.json's predeploy hook builds dist/ and aborts deployment if the build fails.
         run: firebase deploy --only hosting --project "$FIREBASE_PROJECT_ID" --non-interactive

@@ -1,6 +1,10 @@
 export interface LiftSummary { line: number; kg: number; red: number; good: boolean; double: boolean; at: number }
 import type { StyleCombo } from './meet-style.ts';
-export interface TrickStats { wingovers?: number; loops?: number; pitch?: number; style?: number; spirals?: number; bestCombo?: StyleCombo | null }
+/** A best combo's receipt: a run's (meet-combo.js), which keeps the named link into each move, or Training's (meet-style.js). */
+export type SheetCombo = StyleCombo & { links?: readonly number[] };
+export interface TrickStats { wingovers?: number; loops?: number; pitch?: number; style?: number; spirals?: number; bestCombo?: SheetCombo | null }
+/** A run's trick book, as its sheet keeps it (meet-sheet.js stats.tricks): what its feats read. */
+export interface BookStats { links: readonly number[]; flows: number; points: number; mirror: number }
 export interface FeatSummary {
   total: number; lifts: LiftSummary[]; stats: TrickStats & { thrown: number; hits: number };
 }
@@ -10,7 +14,7 @@ export interface WorldSummary {
   rows: readonly unknown[]; rank?: number; sent?: { ok: boolean; rank?: number; why?: string } | null;
   removed?: boolean; stays?: boolean; failed?: boolean;
 }
-interface Feat { id: string; name: string; text: string; streak?: number; bot?: boolean }
+interface Feat { id: string; name: string; text: string; streak?: number; bot?: boolean; book?: boolean }
 
 // What the meet sheet says about a run of Good Lift, worked out without a page: the feats it
 // earned, the line to share it by, the barogram of its climb, what it says of the medals the bots
@@ -20,6 +24,7 @@ interface Feat { id: string; name: string; text: string; streak?: number; bot?: 
 import { WORLD_BOARD } from './board-world.ts';
 import { scoreOf } from './score.ts';
 import { RUN_RULES } from './run-rules.ts';
+import { LINKS, MOVE_NAMES } from './trick-tables.ts';
 
 // The judges, in the order their lights stand: bit 0 of a lift's `red` is the first.
 export const JUDGES = Object.freeze(['contact', 'control', 'airspace']);
@@ -31,9 +36,19 @@ export const THOUSAND_POUNDS = 453.6;
 // the degrees a pitched swing reached ahead in a set landed.
 export const TRICK_FEATS = Object.freeze({ wingovers: 5, pitch: 45 });
 
+// What the trick book's feats ask of a run (meet-combo.js): flows in one combo
+// banked, and points banked in one combo.
+export const BOOK_FEATS = Object.freeze({ flows: 3, points: 300 });
+
+// The moves of a combo that its line names, the latest last, and that the trick
+// book keeps of its best (good-lift-store.js); any before them are counted instead.
+export const COMBO_SHOWN = 8;
+
 // Good Lift's feats. They are its own, kept in its own store, and never move the fjord's belt.
 // `streak` is the one the store awards (days in a row), and `bot` the one awarded once the bots have
 // flown the run's sky (meet-bots.js, as the sheet opens); every other is earned by one run alone.
+// `book` marks the four read off a run's trick book (bookFeatsFor); the store awards those as it
+// records the run.
 export const FEATS: readonly Readonly<Feat>[] = Object.freeze([
   Object.freeze({ id: 'opener', name: 'Opener', text: 'Lock out the first line.' }),
   Object.freeze({ id: 'under-the-horn', name: 'Under the horn', text: 'Make a good lift after Gjallarhorn sounds.' }),
@@ -44,6 +59,10 @@ export const FEATS: readonly Readonly<Feat>[] = Object.freeze([
   Object.freeze({ id: 'pitched-45', name: 'Pitched 45°', text: 'Pitch the wing 45° ahead and catch it.' }),
   Object.freeze({ id: 'training-block', name: 'Training block', text: 'Fly the Daily Sky seven days in a row.', streak: 7 }),
   Object.freeze({ id: 'beat-the-bot', name: 'Beat the bot', text: 'Outscore TST, the test pilot, on the same sky.', bot: true }),
+  Object.freeze({ id: 'first-link', name: 'First link', text: 'Bank a named link: a wingover dived into a spiral, say.', book: true }),
+  Object.freeze({ id: 'flow-three', name: 'Flow ×3', text: 'Bank a combo with three flows: moves begun before the last one settled.', book: true }),
+  Object.freeze({ id: 'mirror', name: 'Mirror', text: 'Fly one move both ways in a combo, and bank it.', book: true }),
+  Object.freeze({ id: 'big-bank', name: 'Big bank', text: 'Bank 300 points in one combo.', book: true }),
 ]);
 
 /** Kilograms as a meet writes them: a decimal only for a half (182.5, 180, 1,240). */
@@ -73,6 +92,21 @@ export function featsFor(result: FeatSummary) {
 }
 
 /**
+ * The trick book's feats one run earned, in FEATS order, from its sheet's
+ * `tricks` (summariseRun's stats.tricks: what it banked of each named link, the most flows and points
+ * in one combo banked, and whether one flew a move both ways). The store awards them as it records the
+ * run (good-lift-store.js recordRun); a sheet without a book earns none.
+ */
+export function bookFeatsFor(tricks: BookStats) {
+  const earned = [];
+  if (tricks.links.some((count) => count > 0)) earned.push('first-link');
+  if (tricks.flows >= BOOK_FEATS.flows) earned.push('flow-three');
+  if (tricks.mirror > 0) earned.push('mirror');
+  if (tricks.points >= BOOK_FEATS.points) earned.push('big-bank');
+  return earned;
+}
+
+/**
  * The run's tricks in a line for the sheet, or '' if it landed none: its style is shown beside the
  * TOTAL, and this says what earned it (`stats` is summariseRun's).
  */
@@ -85,9 +119,36 @@ export function trickSaid(stats: TrickStats) {
   return said.length ? `tricks: ${said.join(' · ')}` : '';
 }
 
-/** A bounded, replay-derived sequence; earlier moves remain represented by their count. */
-export function bestComboSaid(combo?: StyleCombo | null) {
+/**
+ * A combo in words (meet-combo.js's receipt, or the trick book's best): its
+ * latest COMBO_SHOWN moves, each after the named link into it, and a count of any moves before them.
+ *   +2 earlier · WINGOVERS → WING-SPIRAL → SPIRAL DIVE
+ */
+export function comboLine({ moves = 0, sequence, links }: { moves?: number; sequence: readonly number[]; links: readonly number[] }) {
+  const from = Math.max(0, sequence.length - COMBO_SHOWN);
+  const omitted = Math.max(moves, sequence.length) - sequence.length + from;
+  // Moves in capitals, an arrow between them, or the named link that joined them in its own marks.
+  let said = '';
+  for (let i = from; i < sequence.length; i++) {
+    const link = LINKS[links[i] - 1];
+    if (link) said += `${i > from ? ' ' : ''}⟨${link.name.toLowerCase()}⟩ `;
+    else if (i > from) said += ' → ';
+    said += MOVE_NAMES[sequence[i]] || 'MOVE';
+  }
+  return `${omitted ? `+${omitted} earlier · ` : ''}${said}`;
+}
+
+/**
+ * The best combo in a line, or '' for none. Training's (meet-style.js) is a bounded, replay-derived
+ * sequence; earlier moves remain represented by their count. A run's keeps the named link into each
+ * move, so it is said as the trick book says it (comboLine), with what it banked:
+ *   best combo: WINGOVERS → WING-SPIRAL → SPIRAL DIVE · +450
+ */
+export function bestComboSaid(combo?: SheetCombo | null) {
   if (!combo || combo.points <= 0) return '';
+  if (Array.isArray(combo.links)) {
+    return `best combo: ${comboLine({ moves: combo.moves, sequence: combo.sequence, links: combo.links })} · +${combo.points.toLocaleString('en-GB')}`;
+  }
   const names = ['', 'Pitch', 'Wingover', 'Loop', 'Spiral 360'];
   const omitted = Math.max(0, combo.moves - combo.sequence.length);
   const sequence = `${omitted ? `+${omitted} earlier · ` : ''}${combo.sequence.map(kind => names[kind] || 'Move').join(' → ')}`;

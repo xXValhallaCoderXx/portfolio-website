@@ -20,6 +20,8 @@ export interface GustBand {strength: number; ux: number; uz: number; born: numbe
 export interface SkyPilot extends Vector3 {
   collapse: number; shield: number; cloud: number; cloudTime: number; strikes: number; thermal: number;
   danger: number; headroom: number; gustAhead: number; gustIn: number; gustSlot: number;
+  /** Where the last strike came from and what it was (strike-fold.js's STRIKER). */
+  hitX: number; hitZ: number; hitKind: number;
 }
 export interface SkyState {
   seed: number; rng: number; elapsed: number; fogHeight: number; peak: number; openingAt: number;
@@ -27,5 +29,11 @@ export interface SkyState {
   thermals: SkyThermal[]; ravens: SkyRaven[]; clouds: SkyCloud[]; wind: WindLayer[]; gusts: GustBand[];
   gustDue: number; gustCount: number; ravenDue: number; ravenCount: number; ravenAttack: number; ravenAt: number;
   flow: ThermalFlowState; pilot: SkyPilot;
+  /** Whether the air is felt across the wing and never quite still (air-feel.js), as every run's is. */
+  feel: boolean;
+  /** Whether the wing folds by itself (a glider's): a strike then says only where it came from and by what. */
+  physical: boolean;
+  /** How far the turbulence has drifted with the wind since the run began (m). */
+  driftX: number; driftZ: number;
 }
 export interface CloudbaseOptions {hazards?: boolean; wind?: boolean; fixedWind?: Vector2 | null}

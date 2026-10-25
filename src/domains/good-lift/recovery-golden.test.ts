@@ -10,9 +10,11 @@ import { SIM_VERSION } from './sim-version.ts';
 import type { Vector3 } from '../flight/models.ts';
 
 const receipt = JSON.parse(readFileSync(new URL('../../test/fixtures/good-lift-recovery-chromium.json', import.meta.url), 'utf8')) as typeof fixture;
+// Flown in Chromium on the classic wing by tools/capture-goldens.ts (set recovery). Derived angles to
+// the cross-engine precision of V8's inverse trig; bodies, observers and style exact.
 const angles = new Set(['bank', 'pitch', 'rollRate', 'pitchRate', 'trackRate', 'yawRate', 'rollAcceleration', 'leftBrake', 'rightBrake', 'leftBrakeTarget', 'rightBrakeTarget']);
-const normalize = <T>(value: T): T => JSON.parse(JSON.stringify(value, (key, item) => angles.has(key) && typeof item === 'number'
-  ? Math.round(item * 1e11) / 1e11 : item));
+const normalize = <T>(value: T): T => JSON.parse(JSON.stringify(value, (key, item) =>
+  angles.has(key) && typeof item === 'number' ? Math.round(item * 1e11) / 1e11 : item));
 for (const record of receipt.records.filter((r): r is typeof r & {pureFlight: true; origin: Vector3} => !!r.pureFlight)) {
   test(`Chromium ${record.scenario} recovery, ${record.delay}s reactions: complete physical replay`, () => {
     assert.match(receipt.engine, /^Chromium /); assert.equal(record.simVersion, SIM_VERSION);

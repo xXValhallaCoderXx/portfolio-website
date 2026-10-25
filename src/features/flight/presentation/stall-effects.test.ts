@@ -2,11 +2,13 @@ import type { FlightState } from '../../../domains/flight/models.ts';
 import type { BrakeMeter } from './stall-effects.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BRAKE_METER, STALL_EFFECTS, brakeMeter, deepBrakeReached, stallEffects } from './stall-effects.ts';
+import { BRAKE_METER, STALL_EFFECTS, brakeMeter, deepBrakeReached, softBrakes, stallEffects } from './stall-effects.ts';
 import { BRAKE, createFlight, stepFlight } from '../../../domains/flight/flight.ts';
+// Good Lift's gliders, whose halves stall on their own (a test may fly the game's wings).
+import '../../../domains/good-lift/gliders.ts';
 
 const STEP = 1 / 60;
-const NONE = { left: 0, right: 0, luff: 0, shake: 0, tuck: 0 };
+const NONE = { left: 0, right: 0, luff: 0, shake: 0, tuck: 0, cravatLeft: 0, cravatRight: 0, twist: 0 };
 const wing = (fields: Partial<FlightState>) => ({ ...createFlight(), ...fields });
 
 test('nothing of a stall reaches the backdrop, a landing, the launch fade, a finished run or the missing page', () => {
@@ -156,4 +158,65 @@ test('the meter shows the ears as their own state, filling as they fold in, and 
   assert.equal(brakeMeter(0.4, 1, 1, out, 1).state, 'stalled');
   // Without them the meter is the brake's, as it always was.
   assert.deepEqual(brakeMeter(0.4, 0.2, 0, {}, 0), brakeMeter(0.4, 0.2, 0, {}));
+});
+
+test('a half stalled by itself folds back on its own side and flutters, in a run as over the fjord', () => {
+  const half = (sepL: number, sepR: number) => { const g = createFlight(); Object.assign(g.physical, { sepL, sepR }); return g; };
+  for (const mode of ['flying', 'cloudbase', 'training']) {
+    const left = stallEffects(mode, half(1, 0), {});
+    assert.equal(left.left, STALL_EFFECTS.half);
+    assert.equal(left.right, 0);
+    assert.equal(left.luff, STALL_EFFECTS.halfLuff);
+    assert.equal(stallEffects(mode, half(0, 0.5), {}).right, STALL_EFFECTS.half * 0.5);
+  }
+  assert.deepEqual(stallEffects('intro', half(1, 1), {}), NONE, 'nothing of it reaches the backdrop');
+});
+
+test('a glider\'s half folded by a collapse is drawn folded on its own side, fluttering; a caught tip and twisted lines as they are', () => {
+  for (const mode of ['flying', 'cloudbase', 'training']) {
+    const g = createFlight({ x: 0, y: 3000, z: 0 }, 'en-c');
+    Object.assign(g, { foldLeft: 0.6, cravatRight: 1, twist: -2.1 });
+    const drawn = stallEffects(mode, g, {});
+    assert.equal(drawn.left, 0.6); assert.equal(drawn.right, 0);
+    assert.equal(drawn.luff, STALL_EFFECTS.foldLuff * 0.6);
+    assert.equal(drawn.shake, STALL_EFFECTS.foldShake * 0.6);
+    assert.equal(drawn.cravatRight, 1); assert.equal(drawn.cravatLeft, 0);
+    assert.equal(drawn.twist, -2.1);
+    Object.assign(g, { foldLeft: 0.04 });
+    assert.equal(stallEffects(mode, g, {}).left, 0, 'a fold too small to fly on less is not drawn');
+  }
+  const g = createFlight({ x: 0, y: 3000, z: 0 }, 'en-c');
+  Object.assign(g, { foldLeft: 0.6, cravatRight: 1, twist: 1 });
+  assert.deepEqual(stallEffects('intro', g, {}), NONE, 'nothing of it reaches the backdrop');
+  assert.deepEqual(stallEffects('flying', createFlight(), {}), NONE, 'the classic wing never has any');
+});
+
+test('SOFT warns of a half about to stall by itself, before it goes, and never for both hands pulled together', () => {
+  const hands = (left: number, right: number) => ({ controlMode: 'brakes' as const, leftBrake: left, rightBrake: right });
+  // Flies `before` s with `start`, then ramps the right hand from 0.6 to 1 over 2 s (the left held at
+  // `left`, or with it when `even`): when SOFT first reaches 0.5, when the right half lets go, the most it said.
+  const fly = (wing: string, start: number, left: number, even = false) => {
+    const g = createFlight({ x: 0, y: 3000, z: 0 }, wing), out = { left: 0, right: 0 };
+    for (let i = 0; i < 8 * 60; i++) stepFlight(g, hands(start, start), {}, 1 / 60);
+    let soft = -1, gone = -1, most = 0;
+    for (let i = 0; i < 4 * 60; i++) {
+      const right = Math.min(1, 0.6 + 0.4 * i / 120);
+      stepFlight(g, hands(even ? right : left, right), {}, 1 / 60);
+      softBrakes('cloudbase', g, out);
+      most = Math.max(most, out.left, out.right);
+      if (soft < 0 && out.right >= 0.5) soft = i;
+      if (gone < 0 && g.physical.sepR > 0.5) gone = i;
+    }
+    return { soft, gone, most };
+  };
+  const acro = fly('acro', 0, 0);
+  assert.ok(acro.soft >= 0 && acro.gone - acro.soft >= 15, `the acro: SOFT at step ${acro.soft}, the half gone at ${acro.gone}`);
+  for (const wing of ['en-c', 'en-d']) assert.ok(fly(wing, 0.6, 0.6).soft >= 0, `${wing}: slow, one hand deep`);
+  for (const wing of ['en-c', 'en-d', 'acro']) {
+    const together = fly(wing, 0.6, 0.6, true);
+    assert.ok(together.gone >= 0, `${wing}: both halves stall`);
+    assert.equal(together.most, 0, `${wing}: a full stall asked for is no SOFT`);
+  }
+  for (const wing of ['en-a', 'en-b', 'classic']) for (const [start, left] of [[0, 0], [0.6, 0.6]])
+    assert.equal(fly(wing, start, left).most, 0, `${wing}: its halves never stall alone`);
 });

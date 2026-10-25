@@ -79,11 +79,14 @@ const FOG_SEEN = (FOG_SURFACE.radius * (1 + FOG_SURFACE.edge)) / 2;
  * ring's radius would be that height times the trim glide ratio; the fog's climb shortens it.
  * At most `limit` seconds: a caller who stops caring past some radius says so.
  */
-export function glideTime(y: number, fogHeight: number, elapsed: number, limit = 60) {
+export function glideTime(y: number, fogHeight: number, elapsed: number, limit = 60, wing: Glide = GLIDE) {
   return glideDuration(y, fogHeight, elapsed, limit, {
-    fogSpeed: cloudFogSpeed, sink: GLIDE.sink, catchHeight: GLIDE.catch, step: GLIDE.step,
+    fogSpeed: cloudFogSpeed, sink: wing.sink, catchHeight: GLIDE.catch, step: GLIDE.step,
   });
 }
+
+/** How a wing glides hands up: its trim speed and sink (m/s). The classic wing's is GLIDE's own. */
+export interface Glide { speed: number; sink: number }
 
 /** Local ambient drift, with the same terrain shelter as the wing; brief gusts are not forecast. */
 const breezePoint = { x: 0, y: 0, z: 0 };
@@ -110,17 +113,17 @@ export function breezeAt(state: SkyState, y: number, output: AirSample & Partial
  * the wing reaches with height to spare, and on it just as the fog does. `run` is the run (or its
  * state); `limit` is as for glideTime.
  */
-export function glideRing(run: CloudbaseRun | SkyState, pos: Vector3, wind: Vector2, output: Partial<GlideRingData>, limit = 60): GlideRingData {
+export function glideRing(run: CloudbaseRun | SkyState, pos: Vector3, wind: Vector2, output: Partial<GlideRingData>, limit = 60, wing: Glide = GLIDE): GlideRingData {
   const out = output as GlideRingData;
   const state = 'state' in run ? run.state : run;
-  const t = glideTime(pos.y, state.fogHeight, state.elapsed, limit);
+  const t = glideTime(pos.y, state.fogHeight, state.elapsed, limit, wing);
   out.startX = pos.x; out.startY = pos.y; out.startZ = pos.z;
   out.windX = wind.x; out.windZ = wind.z;
   out.t = t;
-  out.r = GLIDE.speed * t;
+  out.r = wing.speed * t;
   out.x = pos.x + wind.x * t;
   out.z = pos.z + wind.z * t;
-  out.y = pos.y - GLIDE.sink * t;
+  out.y = pos.y - wing.sink * t;
   return out;
 }
 
@@ -132,7 +135,7 @@ export function glideRing(run: CloudbaseRun | SkyState, pos: Vector3, wind: Vect
  * one in slot `skip` (the one being ridden, or -1) does not, since the question is where to go
  * next. `was` is the last word, which holds until the margin is GLIDE.hold metres the other way.
  */
-export function glideWord(run: CloudbaseRun | SkyState, ring: Partial<GlideRingData> & Pick<GlideRingData, 'r' | 'x' | 'z'>, was: string, skip: number, output: Partial<GlideReach>): GlideReach {
+export function glideWord(run: CloudbaseRun | SkyState, ring: Partial<GlideRingData> & Pick<GlideRingData, 'r' | 'x' | 'z'>, was: string, skip: number, output: Partial<GlideReach>, wing: Glide = GLIDE): GlideReach {
   const out = output as GlideReach;
   const { thermals } = 'state' in run ? run.state : run;
   let target = -1;
@@ -144,10 +147,10 @@ export function glideWord(run: CloudbaseRun | SkyState, ring: Partial<GlideRingD
     let tx = thermal.x, tz = thermal.z;
     if (Number.isFinite(ring.startX)) {
       const start = { x: ring.startX!, y: ring.startY!, z: ring.startZ! };
-      const reach = movingLiftIntercept(start, thermal, { x: ring.windX!, z: ring.windZ! }, {}, GLIDE.speed);
+      const reach = movingLiftIntercept(start, thermal, { x: ring.windX!, z: ring.windZ! }, {}, wing.speed);
       intercept = reach.seconds; tx = reach.x; tz = reach.z;
       if (intercept > ring.t! || intercept >= cloudThermalRemaining(thermal) - 4) continue;
-      if (!glidePathClear(start, { x: tx, z: tz }, intercept, surfaceAt, 8, GLIDE.sink)) continue;
+      if (!glidePathClear(start, { x: tx, z: tz }, intercept, surfaceAt, 8, wing.sink)) continue;
     }
     const dx = tx - ring.x;
     const dz = tz - ring.z;
@@ -186,6 +189,8 @@ export function createGlideRing({ scene }: Pick<PresentationOptions, 'scene'>) {
   const ring = { t: 0, r: 0, x: 0, y: 0, z: 0 };
   const wind = { x: 0, z: 0 };
   const reach = { target: -1, margin: -Infinity, word: '' };
+  // How the wing being flown glides hands up: the classic wing's until a run says otherwise.
+  const wing: Glide = { speed: GLIDE.speed, sink: GLIDE.sink };
   const tints = { go: new THREE.Color(GLIDE.go), climb: new THREE.Color(GLIDE.climb) };
 
   function build() {
@@ -263,8 +268,8 @@ export function createGlideRing({ scene }: Pick<PresentationOptions, 'scene'>) {
     const ax = pos.x - CLOUD_ZONE.x;
     const az = pos.z - CLOUD_ZONE.z;
     const drift = Math.sqrt(wind.x * wind.x + wind.z * wind.z);
-    glideRing(sky, pos, wind, ring, (Math.sqrt(ax * ax + az * az) + FOG_SURFACE.radius) / Math.max(1, GLIDE.speed - drift));
-    glideWord(sky, ring, state.word, skip, reach);
+    glideRing(sky, pos, wind, ring, (Math.sqrt(ax * ax + az * az) + FOG_SURFACE.radius) / Math.max(1, wing.speed - drift), wing);
+    glideWord(sky, ring, state.word, skip, reach, wing);
     // Some of it lies over the fog: the fog is neither all inside it nor all outside it.
     const cx = ring.x - CLOUD_ZONE.x;
     const cz = ring.z - CLOUD_ZONE.z;
@@ -329,7 +334,13 @@ export function createGlideRing({ scene }: Pick<PresentationOptions, 'scene'>) {
     root = band = null;
   }
 
+  /** Glides the ring by the wing a run is flown in (gliders.js's nominalFor: its trim speed and sink). */
+  function fly(speed: number, sink: number) {
+    wing.speed = speed; wing.sink = sink;
+  }
+
   return {
+    fly,
     begin, update, reset, dispose,
     get root() { return root; },
     get state() { return state; },

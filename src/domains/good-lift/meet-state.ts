@@ -17,7 +17,7 @@ import type { Vector3 } from '../flight/models.ts';
 //
 // There is no clock in here, and no random draw but the meet's own from the run's seed (never the
 // sky's generator), so a replayed run lands on the same total.
-import { FLIGHT } from '../flight/flight.ts';
+import { FLIGHT, wingFolded, wingInTrouble } from '../flight/flight.ts';
 import { CLOUD_POOL, CLOUD_STRIKE, CLOUD_ZONE } from './cloudbase-state.ts';
 import { BELL_RESULT } from './bells.ts';
 import { BLESSING, RUNE, createRunes, meetDraw } from './meet-runes.ts';
@@ -370,7 +370,7 @@ export function createMeet() {
     // height: flatter with the wind behind, steeper into it, and never steeper than the glide at
     // 6 m/s over the ground (no breeze and gust together come near that headwind).
     const middle = TRAIL.from + span / 2;
-    world.sky.windAt(ride.x + ux * middle, world.g.pos.y, ride.z + uz * middle, wind);
+    world.sky.windAt(ride.x + ux * middle, world.g.pos.y, ride.z + uz * middle, wind, true);
     const ground = Math.max(6, FLIGHT.speed.bar + wind.x * ux + wind.z * uz);
     trail.live = true;
     trail.ride = ride.n;
@@ -477,7 +477,7 @@ export function createMeet() {
     let n = 0;
     while (n < SCATTER.most && state.loose[LOOSE.scatter + n].held) n += 1;
     const bearing = meetDraw(sky.seed, 200 + out.n) * TAU;
-    world.sky.windAt(pos.x, pos.y, pos.z, wind);
+    world.sky.windAt(pos.x, pos.y, pos.z, wind, true);
     out.held = false;
     out.n += 1;
     out.at = sky.elapsed;
@@ -739,12 +739,12 @@ export function createMeet() {
     }
 
     // Reps: the wing's own turning, counted the flock's way in a hunted thermal that still lifts.
-    // A collapse, a stall (a spin with it), a front tuck or a tip collapse loses the circle in
-    // progress, and so does turning the other way; the launch column has no flock to turn with.
+    // A collapse, a stall (a spin with it), a front tuck, a fold, a twist or a half flown alone loses
+    // the circle in progress, and so does turning the other way; the launch column has no flock to turn with.
     // A rep is judged for depth on where the circle went while it turned: centred on the core
     // (its mean position within `depth`), it loads the heavier plate.
     const { lap } = state;
-    if (pilot.collapse > 0 || g.stall > 0 || g.tuck > 0) {
+    if (pilot.collapse > 0 || wingInTrouble(g)) {
       state.turned = lap.x = lap.z = lap.n = 0;
     } else if (slot > 0 && thermals[slot].strength >= MEET.alive) {
       const thermal = thermals[slot];
@@ -794,7 +794,7 @@ export function createMeet() {
 
     // The iron off the trail: a strike's plates spray as the wing reopens; past MEET.iron the
     // fronts, the thunder and (after the horn) the fog lay theirs; and the loose plates move on.
-    if (state.spray.held && pilot.collapse === 0) spray(world);
+    if (state.spray.held && pilot.collapse === 0 && !wingFolded(g)) spray(world);
     if (sky.active && iron) {
       front(world);
       if (!state.loose[LOOSE.thunder].live) thunder(world);

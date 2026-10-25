@@ -12,6 +12,12 @@ export function compactCoachCue(message: CoachFields, input: FlightInput, device
   const depth = Math.max(left, right);
   const releaseSide = depth > 0 && !both && (side === 'left' ? right === 0 : left === 0) &&
     ((side === 'left' ? input.rightBrake ?? 0 : input.leftBrake ?? 0) > .04 || message.release?.includes(side === 'left' ? 'right' : 'left'));
+  // The speed bar asked for, the hands up (a deep stall flown out of it, recovery-guide.js).
+  if (target?.bar && depth === 0) {
+    const on = !!input.bar && !(input.leftBrake ?? 0) && !(input.rightBrake ?? 0);
+    return { cue: device === 'keyboard' ? '↑ · speed bar, no brake keys' : device === 'touch' ? 'Hold BAR, thumbs off the brakes.' : 'Drag up for the speed bar.',
+      side: 'both', callout: on ? 'HOLD HERE' : 'BAR ↑', status: on ? 'hold' : 'pull', position: null };
+  }
   let cue: string;
   if (depth === 0) cue = device === 'keyboard' ? 'Release both turn and brake keys.' : device === 'touch' ? 'Lift both thumbs. Let the wing settle.' : 'Let go of the drag. Let the wing settle.';
   else if (device === 'keyboard') {

@@ -19,7 +19,7 @@ type GliderRig = Awaited<ReturnType<typeof loadGliderModels>> & {
   pilotMaterial: THREE.MeshStandardMaterial | undefined;
   lines: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>;
   marks: ReturnType<typeof landmarks>; material: THREE.MeshStandardMaterial;
-  base: { pivot: THREE.Vector3; wing: THREE.Vector3; pilot: THREE.Vector3 };
+  base: { pivot: THREE.Vector3; wing: THREE.Vector3; pilot: THREE.Vector3; scale: number };
 };
 
 import * as THREE from 'three';
@@ -758,6 +758,12 @@ const MOTION = {
   earFold: 1.25,
   earTuck: 0.3,
   earsRaise: 0.7,
+  // A tip caught in its lines (a cravat): the cells past `cravatHinge` are wrapped `cravatFold`
+  // radians down and under, pulled `cravatBack` back, and flap `cravatFlap` radians about that.
+  cravatHinge: 0.38,
+  cravatFold: 2.4,
+  cravatBack: 0.06,
+  cravatFlap: 0.3,
   // A front collapse (a tuck) folds the leading edge `tuckDrop` down and `tuckBack` back under the
   // wing, in the wing file's units, leaving the trailing edge where it was: deep enough to read at
   // a glance from behind, as a collapse is.
@@ -774,6 +780,7 @@ const MOTION = {
   // swing of its own to the flight's.
   trimEase: 2,
   heave: 2.5, // how hard the side of the wing over a core is lifted as the moment to turn in comes (a push)
+  coreLift: 0.03, // in flight, how far the tip over a core lifts as the wing meets it (the file's units)
   tipFlutter: 0.012, // how much the wingtips shake in rough air
   ripple: 0.004, // how much the surface ripples along the span
   breathing: 0.008, // how much the whole arc flexes open and shut
@@ -811,6 +818,8 @@ export function flexWing(x: number, y: number, z: number, air: GliderAir, out: T
     MOTION.tipFlutter * air.rough * reach * reach * reach * Math.sin(air.time * 9 + x * 14) +
     MOTION.ripple * air.rough * Math.sin(x * 46 + air.time * 5) * Math.sin(aft * Math.PI) +
     MOTION.breathing * air.rough * reach * reach * Math.sin(air.time * 1.7);
+  // Meeting a core in flight, the half over it lifts, the more toward its tip (in the file +x is the pilot's left).
+  if (air.heave) lift += MOTION.coreLift * Math.max(0, -air.heave * Math.sign(x)) * reach * reach;
   // The brake pulls all of the trailing edge, the middle less than the rest, and near a stall the
   // edge flutters. This runs for every point of the wing in every frame, so neither costs
   // anything while it is not happening.
@@ -827,6 +836,17 @@ export function flexWing(x: number, y: number, z: number, air: GliderAir, out: T
     const lead = (1 - aft) * (1 - aft) * air.tuck;
     lift -= MOTION.tuckDrop * lead;
     z -= MOTION.tuckBack * lead;
+  }
+  // A tip caught in its lines is wrapped under its hinge and flaps there, on its own side.
+  const cravat = x > 0 ? air.cravatLeft : air.cravatRight;
+  if (cravat > 0) {
+    const past = Math.abs(x) - MOTION.cravatHinge;
+    if (past > 0) {
+      const angle = cravat * (MOTION.cravatFold + MOTION.cravatFlap * Math.sin(air.time * 21 + x * 37));
+      x = Math.sign(x) * (MOTION.cravatHinge + past * Math.cos(angle));
+      lift -= past * Math.sin(angle);
+      z += (MOTION.cravatBack * cravat * past) / (0.5 - MOTION.cravatHinge);
+    }
   }
   // Big ears fold each tip down and in about its hinge, calm (the tips shiver only as the rest of
   // the cloth does); a collapse on top of them takes the wing over.
@@ -1042,6 +1062,15 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS }: 
   group.add(sling, seat, placeholder);
 
   let rig: GliderRig | null = null;
+  // How much longer (span) and deeper (chord) than its model the canopy is drawn: a glider's (setShape).
+  const shape = { span: 1, chord: 1 };
+  // The canopy drawn to `shape`: stretched along the model's own span and chord, never its height,
+  // and only as a whole, so every bend and every line's end, worked in the model's own units, follows.
+  const reshape = () => {
+    if (!rig) return;
+    rig.wing.scale.set(rig.base.scale * shape.span, rig.base.scale, rig.base.scale * shape.chord);
+    rig.wing.updateMatrix();
+  };
   // Settles once the models have taken the stand-in's place (true), or have failed to and left it
   // up (false). The game does not wait for it.
   const ready = loadGliderModels(load)
@@ -1071,7 +1100,8 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS }: 
       // `material` is the wing's own, from its file: the standard wing, which a livery never touches.
       const body = firstSkinnedMesh(pilot);
       rig = { wing, pilot, body, pilotMaterial: body?.material, mesh, rest, anchors, joints, lines, marks: landmarks(rest, anchors), material: mesh.material,
-        base: { pivot: pivot.clone(), wing: wing.position.clone(), pilot: pilot.position.clone() } };
+        base: { pivot: pivot.clone(), wing: wing.position.clone(), pilot: pilot.position.clone(), scale: wing.scale.x } };
+      reshape();
       return true;
     })
     .catch((error) => {
@@ -1089,7 +1119,7 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS }: 
   // `ears` and `tuck` are how far the big ears are in and the leading edge tucked, each 0 to 1.
   const air = {
     time: 0, rough: 0, steerLeft: 0, steerRight: 0, brake: 0, bar: 0, rest: 0, luff: 0, stall: 0,
-    trail: 0, trailLeft: 0, trailRight: 0, collapse: 0, foldLeft: 0, foldRight: 0, ears: 0, tuck: 0,
+    trail: 0, trailLeft: 0, trailRight: 0, collapse: 0, foldLeft: 0, foldRight: 0, cravatLeft: 0, cravatRight: 0, ears: 0, tuck: 0, heave: 0,
     coordinatedLean: 0, directBrakes: 0, leftBrake: 0, rightBrake: 0,
   };
   // What an emergency does to the gear, each from 0 to 1: the wing crumpling, being gathered in,
@@ -1371,6 +1401,15 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS }: 
           console.warn('Part of the kit did not load; the glider keeps what it had.', error);
         });
     },
+    /**
+     * Draws the canopy `span` times as long and `chord` times as deep as its model (a glider's,
+     * gliders.js lookFor), or as the model is with null. Laid on once the models are in.
+     */
+    setShape(look: { span: number; chord: number } | null) {
+      shape.span = look?.span ?? 1;
+      shape.chord = look?.chord ?? 1;
+      reshape();
+    },
     /** What the glider wears now ({ wing, harness, helmet }), and its helmet once made. */
     get kit() {
       return { ...worn };
@@ -1381,7 +1420,7 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS }: 
     // Airborne poses come straight from interpolated simulation bodies. Canopy rotation never
     // rotates the pilot around the group origin; the actual suspension connects their paths.
     posePhysical(snapshot: { pilot: { pos: { x: number; y: number; z: number; }; vel?: { x: number; y: number; z: number; }; }; canopy: { pos: { x: number; y: number; z: number; }; q: { x: number; y: number; z: number; w: number; }; }; yaw: number; }, detail: GliderPose) {
-      this.pose({ ...detail, swing: 0, rough: 0, heave: 0, physical: true });
+      this.pose({ ...detail, swing: 0, physical: true });
       group.position.copy(snapshot.pilot.pos);
       group.quaternion.identity();
       if (rig) {
@@ -1394,7 +1433,8 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS }: 
         rig.pilot.updateMatrix();
         suspension.copy(snapshot.canopy.pos).sub(snapshot.pilot.pos).normalize();
         seat.quaternion.setFromUnitVectors(physicalUp, suspension);
-        pilotHeading.setFromAxisAngle(physicalUp, -snapshot.yaw);
+        // Twisted under the lines, the pilot faces that much round from the wing (positive to the left).
+        pilotHeading.setFromAxisAngle(physicalUp, -snapshot.yaw + (Number.isFinite(detail.twist) ? detail.twist! : 0));
         seat.quaternion.multiply(pilotHeading);
         redraw();
       } else {
@@ -1438,16 +1478,17 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS }: 
       pilotToGroup.multiplyMatrices(seat.matrix, pilot.matrix);
       out.handLeft = marks.fistLeft ? pilotEnd(marks.fistLeft, point).y - sling.position.y : 0;
       out.handRight = marks.fistRight ? pilotEnd(marks.fistRight, point).y - sling.position.y : 0;
-      const metres = wing.scale.x * sling.scale.x;
+      // Metres a unit of the model is along its span, and up (a glider's canopy is drawn longer than its model).
+      const across = wing.scale.x * sling.scale.x, up = wing.scale.y * sling.scale.x;
       const { edgeLeft, edgeRight, tipLeft, tipRight } = marks;
-      out.edgeLeft = (edgeLeft.y - flexWing(edgeLeft.x, edgeLeft.y, edgeLeft.z, air, point).y) * metres;
-      out.edgeRight = (edgeRight.y - flexWing(edgeRight.x, edgeRight.y, edgeRight.z, air, point).y) * metres;
+      out.edgeLeft = (edgeLeft.y - flexWing(edgeLeft.x, edgeLeft.y, edgeLeft.z, air, point).y) * up;
+      out.edgeRight = (edgeRight.y - flexWing(edgeRight.x, edgeRight.y, edgeRight.z, air, point).y) * up;
       // The left tip is the file's +x end, and the right tip its -x end: how far each has come in,
       // and how far it has dropped.
-      out.tipLeft = (tipLeft.x - flexWing(tipLeft.x, tipLeft.y, tipLeft.z, air, point).x) * metres;
-      out.dropLeft = (tipLeft.y - point.y) * metres;
-      out.tipRight = (flexWing(tipRight.x, tipRight.y, tipRight.z, air, point).x - tipRight.x) * metres;
-      out.dropRight = (tipRight.y - point.y) * metres;
+      out.tipLeft = (tipLeft.x - flexWing(tipLeft.x, tipLeft.y, tipLeft.z, air, point).x) * across;
+      out.dropLeft = (tipLeft.y - point.y) * up;
+      out.tipRight = (flexWing(tipRight.x, tipRight.y, tipRight.z, air, point).x - tipRight.x) * across;
+      out.dropRight = (tipRight.y - point.y) * up;
       return out as GliderMeasure;
     },
     /**
@@ -1477,9 +1518,9 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS }: 
      */
     pose({
       dt, time, bank, pace, turn, lift, liftSide, landed,
-      flying = false, brake = 0, bar = 0, luff = 0, stall = 0, foldLeft = 0, foldRight = 0, rough = 0,
+      flying = false, brake = 0, bar = 0, luff = 0, stall = 0, foldLeft = 0, foldRight = 0, cravatLeft = 0, cravatRight = 0, rough = 0,
       ears = 0, tuck = 0, heave = 0, swing, physical = false, coordinatedLean = 0,
-      controlMode = 'legacy', leftBrake = 0, rightBrake = 0,
+      controlMode = 'legacy', leftBrake = 0, rightBrake = 0, still = false,
     }: GliderPose) {
       if (physicalWas && rig && !physical) {
         sling.position.copy(rig.base.pivot);
@@ -1514,6 +1555,8 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS }: 
         air.collapse = gear.collapse;
         air.foldLeft = share(foldLeft);
         air.foldRight = share(foldRight);
+        air.cravatLeft = share(cravatLeft);
+        air.cravatRight = share(cravatRight);
         // Rising air is rougher than still air, and a gust on the tail rougher still. The roughness
         // and the steering ease exactly as they always have, landing only within a hair (1e-9) far
         // too fine to see: steering let go, or a glider long on the ground, would otherwise shrink
@@ -1521,7 +1564,9 @@ export function buildGlider({ loadModel: load = loadModel, parts = KIT_PARTS }: 
         const rocking = 0.3 + Math.min(1, lift / 5) * 0.7;
         const onTail = share(rough);
         const restless = onTail > 0 ? Math.max(rocking, 0.3 + 0.7 * onTail) : rocking;
-        air.rough = settle(air.rough, landed ? 0 : restless, Math.min(1, step * 2), 1e-9);
+        air.rough = settle(air.rough, landed || still ? 0 : restless, Math.min(1, step * 2), 1e-9);
+        // In flight the side over a core lifts as the wing meets it; the spring does it otherwise.
+        air.heave = settle(air.heave, physical ? THREE.MathUtils.clamp(heave, -1, 1) : 0, Math.min(1, step * 6), 1e-9);
         const ease = Math.min(1, step * 6);
         air.steerLeft = settle(air.steerLeft, Math.min(1, Math.max(0, -turn)), ease, 1e-9);
         air.steerRight = settle(air.steerRight, Math.min(1, Math.max(0, turn)), ease, 1e-9);

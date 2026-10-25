@@ -2,16 +2,19 @@ import type { RunWorld } from './models.ts';
 import type { FlightInput } from '../flight/models.ts';
 import type { CoachMessage } from '../coaching/models.ts';
 import type { SkyThermal } from './sky.types.ts';
+import type { PilotPlan } from './gliders.ts';
 /** Only the observations used by the reference pilot; optional systems are supplied by runs that enable them. */
 export interface ReferenceWorld {
   g: FlightState; air: RunWorld['air'];
-  sky: { state: { thermals: SkyThermal[]; pilot: { collapse: number }; elapsed?: number; fogHeight?: number }; inside: RunWorld['sky']['inside'] };
+  sky: { state: { thermals: SkyThermal[]; pilot: { collapse: number }; elapsed?: number; fogHeight?: number; physical?: boolean };
+    inside: RunWorld['sky']['inside'] };
   steps?: number; watch?: RunWorld['watch']; style?: RunWorld['style']; meet?: RunWorld['meet']; bells?: RunWorld['bells'];
 }
 export interface ReferenceTricks { from: number; loops?: number; swaps?: number; pumps?: number }
 export interface ReferencePilotOptions {
   withFlock?: boolean; brake?: string; react?: number | null; collect?: boolean;
   gates?: boolean | readonly number[]; recover?: boolean; catches?: boolean; tricks?: ReferenceTricks | null;
+  plan?: Readonly<PilotPlan>;
 }
 // The reference pilot: a simple, fixed way of flying a run, used by the tests to pin the game's
 // balance and, flown on the day's sky, as a rival to beat. It flies to the nearest good lift and
@@ -19,7 +22,8 @@ export interface ReferencePilotOptions {
 // reacts to a raven, a cloud or a gust. Reflexes can be added for Good Lift's meet: one for
 // Hrungnir's kettlebells, one for the trail of plates, one for the rune gates and one for the
 // plates a strike sprays off the bar. It bounds what a player can do; it is not a player.
-import { FLIGHT, pitchPeak } from '../flight/flight.ts';
+import { FLIGHT, pitchPeak, wingInTrouble } from '../flight/flight.ts';
+import { createRecoveryGuide } from '../coaching/recovery-guide.ts';
 import { RUN, finishRun, stepRun } from './run-step.ts';
 import { PLATE_KIND } from './meet-state.ts';
 import { GATE, GATES, RUNE } from './meet-runes.ts';
@@ -74,6 +78,12 @@ export function createReferenceKeys(options: ReferencePilotOptions = TST, { hold
 // Counted in whole steps, from the step the surge set in or the wing folded.
 export const CATCH = Object.freeze({ react: 0.4, surge: 0.8, hold: 0.35, gap: 0.1 });
 
+// How every reference pilot flies a glider out of trouble, where a strike folds the
+// half it hits and the pilot keeps the controls (wing-folds.js): the recovery guide's hands
+// (recovery-guide.js), `lag` seconds late as a pilot reacts, as a direct pair, until the guide calls
+// the wing saved.
+export const RECOVER = Object.freeze({ lag: 0.3 });
+
 // How a gate-taker times its dash out of its climb to a rune stone and back.
 //   ahead    rad: how far off its nose a stone may be for it to set off for it
 //   carry    how much of its climb the wing keeps on the way out: it sets off when its height, with
@@ -85,10 +95,14 @@ export const DASH = Object.freeze({ ahead: 0.8, carry: 1, low: 4, home: 12 });
 // A gate-seeking collector prefers the reach and double-loading blessings.
 export const WORTH_RUNES = Object.freeze([RUNE.fehu, RUNE.tiwaz]);
 
+// How the pilot plans with the classic wing (gliders.js planFor): its trim, and the circles it aims for.
+const CLASSIC_PLAN: Readonly<PilotPlan> = Object.freeze({ trim: FLIGHT.speed.trim, circle: 25, braked: 21 });
+
 /**
  * A deterministic soaring pilot. `brake: 'none'` uses hands-up circles; the other brake labels
  * all hold the same common brake. `react` is the delay before dodging a kettlebell (null ignores
- * it). `collect`, `gates` and `recover` add plate, rune and scatter detours.
+ * it). `collect`, `gates` and `recover` add plate, rune and scatter detours. `plan` is how it reckons
+ * with the wing it flies (gliders.js planFor): the classic wing's unless it is told another's.
  *
  * `tricks` requests a physical move at `from` metres: alternating turns for `swaps` wingover
  * peaks, an energetic inversion for `loops`, or brake cycles for `pumps`. Recovery always follows
@@ -96,10 +110,10 @@ export const WORTH_RUNES = Object.freeze([RUNE.fehu, RUNE.tiwaz]);
  */
 export function createReferencePilot({
   withFlock = true, brake = 'none', react = null, collect = false, gates = collect ? WORTH_RUNES : false, recover = false, catches = true,
-  tricks = null,
+  tricks = null, plan = CLASSIC_PLAN,
 }: ReferencePilotOptions = {}) {
-  // Aim within the new wing's practical turning radius, with wind compensation below.
-  const radius = brake === 'none' ? 25 : 21;
+  // Aim within the wing's practical turning radius, with wind compensation below.
+  const radius = brake === 'none' ? plan.circle : plan.braked;
   let followed = 0;
   let followedGeneration = -1;
   // Which way it turns off a kettlebell's line: picked once for each warning, when it reacts, and
@@ -126,6 +140,10 @@ export function createReferencePilot({
   const lead = Math.round(CATCH.react / RUN.step);
   const hold = Math.round(CATCH.hold / RUN.step);
   const gap = Math.round(CATCH.gap / RUN.step);
+  // The recovery guide it follows, and what it asked for over the last `lag` steps, oldest next.
+  const guide = createRecoveryGuide(), lag = Math.round(RECOVER.lag / RUN.step);
+  const asked = { left: new Float64Array(lag), right: new Float64Array(lag), bar: new Uint8Array(lag) };
+  let askedAt = 0;
 
   // Steers straight at a point, hands up and off the bar.
   function steer(world: ReferenceWorld, intent: FlightInput, x: number, z: number) {
@@ -233,7 +251,7 @@ export function createReferencePilot({
       const dx = stone.x - pos.x;
       const dz = stone.z - pos.z;
       if (Math.abs(wrapAngle(Math.atan2(dx, -dz) - yaw)) > DASH.ahead) continue;
-      const arrive = pos.y + Math.max(0, vy) * (Math.sqrt(dx * dx + dz * dz) / FLIGHT.speed.trim) * DASH.carry;
+      const arrive = pos.y + Math.max(0, vy) * (Math.sqrt(dx * dx + dz * dz) / plan.trim) * DASH.carry;
       if (arrive < stone.y || arrive > stone.y + GATES.tall - DASH.low) continue;
       dash.phase = 1;
       dash.gate = i;
@@ -271,7 +289,7 @@ export function createReferencePilot({
     const { g, watch, style } = world, w = watch!.state, elapsed = world.sky.state.elapsed!;
     if (trick.phase === 4) return false;
     if (trick.phase === 0) {
-      if (g.pos.y < maneuver.from || world.sky.state.pilot.collapse > 0 || g.stall > 0) return false;
+      if (g.pos.y < maneuver.from || world.sky.state.pilot.collapse > 0 || wingInTrouble(g)) return false;
       trick.phase = 1; trick.at = elapsed;
       trick.movesAt = w.moves; trick.loopsAt = g.loops;
       trick.topsAt = w.tops; trick.frontsAt = w.fronts;
@@ -368,6 +386,19 @@ export function createReferencePilot({
     }
   }
 
+  // Flies a failed glider out as the recovery guide says, `lag` steps late: the hands it asked for
+  // then, as a direct pair. Out of trouble, the hands are its own again.
+  function recoverWing(world: ReferenceWorld, intent: FlightInput) {
+    const advice = guide.step(world.g);
+    const slot = askedAt % lag;
+    const left = asked.left[slot], right = asked.right[slot], bar = asked.bar[slot] === 1;
+    asked.left[slot] = advice.left; asked.right[slot] = advice.right; asked.bar[slot] = advice.bar ? 1 : 0;
+    askedAt += 1;
+    if (!guide.trouble) { intent.controlMode = 'legacy'; return; }
+    intent.controlMode = 'brakes'; intent.leftBrake = left; intent.rightBrake = right; intent.bar = bar;
+    intent.turn = 0; intent.brake = intent.deepBrake = intent.ears = false;
+  }
+
   return {
     decide<T extends FlightInput>(world: ReferenceWorld, intent: T) {
       intent.deepBrake = false;
@@ -419,6 +450,8 @@ export function createReferencePilot({
       // Pumping a swing on purpose, it lets it surge: the catch comes once the pumps are done.
       const maneuver = tricks && trickWing(world, intent);
       if (catches && !maneuver) catchWing(world, intent);
+      // A glider in trouble is flown out of it before anything else.
+      if (state.physical) recoverWing(world, intent);
       return intent;
     },
     /** Whether its hands are on the brake catching a surge, over whatever else it would do. */

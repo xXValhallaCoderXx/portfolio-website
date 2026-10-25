@@ -13,7 +13,7 @@ interface SpiralReceipt {
   records: Array<ReturnType<typeof captureSpiralCombo> & { source: string; nodeMatches: boolean }>;
 }
 
-// Computed in actual Chromium by .artifacts/fun-acro-v4/browser-spiral-combo.mjs. Replay below
+// Computed in actual Chromium by tools/capture-goldens.ts (set spiral-combo). Replay below
 // consumes only these frozen canonical controls, never the adaptive browser capture pilot.
 const receipt = JSON.parse(readFileSync(new URL('../../test/fixtures/good-lift-spiral-combo-chromium.json', import.meta.url), 'utf8')) as SpiralReceipt;
 

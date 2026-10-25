@@ -1,8 +1,9 @@
 import type { LiftSummary, TrickStats } from './meet-card.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FEATS, JUDGES, THOUSAND_POUNDS, TRICK_FEATS, barogram, bestComboSaid, featsFor, kilos, lightsOf, medalsSaid, metres, shareText, trickSaid, worldSaid } from './meet-card.ts';
+import { BOOK_FEATS, COMBO_SHOWN, FEATS, JUDGES, THOUSAND_POUNDS, TRICK_FEATS, barogram, bestComboSaid, bookFeatsFor, comboLine, featsFor, kilos, lightsOf, medalsSaid, metres, shareText, trickSaid, worldSaid } from './meet-card.ts';
 import { FEAT_IDS } from '../progression/good-lift-store.ts';
+import { LINKS, MOVE } from './trick-tables.ts';
 
 const lift = (line: number, red: number, { kg = 25, double = false } = {}) => ({ line, kg, red, good: (red & (red - 1)) === 0, double, at: 0 });
 const run = (lifts: LiftSummary[], { total = 0, stats = {} }: { total?: number; stats?: TrickStats & { thrown?: number; hits?: number } } = {}) => ({
@@ -62,10 +63,11 @@ test('each feat is earned by what the run did, and only by that', () => {
   assert.ok(featsFor(run([lift(250, 0)], { total: THOUSAND_POUNDS })).includes('thousand-pound-club'));
   assert.ok(!featsFor(run([lift(250, 0)], { total: 452.5 })).includes('thousand-pound-club'));
   // Earned in FEATS order; the streak's is never a single run's, nor the bot's, which only the bots
-  // flying the sky can award.
+  // flying the sky can award, nor the trick book's, which the store reads off a sheet that keeps one.
   const all = featsFor(run([...clean.slice(0, 4).map((each, i) => ({ ...each, double: i === 3 })), lift(0, 0)], { total: 500, stats: { thrown: 4, hits: 0, wingovers: 5, pitch: 45 } }));
-  assert.deepEqual(all, FEATS.filter((feat) => !feat.streak && !feat.bot).map((feat) => feat.id));
+  assert.deepEqual(all, FEATS.filter((feat) => !feat.streak && !feat.bot && !feat.book).map((feat) => feat.id));
   assert.deepEqual(FEATS.filter((feat) => feat.streak || feat.bot).map((feat) => feat.id), ['training-block', 'beat-the-bot']);
+  assert.deepEqual(FEATS.filter((feat) => feat.book).map((feat) => feat.id), ['first-link', 'flow-three', 'mirror', 'big-bank']);
 });
 
 test('the trick feats ask five linked wingovers or a pitched swing caught 45° ahead in a set landed, and the sheet says the tricks', () => {
@@ -81,6 +83,39 @@ test('the trick feats ask five linked wingovers or a pitched swing caught 45° a
   assert.equal(trickSaid({ wingovers: 4, loops: 3, pitch: 0 }), 'tricks: wingover ×4 · loop ×3');
   assert.equal(trickSaid({ wingovers: 0, pitch: 0 }), '');
   assert.equal(trickSaid({}), '');
+});
+
+test('the trick book\'s feats ask a named link, three flows, a move flown both ways or 300 points in one combo banked', () => {
+  assert.deepEqual(BOOK_FEATS, { flows: 3, points: 300 });
+  const book = (fields = {}) => ({ links: new Array(LINKS.length + 1).fill(0), flows: 0, points: 0, mirror: 0, ...fields });
+  assert.deepEqual(bookFeatsFor(book()), [], 'a book with nothing banked earns nothing');
+  const linked = book().links.map((_: number, id: number) => (id === LINKS.length ? 1 : 0));
+  assert.deepEqual(bookFeatsFor(book({ links: linked })), ['first-link']);
+  assert.deepEqual(bookFeatsFor(book({ flows: BOOK_FEATS.flows })), ['flow-three']);
+  assert.deepEqual(bookFeatsFor(book({ flows: BOOK_FEATS.flows - 1 })), []);
+  assert.deepEqual(bookFeatsFor(book({ mirror: 1 })), ['mirror']);
+  assert.deepEqual(bookFeatsFor(book({ points: BOOK_FEATS.points })), ['big-bank']);
+  assert.deepEqual(bookFeatsFor(book({ points: BOOK_FEATS.points - 5 })), []);
+  // In FEATS order, however they were met.
+  assert.deepEqual(bookFeatsFor(book({ points: 900, mirror: 1, flows: 4, links: linked })), ['first-link', 'flow-three', 'mirror', 'big-bank']);
+});
+
+test('a run\'s best combo names its moves and named links; Training\'s is said as it always was', () => {
+  const wing = LINKS.find((each) => each.name === 'WING-SPIRAL')!.id, exit = LINKS.find((each) => each.name === 'SPIRAL EXIT')!.id;
+  const receipt = { points: 450, base: 120, variety: 2, moves: 3, mask: 12, sequence: [MOVE.wingover, MOVE.spiral, MOVE.wingover],
+    links: [0, wing, exit], sides: [0, -1, 0], flows: 2, multiplier: 4 };
+  assert.equal(bestComboSaid(receipt), 'best combo: WINGOVERS ⟨wing-spiral⟩ SPIRAL DIVE ⟨spiral exit⟩ WINGOVERS · +450');
+  assert.equal(bestComboSaid({ ...receipt, sequence: [MOVE.loop, MOVE.pitch], links: [0, 0], moves: 2, points: 1250 }), 'best combo: LOOP → PITCH CATCH · +1,250');
+  assert.equal(bestComboSaid({ ...receipt, points: 0 }), '', 'nothing banked');
+  // A long combo names its latest COMBO_SHOWN moves and counts the rest.
+  const long = Array.from({ length: COMBO_SHOWN + 2 }, (_, i) => (i % 2 ? MOVE.spiral : MOVE.wingover));
+  const said = bestComboSaid({ ...receipt, sequence: long, links: long.map(() => 0), moves: long.length });
+  assert.match(said, /^best combo: \+2 earlier · WINGOVERS → SPIRAL DIVE → /);
+  assert.equal(said.split(' → ').length, COMBO_SHOWN);
+  // The trick book keeps fewer moves than its best combo had, and counts the rest the same way.
+  assert.equal(comboLine({ moves: 5, sequence: [MOVE.spiral, MOVE.wingover], links: [wing, exit] }), '+3 earlier · ⟨wing-spiral⟩ SPIRAL DIVE ⟨spiral exit⟩ WINGOVERS');
+  // Today's receipt keeps no links: its wording is unchanged.
+  assert.equal(bestComboSaid({ points: 150, base: 130, variety: 20, moves: 5, mask: 14, sequence: [4, 2, 3] }), 'best combo: +2 earlier · Spiral 360 → Wingover → Loop · 150 pts');
 });
 
 test('the store knows every feat the sheet lists, in the same order', () => {

@@ -200,6 +200,9 @@ export default function Fjord({ flying, armed, target, lost, game: address, warp
           onTraining={openTraining}
           initialLesson={initialLesson}
           stats={preparedSky ? game.current?.launchStats(preparedSky) : null}
+          lessons={game.current?.lessonOffers() ?? null}
+          trainingWing={game.current?.trainingWing() ?? ''}
+          onGlider={(id) => game.current?.setKit({ glider: id })}
           backLabel={address.kind === 'training' ? trainingReturn.current === 'game' ? 'Back to Game' : trainingReturn.current === 'free-form' ? 'Back to Free Form' : 'Back to website' : launchReturn.current === 'free-form' ? 'Back to Free Form' : 'Back to website'}
           audio={() => ({ sound: game.current?.sound.on ?? true, available: game.current?.sound.available ?? false, music: game.current?.music?.on ?? null })}
           onSound={() => { game.current?.toggleSound(); }} onMusic={() => { game.current?.toggleMusic(); }}

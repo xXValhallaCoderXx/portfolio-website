@@ -13,10 +13,11 @@ export const MUSIC = Object.freeze({
     Object.freeze({ file: 'arcade-hallgrimr.mp3', rms: -19.3 }),
     Object.freeze({ file: 'vikings-challenge.mp3', rms: -18.4 }),
   ]),
-  // dBFS RMS the music plays at (about -44.5 LUFS): under every sound of a run, as measured in
-  // Chromium (BS.1770). The wind at trim is -42.8 dBFS RMS (-41 LUFS); at their loudest the run's
-  // vario is -31 LUFS, the surge's swell -37, a rep's ting -38 and a raven's alarm -40.
-  level: -47,
+  // dBFS RMS the music plays at (about -45.5 LUFS): under every sound of a run. The wind is quietest
+  // on the EN-A with both brakes at working depth, -45.5 dBFS RMS (wind-tone.js windLevelDb); the
+  // classic wing's at trim is -42.8 (-41 LUFS, measured in Chromium, BS.1770). At their loudest the
+  // run's vario is -31 LUFS, the surge's swell -37, a rep's ting -38 and a raven's alarm -40.
+  level: -48,
   // Seconds it takes to fade in or out.
   fade: 1.5,
   // Seconds to wait, once every track has failed to load, before a touch or a key tries again.

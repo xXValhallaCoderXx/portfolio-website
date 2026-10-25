@@ -1,18 +1,24 @@
 import * as THREE from 'three';
 import type { FlightState, FlightInput } from '../../../domains/flight/models.ts';
 import type { RenderedFlight } from '../presentation/flight-view.ts';
+import { pullFor, tiltFor } from '../presentation/camera-feel.ts';
 
 const { clamp } = THREE.MathUtils;
 const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 const smoothstep = (a: number, b: number, x: number) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const GAZE = { back: 4, drop: 8, lift: 13, rise: 1.2, fall: 0.5 };
+// Turning on itself (a spin, a SAT, a helicopter): the heading followed at most `rate` rad/s, from
+// `back` m further back, eased in and out at `ease` per second, once the canopy yaws faster than
+// `yaw` rad/s with a half (or the whole wing) stalled.
+const HOLD = { rate: 0.5, back: 6, ease: 3, yaw: 1 };
 export interface LaunchReveal { age: number; duration: number; from: THREE.Vector3; at: THREE.Vector3 }
 export interface FlightCameraPort {
   g: FlightState; camera: THREE.PerspectiveCamera; gateway: THREE.Object3D; input: FlightInput;
   view: { centred: boolean };
   effects: { gaze: number; want: { gaze: number }; floor: number; tilt: number; shake: number };
   surfaceAt(x: number, z: number): number;
-  readonly mode: string; readonly time: number; readonly calm: boolean;
+  // `load` is the load on the lines, eased (load-feel.js), which the camera falls back with.
+  readonly mode: string; readonly time: number; readonly calm: boolean; readonly load: number;
   rendered(): RenderedFlight | null; isAirborne(): boolean; aimLost(dt: number): void;
 }
 /** Chase-camera state is presentation only and never changes flight bodies. */
@@ -60,21 +66,34 @@ export function createFlightCamera(port: FlightCameraPort) {
   // The heading the chase looks along: the glider's own, but carried round more slowly through a
   // wingover, so the glider is seen carving across the picture instead of the world swinging round
   // with it; and how far the camera stands back for it. Outside a wingover the heading is the
-  // glider's own, exactly, and the camera where it always was.
+  // glider's own, exactly, and the camera where it always was. A wing turning on itself is watched
+  // from a heading that hardly moves (that holds still for whoever asks for less motion), from a
+  // little further back, so the world never whirls round with it.
   let heading = g.yaw;
   let swung = 0;
+  let held = 0;
   function followHeading(dt: number) {
     swung = smoothstep(0.4, 1.0, Math.abs(g.bank));
+    const s = g.physical;
+    const rotating = (Math.max(s.sepL, s.sepR) >= 0.5 || g.stall > 0) && Math.abs(g.canopy.omega.y) > HOLD.yaw ? 1 : 0;
+    held += (rotating - held) * (1 - Math.exp(-dt * HOLD.ease));
+    if (held < 1e-3 && !rotating) held = 0;
     const course = port.rendered()?.yaw ?? g.track ?? g.yaw;
     const off = wrapAngle(course - heading);
-    if (swung === 0 && Math.abs(off) < 1e-3) heading = course;
-    else heading += off * (1 - Math.exp(-dt * (4 + 6 * (1 - swung))));
+    if (swung === 0 && held === 0 && Math.abs(off) < 1e-3) { heading = course; return; }
+    let turn = off * (1 - Math.exp(-dt * (4 + 6 * (1 - swung))));
+    if (held > 0) {
+      const most = (port.calm ? 0 : HOLD.rate) * dt;
+      turn += (clamp(turn, -most, most) - turn) * held;
+    }
+    heading += turn;
   }
 
   function chaseTarget() {
     // With no gaze this is the ordinary chase: behind, a little above, looking just ahead.
     forward.set(Math.sin(heading), 0, -Math.cos(heading));
-    chase.copy(port.rendered()?.pilot.pos ?? g.pos).addScaledVector(forward, (camera.aspect < 1 ? -34 : -26) - GAZE.back * effects.gaze - 4 * swung);
+    chase.copy(port.rendered()?.pilot.pos ?? g.pos).addScaledVector(forward, (camera.aspect < 1 ? -34 : -26) - GAZE.back * effects.gaze - 4 * swung - HOLD.back * held -
+      pullFor(port.load, port.calm));
     chase.y += 9.5 - GAZE.drop * effects.gaze;
     lookAt.copy(port.rendered()?.pilot.pos ?? g.pos).addScaledVector(forward, 14);
     lookAt.y += 3 + GAZE.lift * effects.gaze;
@@ -83,7 +102,7 @@ export function createFlightCamera(port: FlightCameraPort) {
 
   function snapCamera() {
     heading = g.track ?? g.yaw;
-    swung = 0;
+    swung = held = 0;
     chaseTarget();
     camera.position.copy(chase);
   }
@@ -141,10 +160,10 @@ export function createFlightCamera(port: FlightCameraPort) {
     camera.position.y = Math.max(camera.position.y, surfaceAt(camera.position.x, camera.position.z) + 4);
     if (port.mode === 'cloudbase') camera.position.y = Math.max(camera.position.y, effects.floor + 4);
     camera.lookAt(lookAt);
-    // The picture tilts with a quarter of a turn's bank, and with a tenth of a wingover's swing
-    // on top of it: none of the swing for whoever asks for less motion, and none of a loop, round
-    // which the horizon holds. Eased, so going into a loop and out of it never snaps.
-    const tilt = port.calm || g.loop !== 0 ? 0 : clamp(-g.bank * 0.15, -Math.PI / 30, Math.PI / 30);
+    // The picture tilts with a quarter of the bank, to 10° (camera-feel.js): none for whoever asks
+    // for less motion, and none round a loop, round which the horizon holds. Eased, so going into a
+    // loop and out of it never snaps.
+    const tilt = tiltFor(g.bank, g.loop !== 0, port.calm);
     effects.tilt += (tilt - effects.tilt) * (1 - Math.exp(-dt * 8));
     camera.rotateZ(effects.tilt);
     if (effects.shake > 0) {

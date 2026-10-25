@@ -1,9 +1,13 @@
-export type BynameId = 'unbroken' | 'unstruck' | 'centred' | 'bell-dodger' | 'horn-lifter' | 'cloud-shy';
+export type BynameId = 'unbroken' | 'unstruck' | 'centred' | 'bell-dodger' | 'horn-lifter' | 'cloud-shy' | 'whirlwind' | 'sky-dancer';
 export interface BynameSheet {
   reason?: string;
   peak: number;
   lifts: { line: number; red: number; good: boolean; double: boolean }[];
-  stats: { strikes: number; thrown: number; hits: number; reps: number; deep: number; cloud: number };
+  stats: {
+    strikes: number; thrown: number; hits: number; reps: number; deep: number; cloud: number;
+    // A run's trick book, and a best combo whose flows it counts: none on a sheet without one.
+    tricks?: { links: readonly number[] }; bestCombo?: { sequence: readonly number[]; flows?: number } | null;
+  };
 }
 interface Byname { id: BynameId; name: string; rule: string; earns: (sheet: BynameSheet) => boolean }
 
@@ -23,12 +27,17 @@ export const BYNAME = Object.freeze({
   thrown: 3, // kettlebells thrown, for the Unstruck and Bell-dodger: Giant-dodger's three
   reps: 3, // reps, for the Centred
   peak: 750, // m of peak, for Cloud-shy: through the height of the storm clouds' lowest two layers
+  moves: 3, // different moves in the best combo banked, for the Whirlwind...
+  flows: 2, // ...and flows in that combo: moves begun before the last one settled
+  links: 3, // different named links banked in one run, for Sky-Dancer
 });
 
 // Lines judged on the way up: the mist's judging of the bar as the run ends is no line.
 const lines = (sheet: BynameSheet) => sheet.lifts.filter((lift: { line: number; }) => lift.line > 0).length;
 
-// A run earns one byname; check the rarer achievements before the more common ones.
+// A run earns one byname; check the rarer achievements before the more common ones. The trick book's
+// two come last, and need a sheet that keeps one, so a sheet without a book is named exactly as it
+// always was.
 export const BYNAMES: readonly Readonly<Byname>[] = Object.freeze([
   Object.freeze({
     id: 'unbroken',
@@ -65,6 +74,19 @@ export const BYNAMES: readonly Readonly<Byname>[] = Object.freeze([
     name: 'Cloud-shy',
     rule: `not a second in cloud, on a climb past ${BYNAME.peak} m`,
     earns: ({ stats, peak }: BynameSheet) => stats.cloud === 0 && peak >= BYNAME.peak,
+  }),
+  Object.freeze({
+    id: 'whirlwind',
+    name: 'the Whirlwind',
+    rule: `a best combo of ${BYNAME.moves} different moves or more, with ${BYNAME.flows} flows`,
+    earns: ({ stats: { tricks, bestCombo } }: BynameSheet) => !!tricks && !!bestCombo &&
+      new Set(bestCombo.sequence).size >= BYNAME.moves && (bestCombo.flows ?? 0) >= BYNAME.flows,
+  }),
+  Object.freeze({
+    id: 'sky-dancer',
+    name: 'Sky-Dancer',
+    rule: `${BYNAME.links} different named links or more, banked in one run`,
+    earns: ({ stats: { tricks } }: BynameSheet) => !!tricks && tricks.links.filter((count) => count > 0).length >= BYNAME.links,
   }),
 ]);
 

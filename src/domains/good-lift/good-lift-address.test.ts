@@ -60,6 +60,12 @@ test('a written address reads back as the same sky', () => {
   assert.ok(!sameGame(null, at('/good-lift')));
 });
 
+test('the lab is gone: an old ?lab link flies the very sky it names, as any other address does', () => {
+  assert.deepEqual(at('/good-lift', '?lab'), { kind: 'practice', sky: null, vs: null, bad: null });
+  assert.deepEqual(at('/good-lift', '?sky=beef&lab=acro'), { kind: 'sky', sky: 0xbeef, vs: null, bad: null });
+  assert.ok(sameGame(at('/good-lift/daily', '?lab=en-c'), at('/good-lift/daily')));
+});
+
 test('Training is a separate destination and ignores ranked seed and challenge modifiers', () => {
   assert.deepEqual(at('/good-lift/training', '?sky=bad', '#vs=AQ'), { kind: 'training', sky: null, vs: null, bad: null });
   assert.equal(gameHref({ kind: 'training', sky: 12, vs: 'AQ' }), '/good-lift/training');

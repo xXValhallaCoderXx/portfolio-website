@@ -7,29 +7,45 @@ import { normalizeLearnedLessons } from '../progression/trick-learning.ts';
 import { WING } from '../flight/wing-envelope.ts';
 import { createControlSummary, summarizeControls } from '../flight/brake-controls.ts';
 import { createDirectAcroGuide } from '../coaching/direct-acro-guide.ts';
-export type LessonId = 'pitch' | 'spiral' | 'wingover' | 'loop';
+import type { createTrickWatch } from './trick-watch.ts';
+import { LINKS, MOVE } from './trick-tables.ts';
+export type LessonId = 'pitch' | 'spiral' | 'wingover' | 'loop' | 'stall' | 'wing-spiral' | 'spiral-exit' | 'heli' | 'sat';
 export interface LessonState {active: LessonId | null; phase: string; learned: string[]; retryAt: number; startedAt: number; stable: number; side: number; completedAt: number; awarded: number; cancelled: string}
-export interface LessonFrame extends CoachFrame {g: CoachFlight & {pos: {x: number; y: number; z: number}; vy: number; tuck: number}; air?: AirSample; warning?: unknown; hazardActive?: boolean; dt?: number}
+export interface LessonFrame extends CoachFrame {g: CoachFlight & {pos: {x: number; y: number; z: number}; vy: number; tuck: number}; air?: AirSample; warning?: unknown; hazardActive?: boolean; dt?: number;
+  tricks?: ReturnType<typeof createTrickWatch>['state']}
 
+const link = (name: string) => LINKS.find(each => each.name === name)!.id;
+const moves = (...ids: number[]): readonly number[] => Object.freeze(ids);
+// Each lesson's heights (m) and the move that completes it. The trick watch judges one of
+// `moves`, by the named `link` if one is given, on a glider always and on the classic wing for every
+// lesson but the first four, which there are the swing watch's `kind`, banked by today's style. A
+// rotation's lesson (`turns`) keeps it turning that many of the watch's units once it begins, rather
+// than taking the hands up as soon as it is seen.
 export const TRICK_LESSONS = Object.freeze({
-  pitch: Object.freeze({ height: 500, entry: 200, abort: 120, kind: 1, label: 'PITCH & CATCH' }),
-  spiral: Object.freeze({ height: 0, entry: 300, abort: 200, kind: 4, label: 'SPIRAL 360' }),
-  wingover: Object.freeze({ height: 750, entry: 250, abort: 180, kind: 2, label: 'WINGOVER' }),
-  loop: Object.freeze({ height: 1000, entry: 400, abort: 250, kind: 3, label: 'LOOP' }),
+  pitch: Object.freeze({ height: 500, entry: 200, abort: 120, kind: 1, moves: moves(MOVE.pitch), link: 0, turns: 0, label: 'PITCH & CATCH' }),
+  spiral: Object.freeze({ height: 0, entry: 300, abort: 200, kind: 4, moves: moves(MOVE.spiral, MOVE.asym), link: 0, turns: 0, label: 'SPIRAL 360' }),
+  wingover: Object.freeze({ height: 750, entry: 250, abort: 180, kind: 2, moves: moves(MOVE.wingover), link: 0, turns: 0, label: 'WINGOVER' }),
+  loop: Object.freeze({ height: 1000, entry: 400, abort: 250, kind: 3, moves: moves(MOVE.loop), link: 0, turns: 0, label: 'LOOP' }),
+  stall: Object.freeze({ height: 0, entry: 400, abort: 250, kind: 0, moves: moves(MOVE.stall, MOVE.tailslide), link: 0, turns: 0, label: 'FULL STALL & CATCH' }),
+  'wing-spiral': Object.freeze({ height: 0, entry: 400, abort: 250, kind: 0, moves: moves(MOVE.spiral, MOVE.asym), link: link('WING-SPIRAL'), turns: 0, label: 'WING-SPIRAL' }),
+  'spiral-exit': Object.freeze({ height: 0, entry: 400, abort: 250, kind: 0, moves: moves(MOVE.wingover), link: link('SPIRAL EXIT'), turns: 0, label: 'SPIRAL EXIT' }),
+  heli: Object.freeze({ height: 0, entry: 400, abort: 250, kind: 0, moves: moves(MOVE.heli), link: 0, turns: 3, label: 'HELICOPTER' }),
+  sat: Object.freeze({ height: 0, entry: 400, abort: 250, kind: 0, moves: moves(MOVE.sat), link: 0, turns: 3, label: 'SAT' }),
   stable: 1, retry: 45, setupIdle: 8, timeout: 45, celebrate: 3, settle: 3,
 });
 const sideName = (side: number): 'left' | 'right' => side < 0 ? 'left' : 'right';
 const turnOf = (input: FlightInput) => Number(!!input.right) - Number(!!input.left);
 
 /** An observer with its own coach. All outputs are requests; no input or flight state is written. */
-export function createTrickLessons({ learned = () => [], onLearned = () => {}, manual = false }: {learned?: () => unknown; onLearned?: (id: LessonId) => void; manual?: boolean} = {}) {
+export function createTrickLessons({ learned = () => [], onLearned = () => {}, manual = false, byTricks = () => false }:
+  {learned?: () => unknown; onLearned?: (id: LessonId) => void; manual?: boolean; byTricks?: () => boolean} = {}) {
   const coach = createFlightCoach();
   const directGuide = createDirectAcroGuide();
   const observeControls = createControlSummary();
   const state: LessonState = { active: null, phase: '', learned: [], retryAt: 0, startedAt: 0,
     stable: 0, side: 1, completedAt: -Infinity, awarded: 0, cancelled: '' };
   let clock = 0, phaseAt = 0, acceptedFor = 0, idle = 0, levelFor = 0;
-  let movesAt = 0, breaksAt = 0, landedAt = 0, lostAt = 0, moveAt = -Infinity;
+  let movesAt = 0, breaksAt = 0, landedAt = 0, lostAt = 0, moveAt = -Infinity, instancesAt = 0, trickBreaksAt = 0;
   let message: CoachMessage | null = null;
   let requested = false;
   let recoveredFor = 0;
@@ -37,7 +53,7 @@ export function createTrickLessons({ learned = () => [], onLearned = () => {}, m
   function reset() {
     observeControls.reset();
     coach.reset(); directGuide.reset(); clock = phaseAt = acceptedFor = idle = levelFor = 0;
-    movesAt = breaksAt = landedAt = lostAt = 0; moveAt = -Infinity; message = null;
+    movesAt = breaksAt = landedAt = lostAt = instancesAt = trickBreaksAt = 0; moveAt = -Infinity; message = null;
     Object.assign(state, { active: null, phase: '', learned: normalizeLearnedLessons(learned()), retryAt: 0,
       startedAt: 0, stable: 0, side: 1, completedAt: -Infinity, awarded: 0, cancelled: '' });
     requested = false; recoveredFor = 0;
@@ -57,28 +73,43 @@ export function createTrickLessons({ learned = () => [], onLearned = () => {}, m
   function phase(next: string) { state.phase = next; phaseAt = clock; acceptedFor = idle = levelFor = 0; }
 
   function manualStep(dt: number, frame: LessonFrame) {
-    const { g, watch, style, input = {} } = frame, id = state.active;
+    const { g, watch, style, input = {}, tricks } = frame, id = state.active;
     if (!id) return message;
+    // A lesson the trick watch judges: a fold or any break it calls is a failure, and a stall only
+    // when it is not one the hands are holding on purpose.
+    const lesson = TRICK_LESSONS[id], watched = !lesson.kind || byTricks();
     if (requested) {
       state.startedAt = clock; movesAt = watch.moves ?? 0; breaksAt = watch.breaks ?? 0;
       landedAt = style?.landed ?? 0; lostAt = style?.lost ?? 0; requested = false;
+      instancesAt = tricks?.instances ?? 0; trickBreaksAt = tricks?.breaks ?? 0;
     }
     const reserve = Math.min(frame.clearance ?? Infinity, frame.fogClearance ?? Infinity);
-    const physicalFailure = g.stall > 0 || g.tuck > 0 || frame.collapse! > 0 ||
-      g.wingPhase && g.wingPhase !== WING.flying || watch.breaks! > breaksAt || (style?.lost ?? 0) > lostAt;
+    const physicalFailure = watched
+      ? g.tuck > 0 || frame.collapse! > 0 || (tricks?.breaks ?? 0) > trickBreaksAt || g.stall > 0 && !tricks?.stalling
+      : g.stall > 0 || g.tuck > 0 || frame.collapse! > 0 ||
+        g.wingPhase && g.wingPhase !== WING.flying || watch.breaks! > breaksAt || (style?.lost ?? 0) > lostAt;
     if (frame.eligible === false || physicalFailure || frame.hazard || frame.warning ||
         reserve < TRICK_LESSONS[id].abort) {
       cancel(reserve < TRICK_LESSONS[id].abort ? 'clearance' : physicalFailure ? 'physical' : 'unavailable');
       return message = null;
     }
-    if (watch.moves! > movesAt && watch.moveKind === TRICK_LESSONS[id].kind && watch.moveAt > state.startedAt) {
+    if (watched) {
+      if (tricks && tricks.instances > instancesAt) {
+        instancesAt = tricks.instances;
+        if (lesson.moves.includes(tricks.move) && (!lesson.link || tricks.link === lesson.link)) {
+          // A rotation is kept turning; its guide takes the hands up once it has turned enough.
+          moveAt = clock; recoveredFor = 0; if (!lesson.turns) directGuide.recover();
+        }
+      }
+    } else if (watch.moves! > movesAt && watch.moveKind === lesson.kind && watch.moveAt > state.startedAt) {
       moveAt = watch.moveAt; movesAt = watch.moves!; recoveredFor = 0; directGuide.recover();
     }
     const released = Math.max(input.leftBrake ?? 0, input.rightBrake ?? 0) <= .04 && !input.bar && !input.ears;
     recoveredFor = moveAt > state.startedAt && watch.calm! > 0 && released ? recoveredFor + dt : 0;
-    if (moveAt > state.startedAt && (style?.landed ?? 0) > landedAt && style!.bankedAt! >= moveAt &&
-        style!.said! > 0 && recoveredFor + 1e-9 >= TRICK_LESSONS.settle) {
-      state.learned = normalizeLearnedLessons([...state.learned, id]); state.awarded = style!.said!;
+    // The swing watch's moves are banked by the style judge too; the trick watch's need only the recovery.
+    const banked = watched || (style?.landed ?? 0) > landedAt && style!.bankedAt! >= moveAt && style!.said! > 0;
+    if (moveAt > state.startedAt && banked && recoveredFor + 1e-9 >= TRICK_LESSONS.settle) {
+      state.learned = normalizeLearnedLessons([...state.learned, id]); state.awarded = watched ? 0 : style!.said!;
       state.completedAt = clock; state.active = null; state.phase = 'banked'; onLearned(id);
       return message = actionMessage({ state: 'banked', context: TRICK_LESSONS[id].label, owner: 'lesson',
         lessonId: id, phase: 'complete', action: 'none', title: 'LESSON COMPLETE',

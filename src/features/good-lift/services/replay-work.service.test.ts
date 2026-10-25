@@ -8,12 +8,12 @@ import { createRunWorld, finishRun, startRun, stepBits } from '../../../domains/
 import { createCloudbaseRun } from '../../../domains/good-lift/cloudbase-state.ts';
 import { createMeet } from '../../../domains/good-lift/meet-state.ts';
 import { createBells } from '../../../domains/good-lift/bells.ts';
-import { createStyle } from '../../../domains/good-lift/meet-style.ts';
-import { createRecorder } from '../../../domains/good-lift/recorder.ts';
+import { createComboStyle } from '../../../domains/good-lift/meet-combo.ts';
+import { LOG_FORMAT, createRecorder } from '../../../domains/good-lift/recorder.ts';
 import { summariseRun } from '../../../domains/good-lift/meet-sheet.ts';
 import { SIM_VERSION } from '../../../domains/good-lift/sim-version.ts';
 
-const emptyLog = (): RunLog => ({ format: 2, simVersion: SIM_VERSION, seed: 1, day: 0, touch: false, initials: '', total: 0, peak: 0, bits: new Uint32Array(), steps: 0 });
+const emptyLog = (): RunLog => ({ format: LOG_FORMAT, simVersion: SIM_VERSION, glider: 'en-a', seed: 1, day: 0, touch: false, initials: '', total: 0, peak: 0, bits: new Uint32Array(), steps: 0 });
 
 function scheduler() {
   let id = 0, time = 0;
@@ -27,12 +27,13 @@ function scheduler() {
   };
 }
 function flight() {
-  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle() }), 17);
+  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createComboStyle(), wing: 'en-b' }), 17);
   const keys = createReferenceKeys(TST), recorder = createRecorder();
   let ending = null;
   while (!ending) { const bits = keys(world); recorder.push(bits); ending = stepBits(world, bits); }
   finishRun(world, ending);
-  return { sheet: summariseRun(world, ending), log: { format: 2, simVersion: SIM_VERSION, seed: 17, day: 0, touch: false, initials: '', total: world.meet!.state.total, peak: Math.floor(world.sky.state.peak), bits: Uint32Array.from(recorder.bits), steps: recorder.steps } };
+  return { sheet: summariseRun(world, ending), log: { format: LOG_FORMAT, simVersion: SIM_VERSION, glider: 'en-b' as const, seed: 17, day: 0, touch: false, initials: '',
+    total: world.meet!.state.total, peak: Math.floor(world.sky.state.peak), bits: Uint32Array.from(recorder.bits), steps: recorder.steps } };
 }
 
 test('a complete skilled digital run yields between slices and equals the synchronous judge exactly', async () => {

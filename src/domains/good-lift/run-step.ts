@@ -5,13 +5,18 @@ import type { DirectControlSummary, FlightInput } from '../flight/models.ts';
 // function (functions/), which checks a run before it ranks it, all step it here, in this one
 // order, so a run flown in a browser can be flown again anywhere else and come out the same. Kept
 // free of 3D and page code: the ground it touches down on is ground.js's, not terrain.js's.
-import { FLIGHT, WING, createFlight, settleFlight, stepFlight } from '../flight/flight.ts';
+import { FLIGHT, WING, canInduce, createFlight, induceFailure, settleFlight, stepFlight, wingFolded } from '../flight/flight.ts';
+import { STRIKE_FOLD, strikeSide } from './strike-fold.ts';
 import { CLOUD_GATE, CLOUD_STRIKE, CLOUD_ZONE } from './cloudbase-state.ts';
 import { surfaceAt } from '../flight/ground.ts';
 import { createSwingWatch } from '../coaching/swing-watch.ts';
+import { createTrickWatch } from './trick-watch.ts';
+import { BREAK } from './trick-tables.ts';
 import { RUN_RULES } from './run-rules.ts';
 import { frameInput } from './recorder.ts';
 import { createControlSummary } from '../flight/brake-controls.ts';
+// Every run is flown on a glider, so the gliders are registered wherever a run can be stepped.
+import { GLIDERS } from './gliders.ts';
 
 // Seconds a run is stepped by, everywhere. Touching down within `ground` metres of the surface
 // ends a run, ring or not.
@@ -29,9 +34,11 @@ const wrapAngle = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle)
  * Everything one run needs, made once and reused for every run after it. `sky` is a
  * createCloudbaseRun(); `g`, `controls` and `air` may be handed in so the game draws the very
  * objects the run steps. `bells` and `meet` are the Good Lift layer, or null to fly the bare sky,
- * and `style` (meet-style.js) scores the run's tricks, or null to leave them unscored.
+ * and `style` (meet-combo.js) scores the run's combos, or null to leave them unscored. `wing` is the
+ * glider the run is flown on (gliders.js): the first, the EN-A every pilot starts on, unless named.
  *
  *   watch   what the wing's swings are doing (swing-watch.js), stepped with the wing
+ *   tricks  the trick watch (trick-watch.js): which move the wing is flying, stepped with the wing
  *   hook    which way a folded wing hooks round: the way it was turning when it was struck
  *   struck  strikes already answered with a hook
  *   stalls  stalls begun this run
@@ -40,22 +47,25 @@ const wrapAngle = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle)
  *   steps   fixed steps flown this run
  *   intent  what stepFrame/stepBits last asked of the wing, including the direct brake pair
  *   trace   the barogram: `alt`, `fog` and `total` (m, m, kg) for each second flown, `n` of them
+ *   wing    the id of the wing the run is flown in (flight-physics.js's registerWing), set at every start
  */
 export function createRunWorld({
   sky,
   g = createFlight({ x: CLOUD_GATE.x, y: CLOUD_GATE.y, z: CLOUD_GATE.z }),
   controls = { turn: 0, brake: false, deepBrake: false, bar: false, ears: false, locked: false, steered: false, climb: null },
   air = { lift: 0, sink: 0, windX: 0, windY: 0, windZ: 0, hazardSink: 0, calm: false, rough: 0, clearance: Infinity,
-    ridge: 0, lee: 0, thermal: 0, crestHeight: 0, ambientX: 0, ambientZ: 0 },
+    ridge: 0, lee: 0, thermal: 0, crestHeight: 0, ambientX: 0, ambientZ: 0, gradX: 0, gradZ: 0, core: 0, edge: 0, turbulence: 0 },
   bells = null,
   meet = null,
   style = null,
+  wing = GLIDERS[0],
 }: RunWorldOptions = {}): RunWorld {
   return {
     sky: sky!, g, controls, air, bells, meet, style,
     watch: createSwingWatch(),
+    tricks: createTrickWatch(),
     forces: { lift: 0, sink: 0, liftSide: 0, windX: 0, windY: 0, windZ: 0, hazardSink: 0, rough: 0,
-      ridge: 0, lee: 0, thermal: 0, crestHeight: 0, ambientX: 0, ambientZ: 0 },
+      ridge: 0, lee: 0, thermal: 0, crestHeight: 0, ambientX: 0, ambientZ: 0, gradX: 0, gradZ: 0, core: 0, edge: 0, turbulence: 0 },
     hook: 1,
     struck: 0,
     stalls: 0,
@@ -68,6 +78,7 @@ export function createRunWorld({
     trace: {
       alt: new Float32Array(TRACE.length), fog: new Float32Array(TRACE.length), total: new Float32Array(TRACE.length), n: 0,
     },
+    wing,
   };
 }
 
@@ -84,18 +95,20 @@ function sample(world: RunWorld) {
 /** Lays out the sky from `seed` and puts the glider at the gate, level and settled at trim. */
 export function startRun(world: RunWorld, seed: number) {
   const { sky, g, trace } = world;
-  sky.reset(CLOUD_GATE.y, seed);
+  // The air is felt across the wing. A glider whose halves fold (wing-folds.js) is folded where a
+  // strike hit it, and flown out of with the controls in hand; any other wing keeps the scripted fold.
+  sky.reset(CLOUD_GATE.y, seed, true, canInduce(world.wing, 'asym'));
   g.pos.x = CLOUD_GATE.x;
   g.pos.y = CLOUD_GATE.y;
   g.pos.z = CLOUD_GATE.z;
   g.yaw = CLOUD_GATE.yaw;
-  settleFlight(g);
+  settleFlight(g, undefined, world.wing);
   // Reference controls and shared presentation can read air before the first step. Never carry
   // a previous run's wind into that first decision or it will differ from a fresh server replay.
   Object.assign(world.air, { lift: 0, sink: 0, windX: 0, windY: 0, windZ: 0, hazardSink: 0, rough: 0, calm: false, clearance: Infinity,
-    ridge: 0, lee: 0, thermal: 0, crestHeight: 0, ambientX: 0, ambientZ: 0 });
+    ridge: 0, lee: 0, thermal: 0, crestHeight: 0, ambientX: 0, ambientZ: 0, gradX: 0, gradZ: 0, core: 0, edge: 0, turbulence: 0 });
   Object.assign(world.forces, { lift: 0, sink: 0, liftSide: 0, windX: 0, windY: 0, windZ: 0, hazardSink: 0, rough: 0,
-    ridge: 0, lee: 0, thermal: 0, crestHeight: 0, ambientX: 0, ambientZ: 0 });
+    ridge: 0, lee: 0, thermal: 0, crestHeight: 0, ambientX: 0, ambientZ: 0, gradX: 0, gradZ: 0, core: 0, edge: 0, turbulence: 0 });
   Object.assign(world.controls, { turn: 0, brake: false, deepBrake: false, bar: false, ears: false, locked: false, steered: false, climb: null,
     controlMode: 'legacy', leftBrake: 0, rightBrake: 0 });
   world.hook = 1;
@@ -110,6 +123,7 @@ export function startRun(world: RunWorld, seed: number) {
   world.bells?.reset(seed);
   world.meet?.reset();
   world.watch.reset();
+  world.tricks.reset();
   world.style?.reset();
   // Nothing of the last run's climb is left behind the first sample of this one: the run at rest.
   trace.alt.fill(0);
@@ -186,23 +200,37 @@ export function stepRun(world: RunWorld, intent: FlightInput, dt: number = RUN.s
   air.crestHeight = forces.crestHeight ?? 0;
   air.ambientX = forces.ambientX ?? forces.windX;
   air.ambientZ = forces.ambientZ ?? forces.windZ;
+  air.gradX = forces.gradX ?? 0;
+  air.gradZ = forces.gradZ ?? 0;
+  // What the wing meets that no force reads: how rough the air is and where in a thermal it is, for
+  // the canopy's rustle and the wind's buffet (presentation only).
+  air.turbulence = forces.turbulence ?? 0;
+  air.core = forces.core ?? 0;
+  air.edge = forces.edge ?? 0;
   air.calm = false;
   air.clearance = g.pos.y - surfaceAt(g.pos.x, g.pos.z);
   g.lift = forces.lift!;
   g.liftSide = forces.liftSide!;
 
-  const stalled = g.stall > 0;
   const tucked = g.tuck > 0;
   stepFlight(g, controls, air, dt);
-  if (g.stall > 0 && !stalled) world.stalls += 1;
   if (g.tuck > 0 && !tucked) world.tucks += 1;
-  world.watch.step(dt, g, pilot.collapse > 0, controls);
-  const strikesBeforeHazards = pilot.strikes;
+  world.watch.step(dt, g, pilot.collapse > 0 || wingFolded(g), controls);
+  // Control is judged by what was lost, not by a stall asked for: a stall or spin not flown as a
+  // move, or a fold, is the control light's; a deliberate full stall caught is a trick.
+  const breaks = world.tricks.state.breaks;
+  world.tricks.step(g, controls, pilot.collapse > 0, world.watch.state);
+  const broke = world.tricks.state.broke;
+  if (world.tricks.state.breaks > breaks && (broke === BREAK.stall || broke === BREAK.spin || broke === BREAK.tuck ||
+    broke === BREAK.fold || broke === BREAK.twist)) world.stalls += 1;
+  // Every strike not yet answered breaks the watches below: the sky's and the bells' this step, and one
+  // called between steps.
+  const strikesBeforeHazards = world.struck;
   if (g.pos.y - surfaceAt(g.pos.x, g.pos.z) <= RUN.ground) return world.ended = 'landed';
 
   const ended = sky.step(dt, g.pos, { flowEligible: !controls.steered && !controls.deepBrake &&
-    !controls.ears && !g.acro && g.wingPhase === WING.flying && !(g.stall > 0 || g.tuck > 0 || g.loop > 0) &&
-    Math.abs(g.bank) <= 0.9 && Math.abs(g.pitch) <= 0.7 });
+    !controls.ears && !g.acro && g.wingPhase === WING.flying && !(g.stall > 0 || g.tuck > 0 || g.loop > 0 || g.twisted > 0) &&
+    !wingFolded(g) && Math.abs(g.bank) <= 0.9 && Math.abs(g.pitch) <= 0.7 });
   if (!ended) world.bells?.step(dt, world);
   // Whatever has struck the wing since it was last answered (a raven, one of the meet's
   // kettlebells, or a strike called between steps) sets which way it hooks: the way the pilot
@@ -210,12 +238,17 @@ export function stepRun(world: RunWorld, intent: FlightInput, dt: number = RUN.s
   if (pilot.strikes > world.struck) {
     world.struck = pilot.strikes;
     world.hook = Math.sign(g.yawRate) || 1;
+    // A wing that folds by itself is folded on the side the strike came from, as far as its striker folds it.
+    if (sky.state.physical) induceFailure(g, 'asym', strikeSide(g, pilot.hitX, pilot.hitZ, world.hook), STRIKE_FOLD[pilot.hitKind]);
   }
   world.meet?.step(dt, world);
   // Sky and bell hazards resolve after the motion observation. Synchronize their break before
   // scoring this step, so a strike cannot bank a combo on its last recovery frame. This does not
   // observe motion again or change the solver, hazard or hook order.
-  if (pilot.strikes > strikesBeforeHazards) world.watch.interrupt(4);
+  if (pilot.strikes > strikesBeforeHazards) {
+    world.watch.interrupt(4);
+    world.tricks.interrupt(BREAK.strike);
+  }
   world.style?.step(dt, world);
   world.steps += 1;
   if (world.steps % TRACE.every === 0) sample(world);

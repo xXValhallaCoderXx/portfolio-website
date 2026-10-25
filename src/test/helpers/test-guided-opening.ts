@@ -10,6 +10,7 @@ import { createBells } from '../../domains/good-lift/bells.ts';
 import { createStyle } from '../../domains/good-lift/meet-style.ts';
 import { createRunCoachEnvironment, runCoachHazard, runCoachWarning } from '../../features/good-lift/services/coach-run.service.ts';
 import { createLiftGuide } from '../../domains/coaching/lift-guide.ts';
+import { GLIDERS, coachWingFor } from '../../domains/good-lift/gliders.ts';
 import { createTrickLessons } from '../../domains/good-lift/trick-lessons.ts';
 import { interruptsLift, resolveCoachMessage } from '../../domains/coaching/coach-routing.ts';
 import { surfaceAt } from '../../domains/flight/ground.ts';
@@ -30,9 +31,10 @@ export function followInstruction(message: CoachMessage, input: HeldControls) {
   return next;
 }
 
-export function createVisiblePilot(seed: number, delay = 0.3, options: Parameters<typeof createTrickLessons>[0] = {}) {
-  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle() }), seed) as RunWorld & { style: ReturnType<typeof createStyle>; bells: ReturnType<typeof createBells> };
-  const guide = createLiftGuide(createRunCoachEnvironment(world.sky)), lessons = createTrickLessons(options), gauge = {};
+export function createVisiblePilot(seed: number, delay = 0.3, options: Parameters<typeof createTrickLessons>[0] = {},
+  { wing = GLIDERS[0] as string }: { wing?: string } = {}) {
+  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle(), wing }), seed) as RunWorld & { style: ReturnType<typeof createStyle>; bells: ReturnType<typeof createBells> };
+  const guide = createLiftGuide({ ...createRunCoachEnvironment(world.sky), wing: () => coachWingFor(wing) }), lessons = createTrickLessons(options), gauge = {};
   const intent = createCoachIntent();
   let input = released(), pending: { at:number;input:HeldControls } | null = null, message: CoachMessage | null = null;
   const stats = { minimumClearance: Infinity, assisted: false as boolean | undefined, shown: 0, transfers: 0, firstThermal: null as number | null, maxQualification: 0 };
@@ -69,8 +71,8 @@ export function createVisiblePilot(seed: number, delay = 0.3, options: Parameter
   return { world, guide, lessons, stats, step, get message() { return message; }, get input() { return input; } };
 }
 
-export function guidedOpening(seed: number, delay: number) {
-  const pilot = createVisiblePilot(seed, delay);
+export function guidedOpening(seed: number, delay: number, flown: { wing?: string } = {}) {
+  const pilot = createVisiblePilot(seed, delay, {}, flown);
   while (pilot.world.sky.state.elapsed < 180 && pilot.world.g.pos.y < 450 && !pilot.stats.assisted) if (pilot.step()) break;
   return { seed, delay, height: pilot.world.g.pos.y, seconds: pilot.world.sky.state.elapsed,
     reason: pilot.world.ended, ...pilot.stats };

@@ -580,7 +580,8 @@ test('however far either half folds, the cloth is never turned inside out along 
     for (let left = 0; left <= 1; left += 0.25) {
       for (let right = 0; right <= 1; right += 0.25) {
         for (const [collapse, ears] of [[0, 0], [0.5, 0], [0, 0.5], [0, 1], [0.5, 1]]) {
-          const air = { time: 0, rough: 0, trail: 0, trailLeft: 0, trailRight: 0, luff: 0, collapse, foldLeft: left, foldRight: right, ears, tuck: ears };
+          const air = { time: 0, rough: 0, trail: 0, trailLeft: 0, trailRight: 0, luff: 0, collapse, foldLeft: left, foldRight: right, cravatLeft: 0, cravatRight: 0,
+            ears, tuck: ears, heave: 0 };
           let before = -Infinity;
           for (let i = 0; i <= 2000; i++) {
             const x = -0.5 + i / 2000;
@@ -798,7 +799,8 @@ test('with the ears in the hands come up to the outer lines, and steering no lon
 });
 
 test('a tuck folds the leading edge down and back under the wing and leaves the trailing edge where it was', () => {
-  const air = { time: 0, rough: 0, trail: 0, trailLeft: 0, trailRight: 0, luff: 0, collapse: 0, foldLeft: 0, foldRight: 0, ears: 0, tuck: 0 };
+  const air = { time: 0, rough: 0, trail: 0, trailLeft: 0, trailRight: 0, luff: 0, collapse: 0, foldLeft: 0, foldRight: 0, cravatLeft: 0, cravatRight: 0,
+    ears: 0, tuck: 0, heave: 0 };
   const tucked = { ...air, tuck: 1 };
   const open = new THREE.Vector3();
   const under = new THREE.Vector3();
@@ -986,4 +988,57 @@ test('the fallback shows mirrored coordinated posture without moving its physica
   }
   glider.posePhysical(snapshot, { ...CALM, flying: true, coordinatedLean: NaN, dt: STEP, time: 2 });
   assert.ok(body.quaternion.equals(new THREE.Quaternion()), 'missing or invalid telemetry leaves a finite neutral posture');
+});
+
+test('a glider\'s shape stretches the canopy along its span and chord, never its height, laid on before or after the models arrive', async () => {
+  const { glider, still } = await hangGlider();
+  const wing = wingOf(glider)!.parent!;
+  const base = wing.scale.y;
+  const before = still();
+  glider.setShape({ span: 0.82, chord: 1.25 });
+  assert.deepEqual([wing.scale.x / base, wing.scale.y / base, wing.scale.z / base].map((v) => +v.toFixed(6)), [0.82, 1, 1.25]);
+  const after = still();
+  // The tips are measured along the span, and the drops and edges up: an unbent wing reads 0 either way.
+  assert.ok(Math.abs(after.tipLeft - before.tipLeft * 0.82) < 1e-6 && Math.abs(after.dropLeft - before.dropLeft) < 1e-6);
+  glider.setShape(null);
+  assert.deepEqual([wing.scale.x, wing.scale.y, wing.scale.z], [base, base, base], 'as the model is');
+  const early = buildGlider({ loadModel });
+  early.setShape({ span: 1.014, chord: 1.245 });
+  assert.equal(await early.ready, true);
+  const shaped = wingOf(early)!.parent!;
+  assert.ok(Math.abs(shaped.scale.z / shaped.scale.y - 1.245) < 1e-9, 'a shape asked for before the models arrive is laid on once they do');
+});
+
+test('in flight rough air rustles the cloth, a core met lifts only its own side, and for less motion the cloth holds still', async () => {
+  const flyFor = async (detail: Partial<GliderPose>) => {
+    const glider = buildGlider({ loadModel });
+    assert.equal(await glider.ready, true);
+    const snapshot = { pilot: { pos: { x: 0, y: 90, z: 0 } }, canopy: { pos: { x: 0, y: 97, z: 0 }, q: { x: 0, y: 0, z: 0, w: 1 } }, yaw: 0 };
+    for (let n = 0; n < 240; n++) glider.posePhysical(snapshot, { ...CALM, flying: true, dt: STEP, time: n * STEP, ...detail });
+    return glider;
+  };
+  assert.ok((await flyFor({ rough: 1 })).air.rough > (await flyFor({})).air.rough + 0.3, 'rough air rustles it harder');
+  assert.equal((await flyFor({ rough: 1, still: true })).air.rough, 0, 'still, for less motion');
+  const still = await flyFor({ still: true, luff: 0.8 });
+  assert.equal(still.air.luff > 0, true, 'a coming stall still says so');
+  // A core on the right: the right half (the file's -x) lifts, the left does not.
+  const heaved = await flyFor({ heave: 1 }), flat = await flyFor({});
+  assert.ok(heaved.air.heave > 0.99);
+  const at = (glider: ReturnType<typeof buildGlider>, x: number) => flexWing(x, 0, 0, { ...glider.air, rough: 0, luff: 0 }, new THREE.Vector3()).y;
+  assert.ok(at(heaved, -0.5) > at(flat, -0.5) + 0.02, 'the right tip lifts');
+  assert.equal(at(heaved, 0.5), at(flat, 0.5), 'the left tip does not');
+});
+
+test('a tip caught in its lines is wrapped under on its own side, and only there', () => {
+  const air = { time: 0, rough: 0, trail: 0, trailLeft: 0, trailRight: 0, luff: 0, collapse: 0, foldLeft: 0, foldRight: 0, cravatLeft: 0, cravatRight: 0,
+    ears: 0, tuck: 0, heave: 0 };
+  const point = new THREE.Vector3();
+  const tip = (x: number) => flexWing(x, 0, 0, air, point).clone();
+  const free = tip(0.5), freeRight = tip(-0.5);
+  air.cravatLeft = 1;
+  const caught = tip(0.5);
+  assert.ok(caught.x < free.x - 0.05, `the left tip (the file's +x) comes in: ${caught.x} from ${free.x}`);
+  assert.ok(caught.y < free.y - 0.05, `and under: ${caught.y} from ${free.y}`);
+  assert.deepEqual(tip(-0.5), freeRight, 'the right half is untouched');
+  assert.deepEqual(tip(0.3), (air.cravatLeft = 0, tip(0.3)), 'and inside the hinge, nothing');
 });

@@ -1,9 +1,9 @@
 import type { FlightInput } from '../flight/models.ts';
 import type { RunIntent } from './models.ts';
 
-export interface RunLogMetadata { format: number; simVersion: number; seed: number; day: number; touch: boolean; initials: string; total: number; peak: number }
+export interface RunLogMetadata { format: number; simVersion: number; glider: LogWing; seed: number; day: number; touch: boolean; initials: string; total: number; peak: number }
 export interface RunLog extends RunLogMetadata { steps: number; bits: Uint32Array }
-export interface LogMetadataInput { format?: unknown; simVersion?: unknown; seed?: unknown; day?: unknown; touch?: unknown; initials?: unknown; total?: unknown; peak?: unknown }
+export interface LogMetadataInput { format?: unknown; simVersion?: unknown; glider?: unknown; seed?: unknown; day?: unknown; touch?: unknown; initials?: unknown; total?: unknown; peak?: unknown }
 export type LogDecodeResult = {ok: false; why: string; log?: never} | {ok: true; log: RunLog; why?: never};
 export type RecordingInput = Omit<FlightInput, 'leftBrake' | 'rightBrake'> & {leftBrake?: unknown; rightBrake?: unknown};
 // A run's log: the controls held at every fixed step. Given the seed of its sky, that is all a
@@ -13,8 +13,9 @@ export type RecordingInput = Omit<FlightInput, 'leftBrake' | 'rightBrake'> & {le
 //
 // A link is these bytes written in base64url without padding:
 //
-//   u8       the format: 2 (digital and proportional brakes)
+//   u8       the format: 3 (digital and proportional brakes, and the wing)
 //   varint   the sim version the run was flown under (sim-version.js)
+//   u8       the wing it was flown on, by its place in LOG_WINGS (glider-ids.js): 0 the classic wing
 //   u32 LE   the sky's seed
 //   varint   the UTC day of a Daily Sky, or 0 for any other sky
 //   varint   flags: bit 0, flown on a touch screen
@@ -37,8 +38,9 @@ export type RecordingInput = Omit<FlightInput, 'leftBrake' | 'rightBrake'> & {le
 
 import { RUN_RULES } from './run-rules.ts';
 import { brakeByte } from '../flight/brake-controls.ts';
+import { LOG_WINGS, isLogWing, type LogWing } from './glider-ids.ts';
 
-export const LOG_FORMAT = 2;
+export const LOG_FORMAT = 3;
 // Every input through the ten-minute deadline fits, even when it changes every step.
 export const MAX_STEPS = RUN_RULES.maxSteps;
 // The decoder accepts a complete ten-minute trace even when input changes every fixed step.
@@ -61,9 +63,9 @@ for (let i = 0; i < ALPHABET.length; i++) SEXTET[ALPHABET.charCodeAt(i)] = i;
 // The largest number a varint may carry, and the most bytes it may take to carry it.
 const UINT = 0xffffffff;
 const VARINT = 5;
-// The most bytes a log can take before its first stretch: format, version, seed, day, flags,
+// The most bytes a log can take before its first stretch: format, version, wing, seed, day, flags,
 // initials, total, peak and steps.
-const HEAD = 1 + VARINT + 4 + VARINT + VARINT + 3 + VARINT + VARINT + VARINT;
+const HEAD = 1 + VARINT + 1 + 4 + VARINT + VARINT + 3 + VARINT + VARINT + VARINT;
 const NAMED = /^(?:[A-Z]{3})?$/;
 const KG = 2.5;
 
@@ -161,17 +163,19 @@ export function createRecorder() {
 }
 
 /**
- * A run's log as a link's text. `meta` is { simVersion, seed, day, touch, initials, total, peak }:
- * the sim version and the seed the run was flown under; the Daily Sky's UTC day, or 0 for any other
- * sky; whether it was flown on a touch screen; '' or three letters A to Z; and the total (kg, a
- * multiple of 2.5) and peak (whole metres) it claims. `bits` holds the controls of each of the
- * first `steps` steps (a recorder's `bits`). Only the current LOG_FORMAT is written.
- * Throws a RangeError for anything the format cannot hold exactly.
+ * A run's log as a link's text. `meta` is { simVersion, glider, seed, day, touch, initials, total,
+ * peak }: the sim version, the wing (LOG_WINGS: always named, never assumed) and the seed the run
+ * was flown under; the Daily Sky's UTC day, or 0 for any other sky; whether it was flown on a touch
+ * screen; '' or three letters A to Z; and the total (kg, a multiple of 2.5) and peak (whole metres)
+ * it claims. `bits` holds the controls of each of the first `steps` steps (a recorder's `bits`).
+ * Only the current LOG_FORMAT is written. Throws a RangeError for anything the format cannot hold
+ * exactly.
  */
 export function encodeLog(meta: LogMetadataInput, bits: ArrayLike<number> | null | undefined, steps: number) {
-  const { simVersion, seed, day = 0, touch = false, initials = '', total = 0, peak = 0, format = LOG_FORMAT } = meta;
+  const { simVersion, glider, seed, day = 0, touch = false, initials = '', total = 0, peak = 0, format = LOG_FORMAT } = meta;
   need(format === LOG_FORMAT, 'the format', format);
   need(isUint(simVersion), 'the sim version', simVersion);
+  need(isLogWing(glider), 'the wing', glider);
   need(isUint(seed), 'the seed', seed);
   need(isUint(day), 'the day', day);
   need(typeof initials === 'string' && NAMED.test(initials), 'the initials', initials);
@@ -191,6 +195,7 @@ export function encodeLog(meta: LogMetadataInput, bits: ArrayLike<number> | null
   };
   bytes[size++] = format;
   varint(simVersion);
+  bytes[size++] = LOG_WINGS.indexOf(glider);
   for (let i = 0; i < 4; i++) bytes[size++] = (seed >>> (8 * i)) & 0xff;
   varint(day);
   varint(touch ? 1 : 0);
@@ -226,18 +231,19 @@ export function encodeLog(meta: LogMetadataInput, bits: ArrayLike<number> | null
 
 /**
  * Reads a link's text back into the log it was written from: { ok: true, log }, `log` being
- * { format, simVersion, seed, day, touch, initials, total, peak, steps, bits } as encodeLog was
- * given them (`bits` a Uint32Array); or { ok: false, why }:
+ * { format, simVersion, glider, seed, day, touch, initials, total, peak, steps, bits } as encodeLog
+ * was given them (`bits` a Uint32Array); or { ok: false, why }:
  *
  *   long       more than MAX_LINK characters, or more than MAX_STEPS steps
  *   format     a log, but not of the current LOG_FORMAT
+ *   glider     a log of a wing this build does not know (one added since, its byte past LOG_WINGS)
  *   truncated  cut short: it ends before its steps do
  *   corrupt    anything else: a character base64url does not use (padding among them), a number
  *              written the long way, flags or initials that cannot be, a stretch of no steps, one
  *              that holds what the last held or runs past the steps, or anything after the last
  *
- * Never throws, whatever it is handed. It does not ask which sim version the log was flown under;
- * a replay does (replay.js).
+ * Never throws, whatever it is handed. It does not ask which sim version the log was flown under,
+ * nor whether its wing can be raced; a replay does (replay.js).
  */
 export function decodeLog(text: unknown): LogDecodeResult {
   if (typeof text !== 'string') return refused('corrupt');
@@ -289,6 +295,8 @@ export function decodeLog(text: unknown): LogDecodeResult {
   const format = byte();
   if (format !== LOG_FORMAT) return refused('format');
   const simVersion = varint();
+  const wing = byte();
+  if (!why && wing >= LOG_WINGS.length) return refused('glider');
   // Operands are read left to right, so the first byte is the lowest.
   const seed = (byte() | (byte() << 8) | (byte() << 16) | (byte() << 24)) >>> 0;
   const day = varint();
@@ -329,5 +337,5 @@ export function decodeLog(text: unknown): LogDecodeResult {
   }
   // Nothing may follow the last stretch: no byte, no stray character, no bit.
   if (at !== size || pool !== 0 || text.length !== Math.ceil((size * 8) / 6)) return refused('corrupt');
-  return { ok: true, log: { format, simVersion, seed, day, touch: flags === 1, initials, total: plates * KG, peak, steps, bits } };
+  return { ok: true, log: { format, simVersion, glider: LOG_WINGS[wing], seed, day, touch: flags === 1, initials, total: plates * KG, peak, steps, bits } };
 }

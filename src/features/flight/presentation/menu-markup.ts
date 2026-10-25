@@ -12,4 +12,6 @@ export function lessonGuidance(id: TrainingLessonId) {
     return `<li><b>${index + 1}</b><span>${step}</span>${brakeDiagram(left, right)}<kbd>${keys}</kbd></li>`;
   }).join('');
 }
-export const menuMoves = TRAINING_LESSONS.map(id => `<span><svg viewBox="0 0 200 86" width="40" height="24" aria-hidden="true"><path d="${LESSON_ART[id].path}" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/></svg><span>${id === 'steering' ? 'STEER' : id === 'thermal' ? 'CLIMB' : id.toUpperCase()}</span></span>`).join('');
+// The lessons every wing is taught, for the hub's overview: the rotations are a glider's alone.
+export const HUB_LESSONS = TRAINING_LESSONS.filter(id => !['heli', 'sat', 'recovery'].includes(TRAINING_LESSON_INFO[id].needs ?? ''));
+export const menuMoves = HUB_LESSONS.map(id => `<span><svg viewBox="0 0 200 86" width="40" height="24" aria-hidden="true"><path d="${LESSON_ART[id].path}" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/></svg><span>${LESSON_ART[id].chip}</span></span>`).join('');

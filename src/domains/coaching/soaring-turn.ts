@@ -5,11 +5,12 @@ import { createControlSummary } from '../flight/brake-controls.ts';
 import { heldControls } from '../flight/thermal-centering.ts';
 import type { AirSample, ControlSummary, FlightInput, FlightState, Vector3 } from '../flight/models.ts';
 import type { CoachMessage, CoachingAdapter, LiftFrame } from './models.ts';
+import { coachWing } from './coach-wing.ts';
 export interface TurnForecast {safe: boolean; supported: boolean; seconds: number; drop: number; gain?: number}
 export interface SoaringTurnState {active: boolean; supported: boolean; phase: string; dir: number; progress: number; forecast: TurnForecast | null; message: CoachMessage | null}
 
 export const SOARING_TURN = Object.freeze({
-  useful: FLIGHT.sink.trim + 0.25, searchEvery: 0.25, step: 1 / 60,
+  useful: FLIGHT.sink.trim + 0.25, usefulAbove: 0.25, searchEvery: 0.25, step: 1 / 60,
   horizon: 18, exit: 2, clearance: 15, footprint: 6, boundary: 20,
   maximumDrop: 6, netLoss: 2, rolloutLead: 1.15, duration: 20,
   levelBank: 0.14, levelRate: 0.12, rollout: 2.5,
@@ -74,7 +75,7 @@ export function createSoaringTurn(adapter: CoachingAdapter) {
       stepFlight(projected, controls, air, C.step);
       arc += wrap(projected.track - lastTrack) * dir; lastTrack = projected.track;
       minimum = Math.min(minimum, projected.pos.y);
-      rising += vertical(air) >= C.useful ? 1 : 0; ticks++;
+      rising += vertical(air) >= coachWing(adapter).trimSink + C.usefulAbove ? 1 : 0; ticks++;
       if (fog) fogY += (fog.speedAt?.(projected.pos.y, (fog.elapsed ?? clock) + t) ?? 0) * C.step;
       if (!safe(projected, fogY) || projected.stall > 0 || projected.tuck > 0 || projected.loop ||
           g.pos.y - minimum > C.maximumDrop)
@@ -106,7 +107,7 @@ export function createSoaringTurn(adapter: CoachingAdapter) {
     const fog = adapter.fog?.();
     if (!safe(g as FlightState, fog?.height)) { clear(chord); return publish(); }
     if (!dir) {
-      if (!chord || blocked || clock < searchAt || vertical(currentAir) < C.useful) return publish();
+      if (!chord || blocked || clock < searchAt || vertical(currentAir) < coachWing(adapter).trimSink + C.usefulAbove) return publish();
       dir = turn; started = now; previousTrack = g.track!; progress = 0; searchAt = -Infinity;
     }
     progress += wrap(g.track! - previousTrack) * dir; previousTrack = g.track!;

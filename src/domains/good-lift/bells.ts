@@ -21,7 +21,8 @@ export interface BellsState {seed: number; due: number; clear: number; retry: nu
 // draws from the run's seed (never the sky's generator), and nothing allocated once it is made.
 // It is stepped only through run-step.js, after the sky, and the only thing it ever changes
 // outside itself is the strike a hit calls. It reads the meet only for the blessing it holds.
-import { copyFlight, createFlight, stepFlight } from '../flight/flight.ts';
+import { copyFlight, createFlight, stepFlight, wingInTrouble } from '../flight/flight.ts';
+import { STRIKER } from './strike-fold.ts';
 import { CLOUD_DEFAULT_SEED, CLOUD_STRIKE, CLOUD_ZONE, encounterInterval } from './cloudbase-state.ts';
 import { RUN } from './run-step.ts';
 import { surfaceAt } from '../flight/ground.ts';
@@ -174,7 +175,7 @@ export function createBells() {
     held.controlMode = undefined; held.leftBrake = held.rightBrake = 0;
     Object.assign(held, controls);
     for (let i = 0; i < steps; i++) {
-      sky.sample(pos, ahead.yaw, forces);
+      sky.sample(pos, ahead.yaw, forces, true);
       air.lift = forces.lift;
       air.sink = forces.sink;
       air.windX = forces.windX;
@@ -214,14 +215,15 @@ export function createBells() {
   }
 
   // What keeps the giant's hand still: a bell already in the air, a wing struck (or still
-  // shielded after it), cloud, a raven about to cross, a stall, a tuck or a tip collapse, a gust
-  // front about to arrive, or the rim close by. A swinging wing is thrown at as any other: blocking
-  // on it would let a pilot pump the swing, or wingover, and never be thrown at.
-  function blocked(sky: CloudbaseRun, g: { pos: { y: number; x: number; z: number; }; stall: number; tuck: number; }) {
+  // shielded after it), cloud, a raven about to cross, a wing in trouble (a stall, a tuck, a fold, a
+  // twist, a half flown alone), a gust front about to arrive, or the rim close by. A swinging wing is
+  // thrown at as any other: blocking on it would let a pilot pump the swing, or wingover, and never
+  // be thrown at.
+  function blocked(sky: CloudbaseRun, g: FlightState) {
     if (g.pos.y < B.from) return true;
     for (let i = 0; i < state.bells.length; i++) if (state.bells[i].phase !== IDLE) return true;
     const pilot = sky.state.pilot;
-    if (pilot.shield > 0 || pilot.cloud > 0 || pilot.danger > 0 || pilot.gustIn < B.gust || g.stall > 0 || g.tuck > 0) return true;
+    if (pilot.shield > 0 || pilot.cloud > 0 || pilot.danger > 0 || pilot.gustIn < B.gust || wingInTrouble(g)) return true;
     const dx = g.pos.x - Z.x;
     const dz = g.pos.z - Z.z;
     return dx * dx + dz * dz > (Z.r - B.edge) * (Z.r - B.edge);
@@ -261,7 +263,7 @@ export function createBells() {
           else if (warded && sky.state.pilot.shield === 0) {
             bell.result = GLANCED;
             state.glanced += 1;
-          } else if (sky.strike(-1)) {
+          } else if (sky.strike(-1, bell, bell.beast ? STRIKER.beast : STRIKER.bell)) {
             bell.result = HIT;
             state.hits += 1;
           } else bell.result = SHIELDED;

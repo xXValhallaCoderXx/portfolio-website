@@ -90,3 +90,13 @@ test('effective input edges use hysteresis and reset when switching sources', ()
   observer.step({ left: true });
   assert.equal(observer.step(pair(0.06)).right, false);
 });
+
+test('a drag pushed up past its grab point holds the speed bar, and only then', () => {
+  const drag = createBrakeDrag(), event = { pointerId: 3, pointerType: 'mouse', button: 0, clientX: 300, clientY: 300 };
+  drag.start(event);
+  drag.move({ ...event, clientY: 300 - BRAKE_DRAG.barLift + 1 }); assert.equal(drag.state.bar, false);
+  drag.move({ ...event, clientY: 300 - BRAKE_DRAG.barLift }); assert.equal(drag.state.bar, true);
+  assert.equal(drag.state.leftBrake, 0); assert.equal(drag.state.rightBrake, 0);
+  drag.move({ ...event, clientY: 360 }); assert.equal(drag.state.bar, false);
+  drag.move({ ...event, clientY: 200 }); drag.reset(); assert.equal(drag.state.bar, false);
+});

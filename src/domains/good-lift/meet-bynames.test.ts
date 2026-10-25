@@ -8,6 +8,8 @@ import { createCloudbaseRun } from './cloudbase-state.ts';
 import { createMeet } from './meet-state.ts';
 import { createBells } from './bells.ts';
 import { summariseRun } from './meet-sheet.ts';
+import { createComboStyle } from './meet-combo.ts';
+import { LINKS, LINK_COUNT, MOVE, MOVE_COUNT } from './trick-tables.ts';
 
 // A lift as the meet keeps one: good with no more than one red light.
 const lift = (line: number, red = 0, double = false) => ({ line, kg: 25, red, good: (red & (red - 1)) === 0, double, at: 0 });
@@ -22,6 +24,23 @@ const sheet = (fields = {}, stats = {}) => ({
   ...fields,
 });
 const clean = (lines: number) => [...Array.from({ length: lines }, (_, i) => lift(250 * (i + 1))), lift(0)];
+// A run's trick book as its sheet keeps it (meet-sheet.js stats.tricks), having
+// banked each named link in `links` (by id) once for each time it is named.
+const tricks = (links: number[] = []) => {
+  const book = { moves: new Array(MOVE_COUNT).fill(0), links: new Array(LINK_COUNT).fill(0), best: new Array(MOVE_COUNT).fill(0), flows: 0, points: 0, mirror: 0 };
+  for (const id of links) book.links[id] += 1;
+  return book;
+};
+type Combo = { sequence: number[]; flows: number };
+type Sheet = ReturnType<typeof sheet> & { stats: { tricks?: ReturnType<typeof tricks>; bestCombo?: Combo | null } };
+// A sheet that keeps a trick book: the bare sheet, with a book and its best combo's receipt.
+const booked = (links: number[], bestCombo: Combo | null, fields = {}, stats = {}): Sheet => {
+  const today = sheet(fields, stats);
+  return { ...today, stats: { ...today.stats, tricks: tricks(links), bestCombo } };
+};
+const link = (name: string) => LINKS.find((each) => each.name === name)!.id;
+// The bynames that read a trick book, which only a sheet that keeps one earns.
+const NEXT: readonly string[] = ['whirlwind', 'sky-dancer'];
 
 test('bynames are few, each with its own name and a rule in words, and are found by their ids', () => {
   assert.ok(BYNAMES.length >= 4 && BYNAMES.length <= 8, `${BYNAMES.length} bynames`);
@@ -76,24 +95,53 @@ test('each byname is earned by its own rule, and not by a run that falls just sh
 });
 
 test('a run that earns several bynames is given the first of them in BYNAMES order', () => {
-  // One run that meets every rule: each byname taken away in turn leaves the next.
+  // One run that meets every rule: each byname taken away in turn leaves the next. A bare sheet
+  // keeps no trick book, so it goes through the first six and then earns none; with a book the two
+  // that read it follow them.
   const all = { lifts: [...clean(4).slice(0, 3), lift(1000, 0, true), lift(0)], peak: 1100 };
   const stats = { strikes: 0, thrown: 4, hits: 0, dodged: 4, reps: 3, deep: 3, cloud: 0 };
-  const spoil: Record<BynameId, (run: ReturnType<typeof sheet>) => ReturnType<typeof sheet>> = {
+  const spoil: Record<BynameId, (run: Sheet) => Sheet> = {
     unbroken: (run) => ({ ...run, lifts: run.lifts.map((each, i: number) => (i === 1 ? lift(500, 2) : each)) }),
     unstruck: (run) => ({ ...run, stats: { ...run.stats, strikes: 1 } }),
     centred: (run) => ({ ...run, stats: { ...run.stats, deep: 2 } }),
     'bell-dodger': (run) => ({ ...run, stats: { ...run.stats, strikes: 2, hits: 1 } }),
     'horn-lifter': (run) => ({ ...run, lifts: run.lifts.map((each) => ({ ...each, double: false })) }),
     'cloud-shy': (run) => ({ ...run, stats: { ...run.stats, cloud: 3 } }),
+    whirlwind: (run) => ({ ...run, stats: { ...run.stats, bestCombo: { sequence: [MOVE.wingover, MOVE.spiral, MOVE.wingover], flows: 2 } } }),
+    'sky-dancer': (run) => ({ ...run, stats: { ...run.stats, tricks: tricks([link('WING-SPIRAL'), link('SPIRAL EXIT')]) } }),
   };
   assert.deepEqual(Object.keys(spoil), BYNAMES.map((byname) => byname.id));
-  let run = sheet(all, stats);
-  for (const byname of BYNAMES) {
-    assert.equal(bynameFor(run), byname.id);
-    run = spoil[byname.id](run);
+  const ids = BYNAMES.map((byname) => byname.id);
+  const flown = booked([link('PITCH-ROLL'), link('WING-SPIRAL'), link('SPIRAL EXIT')], { sequence: [MOVE.pitch, MOVE.wingover, MOVE.spiral], flows: 2 }, all, stats);
+  for (const [first, earns] of [[sheet(all, stats), ids.filter((id) => !NEXT.includes(id))], [flown, ids]] as const) {
+    let run: Sheet = first;
+    for (const id of earns) {
+      assert.equal(bynameFor(run), id);
+      run = spoil[id](run);
+    }
+    assert.equal(bynameFor(run), '');
   }
-  assert.equal(bynameFor(run), '');
+});
+
+test('the trick book\'s two bynames read a sheet\'s book, and a sheet without one earns neither', () => {
+  assert.deepEqual([BYNAME.moves, BYNAME.flows, BYNAME.links], [3, 2, 3]);
+  assert.deepEqual(BYNAMES.slice(-NEXT.length).map((byname) => byname.id), NEXT, 'after every other byname');
+  // The Whirlwind: a best combo of three different moves or more, with two flows.
+  const three = { sequence: [MOVE.pitch, MOVE.wingover, MOVE.spiral], flows: 2 };
+  assert.equal(bynameFor(booked([], three)), 'whirlwind');
+  assert.equal(bynameFor(booked([], { sequence: [MOVE.loop, ...three.sequence, MOVE.loop], flows: 4 })), 'whirlwind');
+  assert.equal(bynameFor(booked([], { ...three, flows: 1 })), '', 'one flow');
+  assert.equal(bynameFor(booked([], { sequence: [MOVE.wingover, MOVE.spiral, MOVE.wingover, MOVE.spiral], flows: 3 })), '', 'two different moves, however many');
+  assert.equal(bynameFor(booked([], null)), '', 'no combo banked');
+  // Sky-Dancer: three different named links banked in the run, in one combo or several.
+  assert.equal(bynameFor(booked([link('PITCH-ROLL'), link('WING-SPIRAL'), link('OVER THE TOP')], null)), 'sky-dancer');
+  assert.equal(bynameFor(booked([link('WING-SPIRAL'), link('WING-SPIRAL'), link('SPIRAL EXIT'), link('SPIRAL EXIT')], null)), '', 'two links, twice each');
+  // A run that meets both earns the rarer, the Whirlwind; a run the sky did not judge earns neither.
+  const both = booked([link('PITCH-ROLL'), link('WING-SPIRAL'), link('SPIRAL EXIT')], three);
+  assert.equal(bynameFor(both), 'whirlwind');
+  assert.equal(bynameFor({ ...both, reason: 'quit' }), '');
+  // The same run with no trick book, as today's sheets keep none, earns no byname of the book's.
+  assert.equal(bynameFor({ ...both, stats: { ...both.stats, tricks: undefined } }), '');
 });
 
 test('a flown run earns the byname whose rule it meets first, and the same one again from a copy of its sheet', () => {
@@ -114,4 +162,14 @@ test('a flown run earns the byname whose rule it meets first, and the same one a
       assert.equal(bynameFor(structuredClone(flown)), id);
     }
   }
+  // A run that keeps a trick book is judged by the same rules, the book's two after the rest.
+  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createComboStyle() }), 1);
+  const { reason } = flyPilot(world, createReferencePilot(TST));
+  const flown = summariseRun(world, reason ?? undefined);
+  assert.ok(flown.stats.tricks, 'its sheet keeps a trick book');
+  const id = bynameFor(flown);
+  const at = BYNAMES.findIndex((byname) => byname.id === id);
+  if (id) assert.ok(BYNAMES[at].earns(flown), id);
+  for (const before of BYNAMES.slice(0, at < 0 ? BYNAMES.length : at)) assert.equal(before.earns(flown), false, before.id);
+  assert.equal(bynameFor(structuredClone(flown)), id);
 });

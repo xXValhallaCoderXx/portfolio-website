@@ -1,17 +1,19 @@
 import type { AirSample, ThermalSource, Vector2, Vector3 } from '../flight/models.ts';
 import type { LiftIntercept } from '../flight/glide-math.ts';
 import type { CoachingAdapter, FlightObservation, LiftFrame, RidgeTransferState } from './models.ts';
-type TransferAdapter = Pick<CoachingAdapter, 'heightAt' | 'inside' | 'cloudDepth' | 'fog'> & {sampleAir?: CoachingAdapter['sampleAir']; sources: () => readonly ThermalSource[]};
+type TransferAdapter = Pick<CoachingAdapter, 'heightAt' | 'inside' | 'cloudDepth' | 'fog' | 'wing'> & {sampleAir?: CoachingAdapter['sampleAir']; sources: () => readonly ThermalSource[]};
 interface TransferForecast extends RidgeTransferState {requiredHeight: number; missingHeight: number; seconds: number; key: string; source: ThermalSource}
 // Read-only departure readiness. It never selects an action, changes an activity or flies a wing.
 import { FLIGHT } from '../flight/flight.ts';
 import { movingLiftIntercept } from '../flight/glide-math.ts';
+import { coachWing } from './coach-wing.ts';
+import type { CoachWing } from './coach-wing.ts';
 
 export const RIDGE_TRANSFER = Object.freeze({
   refresh: 0.5, hysteresis: 8, clearance: 15, footprint: 6,
   entryReserve: 25, entryRadius: 25, entrySeconds: 16, entryJoin: 2, lifeReserve: 12,
   maximumSeconds: 60, step: 0.5, turnRate: 0.4, turnLag: 0.8,
-  turnSink: FLIGHT.sink.trim + 0.8, useful: FLIGHT.sink.trim + 0.25,
+  turnSink: FLIGHT.sink.trim + 0.8, turnSinkAbove: 0.8, useful: FLIGHT.sink.trim + 0.25,
   windChange: 0.35, positionChange: 12, sourceJump: 20,
 });
 const C = RIDGE_TRANSFER;
@@ -22,8 +24,9 @@ const empty = (): RidgeTransferState => Object.freeze({ ready: false, targetId: 
 const keyOf = (source: ThermalSource, index: number) => `${typeof (source.id ?? index)}:${source.id ?? index}:${source.generation ?? 0}`;
 const remaining = (source: ThermalSource) => Math.min(source.remaining ?? Infinity,
   (source.life ?? Infinity) - (source.age ?? 0), source.edgeFade! >= 0 ? source.edgeFade! : Infinity);
-const useful = (source: ThermalSource, index: number) => (source.id ?? index) !== 0 && source.id !== 'launch' && !source.launch &&
-  source.live !== false && !(source.move! > 0) && (source.s ?? 5.5) * (source.strength ?? 1) >= C.turnSink + 0.25;
+// A source strong enough to transfer to with `wing`: lifting a quarter metre a second over what it sinks in the turn.
+const useful = (source: ThermalSource, index: number, wing: Readonly<CoachWing>) => (source.id ?? index) !== 0 && source.id !== 'launch' && !source.launch &&
+  source.live !== false && !(source.move! > 0) && (source.s ?? 5.5) * (source.strength ?? 1) >= wing.trimSink + C.turnSinkAbove + 0.25;
 
 /** Adapter: heightAt, sources, and optional sampleAir, inside, cloudDepth, fog. */
 export function createRidgeTransfer(adapter: TransferAdapter) {
@@ -35,6 +38,8 @@ export function createRidgeTransfer(adapter: TransferAdapter) {
   const point = {} as Vector3, field: AirSample = {}, intercepted = {} as LiftIntercept, shifted = {} as ThermalSource & {vx: number; vz: number}, turnEnd = {} as Vector2;
   let state = empty(), clock = -Infinity, next = -Infinity, selected = '', x = 0, z = 0, wx = 0, wz = 0;
   let sourceX = 0, sourceZ = 0, sourceVX = 0, sourceVZ = 0;
+  // The wing being flown, as the coach reckons with it (coach-wing.js), read afresh at every step.
+  let W = coachWing(adapter);
 
   function reset() {
     state = empty(); clock = next = -Infinity; selected = '';
@@ -51,8 +56,8 @@ export function createRidgeTransfer(adapter: TransferAdapter) {
       const count = Math.ceil(seconds / C.step), h = seconds / count;
       for (let n = 0; n < count; n++) {
         const direction = heading + angle * (n + 0.5) / count;
-        turnEnd.x += (Math.sin(direction) * FLIGHT.speed.light + wind.x) * h;
-        turnEnd.z += (-Math.cos(direction) * FLIGHT.speed.light + wind.z) * h;
+        turnEnd.x += (Math.sin(direction) * W.lightSpeed + wind.x) * h;
+        turnEnd.z += (-Math.cos(direction) * W.lightSpeed + wind.z) * h;
       }
       shifted.x = source.x + (source.vx ?? 0) * seconds;
       shifted.z = source.z + (source.vz ?? 0) * seconds;
@@ -75,7 +80,7 @@ export function createRidgeTransfer(adapter: TransferAdapter) {
   function forecast(g: FlightObservation, air: AirSample, source: ThermalSource, index: number, now: number): TransferForecast | null {
     const wind = { x: air.ambientX ?? air.windX ?? 0, z: air.ambientZ ?? air.windZ ?? 0 };
     // A held brake/bar is released for the transfer; do not assume a faster-than-trim glide.
-    const speed = Math.min(FLIGHT.speed.trim, Math.max(6, g.speed || FLIGHT.speed.trim));
+    const speed = Math.min(W.trimSpeed, Math.max(6, g.speed || W.trimSpeed));
     const turn = headingTurn(g, source, wind, speed);
     const seconds = turn.seconds + intercepted.seconds;
     if (!Number.isFinite(seconds) || seconds > C.maximumSeconds ||
@@ -113,18 +118,18 @@ export function createRidgeTransfer(adapter: TransferAdapter) {
       corridor[at + 3] = time; corridor[at + 4] = heading;
       elapsed = time;
     }
-    record(px, pz, 0, turn.heading, C.turnSink);
+    record(px, pz, 0, turn.heading, W.trimSink + C.turnSinkAbove);
     const turning = Math.ceil(turn.seconds / C.step), turnStep = turn.seconds / turning;
     for (let n = 1; n <= turning; n++) {
       const heading = turn.heading + turn.angle * (n - 0.5) / turning;
-      px += (Math.sin(heading) * FLIGHT.speed.light + wind.x) * turnStep;
-      pz += (-Math.cos(heading) * FLIGHT.speed.light + wind.z) * turnStep;
-      record(px, pz, n * turnStep, heading, C.turnSink);
+      px += (Math.sin(heading) * W.lightSpeed + wind.x) * turnStep;
+      pz += (-Math.cos(heading) * W.lightSpeed + wind.z) * turnStep;
+      record(px, pz, n * turnStep, heading, W.trimSink + C.turnSinkAbove);
     }
     const fromX = px, fromZ = pz, glide = Math.max(1, Math.ceil(intercepted.seconds / C.step));
     const course = Math.atan2(intercepted.x - px, -(intercepted.z - pz));
     for (let n = 1; n <= glide; n++) record(fromX + (intercepted.x - fromX) * n / glide,
-      fromZ + (intercepted.z - fromZ) * n / glide, turn.seconds + intercepted.seconds * n / glide, course, FLIGHT.sink.trim);
+      fromZ + (intercepted.z - fromZ) * n / glide, turn.seconds + intercepted.seconds * n / glide, course, W.trimSink);
     const entry = Math.ceil(C.entrySeconds / C.step), radius = Math.min(C.entryRadius, (source.r ?? 60) * 0.5);
     for (let n = 1; n <= entry; n++) {
       const t = C.entrySeconds * n / entry, joining = t <= C.entryJoin;
@@ -154,6 +159,7 @@ export function createRidgeTransfer(adapter: TransferAdapter) {
       requiredHeight: required, missingHeight: Math.max(0, required - g.pos.y), seconds, key, source };
   }
   function step(dt: number, frame: LiftFrame) {
+    W = coachWing(adapter);
     if (!(dt > 0) || !frame?.g?.pos) return state;
     const now = Number.isFinite(frame.clock) ? frame.clock! : Number.isFinite(clock) ? clock + dt : 0;
     if (now < clock) reset();
@@ -165,7 +171,7 @@ export function createRidgeTransfer(adapter: TransferAdapter) {
     }
     const sources = adapter.sources(), windX = air.ambientX ?? air.windX ?? 0, windZ = air.ambientZ ?? air.windZ ?? 0;
     const current = sources.find((source, index) => keyOf(source, index) === selected);
-    const invalid = !!selected && (!current || !useful(current, sources.indexOf(current)) ||
+    const invalid = !!selected && (!current || !useful(current, sources.indexOf(current), W) ||
       remaining(current) < (state.seconds ?? 0) + C.entrySeconds + C.lifeReserve ||
       Math.hypot(current.x - sourceX, current.z - sourceZ) > C.sourceJump ||
       Math.hypot((current.vx ?? 0) - sourceVX, (current.vz ?? 0) - sourceVZ) >= C.windChange);
@@ -174,7 +180,7 @@ export function createRidgeTransfer(adapter: TransferAdapter) {
     let best: TransferForecast | null = null, retained: TransferForecast | null = null;
     for (let index = 0; index < sources.length; index++) {
       const source = sources[index];
-      if (!useful(source, index)) continue;
+      if (!useful(source, index, W)) continue;
       const result = forecast(g, air, source, index, now);
       if (!result) continue;
       if (result.key === selected) retained = result;

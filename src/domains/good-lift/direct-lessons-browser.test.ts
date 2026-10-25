@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { decodeLog, isDirectFrame } from './recorder.ts';
+import { LOG_FORMAT, decodeLog, isDirectFrame } from './recorder.ts';
 import { SIM_VERSION } from './sim-version.ts';
 import { replayDirectLesson } from '../../test/helpers/test-direct-lessons.ts';
 import type { captureDirectLesson } from '../../test/helpers/test-direct-lessons.ts';
@@ -14,7 +14,7 @@ interface DirectLessonReceipt {
   records: Array<ReturnType<typeof captureDirectLesson> & { source: string; nodeMatches: boolean }>;
 }
 
-// Frozen in Chromium by .artifacts/fun-acro-v4/capture-all.mjs. Tests replay these recorded
+// Frozen in Chromium by tools/capture-goldens.ts (set direct-lessons). Tests replay these recorded
 // canonical inputs; they never run the scripted capture pilot to generate expected results.
 const receipt = JSON.parse(readFileSync(new URL('../../test/fixtures/good-lift-direct-lessons-chromium.json', import.meta.url), 'utf8')) as DirectLessonReceipt;
 
@@ -34,7 +34,8 @@ test('Chromium pitch, wingover and loop lessons retain every paired-control body
     assert.equal(record.simVersion, SIM_VERSION);
     const read = decodeLog(record.link); assert.ok(read.ok, label);
     assert.equal(read.log.simVersion, SIM_VERSION);
-    assert.equal(read.log.format, 2);
+    assert.equal(read.log.format, LOG_FORMAT);
+    assert.equal(read.log.glider, 'classic');
     assert.equal(read.log.steps, record.steps);
     assert.deepEqual([...read.log.bits], record.frames);
     assert.ok(record.frames.every(isDirectFrame), 'hands-up frames retain direct mode too');

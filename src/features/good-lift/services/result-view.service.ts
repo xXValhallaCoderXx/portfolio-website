@@ -76,7 +76,8 @@ export function submissionSaid(submission?: ScoreSubmission) {
   if (phase === 'submitted') return `Submitted as ${initials}${rank ? ` · #${rank} on the world board` : ` · outside the top ${WORLD_BOARD.keep}`}.`;
   if (phase === 'not-best') return `Your higher score is already on this board${rank ? ` at #${rank}` : ''}. This result stays on this device.`;
   if (phase === 'withdrawn') return 'Your leaderboard entry was removed. Your score stays on this device.';
-  if (phase === 'failed') return why === 'rate' || why === 'full' ? 'The leaderboard is busy. Your score is saved here; try submitting again shortly.' : 'Couldn’t submit your score. It is saved here; check your connection and try again.';
+  if (phase === 'failed') return why === 'format' ? 'The leaderboard is updating its flight rules. Your score is saved here; try submitting again shortly.'
+    : why === 'rate' || why === 'full' ? 'The leaderboard is busy. Your score is saved here; try submitting again shortly.' : 'Couldn’t submit your score. It is saved here; check your connection and try again.';
   const reasons: Record<string, string> = {
     duplicate: 'This flight is already on the leaderboard from another browser. No new entry was submitted.',
     day: 'This Daily Sky is too old to submit. Play today’s sky for a ranked result.',
