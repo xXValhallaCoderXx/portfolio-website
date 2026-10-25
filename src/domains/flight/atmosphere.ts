@@ -1,6 +1,14 @@
 import { centerX, surfaceAt } from './ground.ts';
 import type { AirSample, AtmosphereSample, ThermalSource, Vector3 } from './models.ts';
-export interface WeatherField { windX?: number; windZ?: number; thermals?: readonly (ThermalSource & {s: number; r: number})[] }
+/**
+ * Thermals a wing can feel (Good Lift's runs): a sinking `ring` round each, as a share of its
+ * strength and `ringWidth` of its radius wide; `background` m/s of sink wherever the rising air is
+ * under `calm` m/s; and each core `upwind` of its radius toward the wind, where the lift is strongest.
+ * None of it is there below `low` m: it grows in over the next `blend` m, so the climb out of the
+ * launch is as easy as ever.
+ */
+export interface AirFeel { ring: number; ringWidth: number; background: number; calm: number; upwind: number; low: number; blend: number }
+export interface WeatherField { windX?: number; windZ?: number; thermals?: readonly (ThermalSource & {s: number; r: number})[]; feel?: Readonly<AirFeel> }
 
 export const ATMOSPHERE = Object.freeze({
   grid: 16, ridgeReach: 96, maximumLift: 6, maximumSink: 6,
@@ -101,6 +109,7 @@ const terrain = createTerrainAir();
 /** The one environmental field. Vertical diagnostics are aliases, never extra forces. */
 export function sampleAtmosphere(pos: Vector3, weather: WeatherField, out: AirSample = {}) {
   terrain.sample(pos, weather.windX ?? 0, weather.windZ ?? 0, out);
+  if (weather.feel) return feltThermals(pos, weather, weather.feel, out);
   let rising = 0;
   const thermals = weather.thermals ?? [];
   for (let i = 0; i < thermals.length; i++) {
@@ -111,6 +120,57 @@ export function sampleAtmosphere(pos: Vector3, weather: WeatherField, out: AirSa
   }
   rising *= ease((pos.y - terrain.heightAt(pos.x, pos.z)) / ATMOSPHERE.ground.thermal);
   out.thermal = rising;
+  out.windY = clamp(out.windY! + rising, -ATMOSPHERE.maximumSink, ATMOSPHERE.maximumLift);
+  out.lift = Math.max(0, out.windY!);
+  out.sink = Math.max(0, -out.windY!);
+  out.hazardSink = 0;
+  return out as AtmosphereSample;
+}
+
+// The thermals of air a wing can feel: each core moved upwind, a ring of sink beyond its edge, a
+// little sink everywhere the air is not rising, and the lift's slope across the ground (gradX,
+// gradZ, (m/s)/m) for the solver to feel across the wing. `core` and `edge` say how much of a
+// thermal's middle or its edge the point is in (0 to 1, by a 5.5 m/s thermal), for the turbulence.
+function feltThermals(pos: Vector3, weather: WeatherField, feel: Readonly<AirFeel>, out: AirSample) {
+  const windX = weather.windX ?? 0, windZ = weather.windZ ?? 0, speed = Math.sqrt(windX * windX + windZ * windZ);
+  const ux = speed > 1e-6 ? windX / speed : 0, uz = speed > 1e-6 ? windZ / speed : 0;
+  const sinking = clamp((pos.y - feel.low) / feel.blend, 0, 1);
+  let rising = 0, gradX = 0, gradZ = 0, core = 0, edge = 0;
+  const thermals = weather.thermals ?? [];
+  for (let i = 0; i < thermals.length; i++) {
+    const t = thermals[i];
+    if (t.live === false || !(t.strength ?? 1)) continue;
+    const strength = t.s * (t.strength ?? 1), fade = t.fade ?? 1;
+    const dx = pos.x - (t.x - ux * feel.upwind * sinking * t.r), dz = pos.z - (t.z - uz * feel.upwind * sinking * t.r);
+    const d = Math.sqrt(dx * dx + dz * dz);
+    const width = t.r * fade, u = clamp((t.r - d) / width, 0, 1);
+    rising += strength * u * u * (3 - 2 * u);
+    core = Math.max(core, u * u * (3 - 2 * u) * strength / 5.5);
+    if (u > 0 && u < 1 && d > 1e-6) {
+      const slope = -6 * u * (1 - u) / width * strength;
+      gradX += slope * dx / d; gradZ += slope * dz / d;
+      edge = Math.max(edge, 4 * u * (1 - u) * strength / 5.5);
+    }
+    const ring = t.r * feel.ringWidth, v = (d - t.r) / ring;
+    if (sinking > 0 && v > 0 && v < 1 && d > 1e-6) {
+      rising -= feel.ring * sinking * strength * 4 * v * (1 - v);
+      const slope = -feel.ring * sinking * strength * 4 * (1 - 2 * v) / ring;
+      gradX += slope * dx / d; gradZ += slope * dz / d;
+    }
+  }
+  const ground = ease((pos.y - terrain.heightAt(pos.x, pos.z)) / ATMOSPHERE.ground.thermal);
+  rising *= ground; gradX *= ground; gradZ *= ground;
+  // The background sink fades out as the air rises, so its own slope follows the rising air's.
+  const quiet = clamp(rising / feel.calm, 0, 1);
+  rising -= feel.background * sinking * (1 - quiet * quiet * (3 - 2 * quiet)) * ground;
+  if (quiet > 0 && quiet < 1) {
+    const steepen = 1 + feel.background * sinking * ground * 6 * quiet * (1 - quiet) / feel.calm;
+    gradX *= steepen; gradZ *= steepen;
+  }
+  out.thermal = rising;
+  // What the wing feels of the slope grows in with the rest above the launch climb.
+  out.gradX = gradX * sinking; out.gradZ = gradZ * sinking;
+  out.core = core; out.edge = edge;
   out.windY = clamp(out.windY! + rising, -ATMOSPHERE.maximumSink, ATMOSPHERE.maximumLift);
   out.lift = Math.max(0, out.windY!);
   out.sink = Math.max(0, -out.windY!);

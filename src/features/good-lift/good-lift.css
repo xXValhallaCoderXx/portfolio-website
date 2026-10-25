@@ -44,59 +44,321 @@
   animation: fj-lifted 0.6s ease-out both;
 }
 
-/* A secondary, passive combo strip shares the message area's measured placement. */
-.fj-style {
+/* ---- the combo meter (combo-meter.js): the chain in hand beside the pilot, or docked over
+   the brake handles on a phone, in a narrow window or with less motion asked for */
+
+/* Placed by its transform alone (good-lift.js), standing on its bottom edge: its left beside the
+   pilot, its middle when docked. Under the readouts, the coach card and the handles, whatever
+   happens, so it can never hide one of them. */
+.fj-meter {
   display: none;
   position: absolute;
-  top: var(--secondary-top, var(--message-top));
-  left: max(var(--flight-inset), env(safe-area-inset-left));
-  z-index: 3;
-  width: min(520px, calc(100% - 2 * var(--flight-inset)));
-  box-sizing: border-box;
-  margin: 0;
-  padding: 7px 12px;
-  border: 1px solid #24405f;
-  border-radius: 9px;
-  background: #050a13e0;
-  color: #9fb2c6;
-  line-height: 1.4;
-  text-align: left;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  width: max-content;
+  max-width: min(250px, calc(100% - 24px));
+  color: var(--flight-text);
+  line-height: 1.3;
   pointer-events: none;
+  will-change: transform;
 }
-.cloudbase .fj-style { display: flex; flex-direction: column; gap: 2px; }
-.fjord-stage[data-combo-layout='hidden'] .fj-style,
-.flight-paused .fj-style { display: none; }
-.fj-style [data-combo='label'] { font-size: 12px; font-weight: 700; transform-origin: left center; }
-.fj-style [data-combo='detail'] { color: #9fb2c6; font-size: 10px; }
-.fj-combo-calm { display: block; height: 2px; margin-top: 3px; overflow: hidden; border-radius: 2px; background: #24405f; }
-.fj-combo-calm i { display: block; height: 100%; background: #83efc0; transform: scaleX(0); transform-origin: left; }
-.fj-style[data-phase='move'], .fj-style[data-phase='multiplier'] { border-color: #29c7e366; }
-.fj-style[data-phase='move'] [data-combo='label'],
-.fj-style[data-phase='multiplier'] [data-combo='label'] { color: #b7eef4; }
-.fj-style[data-phase='banked'] { border-color: #83efc066; }
-.fj-style[data-phase='banked'] [data-combo='label'] { color: #83efc0; }
-.fj-style[data-phase='lost'] [data-combo='label'] { font-weight: 600; }
-/* Alternating names restart once per observed event, without forced layout reads. */
-.fj-style[data-phase='move'] [data-combo='label'] { animation: fj-combo-move-a 180ms ease-out both; }
-.fj-style[data-phase='move'][data-beat='0'] [data-combo='label'] { animation-name: fj-combo-move-b; }
-.fj-style[data-phase='multiplier'] [data-combo='label'] { animation: fj-combo-multiplier-a 240ms ease-out both; }
-.fj-style[data-phase='multiplier'][data-beat='0'] [data-combo='label'] { animation-name: fj-combo-multiplier-b; }
-.fj-style[data-phase='banked'] [data-combo='label'] { animation: fj-combo-bank-a 300ms ease-out both; }
-.fj-style[data-phase='banked'][data-beat='0'] [data-combo='label'] { animation-name: fj-combo-bank-b; }
-@keyframes fj-combo-move-a { from { opacity: .65; scale: 1.03; } to { opacity: 1; scale: 1; } }
-@keyframes fj-combo-move-b { from { opacity: .65; scale: 1.03; } to { opacity: 1; scale: 1; } }
-@keyframes fj-combo-multiplier-a { from { color: #fff; text-shadow: 0 0 6px #29c7e380; } to { color: #b7eef4; text-shadow: none; } }
-@keyframes fj-combo-multiplier-b { from { color: #fff; text-shadow: 0 0 6px #29c7e380; } to { color: #b7eef4; text-shadow: none; } }
-@keyframes fj-combo-bank-a { from { opacity: .65; scale: 1.04; } to { opacity: 1; scale: 1; } }
-@keyframes fj-combo-bank-b { from { opacity: .65; scale: 1.04; } to { opacity: 1; scale: 1; } }
+
+.cloudbase .fj-meter { display: block; }
+.flight-paused .fj-meter { display: none; }
+.fj-meter p { margin: 0; }
+
+.fj-meter-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 12px;
+  padding: 9px 10px;
+  border: 1px solid #29c7e355;
+  border-radius: 10px;
+  background: #050a13d9;
+  box-shadow: 0 4px 16px #0004;
+}
+
+/* The chain: the moves before the latest in muted words, the latest bright. */
+.fj-meter-chain {
+  grid-column: 1;
+  color: #9fb2c6;
+  font-size: 10px;
+}
+
+.fj-meter-chain b {
+  display: inline-block;
+  color: #e8f1fa;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  transform-origin: left center;
+}
+
+/* The multiplier, big, with how far the variety in hand lets it climb faint after it. */
+.fj-meter-times {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  line-height: 1;
+}
+
+.fj-meter-times b {
+  display: inline-block;
+  color: #5ee6ff;
+  font-size: 20px;
+  font-weight: 800;
+  text-shadow: 0 0 8px #29c7e366;
+  transform-origin: right center;
+}
+
+.fj-meter-times small {
+  color: #9fb2c6;
+  font-size: 10px;
+  opacity: 0.55;
+}
+
+/* What banking now would pay, the ring that fills as the wing settles, and BANK NOW. */
+.fj-meter-pay {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #83efc0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.fj-meter-ring {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  transform: rotate(-90deg);
+}
+
+.fj-meter-ring circle {
+  fill: none;
+  stroke: #24405f;
+  stroke-width: 3;
+}
+
+.fj-meter-ring circle + circle {
+  stroke: #83efc0;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+}
+
+/* While the move in hand is still being flown there is nothing to settle yet. */
+.fj-meter[data-live='true'] .fj-meter-ring {
+  opacity: 0.4;
+}
+
+.fj-meter-pay em {
+  color: #ffb35c;
+  font-size: 10px;
+  font-style: normal;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 8px #ff7a2e99;
+  animation: fj-meter-hurry 0.7s ease-in-out infinite alternate;
+}
+
+/* The link's banner and the flight's word are tags on the card's top and bottom edges: half on
+   it, so they ask little room of the screen beyond it. */
+.fj-meter-banner,
+.fj-meter-word {
+  position: absolute;
+  left: 10px;
+  padding: 1px 6px;
+  border: 1px solid;
+  border-radius: 6px;
+  background: #050a13f2;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.fj-meter-banner {
+  bottom: calc(100% - 7px);
+  border-color: #d3b3ff88;
+  color: #d3b3ff;
+}
+
+.fj-meter-word {
+  top: calc(100% - 7px);
+  border-color: #83efc088;
+  color: #83efc0;
+}
+
+.fj-meter[data-docked='true'] .fj-meter-banner,
+.fj-meter[data-docked='true'] .fj-meter-word {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Compact, where the whole card has no clear place: the multiplier and what banking would pay. */
+.fj-meter[data-compact='true'] .fj-meter-card {
+  display: flex;
+  gap: 8px;
+  padding: 5px 9px;
+}
+.fj-meter[data-compact='true'] .fj-meter-chain,
+.fj-meter[data-compact='true'] .fj-meter-times small,
+.fj-meter[data-compact='true'] .fj-meter-ring,
+.fj-meter[data-compact='true'] .fj-meter-banner,
+.fj-meter[data-compact='true'] .fj-meter-word { display: none; }
+.fj-meter[data-compact='true'] .fj-meter-times { order: -1; }
+.fj-meter[data-compact='true'] .fj-meter-times b { font-size: 16px; }
+
+/* Banked in green, its ring closed; lost in amber. Either way the chain it was is in plain words
+   under it. */
+.fj-meter[data-phase='banked'] .fj-meter-chain b,
+.fj-meter[data-phase='lost'] .fj-meter-chain b { font-size: 13px; letter-spacing: 0.04em; }
+.fj-meter[data-phase='banked'] .fj-meter-pay,
+.fj-meter[data-phase='lost'] .fj-meter-pay { color: #9fb2c6; font-size: 10px; font-weight: 400; }
+.fj-meter[data-phase='banked'] .fj-meter-card { border-color: #83efc099; }
+.fj-meter[data-phase='banked'] .fj-meter-chain b,
+.fj-meter[data-phase='banked'] .fj-meter-times b { color: #83efc0; }
+.fj-meter[data-phase='lost'] .fj-meter-card { border-color: #f2913d99; }
+.fj-meter[data-phase='lost'] .fj-meter-chain b,
+.fj-meter[data-phase='lost'] .fj-meter-times b { color: #f5c066; text-shadow: none; }
+.fj-meter[data-phase='lost'] .fj-meter-ring { display: none; }
+
+/* Each moment pops once: the move that joined, a unit of it, the multiplier it raised, a link's
+   banner, a combo banked or lost. Alternating names restart it once per moment, without reading
+   the layout; with less motion asked for nothing pops (the meter is never given the class). */
+.fj-meter.pop[data-phase='move'] .fj-meter-chain b,
+.fj-meter.pop[data-phase='link'] .fj-meter-chain b { animation: fj-meter-move-a 220ms ease-out both; }
+.fj-meter.pop[data-phase='move'][data-beat='0'] .fj-meter-chain b,
+.fj-meter.pop[data-phase='link'][data-beat='0'] .fj-meter-chain b { animation-name: fj-meter-move-b; }
+.fj-meter.pop[data-phase='unit'] .fj-meter-chain b { animation: fj-meter-unit-a 160ms ease-out both; }
+.fj-meter.pop[data-phase='unit'][data-beat='0'] .fj-meter-chain b { animation-name: fj-meter-unit-b; }
+.fj-meter.pop[data-phase='multiplier'] .fj-meter-times b,
+.fj-meter.pop[data-phase='link'] .fj-meter-times b { animation: fj-meter-times-a 320ms ease-out both; }
+.fj-meter.pop[data-phase='multiplier'][data-beat='0'] .fj-meter-times b,
+.fj-meter.pop[data-phase='link'][data-beat='0'] .fj-meter-times b { animation-name: fj-meter-times-b; }
+.fj-meter.pop[data-phase='link'] .fj-meter-banner { animation: fj-meter-banner-a 220ms ease-out both; }
+.fj-meter.pop[data-phase='link'][data-beat='0'] .fj-meter-banner { animation-name: fj-meter-banner-b; }
+.fj-meter.pop[data-phase='banked'] .fj-meter-card { animation: fj-meter-bank-a 360ms ease-out both; }
+.fj-meter.pop[data-phase='banked'][data-beat='0'] .fj-meter-card { animation-name: fj-meter-bank-b; }
+.fj-meter.pop[data-phase='lost'] .fj-meter-card { animation: fj-meter-lost-a 300ms ease-out both; }
+.fj-meter.pop[data-phase='lost'][data-beat='0'] .fj-meter-card { animation-name: fj-meter-lost-b; }
+@keyframes fj-meter-move-a { from { opacity: 0.55; scale: 1.08; } to { opacity: 1; scale: 1; } }
+@keyframes fj-meter-move-b { from { opacity: 0.55; scale: 1.08; } to { opacity: 1; scale: 1; } }
+@keyframes fj-meter-unit-a { from { color: #fff; scale: 1.05; } to { scale: 1; } }
+@keyframes fj-meter-unit-b { from { color: #fff; scale: 1.05; } to { scale: 1; } }
+@keyframes fj-meter-times-a { from { color: #fff; scale: 1.35; text-shadow: 0 0 12px #5ee6ff; } to { scale: 1; } }
+@keyframes fj-meter-times-b { from { color: #fff; scale: 1.35; text-shadow: 0 0 12px #5ee6ff; } to { scale: 1; } }
+@keyframes fj-meter-banner-a { from { opacity: 0; translate: 0 4px; } to { opacity: 1; translate: 0 0; } }
+@keyframes fj-meter-banner-b { from { opacity: 0; translate: 0 4px; } to { opacity: 1; translate: 0 0; } }
+@keyframes fj-meter-bank-a { from { scale: 1.06; box-shadow: 0 0 18px #83efc066; } to { scale: 1; } }
+@keyframes fj-meter-bank-b { from { scale: 1.06; box-shadow: 0 0 18px #83efc066; } to { scale: 1; } }
+@keyframes fj-meter-lost-a { from { opacity: 0.6; translate: 0 -3px; } to { opacity: 1; translate: 0 0; } }
+@keyframes fj-meter-lost-b { from { opacity: 0.6; translate: 0 -3px; } to { opacity: 1; translate: 0 0; } }
+@keyframes fj-meter-hurry { to { opacity: 0.5; } }
+
+/* Asking for less motion: no pops and no pulse. combo-meter.js docks it too. */
 @media (prefers-reduced-motion: reduce) {
-  .fj-style [data-combo='label'] { animation: none !important; }
+  .fj-meter,
+  .fj-meter * {
+    animation: none !important;
+  }
 }
-@media (max-height: 560px) and (min-width: 601px) {
-  .fj-style { width: min(310px, calc(50% - 28px)); }
+
+/* The cue for a wing in trouble (wing-cue.js), over the pilot: what happened in amber, pulsing
+   while it lasts, with the fix and its key under it on the A and the B; SOFT in amber, SAVED in green. */
+.fj-turn-cue {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid #7fd8ff88;
+  border-radius: 6px;
+  background: #050a13f2;
+  color: #7fd8ff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  text-align: center;
+  pointer-events: none;
+  will-change: transform;
 }
+
+.fj-turn-cue b { display: block; font-weight: 700; }
+
+.fj-turn-cue span {
+  display: block;
+  margin-top: 1px;
+  color: #ffe2c4;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.fj-turn-cue kbd {
+  display: inline-block;
+  margin: 3px 0 1px;
+  padding: 0 6px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font: inherit;
+  letter-spacing: 0.08em;
+}
+
+.fj-turn-cue span[hidden],
+.fj-turn-cue kbd[hidden] { display: none; }
+
+.cloudbase .fj-turn-cue { display: block; }
+.cloudbase .fj-turn-cue[hidden],
+.flight-paused .fj-turn-cue { display: none; }
+
+.fj-turn-cue[data-cue='event'] {
+  border-color: #ffb45c88;
+  color: #ffb45c;
+  animation: fj-turn-cue-pulse 0.5s ease-in-out infinite alternate;
+}
+
+.fj-turn-cue[data-cue='soft'] {
+  border-color: #ffb45c88;
+  color: #ffb45c;
+}
+
+.fj-turn-cue[data-cue='saved'] {
+  border-color: #83efc088;
+  color: #83efc0;
+}
+
+@keyframes fj-turn-cue-pulse {
+  to { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fj-turn-cue { animation: none !important; }
+}
+
+/* On a phone or a narrow window it is docked above the handles, and a little smaller. */
+@media (pointer: coarse), (max-width: 560px) {
+  .fj-meter-card { padding: 9px; }
+  .fj-meter-chain b { font-size: 11px; }
+  .fj-meter-times b { font-size: 18px; }
+}
+
+/* A short screen (a phone held sideways) has the handles reaching up past the pilot, so docked it
+   sits between the readouts and the wing: one wide row, not two, to stay clear of the wing. */
 @media (max-height: 500px) {
-  .fjord-stage .fj-style { left: 88px; width: min(520px, calc(100% - 176px)); }
+  .fj-meter[data-docked='true'] { max-width: min(560px, calc(100% - 24px)); }
+  .fj-meter[data-docked='true'] .fj-meter-card { grid-template-columns: minmax(0, auto) auto auto; padding: 8px 12px; }
+  .fj-meter[data-docked='true'] .fj-meter-pay { grid-column: 2; grid-row: 1; }
+  .fj-meter[data-docked='true'] .fj-meter-times { grid-column: 3; grid-row: 1; }
 }
 
 /* ---- feeling for the core: a surge flares the vario, and a rep to depth stamps the bar */

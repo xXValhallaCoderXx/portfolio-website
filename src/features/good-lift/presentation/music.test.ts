@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MUSIC, createMusic, musicGain } from './music.ts';
+import { GLIDERS, nominalFor } from '../../../domains/good-lift/gliders.ts';
+import { windLevelDb } from '../../flight/presentation/wind-tone.ts';
 
 // Stand-ins for the browser's audio: a media element that plays, is refused, or keeps a play
 // waiting (`pending`) until it is paused, given a new track or refused; and an audio context whose
@@ -72,12 +74,16 @@ function fakes({ refuse = false, pending = false } = {}) {
   return { element, ctx: ctx as unknown as AudioContext & { currentTime: number }, storage, store, log, makeElement: () => element as unknown as HTMLAudioElement };
 }
 
-// The quietest steady sound of a run: the wind in the lines at trim, measured in Chromium.
-const WIND_AT_TRIM = -42.8;
+// The quietest steady sound of a run: the wind in the lines on any wing, at trim or with both brakes
+// at working depth, in a 44.1 or a 48 kHz context.
+const QUIETEST_WIND = Math.min(...['classic', ...GLIDERS].flatMap((id) => {
+  const { speed } = nominalFor(id);
+  return [44100, 48000].flatMap((rate) => [speed.trim, speed.light].map((at) => windLevelDb(at, speed.trim, rate)));
+}));
 
 test('every track plays at the same quiet level, under the wind in the lines', () => {
   for (const track of MUSIC.tracks) assert.ok(Math.abs(20 * Math.log10(musicGain(track)) + track.rms - MUSIC.level) < 1e-9, track.file);
-  assert.ok(MUSIC.level <= WIND_AT_TRIM - 2, 'very low: under the wind, and so under every cue');
+  assert.ok(MUSIC.level <= QUIETEST_WIND - 2, `very low: under the wind (${QUIETEST_WIND.toFixed(1)} dBFS at its quietest), and so under every cue`);
   assert.ok(musicGain(MUSIC.tracks[0]) < 0.1 && musicGain(MUSIC.tracks[1]) < 0.1);
 });
 

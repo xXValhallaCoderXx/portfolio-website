@@ -7,13 +7,15 @@ import { BELL_RESULT, createBells } from './bells.ts';
 import { createRunWorld, startRun, stepRun } from './run-step.ts';
 import { TST, createReferencePilot } from './pilots.ts';
 import { CLOUD_GUST, CLOUD_STRIKE, CLOUD_ZONE, createCloudbaseRun } from './cloudbase-state.ts';
+import { wingFolded } from '../flight/flight.ts';
 
 // The plates off the trail: riding the gust fronts, hanging under storm clouds and rising on the
 // fog, and a strike's own plates sprayed off the bar, with what the blessings do to loading them.
 // The trail itself, the reps, the lines and the lights are pinned in meet-state.test.js.
 
 const STEP = 1 / 60;
-// Steps a struck wing stays folded.
+// Steps a struck wing may stay folded before these tests give up on it: the scripted fold's own
+// time, which a glider's half refilling by itself (wing-folds.js) comes well inside.
 const FOLD = Math.ceil(CLOUD_STRIKE.collapse / STEP);
 const firstSkies = (count: number) => Array.from({ length: count }, (_, i) => i + 1);
 const flat = (a: { x: number; z: number; }, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -193,13 +195,13 @@ test('a strike past 700 m splits the bar into standard plates, largest first and
     assert.deepEqual(held.filter((plate) => plate.held).map((plate) => plate.kg), plates, `${bar} kg`);
     assert.ok(held.every((plate) => !plate.live && (plate.held ? plate.kind === PLATE_KIND.scatter : plate.kind === PLATE_KIND.none)));
     assert.deepEqual([meet!.state.bar, meet!.state.lost, meet!.state.spray.held, meet!.state.scattered], [0, bar - plates.reduce((a, b) => a + b, 0), true, 0]);
-    // Held while the wing is folded, sprayed the step it reopens. The fold lasts its own time and no
-    // longer: a loop that waited on it alone would never end if the wing never reopened.
-    for (let i = 0; i <= FOLD && sky.state.pilot.collapse > 0; i++) {
+    // Held while the wing is folded, sprayed the step it reopens. A loop that waited on the fold
+    // alone would never end if the wing never reopened, so it waits the fold's time and no longer.
+    for (let i = 0; i <= FOLD && (sky.state.pilot.collapse > 0 || wingFolded(g)); i++) {
       assert.ok(held.every((plate) => !plate.live));
       world.fly(STEP);
     }
-    assert.equal(sky.state.pilot.collapse, 0, 'the wing reopened');
+    assert.ok(sky.state.pilot.collapse === 0 && !wingFolded(g), 'the wing reopened');
     const sprayed = held.filter((plate) => plate.live);
     assert.equal(sprayed.length, plates.length);
     assert.deepEqual([meet!.state.scattered, meet!.state.spray.held, meet!.state.spray.at], [plates.length, false, sky.state.elapsed]);
@@ -232,9 +234,10 @@ test('a scattered plate flown through within reach goes back on the bar; below 7
   meet!.state.bar = 60;
   world.fly(STEP);
   sky.strike();
-  // Flown on until the wing has reopened and the plates have sprayed, which is the fold's own time:
-  // a few steps past it, a meet that never sprays fails here rather than flying on for ever.
-  for (let i = 0; i <= FOLD + 2 && (sky.state.pilot.collapse > 0 || meet!.state.spray.held); i++) world.fly(STEP);
+  // Flown on until the wing has reopened and the plates have sprayed, which is within the fold's own
+  // time: a few steps past it, a meet that never sprays fails here rather than flying on for ever.
+  world.fly(STEP);
+  for (let i = 0; i <= FOLD + 2 && (sky.state.pilot.collapse > 0 || wingFolded(g) || meet!.state.spray.held); i++) world.fly(STEP);
   assert.deepEqual([sky.state.pilot.collapse, meet!.state.spray.held], [0, false], 'sprayed as the wing reopened');
   const [first, second] = meet!.state.loose.filter(of(PLATE_KIND.scatter));
   assert.deepEqual([first.kg, second.kg, meet!.state.bar], [25, 25, 0]);

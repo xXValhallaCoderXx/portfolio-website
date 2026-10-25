@@ -1,4 +1,5 @@
 import type { GoodLiftStore, RecordedRun } from './good-lift-store.ts';
+import type { TrickWatch } from '../good-lift/models.ts';
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 // The page's reset reads the shared key without loading the Good Lift store.
@@ -7,11 +8,18 @@ import { GAME_STORE as RESET_KEY } from './achievements.ts';
 import { addRow, boardKey, emptyBoard, rowsFor } from '../good-lift/board.ts';
 import { DAY_MS } from '../good-lift/good-lift-address.ts';
 import { SIM_VERSION } from '../good-lift/sim-version.ts';
-import { FEAT_IDS, GAME_STORE, KIT, TRAINING_BLOCK, earnFeats, earnedKit, emptyStore, keepEarned, kitAfterRun, kitSheet, newlyEarned, normalizeStore, setInitials, } from './good-lift-store.ts';
+import { FEAT_IDS, GAME_STORE, KIT, TRAINING_BLOCK, earnFeats, earnedKit, emptyBook, emptyStore, keepEarned, kitAfterRun, kitSheet, newlyEarned, normalizeBook, normalizeStore, setInitials, } from './good-lift-store.ts';
 import { clearStore, readStore, recordRun, updateStore, writeStore } from '../../adapters/browser/good-lift-storage.service.ts';
 import { BLOCKED } from '../good-lift/meet-initials.ts';
 import { LIVERIES } from '../../adapters/rendering/livery.ts';
-import { KIT_THEMES, emptyKit } from './wing-kit.ts';
+import { KIT_GLIDERS, KIT_THEMES, emptyKit } from './wing-kit.ts';
+import { BOOK_FEATS, COMBO_SHOWN } from '../good-lift/meet-card.ts';
+import { DETECT, LINKS, LINK_COUNT, MOVE, MOVE_COUNT } from '../good-lift/trick-tables.ts';
+import { createComboStyle } from '../good-lift/meet-combo.ts';
+import { createRunWorld, startRun } from '../good-lift/run-step.ts';
+import { createCloudbaseRun } from '../good-lift/cloudbase-state.ts';
+import { createMeet } from '../good-lift/meet-state.ts';
+import { summariseRun } from '../good-lift/meet-sheet.ts';
 
 
 const DAY = 20_756;
@@ -21,7 +29,7 @@ const AT = { version: SIM_VERSION, now: NOON };
 
 // A finished run: today's Daily Sky, judged by the fog, unless told otherwise.
 const run = (fields: Partial<RecordedRun> = {}) => ({
-  kind: 'daily', day: DAY, total: 100, peak: 600, red: [0, 0, 1], at: NOON - 120_000, log: 'AQ', reason: 'fog', feats: [], ...fields,
+  kind: 'daily', day: DAY, total: 100, peak: 600, red: [0, 0, 1], at: NOON - 120_000, log: 'AQ', reason: 'fog', feats: [], glider: 'en-a', ...fields,
 });
 const placed = ({ feats, rank, best }: {feats:string[];rank:number;best:boolean}) => ({ feats, rank, best });
 
@@ -51,7 +59,8 @@ afterEach(() => {
 
 
 test('a fresh or damaged store reads as empty, and a good one round-trips', () => {
-  assert.deepEqual(emptyStore(), { scoreVersion: SIM_VERSION, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], learnedLessons: [], foundationLessons: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: { days: {} }, bots: null });
+  assert.deepEqual(emptyStore(), { scoreVersion: SIM_VERSION, best: { total: 0, peak: 0, score: 0 }, tonnage: 0, runs: 0, feats: [], learnedLessons: [], foundationLessons: [], daily: { last: 0, streak: 0 }, initials: '', optIn: false, board: { days: {} }, bots: null,
+    tricks: { moves: new Array(MOVE_COUNT).fill(0), links: new Array(LINK_COUNT).fill(0), best: new Array(MOVE_COUNT).fill(0), bestCombo: null, flows: 0, points: 0, mirror: 0 } });
   assert.deepEqual(readStore(memoryStorage()), emptyStore());
   for (const text of ['{broken', 'null', '[]', '"store"', '42', JSON.stringify({ best: 'high' })]) {
     assert.deepEqual(readStore(memoryStorage({ [GAME_STORE]: text })), emptyStore(), text);
@@ -59,8 +68,8 @@ test('a fresh or damaged store reads as empty, and a good one round-trips', () =
 
   const storage = memoryStorage();
   const store = { ...emptyStore(), best: { total: 512.5, peak: 1412, score: 646 }, tonnage: 1240, runs: 7, feats: ['opener', 'clean-meet'], daily: { last: DAY, streak: 3 }, initials: 'REN' };
-  addRow(store.board, KEY, { who: 'REN', via: 'me', total: 512.5, style: 260, peak: 1412, red: [0, 2, 4], at: NOON, log: 'AQGv-_x9', byname: '' });
-  addRow(store.board, KEY, { who: 'TOR', via: 'link', total: 487.5, style: 0, peak: 1301, red: [0, 0, 1], at: NOON - 1, log: 'AQGw', byname: '' });
+  addRow(store.board, KEY, { who: 'REN', via: 'me', total: 512.5, style: 260, peak: 1412, red: [0, 2, 4], at: NOON, log: 'AQGv-_x9', byname: '', glider: 'en-c' });
+  addRow(store.board, KEY, { who: 'TOR', via: 'link', total: 487.5, style: 0, peak: 1301, red: [0, 0, 1], at: NOON - 1, log: 'AQGw', byname: '', glider: 'acro' });
   assert.equal(writeStore(store, storage), true);
   assert.deepEqual(JSON.parse(storage.items.get(GAME_STORE)!), store);
   assert.deepEqual(readStore(storage), store);
@@ -107,7 +116,7 @@ test('new score rules reset only the competitive PB while career progress and hi
     daily: { last: DAY, streak: 3 } };
   const oldKey = boardKey(SIM_VERSION - 1, DAY);
   addRow(legacy.board, oldKey, { who: 'REN', via: 'me', total: 500, style: 0, peak: 1500,
-    red: [0], at: NOON, log: 'old', byname: '' });
+    red: [0], at: NOON, log: 'old', byname: '', glider: 'en-a' });
   const migrated = normalizeStore(legacy);
   assert.equal(migrated.scoreVersion, SIM_VERSION);
   assert.deepEqual(migrated.best, { total: 500, peak: 1500, score: 0 });
@@ -267,7 +276,7 @@ test('only daily runs reach the board, and feats are earned once', () => {
   // A Daily Sky goes on its day's board, under the store's initials, as this device's own run.
   const first = recordRun(store, run({ total: 200, peak: 800, red: [0, 2, 0, 4], log: 'daily1', feats: ['opener', 'opener', 'made-up'], byname: 'horn-lifter' }), AT);
   assert.deepEqual(placed(first), { feats: ['opener'], rank: 1, best: true });
-  assert.deepEqual(rowsFor(store.board, KEY), [{ who: 'REN', via: 'me', total: 200, style: 0, peak: 800, red: [0, 2, 0, 4], at: NOON - 120_000, log: 'daily1', byname: 'horn-lifter' }]);
+  assert.deepEqual(rowsFor(store.board, KEY), [{ who: 'REN', via: 'me', total: 200, style: 0, peak: 800, red: [0, 2, 0, 4], at: NOON - 120_000, log: 'daily1', byname: 'horn-lifter', glider: 'en-a' }]);
   // A lighter run ranks below it, and a feat earned again is not earned anew. `best` says whether this
   // run now leads its day, as addRow does; the leading row itself is the first of rowsFor.
   assert.deepEqual(placed(recordRun(store, run({ total: 100, log: 'daily2', feats: ['under-the-horn', 'opener'] }), AT)), { feats: ['under-the-horn'], rank: 2, best: false });
@@ -294,8 +303,10 @@ test('only daily runs reach the board, and feats are earned once', () => {
   assert.deepEqual(earnFeats(store, ['beat-the-bot', 'opener', 'made-up']), ['beat-the-bot']);
   assert.deepEqual(earnFeats(store, new Set(['beat-the-bot'])), []);
   for (const nonsense of [undefined, null, 7, 'opener', { 0: 'opener', length: 1 }]) assert.deepEqual(earnFeats(store, nonsense), []);
-  // Every feat these runs earned: all but the streak's and the tricks', which none of them flew.
-  assert.deepEqual(store.feats, [...FEAT_IDS.filter((id) => !['training-block', 'wingover-five', 'pitched-45'].includes(id))]);
+  // Every feat these runs earned: all but the streak's and the tricks', which none of them flew (and
+  // the trick book's, which none of them kept).
+  const tricks = ['wingover-five', 'pitched-45', 'first-link', 'flow-three', 'mirror', 'big-bank'];
+  assert.deepEqual(store.feats, [...FEAT_IDS.filter((id) => !['training-block', ...tricks].includes(id))]);
 });
 
 test('a run ended early counts toward the runs, the bests and the streak, but takes no place on the board', () => {
@@ -431,6 +442,7 @@ test('what the bots came to on the day\'s sky is kept beside the board, whole or
   const bots = {
     key: boardKey(2, DAY),
     seed: 4_236_776_022,
+    glider: 'en-b',
     scores: [{ total: 115, style: 0, peak: 1040, red: [0, 0, 0, 1, 0] }, { total: 145, style: 0, peak: 1152, red: [0] }, { total: 160, style: 0, peak: 1110, red: [] }],
   };
   const storage = memoryStorage();
@@ -458,13 +470,155 @@ test('a run\'s byname goes onto its row, and one this build does not know goes o
   assert.deepEqual(rowsFor(store.board, KEY).map(({ log, byname }) => [log, byname]), [['named', 'unstruck'], ['later', ''], ['older', '']]);
 });
 
+const link = (name: string) => LINKS.find((each) => each.name === name)!.id;
+// A run's trick book as its sheet keeps it (meet-sheet.js stats.tricks): `banked`
+// counts by move id, `links` by named link id, and the most it banked of the rest.
+const book = ({ banked = {}, links = {}, best = {}, flows = 0, points = 0, mirror = 0 }: { banked?: Record<number, number>; links?: Record<number, number>;
+  best?: Record<number, number>; flows?: number; points?: number; mirror?: number } = {}) => ({
+  moves: Array.from({ length: MOVE_COUNT }, (_, id) => banked[id] ?? 0), links: Array.from({ length: LINK_COUNT }, (_, id) => links[id] ?? 0),
+  best: Array.from({ length: MOVE_COUNT }, (_, id) => best[id] ?? 0), flows, points, mirror,
+});
+// A best combo's receipt as meet-combo.js writes one, `sequence` its moves and `links` the named link into each.
+const receipt = (points: number, sequence: number[], links: number[]) => ({ points, base: 0, variety: 0, moves: sequence.length, mask: 0, sequence, links,
+  sides: sequence.map(() => 0), flows: 0, multiplier: 2 });
+
+test('the trick book reads back whole, and each damaged part of it falls back on its own', () => {
+  assert.deepEqual(emptyStore().tricks, emptyBook());
+  assert.equal(emptyBook().moves.length, MOVE_COUNT);
+  assert.equal(emptyBook().links.length, LINK_COUNT);
+  // A good book round-trips through storage, inside the store.
+  const kept = { ...book({ banked: { [MOVE.wingover]: 4, [MOVE.spiral]: 2 }, links: { [link('WING-SPIRAL')]: 2 }, best: { [MOVE.wingover]: 45, [MOVE.spiral]: 30 }, flows: 2, points: 450, mirror: 1 }),
+    bestCombo: { points: 450, moves: 3, sequence: [MOVE.wingover, MOVE.spiral, MOVE.wingover], links: [0, link('WING-SPIRAL'), link('SPIRAL EXIT')] } };
+  const storage = memoryStorage();
+  writeStore({ ...emptyStore(), tricks: kept }, storage);
+  assert.deepEqual(readStore(storage).tricks, kept);
+  assert.deepEqual(normalizeBook(JSON.parse(JSON.stringify(kept))), kept);
+  // Counts are whole numbers of zero or more, one for each move and named link there is: too long a
+  // list is cut, too short a one filled, and slot 0, no move and no link, is always 0.
+  assert.deepEqual(normalizeBook({ moves: [5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], links: [0, 3], best: 'lots' }),
+    { ...emptyBook(), moves: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], links: [0, 3, ...new Array(LINK_COUNT - 2).fill(0)] });
+  assert.deepEqual(normalizeBook({ moves: [0, -1, 2.5, NaN, '4', null, 2 ** 53, 7] }).moves, [0, 0, 0, 0, 0, 0, 0, 7, 0, 0]);
+  assert.deepEqual(normalizeBook({ flows: -1, points: 12.5, mirror: true }), emptyBook(), 'whole numbers of zero or more, and mirror 1 or nothing');
+  assert.equal(normalizeBook({ mirror: 1 }).mirror, 1);
+  // The best combo is whole or none: points banked, every move one there is, the link into each a
+  // named link or none, as many links as moves.
+  const combo = kept.bestCombo;
+  for (const damaged of [{ ...combo, points: 0 }, { ...combo, points: -5 }, { ...combo, points: 2.5 }, { ...combo, sequence: [], links: [] },
+    { ...combo, sequence: [MOVE.wingover, 0, MOVE.wingover] }, { ...combo, sequence: [MOVE.wingover, MOVE_COUNT, MOVE.wingover] },
+    { ...combo, links: [0, LINK_COUNT, 0] }, { ...combo, links: [0, 1] }, { ...combo, links: undefined }, { ...combo, sequence: 'WINGOVERS' }, 'combo', [combo]]) {
+    assert.equal(normalizeBook({ bestCombo: damaged }).bestCombo, null, JSON.stringify(damaged));
+  }
+  // It keeps the latest COMBO_SHOWN moves, and still counts them all; a count short of its moves is its moves.
+  const long = Array.from({ length: COMBO_SHOWN + 3 }, (_, i) => (i % 2 ? MOVE.spiral : MOVE.wingover));
+  const trimmed = normalizeBook({ bestCombo: { points: 900, moves: long.length, sequence: long, links: long.map((_, i) => (i === long.length - 1 ? link('WING-SPIRAL') : 0)) } }).bestCombo!;
+  assert.deepEqual(trimmed, { points: 900, moves: COMBO_SHOWN + 3, sequence: long.slice(-COMBO_SHOWN), links: [...new Array(COMBO_SHOWN - 1).fill(0), link('WING-SPIRAL')] });
+  assert.deepEqual(normalizeBook({ bestCombo: trimmed }).bestCombo, trimmed, 'and reads back the same');
+  assert.equal(normalizeBook({ bestCombo: { ...combo, moves: 1 } }).bestCombo!.moves, 3);
+  // A damaged book costs only itself, and nonsense is the empty book.
+  for (const nonsense of [null, 'book', 7, [], new Proxy({}, { get() { throw new Error('no'); } })]) {
+    assert.deepEqual(normalizeBook(nonsense), emptyBook());
+    assert.deepEqual(normalizeStore({ runs: 3, tricks: nonsense }), { ...emptyStore(), runs: 3 });
+  }
+  // The book read back shares nothing with what it was read from.
+  const read = normalizeBook(kept);
+  read.moves[MOVE.wingover] = 99;
+  read.bestCombo!.sequence.push(MOVE.loop);
+  assert.equal(kept.moves[MOVE.wingover], 4);
+  assert.deepEqual(kept.bestCombo.sequence, [MOVE.wingover, MOVE.spiral, MOVE.wingover]);
+});
+
+test('a run under today\'s rules leaves the trick book be; one under the next adds what it banked, and earns the book\'s feats once', () => {
+  const store = emptyStore();
+  // Today's sheets keep no trick book, whatever best combo they had.
+  const today = recordRun(store, run({ kind: 'practice', day: 0, style: 150, bestCombo: { points: 150, moves: 3, sequence: [4, 2, 3] } }), AT);
+  assert.deepEqual(today.feats, []);
+  assert.deepEqual(store.tricks, emptyBook());
+  // A run's book goes in: counts add up, each move's best and the most in one combo are kept.
+  const wing = link('WING-SPIRAL'), exit = link('SPIRAL EXIT');
+  const first = recordRun(store, run({ kind: 'practice', day: 0, style: 450,
+    tricks: book({ banked: { [MOVE.wingover]: 2, [MOVE.spiral]: 1 }, links: { [wing]: 1, [exit]: 1 }, best: { [MOVE.wingover]: 20, [MOVE.spiral]: 15 }, flows: 2, points: 450 }),
+    bestCombo: receipt(450, [MOVE.wingover, MOVE.spiral, MOVE.wingover], [0, wing, exit]) }), AT);
+  assert.deepEqual(first.feats, ['first-link', 'big-bank']);
+  assert.deepEqual(store.tricks, { ...book({ banked: { [MOVE.wingover]: 2, [MOVE.spiral]: 1 }, links: { [wing]: 1, [exit]: 1 }, best: { [MOVE.wingover]: 20, [MOVE.spiral]: 15 }, flows: 2, points: 450 }),
+    bestCombo: { points: 450, moves: 3, sequence: [MOVE.wingover, MOVE.spiral, MOVE.wingover], links: [0, wing, exit] } });
+  // A second adds to the counts, raises only the bests it beats, and keeps the best combo that banked more.
+  const second = recordRun(store, run({ kind: 'practice', day: 0,
+    tricks: book({ banked: { [MOVE.loop]: 2, [MOVE.spiral]: 1 }, best: { [MOVE.loop]: 60, [MOVE.spiral]: 10 }, flows: 3, points: 120, mirror: 1 }),
+    bestCombo: receipt(120, [MOVE.loop, MOVE.loop], [0, 0]) }), AT);
+  assert.deepEqual(second.feats, ['flow-three', 'mirror']);
+  assert.deepEqual(store.tricks.moves, book({ banked: { [MOVE.wingover]: 2, [MOVE.spiral]: 2, [MOVE.loop]: 2 } }).moves);
+  assert.deepEqual(store.tricks.best, book({ best: { [MOVE.wingover]: 20, [MOVE.spiral]: 15, [MOVE.loop]: 60 } }).best);
+  assert.deepEqual([store.tricks.bestCombo!.points, store.tricks.flows, store.tricks.points, store.tricks.mirror], [450, 3, 450, 1]);
+  // Feats are earned once; the thresholds are the book's own.
+  assert.deepEqual(recordRun(store, run({ kind: 'practice', day: 0, tricks: book({ links: { [wing]: 1 }, flows: 9, points: 9_000, mirror: 1 }) }), AT).feats, []);
+  assert.deepEqual(store.feats, ['first-link', 'big-bank', 'flow-three', 'mirror'], 'as they were earned');
+  const short = emptyStore();
+  assert.deepEqual(recordRun(short, run({ tricks: book({ flows: BOOK_FEATS.flows - 1, points: BOOK_FEATS.points - 5 }) }), AT).feats, []);
+  // A bigger combo takes the best combo's place.
+  recordRun(store, run({ kind: 'practice', day: 0, tricks: book({ points: 600 }), bestCombo: receipt(600, [MOVE.loop], [0]) }), AT);
+  assert.deepEqual(store.tricks.bestCombo, { points: 600, moves: 1, sequence: [MOVE.loop], links: [0] });
+  // Whatever a sheet says that no run can bank counts as nothing, and the run still counts.
+  const runs = store.runs, before = structuredClone(store.tricks);
+  recordRun(store, run({ kind: 'practice', day: 0, tricks: { moves: [0, -3, NaN], flows: -2, points: Infinity } as unknown as RecordedRun['tricks'], bestCombo: receipt(5, [99], [0]) }), AT);
+  assert.equal(store.runs, runs + 1);
+  assert.deepEqual(store.tricks, before);
+  // It is all in the store as storage keeps it, and reset progress forgets it with the rest.
+  const storage = memoryStorage();
+  writeStore(store, storage);
+  assert.deepEqual(readStore(storage).tricks, store.tricks);
+  clearStore(storage);
+  assert.deepEqual(readStore(storage).tricks, emptyBook());
+});
+
+test('a run\'s own sheet goes into the trick book as its combos banked', () => {
+  // The combo scorer told its moves rather than flown (meet-combo.test.js does the same), on a run's
+  // world, so the sheet is the very one a run is read into (meet-sheet.js).
+  const style = createComboStyle();
+  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: null, style }), 3);
+  const watch = { steps: 0, move: 0, side: 0, units: 0, band: 0, measure: 0, active: 0, endedAt: -1, startedAt: -1, instances: 0,
+    unitCount: 0, previous: 0, link: 0, flow: 0, breaks: 0, broke: 0, settled: 0, neutral: 0, load: 1, tilt: 1, bankSide: 0, stalling: 0 };
+  const told = { tricks: { state: watch } as unknown as TrickWatch };
+  const step = () => { watch.steps += 1; style.step(1 / 60, told); };
+  const move = (id: number, { side = 0, band = 3, units = 1, link: via = 0, flow = 0 } = {}) => {
+    Object.assign(watch, { move: id, side, band, units, link: via, flow, active: 1, settled: 0 });
+    watch.instances += 1; watch.unitCount += units; step();
+  };
+  const settle = () => { watch.active = 0; for (let i = 0; i < DETECT.settle; i++) { watch.settled += 1; step(); } };
+  // Wingovers into a spiral and out again, both links flowed; then a loop each way.
+  move(MOVE.wingover, { band: 2, units: 3 });
+  move(MOVE.spiral, { side: -1, link: link('WING-SPIRAL'), flow: 1 });
+  move(MOVE.wingover, { link: link('SPIRAL EXIT'), flow: 1 });
+  settle();
+  move(MOVE.loop, { side: 1, band: 4 });
+  move(MOVE.loop, { side: -1, band: 4 });
+  settle();
+  const sheet = summariseRun(world, 'fog');
+  const flown = sheet.stats.tricks!;
+  assert.ok(flown && sheet.stats.bestCombo, 'a run\'s sheet keeps its trick book');
+  const store = emptyStore();
+  const { feats } = recordRun(store, run({ kind: 'practice', day: 0, tricks: flown, bestCombo: sheet.stats.bestCombo }), AT);
+  assert.deepEqual(store.tricks.moves, flown.moves);
+  assert.deepEqual(store.tricks.moves, book({ banked: { [MOVE.wingover]: 2, [MOVE.spiral]: 1, [MOVE.loop]: 2 } }).moves);
+  assert.deepEqual(store.tricks.links, book({ links: { [link('WING-SPIRAL')]: 1, [link('SPIRAL EXIT')]: 1 } }).links);
+  assert.deepEqual(store.tricks.best, flown.best);
+  assert.deepEqual([store.tricks.flows, store.tricks.mirror, store.tricks.points], [2, 1, flown.points]);
+  assert.deepEqual(store.tricks.bestCombo, { points: sheet.stats.bestCombo!.points, moves: sheet.stats.bestCombo!.moves,
+    sequence: sheet.stats.bestCombo!.sequence, links: (sheet.stats.bestCombo as { links: number[] }).links });
+  // The feats are the book's own, however the scorer comes to pay.
+  assert.deepEqual(feats, ['first-link', 'mirror', ...(flown.points >= BOOK_FEATS.points ? ['big-bank'] : [])]);
+});
+
 // A store with `tonnage` kilos banked and `feats` earned, and nothing else flown.
 const banked = (tonnage: number, feats: string[] = [], best = 0) => ({ ...emptyStore(), tonnage, feats, best: { total: best, peak: 0 } });
 
+// The looks of the kit, and the looks it has earned: the gliders have tests of their own.
+const looks = KIT.filter((item) => item.kind !== 'glider');
+const earnedLooks = (store: Parameters<typeof earnedKit>[0]) => earnedKit(store).filter((id) => looks.some((item) => item.id === id));
+
 test('the easier kit ladder unlocks both colour choices, while Valkyrie and the helmet keep their achievement requirements', () => {
-  const rungs = KIT.filter((item) => item.kg).map((item): [string, number] => [item.id, item.kg!]);
+  const rungs = looks.filter((item) => item.kg).map((item): [string, number] => [item.id, item.kg!]);
   assert.deepEqual(rungs, [['chalk', 25], ['raven', 50], ['calibrated', 100], ['sheetless', 250], ['flyte', 500], ['hird', 1000]]);
-  assert.deepEqual(KIT.filter((item) => item.feat).map((item) => [item.id, item.feat]), [['valkyrie', 'clean-meet'], ['gjermundbu', 'thousand-pound-club']]);
+  assert.deepEqual(looks.filter((item) => item.feat).map((item) => [item.id, item.feat]), [['valkyrie', 'clean-meet'], ['gjermundbu', 'thousand-pound-club']]);
   // Its wings are the ones that can be worn and painted, and its feats are the store's own.
   assert.deepEqual(['standard', ...KIT.filter((item) => item.kind === 'wing').map((item) => item.id)], KIT_THEMES);
   assert.deepEqual(Object.keys(LIVERIES), KIT_THEMES.slice(1));
@@ -473,8 +627,8 @@ test('the easier kit ladder unlocks both colour choices, while Valkyrie and the 
   assert.deepEqual(earnedKit(banked(0)), []);
   for (let i = 0; i < rungs.length; i++) {
     const [id, kg] = rungs[i];
-    assert.deepEqual(earnedKit(banked(kg - 0.5)), rungs.slice(0, i).map(([key]) => key));
-    assert.deepEqual(earnedKit(banked(kg)), rungs.slice(0, i + 1).map(([key]) => key));
+    assert.deepEqual(earnedLooks(banked(kg - 0.5)), rungs.slice(0, i).map(([key]) => key));
+    assert.deepEqual(earnedLooks(banked(kg)), rungs.slice(0, i + 1).map(([key]) => key));
     if (id !== 'chalk') assert.deepEqual(keepEarned({ wing: id, harness: id }, banked(kg)), { ...emptyKit(), wing: id, harness: id, chalk: false });
   }
   // A feat earns its piece whatever the tonnage.
@@ -485,8 +639,8 @@ test('the easier kit ladder unlocks both colour choices, while Valkyrie and the 
 test('wing and harness entitlements are independent, and unearned colours or gear come off', () => {
   const everything = { wing: 'hird', harness: 'raven', helmet: true, chalk: true };
   assert.deepEqual(keepEarned(everything, banked(0)), emptyKit());
-  assert.deepEqual(keepEarned(everything, banked(1000)), { wing: 'hird', harness: 'raven', helmet: false, chalk: true });
-  assert.deepEqual(keepEarned(everything, banked(999.5, ['thousand-pound-club'])), { wing: 'standard', harness: 'raven', helmet: true, chalk: true });
+  assert.deepEqual(keepEarned(everything, banked(1000)), { ...emptyKit(), wing: 'hird', harness: 'raven', chalk: true });
+  assert.deepEqual(keepEarned(everything, banked(999.5, ['thousand-pound-club'])), { ...emptyKit(), harness: 'raven', helmet: true, chalk: true });
   assert.deepEqual(keepEarned({ wing: 'raven', harness: 'hird' }, banked(50)), { ...emptyKit(), wing: 'raven' });
   assert.deepEqual(keepEarned({ wing: 'valkyrie' }, banked(50000)), emptyKit(), 'tonnage never buys a feat\'s wing');
   assert.deepEqual(keepEarned({ wing: 'valkyrie' }, banked(0, ['clean-meet'])).wing, 'valkyrie');
@@ -525,7 +679,7 @@ test('as a run ends the kit kept is held to what has been earned, and the chalk 
   assert.deepEqual(kitAfterRun({ wing: 'hird', helmet: true, chalk: true }, banked(0), banked(0)), { kept: emptyKit(), fresh: [] });
   assert.deepEqual(kitAfterRun({ wing: 'hird', harness: 'valkyrie', helmet: true, chalk: false }, banked(0), banked(30)).kept, { ...emptyKit(), chalk: true });
   // An earned kit is kept as it is, and nonsense is the empty kit.
-  const raven = { wing: 'raven', harness: 'flyte', helmet: true, chalk: false };
+  const raven = { wing: 'raven', harness: 'flyte', helmet: true, chalk: false, glider: 'en-b' };
   assert.deepEqual(kitAfterRun(raven, banked(3000, ['thousand-pound-club']), banked(3100, ['thousand-pound-club'])), { kept: raven, fresh: [] });
   assert.deepEqual(kitAfterRun('raven', banked(20), banked(25)).kept, { ...emptyKit(), chalk: true });
 });
@@ -534,10 +688,10 @@ test('the kit tab is told how far each rung is, which comes next, the best total
   const sheet = kitSheet(banked(65, ['thousand-pound-club'], 467.5), { wing: 'raven', harness: 'standard', helmet: true, chalk: true }, ['gjermundbu', 'raven']);
   assert.equal(sheet.tonnage, 65);
   assert.equal(sheet.best, 467.5);
-  assert.deepEqual(sheet.worn, { wing: 'raven', harness: 'standard', helmet: true, chalk: true });
+  assert.deepEqual(sheet.worn, { ...emptyKit(), wing: 'raven', helmet: true, chalk: true });
   assert.deepEqual(sheet.fresh, ['raven', 'gjermundbu'], 'in the kit\'s own order');
   const by = Object.fromEntries(sheet.items.map((item) => [item.id, item]));
-  assert.deepEqual(sheet.items.map((item) => item.id), KIT.map((item) => item.id));
+  assert.deepEqual(sheet.items.map((item) => item.id), KIT.map((item) => item.id), 'every piece, the gliders among them');
   assert.deepEqual([by.chalk.earned, by.chalk.left], [true, 0]);
   assert.deepEqual([by.raven.earned, by.raven.left], [true, 0]);
   assert.deepEqual([by.calibrated.earned, by.calibrated.left], [false, 35]);
@@ -546,9 +700,49 @@ test('the kit tab is told how far each rung is, which comes next, the best total
   assert.deepEqual([by.gjermundbu.earned, by.gjermundbu.kind], [true, 'helmet']);
   assert.equal(sheet.next!.id, 'calibrated');
   assert.equal(sheet.next!.left, 35);
-  // Once every rung is open there is none next; the sheet says what is worn as a kit, whatever it is handed.
-  const all = kitSheet(banked(1000), null);
+  // Once every look is open the next rung is a glider's, and once every rung is there is none next;
+  // the sheet says what is worn as a kit, whatever it is handed.
+  assert.equal(kitSheet(banked(1000), null).next!.id, 'en-d');
+  const all = kitSheet(banked(2000), null);
   assert.equal(all.next, null);
   assert.deepEqual(all.worn, emptyKit());
   assert.deepEqual(all.fresh, []);
+});
+
+test('a glider opens at its kilos and its feat together, and the acro only once the C has', () => {
+  const gliders = (store: Parameters<typeof earnedKit>[0]) => earnedKit(store).filter((id) => KIT_GLIDERS.includes(id));
+  assert.deepEqual(gliders(banked(149.5)), []);
+  assert.deepEqual(gliders(banked(150)), ['en-b']);
+  assert.deepEqual(gliders(banked(50000)), ['en-b'], 'kilos alone open no more');
+  assert.deepEqual(gliders(banked(749.5, ['first-link'])), ['en-b']);
+  assert.deepEqual(gliders(banked(750, ['first-link'])), ['en-b', 'en-c']);
+  assert.deepEqual(gliders(banked(2000, ['wingover-five'])), ['en-b', 'en-d']);
+  assert.deepEqual(gliders(banked(0, ['flow-three'])), [], 'no acro before the C');
+  assert.deepEqual(gliders(banked(750, ['first-link', 'flow-three'])), ['en-b', 'en-c', 'acro']);
+  // A glider not earned comes off for the first, which every pilot has.
+  assert.equal(keepEarned({ glider: 'en-d' }, banked(5000)).glider, 'en-a');
+  assert.equal(keepEarned({ glider: 'en-d' }, banked(2000, ['wingover-five'])).glider, 'en-d');
+  assert.equal(keepEarned({ glider: 'en-a' }, banked(0)).glider, 'en-a');
+  // Every piece asks for kilos or a feat, every `after` names a piece before it, and the gliders are
+  // the kit's own, every one past the first.
+  KIT.forEach((item, i) => {
+    assert.ok(item.kg !== undefined || item.feat, item.id);
+    if (item.after) assert.ok(KIT.slice(0, i).some((before) => before.id === item.after), item.id);
+    if (item.feat) assert.ok(FEAT_IDS.includes(item.feat), item.feat);
+  });
+  assert.deepEqual(['en-a', ...KIT.filter((item) => item.kind === 'glider').map((item) => item.id)], KIT_GLIDERS);
+});
+
+test('the kit tab shows the gliders\' rungs, what each still asks, and which kilos come next', () => {
+  const sheet = kitSheet(banked(800, ['opener']), { glider: 'en-b' }, ['en-b']);
+  const by = Object.fromEntries(sheet.items.map((item) => [item.id, item]));
+  assert.deepEqual(sheet.items.map((item) => item.id), KIT.map((item) => item.id));
+  assert.deepEqual([by['en-b'].earned, by['en-b'].left], [true, 0]);
+  assert.deepEqual([by['en-c'].earned, by['en-c'].met, by['en-c'].left], [false, { kg: true, feat: false, after: true }, 0]);
+  assert.deepEqual([by['en-d'].earned, by['en-d'].left], [false, 1200]);
+  assert.deepEqual(by.acro.met, { kg: true, feat: false, after: false });
+  assert.equal(sheet.next!.id, 'hird', 'the kilos reach the next rung, whatever else a glider asks');
+  assert.equal(kitSheet(banked(1200), null, []).next!.id, 'en-d');
+  assert.deepEqual(sheet.fresh, ['en-b']);
+  assert.equal(sheet.worn.glider, 'en-b');
 });

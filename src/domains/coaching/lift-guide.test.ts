@@ -344,9 +344,10 @@ test('full air and route queries run at the quarter-second search cadence, not e
 
 test('actual manual ridge departures hand off only to visible confirmed ridge guidance', () => {
   // These real seeded departures leave a clear cliff section beyond the wider cores.
-  // Seed 1's west route now passes through a second broad thermal instead.
+  // Seed 1's west route now passes through a second broad thermal instead. Flown on the classic
+  // wing, whose speeds the guide here reckons with.
   for (const seed of [10, 2]) {
-    const sky = createCloudbaseRun(), world = createRunWorld({ sky }); startRun(world, seed);
+    const sky = createCloudbaseRun(), world = createRunWorld({ sky, wing: 'classic' }); startRun(world, seed);
     const adapter = runAdapter(sky), guide = createQualifiedLiftGuide(adapter), side = sky.state.weather.side;
     const held = side < 0 ? 4 : 1.5, reversed = side < 0 ? 2 : 1, aligned = held + reversed;
     const pending: FlightInput[] = Array.from({ length: 12 }, () => ({ turn: 0, brake: false }));

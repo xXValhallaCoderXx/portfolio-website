@@ -1,3 +1,4 @@
+import type { CoachWing } from './coach-wing.ts';
 import type { AirSample, FlightInput, HeightSampler, ThermalSource, Vector2, Vector3 } from '../flight/models.ts';
 
 export type ControlName = 'left' | 'right' | 'brake' | 'bar' | 'ears';
@@ -6,8 +7,8 @@ export interface CoachFields {
   action?: string; state?: string; context?: string; phase?: string;
   title?: string; detail?: string; hold?: readonly string[]; release?: readonly string[];
   brakeDepth?: string; dragAction?: string; stableTitle?: boolean;
-  /** Normalized hand demands shared by visible targets and instruction acceptance. */
-  brakeTargets?: { left: number; right: number; tolerance: number };
+  /** Normalized hand demands shared by visible targets and instruction acceptance, and the speed bar held or not. */
+  brakeTargets?: { left: number; right: number; tolerance: number; bar?: boolean };
   progress?: number; progressLabel?: string; feedback?: string; heading?: string;
   activity?: string; preferredDirection?: number; distance?: number;
   targetId?: string | number; targetGeneration?: number; warning?: boolean; warningLabel?: string; urgent?: boolean;
@@ -31,6 +32,8 @@ export interface CoachingAdapter {
   openingProtected?: () => boolean;
   recoveryPoint?: () => Vector2 | null;
   thermalFlow?: () => { source: number; generation: number; pressure?: boolean } | null;
+  // The wing being flown, as the coach reckons with it (coach-wing.js); the classic wing's when none is handed.
+  wing?: () => Readonly<CoachWing> | null;
 }
 
 export interface FlightObservation {

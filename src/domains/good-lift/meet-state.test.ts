@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MEET, MEET_POOL, PLATE_KIND, SCATTER, TRAIL, createMeet } from './meet-state.ts';
 import { RUNE } from './meet-runes.ts';
-import { createStyle } from './meet-style.ts';
+import { createComboStyle } from './meet-combo.ts';
 import { createBells } from './bells.ts';
 import { TST, createReferenceKeys } from './pilots.ts';
 import { RUN, createRunWorld, finishRun, startRun, stepBits } from './run-step.ts';
@@ -219,7 +219,7 @@ test('judgment buffers keep late lines and the meet reuses its pools across rese
 test('recorded digital soaring retains acro time through the deadline and replays exactly', () => {
   const durations = [];
   for (let seed = 1; seed <= 24; seed++) {
-    const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle() }), seed);
+    const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createComboStyle() }), seed);
     const keys = createReferenceKeys(TST), recorder = createRecorder();
     let reason = null;
     while (!reason) {
@@ -230,7 +230,7 @@ test('recorded digital soaring retains acro time through the deadline and replay
     finishRun(world, reason);
     const sheet = summariseRun(world, reason);
     durations.push(sheet.seconds);
-    const text = encodeLog({ simVersion: SIM_VERSION, seed, total: sheet.total, peak: sheet.peak }, recorder.bits, recorder.steps);
+    const text = encodeLog({ simVersion: SIM_VERSION, glider: 'en-a', seed, total: sheet.total, peak: sheet.peak }, recorder.bits, recorder.steps);
     const read = decodeLog(text);
     assert.equal(read.ok, true);
     const replay = replayLog(read.log);

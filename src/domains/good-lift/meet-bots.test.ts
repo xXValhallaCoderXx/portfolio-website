@@ -10,18 +10,20 @@ import { createBells } from './bells.ts';
 import { summariseRun } from './meet-sheet.ts';
 import { seedFor } from './daily.ts';
 import { outranks } from './board.ts';
+import { GLIDERS, planFor } from './gliders.ts';
 
 // Two skies: today's Daily Sky as the arch would open it on one day, and a named one.
 const SKIES = [seedFor(20_756), 7];
 
-// What each bot comes to on a sky flown whole, as the tests fly the reference pilots (pilots.js):
-// the scores the bots in the page must come to. Each sky's flown once, for every test here.
+// What each bot comes to on a sky flown whole on the EN-A every pilot starts on, as the tests fly the
+// reference pilots (pilots.js): the scores the bots in the page must come to. Each sky's flown once,
+// for every test here.
 const flown = new Map<number, BotScore[]>();
 function reference(seed: number) {
   if (!flown.has(seed)) {
     flown.set(seed, BOTS.map(({ pilot }) => {
       const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells() }), seed);
-      const { reason } = flyPilot(world, createReferencePilot(pilot), { limit: BOT_FLIGHT.limit });
+      const { reason } = flyPilot(world, createReferencePilot({ ...pilot, plan: planFor(GLIDERS[0]) }), { limit: BOT_FLIGHT.limit });
       const sheet = summariseRun(world, reason ?? undefined);
       return { total: sheet.total, peak: sheet.peak, red: sheet.lifts.map((lift) => lift.red), reason: sheet.reason };
     }));
@@ -291,6 +293,11 @@ test('the run held up against TST is the best the sky judged since the bots were
   // Another sky's run is forgotten: the bots have left its sky.
   assert.equal(owing({ seed: 7, total: 200, peak: 1000 }, sheet(8, 0, 0, 'quit')), null);
   assert.deepEqual(owing({ seed: 7, total: 900, peak: 1000 }, sheet(8, 100)), { seed: 8, total: 100, style: 0, peak: 1000 });
+  // So is one on another glider: the bots fly the glider of the run they are asked for.
+  const on = (wing: string, total: number, reason = 'fog') => ({ ...sheet(7, total, 1000, reason), wing });
+  assert.deepEqual(owing({ seed: 7, wing: 'en-a', total: 900, peak: 1000 }, on('acro', 100)), { seed: 7, wing: 'acro', total: 100, style: 0, peak: 1000 });
+  assert.equal(owing({ seed: 7, wing: 'en-a', total: 900, peak: 1000 }, on('acro', 100, 'quit')), null);
+  assert.deepEqual(owing({ seed: 7, wing: 'acro', total: 900, peak: 1000 }, on('acro', 100)), { seed: 7, wing: 'acro', total: 900, peak: 1000 });
 });
 
 test('what the bots tell a sheet names its run and sky, the medals, the one it took, TST for the board, and whether it beat TST', () => {
@@ -309,4 +316,42 @@ test('what the bots tell a sheet names its run and sky, the medals, the one it t
   });
   assert.deepEqual([landing({ ...run, total: 145, peak: 1152 }, scores).beat, landing({ ...run, total: 145, peak: 1152 }, scores).fresh], [false, []], 'level with TST is no win');
   assert.deepEqual([landing({ ...run, reason: 'quit' }, scores).medal, landing({ ...run, reason: 'quit' }, scores).beat], ['', false]);
+});
+
+test('bots fly the player\'s glider, the EN-A unless another is named, each glider\'s kept apart', async () => {
+  const clock = page();
+  const bots = createBots(clock);
+  const starter = [{ total: 115, peak: 1040, red: [0] }], acro = [{ total: 90, peak: 980, red: [] }];
+  bots.remember(SKIES[1], starter);
+  bots.remember(SKIES[1], acro, 'acro');
+  assert.deepEqual(bots.known(SKIES[1]), starter);
+  assert.deepEqual(bots.known(SKIES[1], 'en-a'), starter);
+  assert.deepEqual(bots.known(SKIES[1], 'acro'), acro);
+  assert.equal(bots.known(SKIES[1], 'en-d'), null);
+  // A glider's bots fly in that glider.
+  const flight = createBotFlight();
+  flight.start(SKIES[1], 'en-c');
+  assert.equal(flight.wing, 'en-c');
+  flight.advance(10);
+  flight.start(SKIES[1]);
+  assert.equal(flight.wing, 'en-a');
+});
+
+test('on every glider TST lifts a sky\'s worth, inside the band every class keeps to', () => {
+  // Means over three Daily skies: a broken bot, one that lands or leaves its lift, falls out. Over 16
+  // skies, as SIM_VERSION 6 shipped, the A lifts 258 kg, the B 270, the C 233, the D 223 and the acro
+  // 266, strikes folding the half they hit and each bot flying it out by the recovery guide; one sky
+  // to the next spreads each by more than a hundred kilos either way, so the order the classes come
+  // in is no promise.
+  const BAND = Object.freeze({ low: 90, high: 450 });
+  for (const wing of GLIDERS) {
+    let total = 0;
+    for (let day = 20000; day < 20003; day++) {
+      const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), wing }), seedFor(day));
+      const flown = flyPilot(world, createReferencePilot({ ...TST, plan: planFor(wing) }));
+      total += summariseRun(world, flown.reason ?? 'time').total;
+    }
+    const mean = total / 3;
+    assert.ok(mean >= BAND.low && mean <= BAND.high, `${wing}: TST lifts ${mean.toFixed(0)} kg`);
+  }
 });

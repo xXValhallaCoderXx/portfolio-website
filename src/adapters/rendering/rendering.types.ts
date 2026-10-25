@@ -5,11 +5,20 @@ export interface CanvasSurface { width: number; height: number; getContext: (kin
 export interface GliderAir {
   time: number; rough: number; trailLeft: number; trailRight: number; trail: number; luff: number;
   collapse: number; foldLeft: number; foldRight: number; tuck: number; ears: number;
+  // Each tip caught in its lines (a cravat), 0 to 1.
+  cravatLeft: number; cravatRight: number;
+  // The side of the wing over a core lifting as it is met in flight: + its right, - its left.
+  heave: number;
 }
 export interface GliderPose {
   dt: number; time: number; bank: number; pace: number; turn: number; lift: number; liftSide: number; landed: boolean;
   flying?: boolean; brake?: number; bar?: number; luff?: number; stall?: number; foldLeft?: number; foldRight?: number;
   rough?: number; ears?: number; tuck?: number; heave?: number; swing?: number; physical?: boolean;
+  // Each tip caught in its lines (a cravat), 0 to 1, and the pilot turned under the lines against the
+  // wing (a line twist, radians, positive to the left).
+  cravatLeft?: number; cravatRight?: number; twist?: number;
+  // For whoever asks for less motion: the cloth holds still, but for what says something (luff, folds, a tuck).
+  still?: boolean;
   coordinatedLean?: number; coordination?: number; controlMode?: 'legacy' | 'brakes'; leftBrake?: number; rightBrake?: number;
 }
 export interface GliderMeasure { handLeft: number; handRight: number; edgeLeft: number; edgeRight: number; tipLeft: number; dropLeft: number; tipRight: number; dropRight: number }

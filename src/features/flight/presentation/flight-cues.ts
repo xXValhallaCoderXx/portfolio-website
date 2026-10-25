@@ -64,6 +64,15 @@ export function brakeDragPoint(leftBrake: number, rightBrake: number, pointerTyp
   return out;
 }
 
+/** The hands a recovery asks for (wing-cue.js) as a target on the handles, met within the coach's own tolerance (0.07). */
+export function recoveryTarget(hands: Readonly<{ left: number; right: number }>, input: FlightInput, output: Partial<CoachTarget> = {}): CoachTarget {
+  const out = output as CoachTarget;
+  out.leftBrake = hands.left; out.rightBrake = hands.right; out.handsUp = hands.left === 0 && hands.right === 0;
+  out.accepted = Math.abs((input.leftBrake ?? 0) - hands.left) <= 0.07 && Math.abs((input.rightBrake ?? 0) - hands.right) <= 0.07;
+  out.dx = out.dy = 0;
+  return out;
+}
+
 export function coachDragTarget(message: CueMessage | null, pointerType = 'mouse', input: FlightInput = {}, output: Partial<CoachTarget> = {}): CoachTarget | null {
   const out = output as CoachTarget;
   if (!message || message.controlMode !== 'brakes' || message.warning || message.urgent || message.transfer ||
@@ -165,9 +174,15 @@ export function createFlightCues({ element, stage, camera, reducedMotion = () =>
   const handleBounds: CueBounds[] = [];
   const motion = createTravelCue(), suggestion: CoachTarget = { dx: 0, dy: 0, leftBrake: 0, rightBrake: 0, handsUp: false, accepted: false }, markerBox = emptyBounds();
   const obstacles: CueBounds[] = [];
-  const exclusions = '.fj-hud-card, .fj-telemetry, .fj-coach, .fj-lights, .fj-gauge, .fj-cue, .fj-hint, .fj-toasts > *, .fj-title, .fj-style';
+  const exclusions = '.fj-hud-card, .fj-telemetry, .fj-coach, .fj-lights, .fj-gauge, .fj-cue, .fj-hint, .fj-toasts > *, .fj-title';
   function reset() { motion.reset(); travel.hidden = true; if (handles) handles.hidden = true; handleBounds.length = 0; }
-  function update({ pose, facts, message, input, dt, quiet = false }: { pose: CuePose | null; facts: CueFacts; message: CueMessage | null; input: FlightInput; dt: number; quiet?: boolean }) {
+  /**
+   * `recovery`, where given, is the hands a run's fix for a failure asks for this step (wing-cue.js):
+   * the handles light them, as they light a coach's, while the wing is in the very trouble that keeps
+   * a coach's off them.
+   */
+  function update({ pose, facts, message, input, dt, quiet = false, recovery = null }: { pose: CuePose | null; facts: CueFacts; message: CueMessage | null;
+    input: FlightInput; dt: number; quiet?: boolean; recovery?: Readonly<{ left: number; right: number }> | null }) {
     if (facts.blocked) { reset(); return; }
     const box = stage.getBoundingClientRect(), width = box.width, height = box.height;
     const safeBox = find('.fj-cue-safe').getBoundingClientRect();
@@ -183,7 +198,8 @@ export function createFlightCues({ element, stage, camera, reducedMotion = () =>
     if (handles) {
       handles.hidden = false;
       const travel = Number.parseFloat(getComputedStyle(handles).getPropertyValue('--brake-travel')) || BRAKE_HANDLE.travel;
-      const advised = !facts.recovering && !facts.collapse && !facts.stall ? coachDragTarget(message, 'touch', input, suggestion) : null;
+      const advised = recovery ? recoveryTarget(recovery, input, suggestion) :
+        !facts.recovering && !facts.collapse && !facts.stall ? coachDragTarget(message, 'touch', input, suggestion) : null;
       for (const item of handleNodes) {
         const value = cueBrake(input[`${item.side}Brake`] ?? 0);
         item.button.style.transform = `translateY(${handleProgress(value) * travel}px)`;

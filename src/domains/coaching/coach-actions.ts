@@ -36,7 +36,7 @@ function directMessage(fields: CoachFields, input: FlightInput): CoachMessage {
       (target === 0 ? actual <= 0.04 : Math.abs(actual - target) <= targets.tolerance);
     return { ...fields, action, controlMode: 'brakes', title: fields.title ?? base.title,
       detail: fields.detail ?? '', hold: controls(fields.hold ?? base.hold), release: controls(fields.release ?? base.release),
-      accepted: !summary.ears && !input.bar && Number.isFinite(targets.tolerance) && targets.tolerance >= 0 &&
+      accepted: !summary.ears && !!input.bar === !!targets.bar && Number.isFinite(targets.tolerance) && targets.tolerance >= 0 &&
         matches(summary.leftBrake, targets.left) && matches(summary.rightBrake, targets.right) };
   }
   let hold = controls(fields.hold ?? base.hold), release = controls(fields.release ?? base.release);

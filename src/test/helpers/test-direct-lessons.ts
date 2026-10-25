@@ -74,7 +74,7 @@ export function captureDirectLesson(kind: LessonId, side: number, delay: number)
     lastMove = watch.state.moves;
     if (lessons.state.phase === 'banked') break;
   }
-  const link = encodeLog({ simVersion: SIM_VERSION, seed: 0, total: style.state.total, peak: origin.y }, recorder.bits, recorder.steps);
+  const link = encodeLog({ simVersion: SIM_VERSION, glider: 'classic', seed: 0, total: style.state.total, peak: origin.y }, recorder.bits, recorder.steps);
   return { kind, side, delay, pureFlight: true, simVersion: SIM_VERSION, origin, air, steps: recorder.steps,
     frames: [...recorder.bits], link, started, learned, phases: [...phases], messages,
     lesson: { ...lessons.state, learned: [...lessons.state.learned] },

@@ -6,7 +6,6 @@ import { BRAKE, FLIGHT, PITCH, STALL, PHYSICS } from '../flight/flight.ts';
 import { ATMOSPHERE } from '../flight/atmosphere.ts';
 import { RUN_RULES } from './run-rules.ts';
 import { BANDS, WATCH, SPIRAL } from '../coaching/swing-watch.ts';
-import { STYLE } from './meet-style.ts';
 import { SCORE } from './score.ts';
 import * as SKY from './cloudbase-state.ts';
 import { RUN } from './run-step.ts';
@@ -15,17 +14,26 @@ import { BLESSING, GATES, RUNE } from './meet-runes.ts';
 import { BEAST, BELLS, BELL_POOL } from './bells.ts';
 import { ZONES, surfaceAt } from '../../adapters/rendering/terrain.ts';
 import { BRAKE_CONTROLS } from '../flight/brake-controls.ts';
+import { FOLDED } from '../flight/wing-folds.ts';
+import { GLIDER_TABLES } from './gliders.ts';
+import { LOG_WINGS } from './glider-ids.ts';
+import { AIR_FEEL, TURBULENCE } from './air-feel.ts';
+import { BREAK, COMBO, DETECT, LINKS, MOVE, TRICKS } from './trick-tables.ts';
+import { STRIKER, STRIKE_FOLD } from './strike-fold.ts';
 
 // Pin the current release's tables. A physical or scoring change requires a new version and pin.
-const FINGERPRINT = '09a6d448';
+const FINGERPRINT = 'a66d55aa';
 
-// Everything a run is flown by that is a number rather than code: the wing's tables, every one of
-// the sky's, the step's, the meet's (its plates off the trail and its rune gates and blessings with
-// it, and the runes' own numbers, which say what a seed's gates offer) and the kettlebells' (the
-// Beast's with them), where each landing zone is cut into the ground (each its x, z, r and h), and
-// the ground under the whole sky, to the centimetre, every 10 m across its square. And, since style
-// multiplies the total a run is ranked by and the server works it out again from the log, what a
-// trick is worth: the swing watch's and the style's tables and the score's. Code changes are caught
+// Everything a run is flown by that is a number rather than code: the classic wing's tables and
+// every glider's (its canopy, its feel, how its halves fly and how it folds and fills again), the
+// wings a log can name, the air the wings feel and how rough it is, every one of the sky's tables,
+// the step's, the meet's (its plates off the trail and its rune gates and blessings with it, and the
+// runes' own numbers, which say what a seed's gates offer) and the kettlebells' (the Beast's with
+// them), how far a strike folds a glider and what counts as folded, where each landing zone is cut
+// into the ground (each its x, z, r and h), and the ground under the whole sky, to the centimetre,
+// every 10 m across its square. And, since a run is ranked by its total and the combos it banked,
+// and the server works both out again from the log, what a trick is worth: the swing watch's tables,
+// the trick watch's and the combos' (trick-tables.js), and the score's. Code changes are caught
 // elsewhere: by the goldens in run-step.test.js, the reference pilots' pins, and replays of logs
 // recorded in browsers.
 function material() {
@@ -35,7 +43,8 @@ function material() {
     for (let dx = -zone.r; dx <= zone.r; dx += 10) ground.push(Math.round(surfaceAt(zone.x + dx, zone.z + dz) * 100));
   }
   return {
-    FLIGHT, BRAKE, STALL, PITCH, BANDS, WATCH, SPIRAL, STYLE, SCORE, PHYSICS, ATMOSPHERE, RUN_RULES, BRAKE_CONTROLS,
+    FLIGHT, BRAKE, STALL, PITCH, BANDS, WATCH, SPIRAL, SCORE, PHYSICS, ATMOSPHERE, RUN_RULES, BRAKE_CONTROLS,
+    GLIDER_TABLES, LOG_WINGS, AIR_FEEL, TURBULENCE, MOVE, BREAK, TRICKS, DETECT, LINKS, COMBO, STRIKER, STRIKE_FOLD, FOLDED,
     ...Object.fromEntries(Object.entries(SKY).filter(([name]) => name.startsWith('CLOUD_'))),
     RUN, MEET, TRAIL, MEET_POOL, WIND, THUNDER, BAIT, SCATTER, GATES, BLESSING, RUNE, BELLS, BELL_POOL, BEAST,
     ZONES: ZONES.map(({ x, z, r, h }) => ({ x, z, r, h })),
@@ -86,7 +95,8 @@ test('the fingerprint moves with every number in the tables, every landing zone 
   // Every table a run is flown by is in it, and the whole of the ground's grid.
   const names = Object.keys(tables);
   for (const name of ['FLIGHT', 'BRAKE', 'STALL', 'PITCH', 'CLOUD_ZONE', 'CLOUD_GATE', 'CLOUD_LAUNCH', 'CLOUD_WEAR', 'CLOUD_FOG', 'CLOUD_HUNT', 'CLOUD_RAVENS', 'CLOUD_STRIKE', 'CLOUD_STORM', 'CLOUD_WIND', 'CLOUD_GUST', 'CLOUD_POOL',
-    'PHYSICS', 'ATMOSPHERE', 'CLOUD_WEATHER', 'RUN_RULES', 'MEET', 'TRAIL', 'MEET_POOL', 'WIND', 'THUNDER', 'BAIT', 'SCATTER', 'GATES', 'BLESSING', 'RUNE', 'BELLS', 'BELL_POOL', 'BEAST']) {
+    'PHYSICS', 'ATMOSPHERE', 'CLOUD_WEATHER', 'RUN_RULES', 'MEET', 'TRAIL', 'MEET_POOL', 'WIND', 'THUNDER', 'BAIT', 'SCATTER', 'GATES', 'BLESSING', 'RUNE', 'BELLS', 'BELL_POOL', 'BEAST',
+    'GLIDER_TABLES', 'LOG_WINGS', 'AIR_FEEL', 'TURBULENCE', 'MOVE', 'BREAK', 'TRICKS', 'DETECT', 'LINKS', 'COMBO', 'STRIKER', 'STRIKE_FOLD', 'FOLDED']) {
     assert.ok(names.includes(name), name);
   }
   assert.equal(tables.ground.length, (Math.floor(2 * SKY.CLOUD_ZONE.r / 10) + 1) ** 2);

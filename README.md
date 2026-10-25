@@ -118,6 +118,24 @@ Opening the board and typing initials only read data or edit a draft; each resul
     opens it and R flies it again. `/good-lift` is practice, a new sky every run.
     `/good-lift?sky=<hex>` is one named sky. Any other address under `/good-lift/` is the missing
     page. Opened directly, an address shows a start screen first, because sound needs a click.
+  - **Gliders.** Every run is flown on a glider (`src/domains/good-lift/gliders.ts`), each the one
+    solver's wing with its canopy and its air changed: the EN-A every pilot starts on, which forgives
+    most and climbs best, then the EN-B, the sport EN-C, the racing EN-D and the Acro, earned by the
+    kilos banked over every run and by trick feats (the start screen and the kit tab say what each
+    still asks). A run's log, its board row and a challenge all name the glider it was flown on, and
+    the bots fly the pilot's own. Training teaches each glider the lessons it can fly. The fjord and
+    the page fly the classic wing.
+  - **Tricks and combos.** The trick watch (`trick-watch.ts`) reads moves from the flight alone
+    (pitch catches, wingovers, spirals, asymmetric spirals, full stalls, tail slides, helicopters,
+    SATs and loops, as each glider can fly them) and the style (`meet-combo.ts`) chains them: each
+    new move, named link and flow raises the multiplier, three settled seconds bank the combo into
+    the score, and a fold, a strike or a stall not asked for loses it.
+  - **A wing in trouble.** A raven or a kettlebell folds the half of the wing it hits, as far as
+    its striker folds it, and the pilot keeps the controls to fly it out (`wing-folds.ts`); a stall,
+    a spin, a frontal, a cravat, a deep stall or a line twist come from the pilot's own hands. The
+    EN-A and the EN-B are told the fix over the pilot (`wing-cue.ts`, with the key for each step);
+    the EN-C, the EN-D and the Acro only what has happened, their fixes taught in Training. Flying
+    it well saves height and time; the judges see it as they always did.
   - **Lift.** An anchored launch source starts the flight facing north over the valley. Four
     hunted cells drift with the wind, bloom and fade, with stable identities so circling progress
     follows the core. Ravens and locally advected motes show their actual airflow. Ambient wind
@@ -227,14 +245,14 @@ Opening the board and typing initials only read data or edit a draft; each resul
     They stop while a run is flown. The visit keeps what they came to on its last 16 skies, so
     none of those is flown twice, and the store keeps the Daily Sky's for the day. Each slice asks
     some 4 ms of the page, and on a page busy every frame they still land in seconds.
-  - **Replays and challenges.** A run is its seed and its resolved flight controls
+  - **Replays and challenges.** A run is its seed, its glider and its resolved flight controls
     step by step, and nothing else: every run is recorded (`src/domains/good-lift/recorder.ts`) and, as it ends,
     replayed in the page (`replay.ts`), and only a run that replays to the very same sheet gets a
     link and a place on the board. The share line carries that link, `/good-lift/daily#vs=…`
     (digital runs compress well; continuously varying brakes can produce much larger links,
     bounded at 196,608 characters). Opening it replays the run before the start screen, which
-    shows what it truly came to (`to beat: … pts · … m · verified`; what a link claims is never
-    trusted), then flies the same sky; the sheet gives the verdict, and a race on today's sky puts
+    shows what it truly came to (`to beat: REN · EN-D · … pts · … m`; what a link claims is never
+    trusted), then flies the same sky on the challenger's own glider; the sheet gives the verdict, and a race on today's sky puts
     the challenger on the day's board. `SIM_VERSION` (`src/domains/good-lift/sim-version.ts`) names the rules a
     run was flown under: a test fingerprints every tuning table, so changing how a run flies without
     a new version fails `npm test`, and a link from other rules is refused rather than misread.
@@ -391,7 +409,7 @@ reference pilots (`src/domains/good-lift/pilots.ts`) and recorded button inputs 
 Acceptance covers stable turns, energy loss, shared wind, safe launch, drifting-core scoring,
 five-to-eight-minute skilled sessions and the exact ten-minute deadline. Browser-recorded goldens
 must replay to identical judged sheets in Node. Changing flight rules requires a new `SIM_VERSION`,
-its fingerprint and updated goldens. The initial release protects two opening cores until the
+its fingerprint and the browser receipts captured again (see "Capturing the browser receipts"). The initial release protects two opening cores until the
 first 450 m crossing, then blends them into normal depletion and drift over 45 seconds. Raven
 attacks and gusts start at 500 m with seeded, gradually shorter intervals; storm clouds begin
 at 500 m, and kettlebells join at 700 m. One warned raven attack is possible at a time.
@@ -529,8 +547,8 @@ Firestore document, at most one run from each device: its best. The page reaches
 off: no leaderboard requests are made, and results stay local. The local configuration above can
 use the existing live function; the setup below describes provisioning or deploying that function.
 
-A run goes up only if it was flown on today's or yesterday's (UTC) Daily Sky under the current
-`SIM_VERSION`, was ended by the fog, a touchdown or the ten-minute limit, is named with initials the board shows (and
+A run goes up only if it was flown on a glider, on today's or yesterday's (UTC) Daily Sky, under the
+current `SIM_VERSION` and log format, was ended by the fog, a touchdown or the ten-minute limit, is named with initials the board shows (and
 the page sends it only after the pilot presses **Submit score** for that result), replays to the very total and peak its log
 claims, and is not on the board already from another device (a run is known by its controls as
 the step reads them and by what its replay flew, so neither renaming its link nor rewriting keys
@@ -544,7 +562,8 @@ many tokens, shuts anyone out. The function answers three routes under `VITE_BOA
 fortnight, and `DELETE /runs/<UTC day>` with `Authorization: Bearer <token>`.
 
 A run is ranked only if Node's replay of it comes to the very sheet the browser's did. The golden
-runs in `npm test` were all flown in Chromium; Safari's JavaScript engine may round a sine or an
+runs in `npm test` were all flown in Chromium, one of them on every glider, and the function's own
+handler takes each; Safari's JavaScript engine may round a sine or an
 arctangent differently in the last bit, and if that ever changed a run, every such run from an
 iPhone would be refused as `mismatch` (the function's log says so). Fly a Daily Sky in Safari on a
 Mac and on an iPhone against the deployed function before relying on it.
@@ -555,8 +574,8 @@ Mac and on an iPhone against the deployed function before relying on it.
   run's log (its controls step by step, its initials and what it claims) and this browser's device
   token: 32 random bytes, made the first time a run is sent and kept in localStorage under
   `good-lift-device`. Asking for a day's board sends nothing but the day.
-- **Kept**, in each day's document: for each run on the board, its initials, byname, total, peak and
-  lights, when it arrived, its id (a digest of its controls), a digest of what its replay flew (to
+- **Kept**, in each day's document: for each run on the board, its initials, byname, total, peak,
+  lights and the glider it was flown on, when it arrived, its id (a digest of its controls), a digest of what its replay flew (to
   tell copies by, never shown) and a digest of the device token with the day, so one device has another name on every day's board; and how many runs each device sent
   that day. Never the log, never the token itself, and never an address: to limit how often one
   asks, the function counts each address's requests in its memory for the clock minute they come
@@ -636,26 +655,49 @@ refuses the new version's runs and serves the old version's boards, which the pa
 so the meet sheet shows this browser's board alone.
 
 
+### Capturing the browser receipts
+
+The goldens in `src/test/fixtures/` are flown in a real Chromium page and then again in Node, and
+written only when every flight in a set comes out the very same in both (the runs on each glider
+also go through the function's own handler). Capture them again whenever `SIM_VERSION` changes:
+
+```bash
+CHROMIUM=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/playwright-core/index.mjs \
+  npx tsx tools/capture-goldens.ts            # or name sets: runs lessons recovery brakes …
+npm test
+```
+
+The tool serves this checkout with Vite itself (or uses `QA_BASE`), flies each set on an empty page,
+and records the engine, the time and a digest of every source the flights were flown from.
+
 ### Releasing a flight-rules update
 
-Hosting and its existing world-board function must use the same simulation version. The GitHub
-workflow deploys Hosting only, so a physics release needs the board deployed in the same release.
-Build and verify both artifacts first:
+Hosting and the world board's function must fly the same `SIM_VERSION`: a page whose runs the
+function would refuse must never go out ahead of it. The GitHub workflow deploys Hosting only, and
+stops before it does if the live board answers with other rules than the build's
+(`tools/check-live-board.ts`; a board it cannot ask lets the deploy go on), so the function goes first:
 
-```bash
-npm test
-npm run check:split
-npm run build
-npm run build:functions
-```
+1. Tag what is live on `main` (for version 6, `good-lift-v5`), to roll back to. Release just after
+   00:00 UTC, so the day's board starts under the new rules.
+2. From the release branch, `npm run verify`, then deploy the function alone:
 
-With the deployment account and production board URL configured, publish both targets together:
+   ```bash
+   firebase deploy --only functions:board --project renate-gouveia-portfolio
+   day=$(node -e "console.log(Math.floor(Date.now() / 86400000))")
+   curl -s "https://us-central1-renate-gouveia-portfolio.cloudfunctions.net/board/board/$day"   # "version": the new SIM_VERSION
+   ```
 
-```bash
-firebase deploy --only functions:board,hosting --project renate-gouveia-portfolio
-```
+   Until Hosting follows, pages of the old rules have their runs refused as `version`; their
+   results stay on the device. A page of the new rules that meets the old function says the
+   leaderboard is updating its flight rules, and its score can be sent again.
+3. Merge the release into `main`. The workflow checks the live board's version, then deploys Hosting.
+4. Fly and submit a Daily Sky on a few gliders from the released site, and open a challenge link in
+   Safari, on a Mac and on an iPhone.
 
-Verify the live board reports the current `SIM_VERSION`, then fly and submit a Daily Sky from the released
-client. During a version mismatch, local results remain available and the world-board status
-explains that its flight rules are updating. This change does not require deleting old Firestore
-boards. Repository changes and local QA do not constitute a deployment.
+A new version is a new Daily Sky, a new board (`boards/<SIM_VERSION>:<day>`) and a fresh best
+score; the streak, tonnage, feats, kit and trick book carry over. Old boards stay in Firestore until
+their TTL deletes them.
+
+To roll back, deploy the function from the tag (`git checkout good-lift-v5`, then the deploy in step
+2), then `git revert -m 1` the merge on `main`, which the workflow deploys once the board answers
+with the old version again. Repository changes and local QA do not constitute a deployment.

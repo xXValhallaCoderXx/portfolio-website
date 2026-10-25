@@ -4,7 +4,13 @@ export type MenuContext = 'free-form' | 'game' | 'training';
 export interface MenuStats {
   best: number; streak: number;
   medals: { medal: string; score: number; by: string }[];
+  // The gliders the next run can be flown on, once they fly (null until then).
+  glider?: GliderMenu | null;
 }
+/** A glider as the launch hub offers it: its names, and what it still asks when it is not yet earned. */
+export interface GliderOption { id: string; name: string; badge: string; role: string; earned: boolean; lock: string }
+/** The glider the next run flies (`worn`), and every one there is. */
+export interface GliderMenu { worn: string; options: GliderOption[] }
 export function menuContext(mode: string): MenuContext {
   return mode === 'training' ? 'training' : mode === 'cloudbase' || mode === 'cloudbase-ended' ? 'game' : 'free-form';
 }

@@ -3,8 +3,15 @@ import type { createSwingWatch } from '../../../domains/coaching/swing-watch.ts'
 export function createFlightEffects() {
   return {
     fold: 0, veil: 0, veilShown: 0, shake: 0, gaze: 0, want: { fold: 0, veil: 0, shake: 0, gaze: 0 }, floor: -Infinity, stop: 0,
-    foldLeft: 0, foldRight: 0, luff: 0, stall: { left: 0, right: 0, luff: 0, shake: 0, tuck: 0 }, stalled: false,
+    foldLeft: 0, foldRight: 0, luff: 0, stall: { left: 0, right: 0, luff: 0, shake: 0, tuck: 0, cravatLeft: 0, cravatRight: 0, twist: 0 }, stalled: false,
     tuck: 0, heave: 0,
+    // Each tip caught in its lines as drawn, and the pilot turned under twisted lines (radians).
+    cravatLeft: 0, cravatRight: 0, twist: 0,
+    // The wing's own failures already heard (flight-session.js hearWing): a half folded (its side),
+    // a tip caught, the lines twisted.
+    wingHeard: { fold: 0, cravat: false, twist: false },
+    // The jolt of a fold (radians of shake), dying away; and how near each half is to stalling by itself.
+    jolt: 0, soft: { left: 0, right: 0 },
     meter: { fill: 0, red: 0, state: '' }, meterShown: { fill: -1, red: -1, state: null as string | null },
     // The swing gauge (swing-gauge.js) and what of it was last written to the page; the catches and
     // the swings through the bottom already heard.

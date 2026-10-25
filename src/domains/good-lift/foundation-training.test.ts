@@ -188,9 +188,10 @@ test('foundation completion preserves trick prerequisites, scores, kit and legac
   clearStore(storage);
 });
 
-test('six-lesson catalog keeps real trick reserve configuration and explicit lesson order', () => {
-  assert.deepEqual(TRAINING_LESSONS, ['steering', 'thermal', 'pitch', 'spiral', 'wingover', 'loop']);
-  for (const id of ['pitch', 'spiral', 'wingover', 'loop'] as const) {
+test('the lesson catalog keeps real trick reserve configuration and explicit lesson order', () => {
+  assert.deepEqual(TRAINING_LESSONS, ['steering', 'thermal', 'pitch', 'spiral', 'wingover', 'stall', 'wing-spiral', 'spiral-exit', 'loop', 'heli', 'sat',
+    'collapse', 'frontal', 'deep-stall', 'spin', 'cravat', 'twist']);
+  for (const id of ['pitch', 'spiral', 'wingover', 'stall', 'wing-spiral', 'spiral-exit', 'loop', 'heli', 'sat'] as const) {
     assert.equal(TRAINING_LESSON_INFO[id].entry, TRICK_LESSONS[id].entry);
     assert.equal(TRAINING_LESSON_INFO[id].abort, TRICK_LESSONS[id].abort);
   }

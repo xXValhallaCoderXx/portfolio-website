@@ -6,10 +6,12 @@ type RunWorld = ReturnType<typeof createRunWorld>;
 // came to. The tests hold what the function makes of a run up against that sheet. They never pin
 // what a pilot lifts, which every SIM_VERSION changes.
 import { TST, createReferenceKeys } from '../../src/domains/good-lift/pilots.ts';
-import { createRunWorld, finishRun, startRun, stepBits, stepFrame } from '../../src/domains/good-lift/run-step.ts';
+import { createRunWorld, finishRun, startRun, stepFrame } from '../../src/domains/good-lift/run-step.ts';
 import { createCloudbaseRun } from '../../src/domains/good-lift/cloudbase-state.ts';
 import { createMeet } from '../../src/domains/good-lift/meet-state.ts';
 import { createBells } from '../../src/domains/good-lift/bells.ts';
+import { createComboStyle } from '../../src/domains/good-lift/meet-combo.ts';
+import { GLIDERS, type GliderId } from '../../src/domains/good-lift/gliders.ts';
 import { summariseRun } from '../../src/domains/good-lift/meet-sheet.ts';
 import { INPUT, MAX_STEPS, createRecorder, decodeLog, encodeLog, inputFrame } from '../../src/domains/good-lift/recorder.ts';
 import { seedFor } from '../../src/domains/good-lift/daily.ts';
@@ -27,13 +29,13 @@ export const PILOTS = Object.freeze({
 });
 
 /**
- * A run of the Daily Sky of UTC `day` flown by `pilot` (one of PILOTS) under `initials`, until the
- * fog or the ground ends it or its pilot does at step `quit`. Returns { day, seed, sheet, log, text }:
- * the sheet it came to (summariseRun's), its log as decodeLog reads it, and its link's text.
+ * A run of the Daily Sky of UTC `day` flown by `pilot` (one of PILOTS) on `glider` under `initials`,
+ * until the fog or the ground ends it or its pilot does at step `quit`. Returns { day, seed, sheet,
+ * log, text }: the sheet it came to (summariseRun's), its log as decodeLog reads it, and its link's text.
  */
-export function fly(day: number, pilot: string, { initials = 'REN', quit = MAX_STEPS }: {initials?:string;quit?:number} = {}) {
+export function fly(day: number, pilot: string, { initials = 'REN', quit = MAX_STEPS, glider = GLIDERS[0] }: {initials?:string;quit?:number;glider?:GliderId} = {}) {
   const seed = seedFor(day);
-  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells() }), seed);
+  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createComboStyle(), wing: glider }), seed);
   const recorder = createRecorder();
   const bitsOf = PILOTS[pilot as keyof typeof PILOTS]();
   let reason = null;
@@ -45,7 +47,7 @@ export function fly(day: number, pilot: string, { initials = 'REN', quit = MAX_S
   reason ??= 'quit';
   finishRun(world, reason);
   const sheet = summariseRun(world, reason);
-  const text = encodeLog({ simVersion: SIM_VERSION, seed, day, initials, total: sheet.total, peak: sheet.peak }, recorder.bits, recorder.steps);
+  const text = encodeLog({ simVersion: SIM_VERSION, glider, seed, day, initials, total: sheet.total, peak: sheet.peak }, recorder.bits, recorder.steps);
   const decoded = decodeLog(text);
   if (!decoded.ok) throw new Error(decoded.why);
   return { day, seed, sheet, log: decoded.log, text };
@@ -54,18 +56,7 @@ export function fly(day: number, pilot: string, { initials = 'REN', quit = MAX_S
 /** A flown run's log written again with `meta` changed: the run itself, its seed and controls, the same. */
 export const rewrite = ({ log }: {log: RunLog}, meta: Record<string, unknown>) => encodeLog({ ...log, ...meta }, log.bits, log.steps);
 
-/**
- * The steps of a flown run on which its wing was folded, flown again from its log: the hands are off
- * it then. Read after each step, so a step on which a pump opened the wing, and gave the hands back,
- * is not one of them.
- */
-export function folded({ seed, log }: {seed:number;log:RunLog}) {
-  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells() }), seed);
-  const steps = [];
-  for (let i = 0; i < log.steps; i++) {
-    const ended = stepBits(world, log.bits[i]);
-    if (world.controls.locked) steps.push(i);
-    if (ended) break;
-  }
-  return steps;
-}
+// A log's text as its bytes, and bytes as a log's text, to write what no encoder of this build
+// would: a log of another format, or of a wing it does not know.
+export const bytesOf = (text: string) => [...Buffer.from(text, 'base64url')];
+export const textOf = (bytes: number[]) => Buffer.from(bytes).toString('base64url');

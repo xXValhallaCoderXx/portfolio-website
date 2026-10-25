@@ -30,6 +30,19 @@
 .fj-hub-stats .bronze { color: #c88f5f; }
 .fj-hub-stats .silver { color: #c6d3e0; }
 .fj-hub-stats .gold { color: #f2c94c; }
+/* The glider the next run flies, and the choice of another. */
+.fj-hub-glider { margin: 0 0 14px; }
+.fj-hub-glider > button { display: flex; align-items: baseline; gap: 10px; width: 100%; min-height: 44px; padding: 8px 12px; text-align: left; }
+.fj-hub-glider > button > span { color: #9fb2c6; font-size: 10px; letter-spacing: .12em; }
+.fj-hub-glider > button > b { flex: 1; color: #e8f1fa; font-size: 13px; letter-spacing: .04em; }
+.fj-hub-glider > button > small, .fj-hub-glider > button > i { color: #9fb2c6; font-size: 11px; font-style: normal; }
+.fj-hub-gliders { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; border: 0; }
+.fj-hub-gliders label { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: baseline; padding: 8px 10px; border: 1px solid #24405f; border-radius: 10px; cursor: pointer; }
+.fj-hub-gliders label.selected { border-color: #29c7e3; background: #29c7e314; }
+.fj-hub-gliders label.locked { opacity: .65; cursor: default; }
+.fj-hub-gliders input { grid-row: span 2; }
+.fj-hub-gliders strong { color: #e8f1fa; font-size: 12px; letter-spacing: .06em; }
+.fj-hub-gliders small { color: #9fb2c6; font-size: 10px; line-height: 1.4; }
 .fj-launch-settings, .fj-keys-more { display: flex; align-items: center; gap: 8px; }
 .fj-launch-settings { flex: 1; }
 .fj-launch-settings > span, [data-music-unavailable] { color: #9fb2c6; font-size: 10px; }
@@ -83,6 +96,8 @@
 .fj-pause-lesson-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; border: 0; }
 .fj-pause-lesson { position: relative; display: grid; grid-template-columns: 42px 1fr; align-items: center; gap: 3px 8px; min-height: 72px; padding: 10px; border: 1px solid #24405f; border-radius: 10px; background: #0b1424; cursor: pointer; }
 .fj-pause-lesson input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; cursor: pointer; }
+.fj-pause-lesson.locked { border-style: dashed; opacity: .62; }
+.fj-pause-lesson.locked.selected { opacity: 1; }
 .fj-pause-lesson:focus-within { outline: 2px solid #29c7e3; outline-offset: 2px; }
 .fj-pause-lesson svg { grid-row: 1 / 3; color: #3ee6b0; }
 .fj-pause-lesson strong { font-size: 12px; }

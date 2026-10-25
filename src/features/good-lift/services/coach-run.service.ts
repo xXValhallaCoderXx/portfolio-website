@@ -16,7 +16,8 @@ export function createRunCoachEnvironment(sky: CloudbaseRun) {
     thermalFlow: () => sky.state.flow,
     openingProtected: () => sky.state.openingAt < 0,
     recoveryPoint: () => ({ x: CLOUD_ZONE.x, z: CLOUD_ZONE.z }),
-    sampleAir: (pos: Vector3, out: AirSample) => sky.sample(pos, 0, out),
+    // Plans are made in the air without its bumps (felt air's turbulence: cloudbase-state.js).
+    sampleAir: (pos: Vector3, out: AirSample) => sky.sample(pos, 0, out, true),
     heightAt: surfaceAt,
     sources: () => sky.state.thermals.map((t: CloudbaseRun['state']['thermals'][number], id: number) => ({ ...t, id, flock: id > 0, remaining: cloudThermalRemaining(t) })),
     inside: (pos: { x: number; z: number; }, margin = 0) => Math.hypot(pos.x - CLOUD_ZONE.x, pos.z - CLOUD_ZONE.z) <= CLOUD_ZONE.r - margin,

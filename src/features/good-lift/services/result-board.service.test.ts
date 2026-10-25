@@ -9,7 +9,7 @@ import { createCloudbaseRun } from '../../../domains/good-lift/cloudbase-state.t
 import { createRunWorld, startRun, stepBits, finishRun } from '../../../domains/good-lift/run-step.ts';
 import { createMeet } from '../../../domains/good-lift/meet-state.ts';
 import { createBells } from '../../../domains/good-lift/bells.ts';
-import { createStyle } from '../../../domains/good-lift/meet-style.ts';
+import { createComboStyle } from '../../../domains/good-lift/meet-combo.ts';
 import { summariseRun } from '../../../domains/good-lift/meet-sheet.ts';
 import { createRecorder, decodeLog, encodeLog } from '../../../domains/good-lift/recorder.ts';
 import { replayLog } from '../../../domains/good-lift/replay.ts';
@@ -26,17 +26,17 @@ const key = boardKey(SIM_VERSION, day);
 // A real completed flight, recorded through the canonical step boundary, reused as copies below.
 function flight(): RunResult {
   const seed = seedFor(day);
-  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle() }), seed);
+  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createComboStyle() }), seed);
   const recorder = createRecorder();
   let reason = null;
   while (!reason) { recorder.push(0); reason = stepBits(world, 0); }
   finishRun(world, reason);
   const sheet = summariseRun(world, reason);
-  const log = encodeLog({ simVersion: SIM_VERSION, seed, day, total: sheet.total, peak: sheet.peak, touch: true }, recorder.bits, recorder.steps);
+  const log = encodeLog({ simVersion: SIM_VERSION, glider: 'en-a', seed, day, total: sheet.total, peak: sheet.peak, touch: true }, recorder.bits, recorder.steps);
   return { ...sheet, kind: 'daily', day, label: 'Daily test', at: 1234, style: sheet.stats.style,
     best: { total: sheet.total, peak: sheet.peak }, feats: { earned: [], fresh: [], streak: 0 },
     board: { rows: [], mine: log }, target: null, log, link: `https://flight.test/good-lift#vs=${log}`,
-    verified: true, verifying: false, byname: '', verse: '', initials: '', pilot: '', online: true };
+    verified: true, verifying: false, byname: '', verse: '', initials: '', pilot: '', online: true, wing: 'en-a' };
 }
 const completed = flight();
 const deferred = <T>() => {
@@ -51,7 +51,7 @@ function setup() {
   const result = structuredClone(completed);
   const store = emptyStore();
   recordRun(store, { kind: result.kind, day, at: result.at, total: result.total, peak: result.peak,
-    style: result.style, log: result.log, red: result.lifts.map(lift => lift.red), reason: result.reason }, { now: day * 86400000, version: SIM_VERSION });
+    style: result.style, log: result.log, red: result.lifts.map(lift => lift.red), reason: result.reason, glider: result.wing }, { now: day * 86400000, version: SIM_VERSION });
   result.board!.rows = rowsFor(store.board, key);
   const events: { results: RunResult[]; worlds: WorldResult[]; posts: string[]; reads: number; deletes: number; writes: number } = { results: [], worlds: [], posts: [], reads: 0, deletes: 0, writes: 0 };
   const replies = {
@@ -59,7 +59,7 @@ function setup() {
       const decoded = decodeLog(log); assert.ok(decoded.ok);
       return { ok: true, why: '', rank: 1, board: { ...empty(), rows: [{ who: decoded.log.initials,
         id: await runId(decoded.log), total: result.total, style: result.style, peak: result.peak,
-        red: result.lifts.map(lift => lift.red), byname: '', at: result.at }] } };
+        red: result.lifts.map(lift => lift.red), byname: '', at: result.at, glider: decoded.log.glider }] } };
     },
     board: async (): ReturnType<Online['board']> => empty(),
     remove: async (): ReturnType<Online['remove']> => ({ ok: true, removed: 1, board: empty() }),
@@ -185,7 +185,7 @@ test('a network failure keeps the locally named flight and retries only on anoth
   assert.deepEqual({ runs: store.runs, tonnage: store.tonnage, best: store.best }, progress);
 });
 
-for (const [why, phase] of [['not-best', 'not-best'], ['duplicate', 'rejected'], ['day', 'rejected'], ['mismatch', 'rejected'], ['quota', 'rejected'], ['rate', 'failed'], ['store', 'failed']] as const) {
+for (const [why, phase] of [['not-best', 'not-best'], ['duplicate', 'rejected'], ['day', 'rejected'], ['mismatch', 'rejected'], ['quota', 'rejected'], ['rate', 'failed'], ['store', 'failed'], ['format', 'failed'], ['version', 'rejected'], ['glider', 'rejected']] as const) {
   test(`the server's ${why} response stays distinct from a successful submission`, async () => {
     const { result, controller, replies } = setup();
     replies.send = async () => ({ ok: false, why, rank: why === 'not-best' ? 3 : 0, board: empty() });

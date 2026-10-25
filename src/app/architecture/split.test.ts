@@ -12,6 +12,10 @@ test('the portfolio and outdoor flight carry no Good Lift runtime or result UI b
   assert.equal(page.has(RESULT), false);
   assert.equal(page.has(KIT), false);
   assert.deepEqual(importsOf(resolve(SOURCE_ROOT, 'domains/progression/good-lift-key.ts')), { statics: [], dynamics: [], types: [] });
+  // The game's own modules the page may hold, a link's rules and a glider's name among them, import nothing.
+  for (const leaf of ['good-lift-address.ts', 'sim-version.ts', 'glider-ids.ts']) {
+    assert.deepEqual(importsOf(resolve(SOURCE_ROOT, 'domains/good-lift', leaf)), { statics: [], dynamics: [], types: [] }, leaf);
+  }
 });
 test('Good Lift has one dynamic entry and includes its result and kit presentation', () => {
   const importers = sourceFiles(SOURCE_ROOT).filter(file => !file.endsWith('.test.ts')).flatMap(file => {

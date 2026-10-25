@@ -44,7 +44,7 @@ export function captureSpiralCombo(side: number, delay: number) {
     seen = watch.state.moves;
   }
   return { side, delay, simVersion: SIM_VERSION, origin, steps: recorder.steps,
-    link: encodeLog({ simVersion: SIM_VERSION, seed: 0, total: style.state.total, peak: origin.y }, recorder.bits, recorder.steps),
+    link: encodeLog({ simVersion: SIM_VERSION, glider: 'classic', seed: 0, total: style.state.total, peak: origin.y }, recorder.bits, recorder.steps),
     moves, metrics: { stalls, tucks, heightLoss: origin.y - minimumHeight }, checkpoints, snapshot: snapshot(world) };
 }
 

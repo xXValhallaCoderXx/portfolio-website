@@ -1,71 +1,321 @@
 {
   "engine": "Chromium 143.0.7499.4",
-  "generated": "2026-10-22T09:14:27.236Z",
-  "command": "node --import tsx .artifacts/fun-acro-v4/browser-spiral-combo.mjs",
+  "node": "v24.21.0",
+  "generated": "2026-10-25T04:09:35.259Z",
+  "command": "npx tsx tools/capture-goldens.ts spiral-combo",
+  "simVersion": 6,
   "provenance": "Isolated still-air physical Spiral 360 -> Wingover combo; actual course, no injected angles, forces or results",
-  "sourceDigest": "8fe5357f4e7ac7626cc0825f254ad317048b58a0d6df347d3f796a9538399109",
+  "sourceDigest": "b2c0f6fbfa4431b071439cabfa1a80136ba511355ae43c5fbf21329ae159db02",
   "sourceManifest": [
     {
-      "path": ".artifacts/fun-acro-v4/browser-spiral-combo.mjs",
-      "sha256": "85eccad9cd464d5f5b4d6c5a1221f6fe0fb48d4da878a93e4ead1e5faad3fb07"
+      "path": "functions/src/runs.ts",
+      "sha256": "cfc6c837e2619da270cb6852bfcd502e59239af85efd6957cbffd4d8712d3171"
+    },
+    {
+      "path": "src/adapters/browser/good-lift-storage.service.ts",
+      "sha256": "251100e61a0e0961a18a2ac045203efc8bc6906fad9410078de14fd888ac50a2"
+    },
+    {
+      "path": "src/adapters/browser/storage.port.ts",
+      "sha256": "8ad2eb0bc340104eb5c9f47d3373203eb57b7fef4d8d9c7832a5249243b60854"
+    },
+    {
+      "path": "src/adapters/crypto/run-identity.service.ts",
+      "sha256": "f28ceff57ad463d0164a56ed600813b7b415dfad7372d87097224273325bae17"
+    },
+    {
+      "path": "src/domains/coaching/coach-actions.ts",
+      "sha256": "cfd3531de46d98fc0e0dbb709b20e30f1ab6dc08293c9a199adb47a084dbf887"
+    },
+    {
+      "path": "src/domains/coaching/coach-intent.ts",
+      "sha256": "002287d862bc7ce05a6b74acbb3d74f936b35b8f6588414b5d78ffd9dcd8974a"
+    },
+    {
+      "path": "src/domains/coaching/coach-routing.ts",
+      "sha256": "01b029a67ca53f9a1e5d45ddca6b17aefb64ed9e581f6d145ebe9467b37c6eab"
+    },
+    {
+      "path": "src/domains/coaching/coach-wing.ts",
+      "sha256": "2211940df7ca4a41a8a66087cfe260ca267af6d1eeff238bafe3a56ade72c587"
+    },
+    {
+      "path": "src/domains/coaching/direct-acro-guide.ts",
+      "sha256": "81aacc9ac5aee1c7bb9c13d9aae0191d68cb76fd04c265770357b3e9c02202ef"
+    },
+    {
+      "path": "src/domains/coaching/flight-coach.ts",
+      "sha256": "2dfefe578efceeea404e4f6c4be25e4104e16a704143f1045e609ce527c87bfa"
+    },
+    {
+      "path": "src/domains/coaching/lift-activity.ts",
+      "sha256": "0481e6bca16be8c875574fa548cc7c94d8a3d680410ea0a08e29935357166d8a"
+    },
+    {
+      "path": "src/domains/coaching/lift-guide.ts",
+      "sha256": "216f00d6de3e9854ceb827c111a03a57926d350a9301b22b70488de3b9f301e6"
+    },
+    {
+      "path": "src/domains/coaching/recovery-guide.ts",
+      "sha256": "55adbe37cfcd47405231279109e841e2fb9cd7046116529cb1898c5d996099c4"
+    },
+    {
+      "path": "src/domains/coaching/ridge-transfer.ts",
+      "sha256": "ec1d57e9f195ed7c3ce2f2fb2644decd602007f9cff2c3b3dec7c189c9b9a938"
+    },
+    {
+      "path": "src/domains/coaching/soaring-turn.ts",
+      "sha256": "7561578ae758b9d09c24763dc7944d305d58af0df0c63c1006380a2f6b8c9a80"
     },
     {
       "path": "src/domains/coaching/swing-watch.ts",
       "sha256": "ba8cc2cfd7eecf83dfb0810e711c21355357c18ab10c9bfa6e764019c25ee5c0"
     },
     {
+      "path": "src/domains/coaching/training-catalog.ts",
+      "sha256": "8dd7eddf58feede743974c88e390516e42b5528b2bad326f5f937b56e3b8819b"
+    },
+    {
+      "path": "src/domains/flight/atmosphere.ts",
+      "sha256": "06ad14e08ab0dfbd8060b93698b6ff9b5e7f0c6330dc569f72ca9fb6f96f7629"
+    },
+    {
       "path": "src/domains/flight/brake-controls.ts",
       "sha256": "6c9954891801590aaff902c9270b0ab12a1670de8f112859b6c4ac9dca14d231"
     },
     {
+      "path": "src/domains/flight/cloud-weather.ts",
+      "sha256": "505a6af4005083de3ba728be92bfe99f7db194fe527d37d47c6333aa8da7c531"
+    },
+    {
       "path": "src/domains/flight/flight-physics.ts",
-      "sha256": "814189dfeacf8ad41712cdc07d807c17f707b892b2a38cf303fbfbca03a2db21"
+      "sha256": "b1109394e711498924d864b020a3922c0d2724ece40df67df0531b001a63de33"
     },
     {
       "path": "src/domains/flight/flight.ts",
-      "sha256": "16ed9d5385f4b88dcc30d1f92d8624fe4e0281165caef33ab3b55f836d1f6292"
+      "sha256": "cbcec1b8cbc5e7c7a39548239bbe3856879652fafa7b756822b3ee5ef555cd63"
+    },
+    {
+      "path": "src/domains/flight/gateway.ts",
+      "sha256": "39b88ce1964ee1f3afe028c97b0739c9002361cdbfa327fe18bfc174d9ef74e9"
+    },
+    {
+      "path": "src/domains/flight/glide-math.ts",
+      "sha256": "87552029455c6fa19c9e9a78446e495ef49a85f8631f31e55601e19a44ec9a1d"
+    },
+    {
+      "path": "src/domains/flight/ground.ts",
+      "sha256": "6386629afad297d5de625f69bc746fc60cd18905d3b14a32a45d81276edaf7a4"
+    },
+    {
+      "path": "src/domains/flight/thermal-centering.ts",
+      "sha256": "685b53f65cdbf3dbf3c497a5fdea4ca4f433f39c8e00102d92749273d60a84d3"
+    },
+    {
+      "path": "src/domains/flight/thermal-flow.ts",
+      "sha256": "f6767a4637fcc5f19c75c86d80b26c89098dad986a44ee1382c46e0dc64b45b1"
     },
     {
       "path": "src/domains/flight/wing-envelope.ts",
-      "sha256": "e6240df898b15b265624150d89867207a2da6e73b455c5e0a6325016b83432af"
+      "sha256": "686b8f3c052d44e34a5e4a918c086157e60ada51f51e0642fdf16923faae926f"
+    },
+    {
+      "path": "src/domains/flight/wing-folds.ts",
+      "sha256": "2697654704fa60700d51411e96b66fd15e1bc1614b609921e4332ed50358e953"
+    },
+    {
+      "path": "src/domains/flight/wings.ts",
+      "sha256": "5b34ecfade4dd49de27e73611e3fdd153b745835acc1e12e0710f1c5e5cafd0a"
+    },
+    {
+      "path": "src/domains/good-lift/air-feel.ts",
+      "sha256": "c3e4407215ad7cc64d2b00e91f56f6785aaa0d05930a86eeaa529dce5d397044"
+    },
+    {
+      "path": "src/domains/good-lift/bells.ts",
+      "sha256": "eb3e3b8fb751d75af703dd3bd5cadcdbbd0b285201f2c31d2b6c98aa2e1fb67a"
+    },
+    {
+      "path": "src/domains/good-lift/board-world.ts",
+      "sha256": "4dced93e26c00aba74c9d24c07815c08d21cf264ed4db99186a845e0c71de6fa"
+    },
+    {
+      "path": "src/domains/good-lift/board.ts",
+      "sha256": "c3a02c7de16fd27355a8ffe94d470afbbc031212da7e56ecec266b531f87565c"
+    },
+    {
+      "path": "src/domains/good-lift/cloudbase-state.ts",
+      "sha256": "b3aeb95d31525990ffa6d63b5688eb3b66ad94be3a52743ce917e09606ee25e3"
+    },
+    {
+      "path": "src/domains/good-lift/daily.ts",
+      "sha256": "37e8bd1221f08aca3ba6255235e614ceb756fc2780032bba2e7e3013278ab5fc"
+    },
+    {
+      "path": "src/domains/good-lift/glider-ids.ts",
+      "sha256": "f0f42f91c922306affac40674d19c32c1d66d8d7bd0fcd89d726ac4b371dafa4"
+    },
+    {
+      "path": "src/domains/good-lift/gliders.ts",
+      "sha256": "e78992873c4ea7d106b48aa9267fdd28eea33496a130b9ac496f45d945dfbb71"
+    },
+    {
+      "path": "src/domains/good-lift/good-lift-address.ts",
+      "sha256": "322fe81744fa32b6a310c55d95dc22b61655ed4830c10f7aec9a24576b2a813d"
+    },
+    {
+      "path": "src/domains/good-lift/meet-bynames.ts",
+      "sha256": "5d9cb45323551dce16bda1eef31397f295ffd8697e75c2ec58d0907419192253"
+    },
+    {
+      "path": "src/domains/good-lift/meet-card.ts",
+      "sha256": "ec7d3cbc9db2c2113762e559d2340c0379f99c7899b1ab7d4bad45d8a001092b"
+    },
+    {
+      "path": "src/domains/good-lift/meet-combo.ts",
+      "sha256": "df7fb29e116e091e59e335ab05a2163b2249ab77bc43a1b4b210a19883796233"
+    },
+    {
+      "path": "src/domains/good-lift/meet-initials.ts",
+      "sha256": "286c5ffc1208ad6aaecad51837dae552dda5d05d17f0bd0f89d9f229ac413f46"
+    },
+    {
+      "path": "src/domains/good-lift/meet-runes.ts",
+      "sha256": "4330699eafd5f3c3bc9266c8b6cce686bc45e9aa99d45b8e1477fae5224f0506"
+    },
+    {
+      "path": "src/domains/good-lift/meet-sheet.ts",
+      "sha256": "d07b37366b1222f17247d739acf362acbabea22ab92c42e09d979b7a97957c18"
+    },
+    {
+      "path": "src/domains/good-lift/meet-state.ts",
+      "sha256": "78f8778c3ccc64b3bc709f7525aff9ac222eca9035f84f55c08a4e361f9665f0"
     },
     {
       "path": "src/domains/good-lift/meet-style.ts",
       "sha256": "3972f39b1debd37d97c4bcff25cc7672c042c79fb15ad71bf9d60d14588d5b55"
     },
     {
+      "path": "src/domains/good-lift/pilots.ts",
+      "sha256": "180942a10a6ee4372bfcb14fe9a61495c057c1e07a744e401f76c4f11fd4bbf8"
+    },
+    {
       "path": "src/domains/good-lift/recorder.ts",
-      "sha256": "9760809a7a9287588498f68c8852886a3380444dc57ec04a7ec0fc558aa27126"
+      "sha256": "65c29552264c44cdc15cf224cd2f05d0b492a8e0e287f60456a0f5412d586685"
+    },
+    {
+      "path": "src/domains/good-lift/replay.ts",
+      "sha256": "e707d52237df46a037abe76331e6f9911e9883007c08637804166b07c66586fa"
     },
     {
       "path": "src/domains/good-lift/run-rules.ts",
       "sha256": "f7879719bf2d62bc10110304e1e5434569db1945ae425b349a4272ef5337f8e2"
     },
     {
+      "path": "src/domains/good-lift/run-step.ts",
+      "sha256": "24e41962697c5a80ba807a80c68723bd66a46b00c2f22f56496323e331f00de6"
+    },
+    {
+      "path": "src/domains/good-lift/score.ts",
+      "sha256": "5203038600a3a201c844f32a0c3d52a4bc7972eda9019944a220e1cf21c60979"
+    },
+    {
       "path": "src/domains/good-lift/sim-version.ts",
-      "sha256": "5a4a73224754aa54fd9d73b3e41d54697b689d8ead65649b2fd4f6666a01e261"
+      "sha256": "b9ec831f2f50b5c4fde1bbcb56439ac2d1113d671ec5394ec7949ecffb112677"
+    },
+    {
+      "path": "src/domains/good-lift/strike-fold.ts",
+      "sha256": "8f703454e9fd8714d2ac2f68ffb3c803b425657d785dd8a8c9797613096d13b7"
+    },
+    {
+      "path": "src/domains/good-lift/trick-lessons.ts",
+      "sha256": "96f3a93f1db39546599e699f2ad3b846a824c3e91881e10fd2818ba72ebed8e3"
+    },
+    {
+      "path": "src/domains/good-lift/trick-tables.ts",
+      "sha256": "876af33b5903a5dfa835976b77a8fda014538498f6e4fc62d43df8028ca65f9b"
+    },
+    {
+      "path": "src/domains/good-lift/trick-watch.ts",
+      "sha256": "022f861bcb759ec37d311420281ba1ff6ca4e5c544feb7079a3cd9bf8e05254c"
+    },
+    {
+      "path": "src/domains/progression/foundation-learning.ts",
+      "sha256": "69c19c8cd1daffff316cb0e9425ce15376c79e529d7ab2da4c6aa9b76c7a8d67"
+    },
+    {
+      "path": "src/domains/progression/good-lift-key.ts",
+      "sha256": "a98ab58f2a9f1a22946a922e9a3be2c7c5de75dbc56d8c074e157410e6354501"
+    },
+    {
+      "path": "src/domains/progression/good-lift-store.ts",
+      "sha256": "1489972d1db0186f57afa66819aa2b818358dea89446e2fe1d2a68eaeb78ca7a"
+    },
+    {
+      "path": "src/domains/progression/trick-learning.ts",
+      "sha256": "95cf2af6aab8efa262167f727bf41020ff0cd663059c900028aa256cca9350cb"
+    },
+    {
+      "path": "src/domains/progression/wing-kit.ts",
+      "sha256": "29bcf114a9e6a4bb33763f1e782972d893067bf8ca2f6ed44a541d1ab24056d9"
+    },
+    {
+      "path": "src/features/flight/presentation/swing-gauge.ts",
+      "sha256": "2cc4f0b3e3c54fdf4019b7326452172c3a5d2b8372b5bcdf1190b6acd4908548"
+    },
+    {
+      "path": "src/features/good-lift/services/coach-run.service.ts",
+      "sha256": "0c25b087276b672b7bc775edcc19b7541aa937c13bbafcaa8cb09e60e0088427"
+    },
+    {
+      "path": "src/test/helpers/test-brake-replay.ts",
+      "sha256": "a3a3d6239e877b6865d09fde7091d7d1a43ebcd7b258939a1188dba15dd6beef"
     },
     {
       "path": "src/test/helpers/test-direct-flight.ts",
       "sha256": "a974e95fbbb2011c8fbcd9f23cc3ef0e232a37e6175cd877717068e2d56ccec8"
     },
     {
+      "path": "src/test/helpers/test-direct-lessons.ts",
+      "sha256": "ff1c12c18b10c98704564a8e48503c6a060983e027a13c132af6f3ea986e997b"
+    },
+    {
+      "path": "src/test/helpers/test-goldens.ts",
+      "sha256": "a8ff2eecdb9af448477abc82a5946586cb9a964dad5866490724bd3b3d4028c2"
+    },
+    {
+      "path": "src/test/helpers/test-guided-opening.ts",
+      "sha256": "69a7a7b4cc222f8df0ad99e7f1d9c8914657d2568ea498dbc48d2ee12374b96a"
+    },
+    {
+      "path": "src/test/helpers/test-recovery-flight.ts",
+      "sha256": "f9837f65cd0da3d0378a08b87b972612e621b99f30285a8dc600069ab6e96c7f"
+    },
+    {
       "path": "src/test/helpers/test-spiral-combo.ts",
-      "sha256": "60a41a89122b49204ad91ffc89bd0ee3ef14c55a1d855069ee686780ea6cbce2"
+      "sha256": "c4de07dd47bf13ad34e797fae57918c7044c08bc0703f5b8bfe395478210e340"
+    },
+    {
+      "path": "tools/capture-goldens.ts",
+      "sha256": "a3ea388cd9c90c0ffea25888d085c82c702b109e5f94a3ae33ce6714331b4559"
+    },
+    {
+      "path": "tools/source-graph.ts",
+      "sha256": "adb3a49c01b82b591cb81c531b21a8a7b7dd917cf996f0c72d3d6c43618611b9"
     }
   ],
   "records": [
     {
       "side": -1,
       "delay": 0.3,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": 0,
         "y": 2000,
         "z": 0
       },
       "steps": 2309,
-      "link": "AgUAAAAAAAAAAAAs0A-FEvoEINEAjgIgANGOAiDRAI4CIADRjgIg0QB4IADREiAAABMgmZnTASAAAKwBIJmZNyAAAA",
+      "link": "AwYAAAAAAAAAAAAALNAPhRL6BCDRAI4CIADRjgIg0QCOAiAA0Y4CINEAeCAA0RIgAAATIJmZ0wEgAACsASCZmTcgAAA",
       "moves": [
         {
           "step": 616,
@@ -1358,14 +1608,14 @@
     {
       "side": 1,
       "delay": 0.3,
-      "simVersion": 5,
+      "simVersion": 6,
       "origin": {
         "x": 0,
         "y": 2000,
         "z": 0
       },
       "steps": 2309,
-      "link": "AgUAAAAAAAAAAAAs0A-FEvoEIADRjgIg0QCOAiAA0Y4CINEAjgIgANF4INEAEiAAABMgmZnTASAAAKwBIJmZNyAAAA",
+      "link": "AwYAAAAAAAAAAAAALNAPhRL6BCAA0Y4CINEAjgIgANGOAiDRAI4CIADReCDRABIgAAATIJmZ0wEgAACsASCZmTcgAAA",
       "moves": [
         {
           "step": 616,

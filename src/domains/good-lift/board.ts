@@ -22,6 +22,7 @@ import { bynameOf } from './meet-bynames.ts';
 import { byRank, outranks } from './score.ts';
 import { MAX_LINK } from './recorder.ts';
 import { SIM_VERSION } from './sim-version.ts';
+import { isGlider } from './glider-ids.ts';
 
 // How much the board remembers: the best `keep` runs of each day, for `days` UTC days (today and
 // the 13 before it). The independent log budget bounds storage even for rapidly changing inputs.
@@ -97,6 +98,7 @@ export function normalizeScore(score: unknown): Score | null {
  *   at      ms since 1970 when the run started
  *   log     the run's log, non-empty base64url under ROW.log characters
  *   byname  the byname the run earned (meet-bynames.js), by its id, or '' for none
+ *   glider  the glider it was flown on (glider-ids.js), as its log names it
  *
  * Anything else in the object is left behind. A damaged row is dropped, never repaired: a total
  * rounded to the nearest plate, or a name guessed from lower case, would be a run nobody flew,
@@ -105,7 +107,7 @@ export function normalizeScore(score: unknown): Score | null {
  */
 export function normalizeRow(row: unknown): BoardRow | null {
   if (!isRecord(row)) return null;
-  const { who, via, at, log, byname } = row;
+  const { who, via, at, log, byname, glider } = row;
   if (typeof who !== 'string' || !WHO.test(who)) return null;
   if (typeof byname !== 'string') return null;
   if (via !== 'me' && via !== 'link') return null;
@@ -113,7 +115,8 @@ export function normalizeRow(row: unknown): BoardRow | null {
   if (!score) return null;
   if (!isAmount(at)) return null;
   if (typeof log !== 'string' || log.length > ROW.log || !LOG.test(log)) return null;
-  return { who, via, ...score, at, log, byname: bynameOf(byname) ? byname : '' };
+  if (!isGlider(glider)) return null;
+  return { who, via, ...score, at, log, byname: bynameOf(byname) ? byname : '', glider };
 }
 
 /**
@@ -212,14 +215,16 @@ export function pruneBoard(board: Board, today: number) {
 /**
  * The rows of a day (rowsFor's, best first) with a bot's run pinned among them where it ranks, for
  * the sheet to show: under every run that outranks it and over the rest, so a run that only ties it
- * stays under it. `bot` is { who, total, peak, red }: a bot flies no tricks, so its score is its total. Its row comes back as a bot's: `via` 'bot',
- * with no start, log or byname, which normalizeRow refuses, so it can never be stored as a run. A
- * new list, holding the caller's own rows.
+ * stays under it. `bot` is { who, total, peak, red, glider }: a bot flies no tricks, so its score is
+ * its total, and it flies the glider of the run it is held up against. Its row comes back as a
+ * bot's: `via` 'bot', with no start, log or byname, which normalizeRow refuses, so it can never be
+ * stored as a run. A new list, holding the caller's own rows.
  */
-export function withBot<T extends RankedScore>(rows: T[], bot: Omit<Score, 'style' | 'red'> & { who: string; style?: number; red: readonly number[] }): (T | BotRow)[] {
+export function withBot<T extends RankedScore>(rows: T[], bot: Omit<Score, 'style' | 'red'> & { who: string; style?: number; red: readonly number[]; glider?: string }): (T | BotRow)[] {
   let place = 0;
   while (place < rows.length && outranks(rows[place], bot)) place += 1;
-  const pinned: BotRow = { who: bot.who, via: 'bot', total: bot.total, style: bot.style ?? 0, peak: bot.peak, red: [...bot.red], at: 0, log: '', byname: '' };
+  const pinned: BotRow = { who: bot.who, via: 'bot', total: bot.total, style: bot.style ?? 0, peak: bot.peak, red: [...bot.red], at: 0, log: '', byname: '',
+    ...(bot.glider ? { glider: bot.glider } : {}) };
   return [...rows.slice(0, place), pinned, ...rows.slice(place)];
 }
 
@@ -232,6 +237,7 @@ const BOTS_KEPT = 8;
  *
  *   key      the day's board key (boardKey): the rules the bots flew under, and the UTC day
  *   seed     the sky's seed, 32 bits
+ *   glider   the glider they flew (the pilot's, glider-ids.js): another glider's bots fly again
  *   scores   each bot's { total, peak, red } (normalizeScore), in the order meet-bots.js flies them,
  *            one to eight of them
  *
@@ -239,9 +245,10 @@ const BOTS_KEPT = 8;
  */
 export function normalizeBots(raw: unknown): BotScores | null {
   if (!isRecord(raw)) return null;
-  const { key, seed, scores } = raw;
+  const { key, seed, glider, scores } = raw;
   if (typeof key !== 'string' || Number.isNaN(boardDay(key))) return null;
   if (typeof seed !== 'number' || !Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) return null;
+  if (!isGlider(glider)) return null;
   if (!Array.isArray(scores) || scores.length < 1 || scores.length > BOTS_KEPT) return null;
   const clean: Score[] = [];
   for (let i = 0; i < scores.length; i++) {
@@ -249,5 +256,5 @@ export function normalizeBots(raw: unknown): BotScores | null {
     if (!score) return null;
     clean.push(score);
   }
-  return { key, seed, scores: clean };
+  return { key, seed, glider, scores: clean };
 }

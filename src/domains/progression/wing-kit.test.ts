@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 import { GAME_STORE as RESET_KEY } from './achievements.ts';
 
-import { KIT_KEY, KIT_THEMES, emptyKit, normalizeKit } from './wing-kit.ts';
+import { KIT_GLIDERS, KIT_KEY, KIT_THEMES, emptyKit, normalizeKit } from './wing-kit.ts';
 import { clearKit, readKit, writeKit } from '../../adapters/browser/kit-storage.service.ts';
 
 // A storage that keeps what it is given, as the page's localStorage does.
@@ -25,7 +25,7 @@ afterEach(() => {
 });
 
 test('a visitor starts in standard colours with no helmet and no chalk, and that is what a missing, damaged or foreign kit reads as', () => {
-  assert.deepEqual(emptyKit(), { wing: 'standard', harness: 'standard', helmet: false, chalk: false });
+  assert.deepEqual(emptyKit(), { wing: 'standard', harness: 'standard', helmet: false, chalk: false, glider: 'en-a' });
   assert.equal(KIT_THEMES[0], 'standard');
   assert.deepEqual(readKit(memoryStorage()), emptyKit());
   for (const text of ['{broken', 'null', '[]', '"raven"', '7', JSON.stringify({ wing: 'golden', helmet: 'yes', chalk: 1 })]) {
@@ -35,13 +35,20 @@ test('a visitor starts in standard colours with no helmet and no chalk, and that
     assert.deepEqual(normalizeKit(nonsense), emptyKit());
   }
   // Each part stands on its own: a known wing is kept even beside a broken helmet.
-  assert.deepEqual(normalizeKit({ wing: 'hird', harness: 'golden', helmet: 'on', chalk: true, extra: 1 }), { wing: 'hird', harness: 'standard', helmet: false, chalk: true });
+  assert.deepEqual(normalizeKit({ wing: 'hird', harness: 'golden', helmet: 'on', chalk: true, extra: 1 }), { wing: 'hird', harness: 'standard', helmet: false, chalk: true, glider: 'en-a' });
   assert.deepEqual(normalizeKit({ wing: 'golden', harness: 'raven' }), { ...emptyKit(), harness: 'raven' });
+});
+
+test('every glider can be worn, a kit kept before there were gliders flies the first, and an unknown one flies the first too', () => {
+  assert.equal(KIT_GLIDERS[0], 'en-a');
+  for (const glider of KIT_GLIDERS) assert.equal(normalizeKit({ glider }).glider, glider);
+  assert.equal(normalizeKit({ wing: 'raven', harness: 'raven', helmet: true, chalk: true }).glider, 'en-a', 'an old kit');
+  for (const glider of ['classic', 'EN-C', 'en-e', 3, null]) assert.equal(normalizeKit({ glider }).glider, 'en-a', String(glider));
 });
 
 test('a kit written is read back as written, under its own key, sharing nothing with what it was given', () => {
   const storage = memoryStorage();
-  const kit = { wing: 'valkyrie', harness: 'flyte', helmet: true, chalk: true };
+  const kit = { wing: 'valkyrie', harness: 'flyte', helmet: true, chalk: true, glider: 'en-c' };
   assert.equal(writeKit(kit, storage), true);
   assert.deepEqual(JSON.parse(storage.items.get(KIT_KEY)!), kit);
   const read = readKit(storage);
@@ -69,8 +76,8 @@ test('where storage is blocked or full, the kit lasts for the visit, and the nex
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('blocked'); } });
   assert.deepEqual(readKit(), emptyKit());
   assert.equal(writeKit({ wing: 'raven', harness: 'sheetless', chalk: true }), false);
-  assert.deepEqual(readKit(), { wing: 'raven', harness: 'sheetless', helmet: false, chalk: true });
-  assert.deepEqual(readKit(null), { wing: 'raven', harness: 'sheetless', helmet: false, chalk: true });
+  assert.deepEqual(readKit(), { wing: 'raven', harness: 'sheetless', helmet: false, chalk: true, glider: 'en-a' });
+  assert.deepEqual(readKit(null), { wing: 'raven', harness: 'sheetless', helmet: false, chalk: true, glider: 'en-a' });
   // Storage that reads but refuses writes keeps the visit's copy rather than what it held before.
   clearKit(memoryStorage());
   const full = memoryStorage({ [KIT_KEY]: JSON.stringify({ wing: 'hird' }) });

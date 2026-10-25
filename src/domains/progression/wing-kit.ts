@@ -1,6 +1,7 @@
 import type { WornKit } from './models.ts';
 // What the visitor flies in, wherever they fly: the wing and harness colours, the Gjermundbu helmet and the
-// chalk on their hands. Good Lift earns them (good-lift-store.js holds the ladder) and writes the
+// chalk on their hands; and the glider Good Lift's runs are flown on (the fjord, the hero and Training
+// always fly today's wing). Good Lift earns them (good-lift-store.js holds the ladder) and writes the
 // choice here, under a key of its own, so that the engine can dress the glider as the page opens
 // without loading any of the game. It imports nothing, so it can sit in the page's own bundle.
 //
@@ -15,12 +16,16 @@ export const KIT_KEY = 'good-lift-kit';
 // The themes available independently for the wing and cocoon harness, in kit order.
 export const KIT_THEMES = Object.freeze(['standard', 'raven', 'calibrated', 'sheetless', 'flyte', 'hird', 'valkyrie']);
 
-/** The kit a visitor starts with: standard colours, no helmet and no chalk. */
-export const emptyKit = (): WornKit => ({ wing: 'standard', harness: 'standard', helmet: false, chalk: false });
+// The gliders Good Lift's runs can be flown on (gliders.js GLIDERS), in kit order: every pilot starts on the first.
+export const KIT_GLIDERS = Object.freeze(['en-a', 'en-b', 'en-c', 'en-d', 'acro']);
+
+/** The kit a visitor starts with: standard colours, no helmet, no chalk, and the first glider. */
+export const emptyKit = (): WornKit => ({ wing: 'standard', harness: 'standard', helmet: false, chalk: false, glider: KIT_GLIDERS[0] });
 
 /**
  * A valid kit from anything: unknown wing or harness themes become standard independently; helmet
- * and chalk are on only when they are `true`. Never throws, and shares nothing with `raw`.
+ * and chalk are on only when they are `true`; an unknown glider (or none, as a kit kept before
+ * there were gliders) is the first. Never throws, and shares nothing with `raw`.
  */
 export function normalizeKit(raw: unknown): WornKit {
   const kit = emptyKit();
@@ -31,6 +36,7 @@ export function normalizeKit(raw: unknown): WornKit {
     if (typeof value.harness === 'string' && KIT_THEMES.includes(value.harness)) kit.harness = value.harness;
     kit.helmet = value.helmet === true;
     kit.chalk = value.chalk === true;
+    if (typeof value.glider === 'string' && KIT_GLIDERS.includes(value.glider)) kit.glider = value.glider;
   } catch {
     // Only an object built to throw when read gets here; JSON never does.
     return emptyKit();

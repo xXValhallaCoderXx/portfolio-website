@@ -1,4 +1,5 @@
 import type { BellsState } from './bells.ts';
+import { STRIKER } from './strike-fold.ts';
 import { createMeet } from './meet-state.ts';
 import type { RunWorld, BellSystem } from './models.ts';
 import type { AirSample } from '../flight/models.ts';
@@ -208,7 +209,10 @@ test('a bell hit calls the same strike as a raven, once, and grants the same fol
   assert.ok(untilThrown(world) < 20);
   const before = world.sky.state.pilot.strikes;
   assert.equal(sendDown(world, 0).result, BELL_RESULT.hit);
-  assert.equal(twin.sky.strike(-1), true);
+  // From where the bell met the wing, as a bell (strike-fold.js): where a glider that folds is folded.
+  const { hitX, hitZ, hitKind } = world.sky.state.pilot;
+  assert.equal(hitKind, STRIKER.bell);
+  assert.equal(twin.sky.strike(-1, { x: hitX, z: hitZ }, STRIKER.bell), true);
   twin.sky.state.elapsed = world.sky.state.elapsed;
   assert.deepEqual(world.sky.state, twin.sky.state);
   assert.equal(world.sky.state.pilot.strikes, before + 1);

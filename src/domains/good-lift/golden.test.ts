@@ -13,9 +13,10 @@ import { SIM_VERSION } from './sim-version.ts';
 import { sampleAtmosphere } from '../flight/atmosphere.ts';
 
 // These inputs AND sheets were computed in Chromium, then replayed in Node. Their source receipt
-// records the engine, timestamp and a source digest checked before/after recording. The ignored
-// .artifacts/fun-acro-v4/capture-all.mjs reproduces the capture from the Vite source
-// server, on an empty page without HMR or rendering clocks. No Node-generated expected sheets.
+// records the engine, timestamp and a source digest checked before/after recording.
+// tools/capture-goldens.ts (sets runs and lessons) reproduces the capture from the Vite source
+// server, on an empty page without HMR or rendering clocks. No Node-generated expected sheets. The
+// runs fly the EN-A, as every run does; the maneuvers and lessons the classic wing.
 const receipt = JSON.parse(readFileSync(new URL('../../test/fixtures/good-lift-chromium.json', import.meta.url), 'utf8')) as typeof receiptFixture;
 
 test('actual Chromium keyboard runs replay to exactly the same complete Node sheets and barograms', () => {
@@ -86,8 +87,8 @@ test('sixteen Chromium lessons replay real circling, setup, matching maneuvers a
   const lessons = JSON.parse(readFileSync(new URL('../../test/fixtures/good-lift-lessons-chromium.json', import.meta.url), 'utf8')) as typeof lessonFixture;
   assert.match(lessons.engine, /^Chromium /); assert.equal(lessons.records.length, 16);
   const telemetry = new Set(['bank', 'pitch', 'rollRate', 'pitchRate', 'trackRate', 'yawRate', 'rollAcceleration', 'leftBrake', 'rightBrake', 'leftBrakeTarget', 'rightBrakeTarget']);
-  const normalize = <T>(value: T): T => JSON.parse(JSON.stringify(value, (key, item) => telemetry.has(key) && typeof item === 'number'
-    ? Math.round(item * 1e11) / 1e11 : item));
+  const normalize = <T>(value: T): T => JSON.parse(JSON.stringify(value, (key, item) =>
+    telemetry.has(key) && typeof item === 'number' ? Math.round(item * 1e11) / 1e11 : item));
   for (const record of lessons.records) {
     assert.equal(record.simVersion, SIM_VERSION);
     const read = decodeLog(record.link); assert.ok(read.ok); assert.equal(read.log.steps, record.steps);

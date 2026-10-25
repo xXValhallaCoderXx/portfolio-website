@@ -7,6 +7,7 @@ import { createBells } from '../../domains/good-lift/bells.ts';
 import { createStyle } from '../../domains/good-lift/meet-style.ts';
 import { inputFrame } from '../../domains/good-lift/recorder.ts';
 import { createLiftGuide } from '../../domains/coaching/lift-guide.ts';
+import { GLIDERS, coachWingFor } from '../../domains/good-lift/gliders.ts';
 import { createTrickLessons } from '../../domains/good-lift/trick-lessons.ts';
 import { actionMessage } from '../../domains/coaching/coach-actions.ts';
 import { interruptsLift, resolveCoachMessage } from '../../domains/coaching/coach-routing.ts';
@@ -37,10 +38,13 @@ export function followDirectInstruction(message: CoachMessage, input: FlightInpu
   return accepted;
 }
 
-/** A canonical live run driven only by the visible coach, with an explicit human reaction delay. */
-export function createVisibleDirectPilot(seed: number, delay = 0.3) {
-  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle() }), seed);
-  const guide = createLiftGuide(createRunCoachEnvironment(world.sky));
+/**
+ * A canonical live run driven only by the visible coach, with an explicit human reaction delay, on
+ * `wing` (the EN-A every pilot starts on, unless named).
+ */
+export function createVisibleDirectPilot(seed: number, delay = 0.3, { wing = GLIDERS[0] as string }: { wing?: string } = {}) {
+  const world = startRun(createRunWorld({ sky: createCloudbaseRun(), meet: createMeet(), bells: createBells(), style: createStyle(), wing }), seed);
+  const guide = createLiftGuide({ ...createRunCoachEnvironment(world.sky), wing: () => coachWingFor(wing) });
   const intent = createCoachIntent();
   // Measure access to acro height independently of spending it on an automatic lesson.
   const lessons = createTrickLessons({ learned: () => ['pitch', 'wingover', 'loop'] });

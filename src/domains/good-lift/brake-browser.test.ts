@@ -2,7 +2,7 @@ import type receiptFixture from '../../test/fixtures/good-lift-brakes-chromium.j
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { decodeLog, frameInput, isDirectFrame } from './recorder.ts';
+import { LOG_FORMAT, decodeLog, frameInput, isDirectFrame } from './recorder.ts';
 import { SIM_VERSION } from './sim-version.ts';
 import { WING } from '../flight/flight.ts';
 import { replayBrakeCapture } from '../../test/helpers/test-brake-replay.ts';
@@ -19,7 +19,8 @@ test('Chromium direct, mixed, full-stall and frontal inputs retain exact physica
     assert.equal(record.simVersion, SIM_VERSION);
     const read = decodeLog(record.link);
     assert.ok(read.ok, read.why!);
-    assert.equal(read.log.format, 2);
+    assert.equal(read.log.format, LOG_FORMAT);
+    assert.equal(read.log.glider, record.pureFlight ? 'classic' : 'en-a', 'runs fly the EN-A; pure flights the classic wing');
     assert.equal(read.log.steps, record.steps);
     assert.ok(read.log.bits.some(isDirectFrame));
     const replay = replayBrakeCapture(record, read.log.bits);

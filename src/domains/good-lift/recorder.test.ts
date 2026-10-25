@@ -9,6 +9,7 @@ import { createMeet } from './meet-state.ts';
 import { createBells } from './bells.ts';
 import { summariseRun } from './meet-sheet.ts';
 import { SIM_VERSION } from './sim-version.ts';
+import { LOG_WINGS } from './glider-ids.ts';
 import type { WithImplicitCoercion } from 'node:buffer';
 
 const firstSkies = (count: number) => Array.from({ length: count }, (_, i) => i + 1);
@@ -18,11 +19,11 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789
 // on the recorder's, for building and taking apart links by hand.
 const bytesOf = (text: WithImplicitCoercion<string>) => [...Buffer.from(text, 'base64url')];
 const textOf = (bytes: number[]) => Buffer.from(bytes).toString('base64url');
-const META = Object.freeze({ simVersion: 0, seed: 7, day: 0, touch: false, initials: '', total: 25, peak: 300 });
+const META = Object.freeze({ simVersion: 0, glider: 'en-a', seed: 7, day: 0, touch: false, initials: '', total: 25, peak: 300 });
 
 test('the ten-minute deadline fits the current format even when every fixed step changes digital input', () => {
   assert.equal(MAX_STEPS, 36_000);
-  assert.equal(LOG_FORMAT, 2);
+  assert.equal(LOG_FORMAT, 3);
   const bits = Uint8Array.from({ length: MAX_STEPS }, (_, i) => i % 32);
   const text = encodeLog({ ...META, simVersion: SIM_VERSION }, bits, bits.length);
   assert.ok(text.length <= MAX_LINK);
@@ -112,9 +113,9 @@ test('a log of five-bit controls survives encoding and decoding whatever the run
   ];
   const metas = [
     META,
-    { simVersion: 1, seed: 0x6785502f, day: 20756, touch: true, initials: 'REN', total: 487.5, peak: 1412 },
-    { simVersion: 0xffffffff, seed: 0xffffffff, day: 0xffffffff, touch: false, initials: 'ZZZ', total: 2.5 * 0xffffffff, peak: 0xffffffff },
-    { simVersion: 127, seed: 0, day: 128, touch: true, initials: 'AAA', total: 0, peak: 0 },
+    { simVersion: 1, glider: 'classic', seed: 0x6785502f, day: 20756, touch: true, initials: 'REN', total: 487.5, peak: 1412 },
+    { simVersion: 0xffffffff, glider: 'acro', seed: 0xffffffff, day: 0xffffffff, touch: false, initials: 'ZZZ', total: 2.5 * 0xffffffff, peak: 0xffffffff },
+    { simVersion: 127, glider: 'en-d', seed: 0, day: 128, touch: true, initials: 'AAA', total: 0, peak: 0 },
   ];
   for (const meta of metas) {
     for (const bits of runs) {
@@ -130,20 +131,31 @@ test('a log of five-bit controls survives encoding and decoding whatever the run
     }
   }
   // Only the steps asked for are written, however much more the buffer holds; and a log of the
-  // controls alone has every meta at its default.
+  // controls alone has every meta at its default but the wing, which is never assumed.
   const buffer = madeUp(4, 500, 20);
   assert.equal(encodeLog(META, buffer, 100), encodeLog(META, buffer.subarray(0, 100), 100));
-  assert.deepEqual(decodeLog(encodeLog({ simVersion: 2, seed: 9 }, buffer, 10)).log,
-    { format: LOG_FORMAT, simVersion: 2, seed: 9, day: 0, touch: false, initials: '', total: 0, peak: 0, steps: 10, bits: Uint32Array.from(buffer.slice(0, 10)) });
+  assert.deepEqual(decodeLog(encodeLog({ simVersion: 2, glider: 'en-c', seed: 9 }, buffer, 10)).log,
+    { format: LOG_FORMAT, simVersion: 2, glider: 'en-c', seed: 9, day: 0, touch: false, initials: '', total: 0, peak: 0, steps: 10, bits: Uint32Array.from(buffer.slice(0, 10)) });
+  assert.throws(() => encodeLog({ simVersion: 2, seed: 9 }, buffer, 10), RangeError);
+});
+
+test('every wing a log can name keeps its byte for good, and reads back as itself', () => {
+  assert.deepEqual(LOG_WINGS, ['classic', 'en-a', 'en-b', 'en-c', 'en-d', 'acro']);
+  for (const [byte, glider] of LOG_WINGS.entries()) {
+    const text = encodeLog({ ...META, simVersion: SIM_VERSION, glider }, [0, 1], 2);
+    assert.equal(bytesOf(text)[2], byte, glider);
+    assert.equal(decodeLog(text).log!.glider, glider);
+  }
 });
 
 test('a digital log is written byte for byte in the current format', () => {
   const bits = [...Array(90).fill(0), ...Array(12).fill(INPUT.right), ...Array(30).fill(INPUT.right | INPUT.bar), INPUT.left | INPUT.right, ...Array(5).fill(INPUT.brake)];
-  const text = encodeLog({ simVersion: 1, seed: 0x6785502f, day: 20756, touch: true, initials: 'REN', total: 487.5, peak: 1412 }, bits, bits.length);
-  assert.equal(text, 'AgEvUIVnlKIBARIFDsMBhAuKAVoADAIeCgEDBQQ');
+  const text = encodeLog({ simVersion: 1, glider: 'en-b', seed: 0x6785502f, day: 20756, touch: true, initials: 'REN', total: 487.5, peak: 1412 }, bits, bits.length);
+  assert.equal(text, 'AwECL1CFZ5SiAQESBQ7DAYQLigFaAAwCHgoBAwUE');
   assert.deepEqual(bytesOf(text), [
     LOG_FORMAT,
     0x01,                   // sim version 1
+    0x02,                   // the EN-B (LOG_WINGS)
     0x2f, 0x50, 0x85, 0x67, // the seed, lowest byte first
     0x94, 0xa2, 0x01,       // day 20,756, seven bits a byte, lowest first
     0x01,                   // flown on a touch screen
@@ -279,26 +291,28 @@ test('a cut-short, padded or tampered link is refused rather than misread', () =
 });
 
 test('a link whose bytes are not exactly a log of a supported format is refused, each for what is wrong with it', () => {
-  // A small log taken apart: format, version, seed, day, flags, initials, 10 plates, 300 m, 6 steps,
-  // then 3 steps of nothing held, 2 of right and 1 of the brake.
-  const whole = [LOG_FORMAT, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0xac, 0x02, 6, 3, 0, 2, 2, 1, 4];
+  // A small log taken apart: format, version, the EN-A, seed, day, flags, initials, 10 plates, 300 m,
+  // 6 steps, then 3 steps of nothing held, 2 of right and 1 of the brake.
+  const whole = [LOG_FORMAT, 0, 1, 7, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0xac, 0x02, 6, 3, 0, 2, 2, 1, 4];
   assert.equal(textOf(whole), encodeLog(META, [0, 0, 0, 2, 2, 4], 6));
   assert.equal(decodeLog(textOf(whole)).ok, true);
   const swap = (at: number, count: number, ...bytes: number[]) => textOf([...whole.slice(0, at), ...bytes, ...whole.slice(at + count)]);
   const cases = {
-    format: [swap(0, 1, 1), swap(0, 1, 3), swap(0, 1, 0)],
-    long: [swap(14, 1, 0xa1, 0x99, 0x02)],
-    truncated: [swap(14, 1, 7), textOf(whole.slice(0, 13)), textOf([LOG_FORMAT])],
+    // Format 2 named no wing: its bytes read as format 3's would misread every one after the version.
+    format: [swap(0, 1, 1), swap(0, 1, 2), swap(0, 1, 4), swap(0, 1, 0), swap(0, 3, 2, 0)],
+    glider: [swap(2, 1, LOG_WINGS.length), swap(2, 1, 0xff)],
+    long: [swap(15, 1, 0xa1, 0x99, 0x02)],
+    truncated: [swap(15, 1, 7), textOf(whole.slice(0, 14)), textOf([LOG_FORMAT]), textOf([LOG_FORMAT, 0])],
     corrupt: [
       swap(1, 1, 0x80, 0x00),                         // the version written the long way
       swap(1, 1, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01), // a number of six bytes
       swap(1, 1, 0xff, 0xff, 0xff, 0xff, 0x7f),       // a number over 32 bits
-      swap(7, 1, 2),                                  // a flag nobody sets
-      swap(8, 3, 1, 0, 0),                            // one initial of three
-      swap(8, 3, 27, 1, 1),                           // a 27th letter
-      swap(15, 1, 0),                                 // a stretch of no steps
-      swap(15, 2, 1, 0, 2, 0),                        // two stretches holding the same
-      swap(14, 1, 4),                                 // stretches running past the steps
+      swap(8, 1, 2),                                  // a flag nobody sets
+      swap(9, 3, 1, 0, 0),                            // one initial of three
+      swap(9, 3, 27, 1, 1),                           // a 27th letter
+      swap(16, 1, 0),                                 // a stretch of no steps
+      swap(16, 2, 1, 0, 2, 0),                        // two stretches holding the same
+      swap(15, 1, 4),                                 // stretches running past the steps
       textOf([...whole, 0]),                          // a byte after the last stretch
     ],
   };
@@ -307,13 +321,13 @@ test('a link whose bytes are not exactly a log of a supported format is refused,
   }
   // The largest number a varint carries is read as it is, and so is the longest log there can be.
   assert.equal(decodeLog(swap(1, 1, 0xff, 0xff, 0xff, 0xff, 0x0f)).log!.simVersion, 0xffffffff);
-  const longest = decodeLog(textOf([...whole.slice(0, 14), 0xa0, 0x99, 0x02, 0xa0, 0x99, 0x02, 0]));
+  const longest = decodeLog(textOf([...whole.slice(0, 15), 0xa0, 0x99, 0x02, 0xa0, 0x99, 0x02, 0]));
   assert.deepEqual([longest.ok, longest.log?.steps, longest.log?.bits.every((bits: number) => bits === 0)], [true, MAX_STEPS, true]);
   // Bytes that do not fill the last character leave bits over, which a log leaves 0. Set one and
   // the same bytes have a second text; it is refused, though Node's own reader would let it pass.
-  const short = [LOG_FORMAT, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0xac, 0x02, 4, 3, 0, 1, 2];
+  const short = [LOG_FORMAT, 0, 1, 7, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0xac, 0x02, 4, 3, 0, 1, 2];
   const exact = textOf(short);
-  assert.deepEqual([exact.length, decodeLog(exact).ok], [26, true]);
+  assert.deepEqual([exact.length, decodeLog(exact).ok], [27, true]);
   const nudged = exact.slice(0, -1) + String.fromCharCode(exact.charCodeAt(exact.length - 1) + 1);
   assert.deepEqual(bytesOf(nudged), short);
   assert.deepEqual(decodeLog(nudged), { ok: false, why: 'corrupt' });
@@ -324,6 +338,7 @@ test('a log the format cannot hold exactly is never written', () => {
   const bad = [
     { format: 0 }, { format: 1 }, { format: LOG_FORMAT + 1 },
     { simVersion: -1 }, { simVersion: 1.5 }, { simVersion: 2 ** 32 }, { simVersion: undefined },
+    { glider: undefined }, { glider: '' }, { glider: 'EN-A' }, { glider: 'en-e' }, { glider: 1 }, { glider: '__proto__' },
     { seed: -1 }, { seed: 2 ** 32 }, { seed: '7' },
     { day: -1 }, { day: 0.5 },
     { initials: 'ren' }, { initials: 'AB' }, { initials: 'ABCD' }, { initials: null },

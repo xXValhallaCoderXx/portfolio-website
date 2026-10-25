@@ -23,7 +23,9 @@ test('server judging reaches shared domains, the crypto adapter and server modul
   const { files, packages } = reach('functions/src/runs.ts');
   assert.deepEqual(packages, []);
   assert.deepEqual(files.filter(file => !/^(?:functions\/src|src\/domains|src\/adapters\/crypto)\//.test(file)), []);
-  for (const needed of ['src/domains/good-lift/replay.ts', 'src/domains/good-lift/run-step.ts', 'src/domains/flight/ground.ts', 'src/domains/good-lift/board-world.ts']) assert.ok(files.includes(needed), needed);
+  // A run is flown on the glider its log names, so the function flies every one of them.
+  for (const needed of ['src/domains/good-lift/replay.ts', 'src/domains/good-lift/run-step.ts', 'src/domains/flight/ground.ts', 'src/domains/good-lift/board-world.ts',
+    'src/domains/good-lift/gliders.ts', 'src/domains/good-lift/glider-ids.ts', 'src/domains/flight/wings.ts', 'src/domains/flight/wing-folds.ts']) assert.ok(files.includes(needed), needed);
 });
 test('the Firebase wiring adds only its declared packages and targets Node 22', () => {
   assert.deepEqual(reach('functions/src/index.ts').packages, ['firebase-admin/app', 'firebase-admin/firestore', 'firebase-functions/v2', 'firebase-functions/v2/https']);

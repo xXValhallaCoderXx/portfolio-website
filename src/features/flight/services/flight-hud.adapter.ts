@@ -6,6 +6,7 @@ import { THERMAL_AIR } from '../presentation/thermal-air.ts';
 import { windReadout } from '../presentation/wind-feedback.ts';
 import { flightMessageOwner, flightSecondaryOwner } from '../presentation/flight-message.ts';
 import { freeFormStatus } from '../presentation/free-form-status.ts';
+import { loadReadout } from '../presentation/load-feel.ts';
 import { TRAINING_LESSON_INFO, type TrainingLessonId } from '../../../domains/coaching/training-catalog.ts';
 import type { FlightZone } from './flight-navigation.service.ts';
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
@@ -16,11 +17,10 @@ interface RunReadouts {
 }
 interface FlightHudPort {
  stage: HTMLElement; g: FlightState; input: FlightInput; air: AirSample;
- vario: { readonly value: number }; thermalAir: { readonly fill: number; readonly value: number; readonly trend: string };
+ vario: { readonly value: number }; readonly load: number; thermalAir: { readonly fill: number; readonly value: number; readonly trend: string };
  progress: ReturnType<typeof readProgress>; zoneLabels: { zone: FlightZone; el: HTMLElement }[]; autoHaste: number;
  readonly mode: string; readonly auto: FlightZone | null; readonly outOfBounds: boolean; readonly mapOpen: boolean; readonly keysOpen: boolean; readonly briefing: boolean; readonly portal: boolean; readonly held: boolean; readonly coachMessage: CoachFields | null;
  isAirborne(): boolean; compact(): boolean; runHud(quiet: boolean): string; runReadouts?(): RunReadouts | null;
- clearComboFeedback?(): void;
  trainingReadouts?(): {lesson: string; points: number} | null;
  nearestZone(onlyUnvisited: boolean): { zone: FlightZone; dist: number } | null; drawMap(): void;
 }
@@ -49,10 +49,6 @@ export function createFlightHud(port: FlightHudPort) {
    stage.dataset.messageOwner = owner;
    const secondary = flightSecondaryOwner({ blocked, urgent, judges });
    stage.dataset.secondaryOwner = secondary;
-   const comboLayout = blocked || urgent || judges ? 'hidden' : owner === 'coach' ? 'coach' : 'standalone';
-   stage.dataset.comboLayout = comboLayout;
-   stage.dataset.comboSuppressed = String(comboLayout === 'hidden');
-   if (comboLayout === 'hidden') port.clearComboFeedback?.();
    const said = stage.querySelector('.fj-said');
    said?.setAttribute('aria-live', secondary === 'judges' ? 'polite' : 'off');
    $('.fj-toasts').setAttribute('aria-hidden', String(secondary !== 'judges' && owner !== 'notice'));
@@ -144,6 +140,9 @@ export function createFlightHud(port: FlightHudPort) {
      }
      $('.fj-hint').textContent = '';
    }
+   // The eased load on the lines, while it is more than a turn's (load-feel.js).
+   const load = hud('load');
+   load.textContent = port.isAirborne() && port.mode !== 'lost' ? loadReadout(port.load, port.compact(), !!load.textContent) : '';
    $('.fj-toasts').style.removeProperty('top');
    messages();
    layoutMessages();

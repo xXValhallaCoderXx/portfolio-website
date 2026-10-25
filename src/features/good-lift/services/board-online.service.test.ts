@@ -41,7 +41,8 @@ function network(answer: (url: string, init: RequestInit) => unknown = () => ({ 
 const random = (count: number) => Uint8Array.from({ length: count }, (_, i) => (i * 37 + 11) & 255);
 
 // A row of the world board, and a day's board as the function sends it.
-const row = (n: number, fields = {}) => ({ who: 'REN', byname: '', total: 500 - 2.5 * n, style: 0, peak: 900, red: [0, 0], at: 1_792_000_000_000 + n, id: n.toString(16).padStart(WORLD_BOARD.id, '0'), ...fields });
+const row = (n: number, fields = {}) => ({ who: 'REN', byname: '', total: 500 - 2.5 * n, style: 0, peak: 900, red: [0, 0], at: 1_792_000_000_000 + n, id: n.toString(16).padStart(WORLD_BOARD.id, '0'),
+  glider: 'en-b', ...fields });
 const sent = <Row>(rows: Row[], day = DAY, version = SIM_VERSION) => ({ version, day, rows });
 
 test('with no function named the world board is off: nothing is fetched, no token is made, and every answer is null', async () => {
@@ -120,7 +121,7 @@ test('storage that is blocked still gives the visit a token, and one that is dam
 });
 
 test('a day\'s board is taken only as asked for: these rules, that day, clean rows, each run once and no more than the board keeps', async () => {
-  const rows = [row(0), row(1), { ...row(2), who: '' }, { ...row(3), device: 'f'.repeat(32) }, row(0), 'junk'];
+  const rows = [row(0), row(1), { ...row(2), who: '' }, { ...row(3), device: 'f'.repeat(32) }, row(0), { ...row(4), glider: 'classic' }, 'junk'];
   assert.deepEqual(readBoard(sent(rows), DAY), sent([row(0), row(1), row(3)]));
   assert.equal(readBoard(sent(rows, DAY - 1), DAY), null);
   assert.equal(readBoard(sent(rows, DAY, SIM_VERSION + 1), DAY), null);
@@ -211,7 +212,7 @@ test('a run taken off leaves the board, but one of this browser\'s runs that ano
 
 test('where this browser stands is the best row that is one of its own runs, however that run was named', async () => {
   const bits = Uint8Array.from({ length: 300 }, (_, i) => (i >> 6) & 3);
-  const text = (meta: { initials?: string; total?: number; }, steps = bits.length) => encodeLog({ simVersion: SIM_VERSION, seed: 7, day: DAY, initials: 'REN', ...meta }, bits, steps);
+  const text = (meta: { initials?: string; total?: number; }, steps = bits.length) => encodeLog({ simVersion: SIM_VERSION, glider: 'en-b', seed: 7, day: DAY, initials: 'REN', ...meta }, bits, steps);
   const mine = text({});
   const other = text({}, 299);
   const read = decodeLog(mine); assert.ok(read.ok);

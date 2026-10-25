@@ -8,9 +8,10 @@ type PendingActivity = ActivityCandidate & {seconds: number; arc: number; gap: n
 // Observed flying activity, separate from where a navigation guide would like the pilot to go.
 import { FLIGHT } from '../flight/flight.ts';
 import { ATMOSPHERE, thermalProfile } from '../flight/atmosphere.ts';
+import { coachWing } from './coach-wing.ts';
 
 export const LIFT_ACTIVITY = Object.freeze({
-  useful: FLIGHT.sink.trim + 0.25, smooth: 0.75, dip: 0.5,
+  useful: FLIGHT.sink.trim + 0.25, usefulAbove: 0.25, smooth: 0.75, dip: 0.5,
   ridgeEnter: 1.5, ridgeExit: 1.5, thermalEnter: 3, thermalExit: 2,
   ridgeWeak: 1.2, thermalWeak: 1, netWeak: 1, descending: -0.3,
   alongEnter: Math.PI / 6, alongExit: 5 * Math.PI / 18,
@@ -51,7 +52,9 @@ export function ridgeTangent(g: Pick<FlightObservation, 'pos'>, air: AirSample, 
  * step(dt,{g,air,clock,eligible,unsafe}) observes fixed flight steps. State snapshots are immutable;
  * reading or pausing them advances nothing. No navigation target or player's input is consulted.
  */
-export function createLiftActivity(adapter: Pick<CoachingAdapter, 'heightAt' | 'sources' | 'inside' | 'cloudDepth' | 'fog'>) {
+export function createLiftActivity(adapter: Pick<CoachingAdapter, 'heightAt' | 'sources' | 'inside' | 'cloudDepth' | 'fog' | 'wing'>) {
+  // The rising air worth the name with the wing being flown (coach-wing.js).
+  const useful = () => coachWing(adapter).trimSink + C.usefulAbove;
   if (typeof adapter?.heightAt !== 'function') throw new TypeError('lift activity requires terrain height');
   let clock = -Infinity, climb = 0, smoothed = false, previousPosition: Vector3 | null = null;
   let history = new Map<string, {angle: number; course: number; near: number}>(), active: ActiveActivity | null = null, pending: PendingActivity | null = null, exit = 0, state: LiftActivityState;
@@ -105,12 +108,12 @@ export function createLiftActivity(adapter: Pick<CoachingAdapter, 'heightAt' | '
     return result;
   }
   function thermalQualifies(source: SourceObservation, air: AirSample) {
-    return source.own >= C.useful && (air.thermal ?? source.own) >= C.useful &&
-      vertical(air) >= C.useful && climb > 0 && source.coherent;
+    return source.own >= useful() && (air.thermal ?? source.own) >= useful() &&
+      vertical(air) >= useful() && climb > 0 && source.coherent;
   }
   function ridgeQualifies(air: AirSample, along: number|null, speed: number) {
-    return speed >= C.groundSpeed && air.ridge! >= C.useful && air.ridge! > (air.thermal || 0) &&
-      air.ridge! > (air.lee || 0) && vertical(air) >= C.useful && climb >= 0 &&
+    return speed >= C.groundSpeed && air.ridge! >= useful() && air.ridge! > (air.thermal || 0) &&
+      air.ridge! > (air.lee || 0) && vertical(air) >= useful() && climb >= 0 &&
       along !== null && along <= C.alongEnter;
   }
   function advanceAcquisition(candidate: ActivityCandidate | null, qualifies: boolean, dt: number) {

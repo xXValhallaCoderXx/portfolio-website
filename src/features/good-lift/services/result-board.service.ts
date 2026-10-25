@@ -99,7 +99,9 @@ export function createResultBoard({ online, onResult, onWorld, read = readStore,
     const sending = (async () => {
       const sent = await online.send(log, result.day).catch(() => null);
       if (shown !== result || ask !== asks) return undefined;
-      const retryable = !sent || ['rate', 'store', 'fault', 'full'].includes(sent.why);
+      // A board still on the rules before these refuses this log's format until its function is
+      // updated: the score waits here and may be sent again, as when the board is busy.
+      const retryable = !sent || ['rate', 'store', 'fault', 'full', 'format'].includes(sent.why);
       result.submission = { initials, phase: sent?.ok ? 'submitted' : retryable ? 'failed' : sent?.why === 'not-best' ? 'not-best' : 'rejected', why: sent?.why, rank: sent?.rank };
       if (world) tell({ ...world, loading: true });
       onResult?.(result);

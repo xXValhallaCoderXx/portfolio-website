@@ -15,7 +15,7 @@ import { createTrainingInputFeedback } from '../presentation/training-input-feed
 import { createFlightAudio, type AudioVoice } from './flight-audio.adapter.ts';
 import { createFlightCamera } from './flight-camera.adapter.ts';
 import { createFlightScene } from '../../../adapters/rendering/flight-scene.adapter.ts';
-import { TRAINING_LESSONS, TRAINING_LESSON_INFO } from '../../../domains/coaching/training-catalog.ts';
+import { TRAINING_LESSONS, TRAINING_LESSON_INFO, isRecoveryLesson } from '../../../domains/coaching/training-catalog.ts';
 import { LESSON_ART } from '../presentation/lesson-art.ts';
 import { lessonGuidance } from '../presentation/menu-markup.ts';
 import { lessonSelection, lessonStage, menuContext } from '../presentation/menu-model.ts';
@@ -41,12 +41,16 @@ import { brakeByte, summarizeControls } from '../../../domains/flight/brake-cont
 import { interruptsLift, resolveCoachMessage } from '../../../domains/coaching/coach-routing.ts';
 import { createPlateNotice, createWindNotice } from '../presentation/wind-feedback.ts';
 import { FLIGHT, createFlight, releaseFlight, settleFlight, stepFlight } from '../../../domains/flight/flight.ts';
-import { stallEffects, brakeMeter } from '../presentation/stall-effects.ts';
+import { FOLDED } from '../../../domains/flight/wing-folds.ts';
+import { stallEffects, brakeMeter, softBrakes } from '../presentation/stall-effects.ts';
 import { createSwingWatch } from '../../../domains/coaching/swing-watch.ts';
 import { swingGauge } from '../presentation/swing-gauge.ts';
 import { createLost } from '../presentation/lost.ts';
 import { createWindStreaks } from '../../../adapters/rendering/wind-streaks.ts';
 import { createVario } from '../presentation/vario.ts';
+import { createLoadFeel } from '../presentation/load-feel.ts';
+import { lensFor } from '../presentation/camera-feel.ts';
+import { CLASSIC_WORN, type WornWing } from '../presentation/wing-feel.ts';
 import { createThermalAir, showThermalAir } from '../presentation/thermal-air.ts';
 import { sameGame } from '../../../domains/good-lift/good-lift-address.ts';
 import { normalizeKit } from '../../../domains/progression/wing-kit.ts';
@@ -69,6 +73,8 @@ const HASTE = 3;
 // Game is an explicit menu destination. The rune arch remains part of the landscape.
 const DAILY = Object.freeze({ kind: 'daily', sky: null, vs: null, bad: null });
 const TRAINING = Object.freeze({ kind: 'training', sky: null, vs: null, bad: null } as const);
+// The jolt of a wing folding: radians of shake, put out at `fade` a second.
+const JOLT = Object.freeze({ shake: 0.02, fade: 8 });
 
 /**
  * Builds the fjord inside `stage` and starts drawing it as an idle backdrop: the glider circles and
@@ -147,7 +153,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   let useBloom = true;
 
   // The lens widens for a moment in a warp and stays a little wide while boosting.
-  const lens = { base: 60, was: 60, now: 60, warp: 0, rising: false };
+  const lens = { base: 60, was: 60, now: 60, warp: 0, rising: false, speed: 0 };
 
   // The scene fills its stage: the hero while idle, the whole window in flight.
   const view = { width: 1, height: 1, centred: false };
@@ -184,6 +190,10 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   const fjordWatch = createSwingWatch();
   const air: AirSample & { lift: number; sink: number; windX: number; windY: number; windZ: number; calm: boolean; rough: number; clearance: number } = { lift: 0, sink: 0, windX: 0, windY: 0, windZ: 0, calm: false, rough: 0, clearance: Infinity };
   const vario = createVario();
+  // The load on the lines as the camera, the wind and the readouts feel it (load-feel.js).
+  const loadFeel = createLoadFeel();
+  // The wing being flown as the picture and the wind feel it: a run's glider, or the classic wing.
+  const worn = (): Readonly<WornWing> => (mode === 'cloudbase' && run ? run.feel : mode === 'training' && training ? training.feel : CLASSIC_WORN);
   const thermalAir = createThermalAir();
   const thermalAirEl = $('.fj-thermal-air');
   vario.reset(g.vy);
@@ -261,7 +271,6 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     $('.fj-training-result').hidden = kind !== 'training';
     stage.classList.toggle('flight-paused', !!kind);
     if (kind) {
-      run?.clearComboFeedback();
       stage.dataset.overlay = kind;
       overlayFocus.activate(kind === 'training' ? $('.fj-training-result') : briefing ? $('.fj-brief') : keysOpen ? $('.fj-keys') : resetConfirmOpen ? $('.fj-reset-confirm') : $('.fj-map'));
     } else {
@@ -309,7 +318,9 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     $('.fj-keys').dataset.menuContext = context;
     $('[data-flight-mode]').textContent = context === 'training' ? 'TRAINING' : context === 'game' ? 'GOOD LIFT' : 'FREE FORM';
     $('[data-do="keys"] span').textContent = context === 'training' ? 'lessons & menu' : 'menu';
-    $('[data-flight-purpose]').textContent = context === 'training' ? 'unranked practice' : context === 'game' ? flownSky?.kind === 'practice' ? 'Practice Sky · unranked' : 'climb the lines' : 'explore the website';
+    // A run on a glider names its class and glide first (wing-feel.js); the classic wing names none.
+    const wing = context !== 'free-form' && worn().label ? `${worn().label} · ` : '';
+    $('[data-flight-purpose]').textContent = context === 'training' ? `${wing}unranked practice` : context === 'game' ? `${wing}${flownSky?.kind === 'practice' ? 'Practice Sky · unranked' : 'climb the lines'}` : 'explore the website';
     for (const element of stage.querySelectorAll<HTMLElement>('[data-free-form-menu]')) element.hidden = context !== 'free-form';
     for (const element of stage.querySelectorAll<HTMLElement>('[data-training-menu]')) element.hidden = context !== 'training';
     $('[data-hub-menu]').hidden = context === 'training';
@@ -330,18 +341,28 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
 
   function syncLessonSelection() {
     if (!training) return;
-    const active = training.state.lesson, selected = TRAINING_LESSON_INFO[selectedLesson];
+    // What each lesson is on the glider flown: hidden where it is not offered, locked (and why) where it cannot be flown.
+    const offers = training.offers();
+    if (offers[selectedLesson] === null) selectedLesson = training.state.lesson;
+    const active = training.state.lesson, selected = TRAINING_LESSON_INFO[selectedLesson], lock = offers[selectedLesson] ?? '';
     const selection = lessonSelection(active, selectedLesson, training.state.status === 'flying');
     for (const radio of stage.querySelectorAll<HTMLInputElement>('input[name="paused-lesson"]')) {
+      const offer = offers[radio.value as TrainingLessonId], tile = radio.closest('label');
       radio.checked = radio.value === selectedLesson;
-      radio.closest('label')?.classList.toggle('selected', radio.checked);
+      if (!tile) continue;
+      tile.classList.toggle('selected', radio.checked);
+      tile.hidden = offer === null;
+      tile.classList.toggle('locked', !!offer);
+      tile.title = offer ?? '';
     }
     for (const tag of stage.querySelectorAll<HTMLElement>('[data-active-lesson]')) tag.hidden = tag.dataset.activeLesson !== active;
     $('[data-selected-lesson]').textContent = selected.label;
     $('[data-selected-description]').textContent = selected.description;
     $('[data-selected-art]').setAttribute('d', LESSON_ART[selectedLesson].path);
-    $('[data-switch-notice]').textContent = selection.same ? 'Your current lesson. Restart is separate.' : `${TRAINING_LESSON_INFO[active].label} stays paused until you choose Start.`;
-    $('[data-do="training-start"]').textContent = `${selection.resume ? '▶' : '↗'} ${selection.action}`;
+    $('[data-switch-notice]').textContent = lock || (selection.same ? 'Your current lesson. Restart is separate.' : `${TRAINING_LESSON_INFO[active].label} stays paused until you choose Start.`);
+    const start = $('[data-do="training-start"]') as HTMLButtonElement;
+    start.disabled = !!lock;
+    start.textContent = lock ? 'Not on this glider' : `${selection.resume ? '▶' : '↗'} ${selection.action}`;
   }
 
   function syncTrainingMenu() {
@@ -434,7 +455,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   function loadTraining() {
     trainingLoading ??= import('../../good-lift/services/good-lift-session.service.ts').then(({ createGoodLiftTraining }) => {
       runModuleFailed = false;
-      if (!disposed) training ??= createGoodLiftTraining({ g, controls, air, scene });
+      if (!disposed) training ??= createGoodLiftTraining({ g, controls, air, scene, shape: (look) => glider.setShape(look) });
     }, error => { runModuleFailed = true; throw error; });
     return trainingLoading;
   }
@@ -642,13 +663,16 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   function simulateTraining(dt: number) {
     if (!training) return;
     training.step(dt, input);
+    hearWing(false);
     stepCoach(dt);
     if (training.state.status !== 'flying') {
       clearInput(); coachView.reset();
       const complete = training.state.status === 'complete';
       $('#fj-training-title').textContent = `${TRAINING_LESSON_INFO[training.state.lesson].label} · ${complete ? 'complete' : 'try again'}`;
       $('[data-training-detail]').textContent = complete ? 'Lesson completed. Take another turn, or choose what to learn next.' :
-        training.state.failure === 'clearance' ? 'More height needed. Retry starts you high with a settled wing.' : 'The attempt ended before banking. Retry with a settled wing.';
+        training.state.failure === 'clearance' ? 'More height needed. Retry starts you high with a settled wing.' :
+          // A recovery lesson says what went wrong with the fix (recovery-lessons.js).
+          isRecoveryLesson(training.state.lesson) ? training.message?.detail ?? 'Retry with a settled wing.' : 'The attempt ended before banking. Retry with a settled wing.';
       $('.fj-training-result [data-do="training-retry"]').textContent = complete ? 'Repeat lesson' : 'Try again';
       $('.fj-training-result [data-do="training-next"]').hidden = !complete;
       syncFlightOverlay(false);
@@ -680,6 +704,9 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     // One atmosphere supplies the wing, particles, windsocks and instruments in both modes.
     const agl = g.pos.y - surfaceAt(g.pos.x, g.pos.z);
     sampleFjordAir(g.pos, airtime, air);
+    // The fjord's air has no slope across the wing, no turbulence and no thermal of the run's: whatever
+    // a run left in the shared sample goes.
+    air.gradX = air.gradZ = air.turbulence = air.core = air.edge = 0;
     air.clearance = agl;
     air.calm = false;
     g.lift = air.lift;
@@ -733,6 +760,44 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     } else if (ended) finishCloudbase(ended);
   }
 
+  // The wing's own sounds, over the fjord, in a run and in Training, each as it begins: a front
+  // collapse's slump and crack (and the picture's jolt), a half folding on its own side (a glider's,
+  // wing-folds.js) with the same jolt, a tip caught in its lines, the lines twisting, a stall heard
+  // once; and each filling again. `collapsed` says a raven strike had the wing, which ends a stall with
+  // no sound of refilling.
+  function hearWing(collapsed: boolean) {
+    const frontal = g.tuck > 0;
+    if (frontal && !effects.heard.frontal) {
+      play('frontal-fold', 0.4, slump, 0, 0.35);
+      play('crack', 0.4, crack);
+      // The leading edge folding under jolts the picture (none for whoever asks for less motion).
+      effects.jolt = JOLT.shake;
+    }
+    if (!frontal && effects.heard.frontal) playRefill(0);
+    effects.heard.frontal = frontal;
+    const heard = effects.wingHeard;
+    const fold = g.foldLeft > FOLDED || g.foldRight > FOLDED ? g.foldLeft >= g.foldRight ? -1 : 1 : 0;
+    if (fold && !heard.fold) {
+      play('half-fold', 0.4, slump, fold * 0.7, 0.45);
+      play('crack', 0.4, crack);
+      effects.jolt = JOLT.shake;
+    } else if (!fold && heard.fold) playRefill(heard.fold);
+    heard.fold = fold;
+    const cravat = g.cravatLeft > 0 || g.cravatRight > 0;
+    if (cravat && !heard.cravat) play('cravat', 0.4, snap);
+    heard.cravat = cravat;
+    const twist = g.twisted > 0;
+    if (twist && !heard.twist) play('twist', 0.4, swoosh, 0.6);
+    heard.twist = twist;
+    if (g.stall > 0 && !effects.stalled) {
+      effects.stalled = true;
+      playStall();
+    } else if (g.stall === 0 && effects.stalled) {
+      effects.stalled = false;
+      if (!collapsed && !frontal) playRefill(0);
+    }
+  }
+
   // What every kind of flying does after the wing has moved: the stall heard once and counted,
   // how long the brake has been deep, the achievements earned in the air and the rune stones.
   // `collapsed` says a raven strike had the wing, which ends a stall with no sound of refilling.
@@ -745,9 +810,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     const pumps = (mode === 'cloudbase' ? run?.world.pump.n ?? 0 : 0);
     const folded = g.tuck > 0 || (mode === 'cloudbase' && (run?.world.sky.state.pilot.collapse ?? 0) > 0);
     const frontal = g.tuck > 0;
-    if (frontal && !effects.heard.frontal) play('frontal-fold', 0.4, slump, 0, 0.35);
-    if (!frontal && effects.heard.frontal) playRefill(0);
-    effects.heard.frontal = frontal;
+    hearWing(collapsed);
     if (watch) {
       if (watch !== effects.heard.watch) effects.heard = { watch, catches: watch.catches, timed: watch.timed, pitch: g.pitch, roll: g.roll, pumps, folded, frontal, pumped: 0, loops: undefined };
       // Each pump that counted ticks by the wing, and the wing opening once it has been pumped rings,
@@ -784,13 +847,6 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     if (g.roll * effects.heard.roll < 0 && Math.abs(g.rollRate) > 1.2) play('swoosh', 0.35, swoosh, Math.min(1, Math.abs(g.rollRate) / 3));
     effects.heard.pitch = g.pitch;
     effects.heard.roll = g.roll;
-    if (g.stall > 0 && !effects.stalled) {
-      effects.stalled = true;
-      playStall();
-    } else if (g.stall === 0 && effects.stalled) {
-      effects.stalled = false;
-      if (!collapsed && !frontal) playRefill(0);
-    }
 
     if (g.lift > 1 && g.vy > 0) {
       climbStart ??= g.pos.y;
@@ -983,7 +1039,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   // ---------------------------------------------------------------- camera
 
   const cameraRig = createFlightCamera({ g, camera, gateway: gateway.group, input, view, effects, surfaceAt,
-    get mode() { return mode; }, get time() { return time; }, get calm() { return calm; },
+    get mode() { return mode; }, get time() { return time; }, get calm() { return calm; }, get load() { return loadFeel.value; },
     rendered: () => renderedFlight, isAirborne, aimLost: dt => lostScene.aim(dt) });
   const snapCamera = () => cameraRig.snap();
   const updateCamera = (dt: number) => cameraRig.update(dt);
@@ -1163,12 +1219,14 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
       if (!overlayOpen()) hooks.onResult?.({ ...result });
     },
     compact: () => touch || view.width <= 560,
+    device: () => brakeInput.state.device,
     best: () => progress.cloudbase.bestAltitude,
     flash: flashStrike,
     sound: { play, panned, get audio() { return flightAudio.audio!; } },
     bright: () => !useBloom,
     kit: () => ({ ...kit }),
     wear,
+    shape: (look) => glider.setShape(look),
   };
   // Only simulation steps advance coach intent, targets and cue timing. Rendering reads the result.
   const gaugeHands = { brake: false, fold: 0, held: 0, pumps: 0 };
@@ -1178,6 +1236,8 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     recoveryPoint: () => mode === 'cloudbase' ? requireRun().coachEnvironment.recoveryPoint() : null,
     thermalFlow: () => mode === 'cloudbase' ? requireRun().coachEnvironment.thermalFlow() : null,
     openingProtected: () => mode === 'cloudbase' && requireRun().coachEnvironment.openingProtected(),
+    // A run on a glider hands the coach that glider; the fjord and Training fly the classic wing.
+    wing: () => mode === 'cloudbase' ? requireRun().coachWing : null,
     sampleAir: (pos: Vector3, out: AirSample = {}) => mode === 'cloudbase'
       ? requireRun().coachEnvironment.sampleAir(pos, out) : sampleFjordAir(pos, airtime, out),
     heightAt: surfaceAt,
@@ -1289,11 +1349,11 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   }
 
   const hudView = createFlightHud({ stage, g, input, air, vario, thermalAir, progress, zoneLabels, autoHaste: HASTE,
-    get mode() { return mode; }, get auto() { return auto; }, get mapOpen() { return mapOpen; }, get keysOpen() { return keysOpen; },
+    get load() { return loadFeel.value; }, get mode() { return mode; }, get auto() { return auto; }, get mapOpen() { return mapOpen; }, get keysOpen() { return keysOpen; },
     get briefing() { return briefing; }, get outOfBounds() { return outOfBounds; }, get portal() { return portal; }, get held() { return held || trainingOutcome(); }, get coachMessage() { return presentedCoach(); },
     trainingReadouts: () => mode === 'training' && training ? { lesson: training.state.lesson, points: training.style.state.total } : null,
     isAirborne, compact: () => host.compact(), runHud: quiet => requireRun().hud(quiet), runReadouts: () => run?.readouts ?? null,
-    clearComboFeedback: () => run?.clearComboFeedback(), nearestZone, drawMap });
+    nearestZone, drawMap });
   const updateHud = () => hudView.update();
 
 
@@ -1498,8 +1558,9 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
 
   // ---------------------------------------------------------------- sound
 
-  const flightAudio = createFlightAudio({ stage, g, effects, vario, isAirborne, get mode() { return mode; }, get paused() { return flightPaused(); }, runSounds: () => run?.sounds() });
-  const { playStall, playRefill, slump, chime, snap, swoosh } = flightAudio;
+  const flightAudio = createFlightAudio({ stage, g, effects, vario, isAirborne, get mode() { return mode; }, get paused() { return flightPaused(); }, runSounds: () => run?.sounds(),
+    worn, get load() { return loadFeel.value; }, get turbulence() { return air.turbulence ?? 0; } });
+  const { playStall, playRefill, slump, crack, chime, snap, swoosh } = flightAudio;
   const startAudio = () => flightAudio.start();
   const updateAudio = () => flightAudio.update();
   const toggleSound = () => flightAudio.toggle();
@@ -1677,7 +1738,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
   // Out of sight, Good Lift's music waits for the page to come back.
   on(document, 'visibilitychange', () => {
     run?.hideMusic(document.hidden);
-    if (document.hidden) { clearInput(); run?.clearComboFeedback(); }
+    if (document.hidden) clearInput();
   });
 
   const actions = {
@@ -1695,7 +1756,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     training: openTraining,
     'training-choose': () => showKeys(true),
     'training-start': () => {
-      if (!training || !keysOpen) return;
+      if (!training || !keysOpen || training.offers()[selectedLesson] !== '') return;
       if (lessonSelection(training.state.lesson, selectedLesson, training.state.status === 'flying').resume) showKeys(false);
       else restartTraining(false, selectedLesson);
     },
@@ -1780,6 +1841,7 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     if (inRun) requireRun().want();
     else effects.want.fold = effects.want.veil = effects.want.shake = effects.want.gaze = 0;
     stallEffects(mode, g, effects.stall, mode === 'cloudbase' || mode === 'training' ? g.stallLoad : 0);
+    softBrakes(mode, g, effects.soft);
     if (isAirborne()) {
       // A raven strike folds the whole wing; a stall folds a little of both halves, or one of them
       // hard. Each half goes fast and opens again more slowly. The 404 scene folds the wing by
@@ -1797,12 +1859,22 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
       // A tuck folds the leading edge under at once and opens over a few tenths of a second.
       effects.tuck += (effects.stall.tuck - effects.tuck) * Math.min(1, elapsed * (effects.stall.tuck > effects.tuck ? 18 : 3));
       if (effects.tuck < 0.003 && effects.stall.tuck === 0) effects.tuck = 0;
-    } else effects.foldLeft = effects.foldRight = effects.luff = effects.tuck = 0;
+      // A tip caught in its lines wraps at once and comes free over a moment; twisted lines turn the
+      // pilot as they twist (a glider's, wing-folds.js).
+      effects.cravatLeft += (effects.stall.cravatLeft - effects.cravatLeft) * Math.min(1, elapsed * (effects.stall.cravatLeft > effects.cravatLeft ? 18 : 4));
+      effects.cravatRight += (effects.stall.cravatRight - effects.cravatRight) * Math.min(1, elapsed * (effects.stall.cravatRight > effects.cravatRight ? 18 : 4));
+      if (effects.cravatLeft < 0.003 && effects.stall.cravatLeft === 0) effects.cravatLeft = 0;
+      if (effects.cravatRight < 0.003 && effects.stall.cravatRight === 0) effects.cravatRight = 0;
+      effects.twist += (effects.stall.twist - effects.twist) * Math.min(1, elapsed * 12);
+      if (Math.abs(effects.twist) < 0.003 && effects.stall.twist === 0) effects.twist = 0;
+    } else effects.foldLeft = effects.foldRight = effects.luff = effects.tuck = effects.cravatLeft = effects.cravatRight = effects.twist = 0;
     // The lift of the wing over a core is a moment's: it dies away, and is put right out once a trace.
     effects.heave -= effects.heave * Math.min(1, elapsed * 3);
     if (Math.abs(effects.heave) < 0.001) effects.heave = 0;
     effects.fold = Math.max(effects.foldLeft, effects.foldRight);
-    effects.shake = !isAirborne() || calm || paused ? 0 : Math.max(effects.want.shake, effects.stall.shake);
+    effects.jolt -= effects.jolt * Math.min(1, flightElapsed * JOLT.fade);
+    if (effects.jolt < 1e-4) effects.jolt = 0;
+    effects.shake = !isAirborne() || calm || paused ? 0 : Math.max(effects.want.shake, effects.stall.shake, effects.jolt);
     if (inRun) {
       effects.veil += (effects.want.veil - effects.veil) * Math.min(1, elapsed * (effects.want.veil > effects.veil ? 6 : 2.5));
       // Below a trace the veil is put right out, so no see-through layer is left over the picture.
@@ -1814,7 +1886,12 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     }
 
     lens.warp = lens.rising ? Math.min(1, lens.warp + elapsed / 0.35) : Math.max(0, lens.warp - elapsed / 0.8);
-    const wide = lens.base + 44 * lens.warp * lens.warp + (haste > 1 ? 12 : 0);
+    // The lens widens as the wing runs past its own trim (camera-feel.js), eased on the flight's own
+    // time; the page's warp and the autopilot's haste widen it too. For whoever asks for less motion
+    // none of it moves.
+    const flying = isAirborne();
+    lens.speed += (lensFor(g.speed, worn().trim, calm || !flying || haste > 1) - lens.speed) * Math.min(1, (flying ? flightElapsed : elapsed) * 2);
+    const wide = lens.base + (calm ? 0 : 44 * lens.warp * lens.warp + (haste > 1 ? 12 : 0)) + lens.speed;
     lens.now += (wide - lens.now) * Math.min(1, elapsed * 10);
     if (Math.abs(camera.fov - lens.now) > 0.02) {
       camera.fov = lens.now;
@@ -1836,6 +1913,8 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     const airborne = isAirborne();
     if (airborne) vario.step(g.vy, flightElapsed);
     else vario.reset(g.vy);
+    if (airborne) loadFeel.step(g.load, flightElapsed);
+    else loadFeel.reset();
     if (airborne) thermalAir.step(air.thermal ?? 0, flightElapsed);
     else thermalAir.reset();
     const poseDetail = {
@@ -1860,8 +1939,13 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
       stall: airborne && g.stall > 0 ? 1 : 0,
       foldLeft: effects.foldLeft,
       foldRight: effects.foldRight,
+      cravatLeft: effects.cravatLeft,
+      cravatRight: effects.cravatRight,
+      twist: effects.twist,
       // A gust rocking the wing is only motion; the flutter of a coming stall says something, and stays.
-      rough: airborne && !calm ? air.rough : 0,
+      // A run's rough air and its turbulence rustle the cloth; over the fjord it rocks as it always has.
+      rough: airborne && !calm ? Math.max(inRun ? air.rough ?? 0 : 0, smoothstep(0.15, 1.2, air.turbulence ?? 0)) : 0,
+      still: calm,
       ears: airborne ? g.ears : 0,
       tuck: effects.tuck,
       // The wing's own swing over the pilot, back to overhead on the ground.
@@ -1877,10 +1961,12 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     updateCamera(paused ? 0 : elapsed);
     hudView.layoutMessages();
     flightCues.update({ pose: renderedFlight, dt: elapsed, message: presentedCoach(), input, quiet: mode !== 'training',
+      // A run's fix for a failure, on the gliders told one (the A and the B), lit on the handles.
+      recovery: mode === 'cloudbase' ? run?.recoveryTarget() ?? null : mode === 'training' ? training?.recoveryTarget() ?? null : null,
       facts: { blocked: !isAirborne() || flightPaused() || document.hidden ||
           !!auto || controls.steered || controls.locked || controls.climb != null,
         noseYaw: g.yaw, forwardAirspeed: g.forwardAirspeed, wingPhase: g.wingPhase, stall: g.stall,
-        collapse: Math.max(g.tuck, mode === 'cloudbase' ? run?.sky.state.pilot.collapse ?? 0 : 0),
+        collapse: Math.max(g.tuck, g.foldLeft, g.foldRight, g.cravatLeft, g.cravatRight, mode === 'cloudbase' ? run?.sky.state.pilot.collapse ?? 0 : 0),
         inverted: !!g.loop || Math.abs(g.bank) >= Math.PI / 2 || g.pilot.pos.y > g.canopy.pos.y,
         recovering: presentedCoach()?.state === 'recover' } });
 
@@ -1940,6 +2026,8 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     // The wing's swings as watched (swing-watch.js), over the fjord or in the run, and a run's style.
     get watch() { return mode === 'training' ? training?.watch.state ?? null : mode === 'cloudbase' ? run?.world.watch.state ?? null : fjordWatch.state; },
     get style() { return mode === 'training' ? training?.style.state ?? null : run?.style.state ?? null; },
+    // The run's trick watch (trick-watch.js), whose moves the combos score.
+    get tricks() { return mode === 'cloudbase' ? run?.world.tricks.state ?? null : null; },
     get training() { return training?.state ?? null; },
     // A run's briefing: whether it is up, and the key that ends it, as a pilot ready to fly.
     get briefing() { return briefing; },
@@ -2029,6 +2117,10 @@ export function createGame(stage: HTMLElement, hooks: FlightHooks = {}) {
     get music() { return run?.musicState ?? null; },
     toggleSound,
     launchStats: (prepared: ResolvedSky) => run?.launchStats(prepared) ?? null,
+    /** What each Training lesson is on the glider Training flies (null before Training has loaded). */
+    lessonOffers: () => training?.offers() ?? null,
+    /** The glider Training flies, by class and glide ('' for the classic wing, or before Training has loaded). */
+    trainingWing: () => training?.wingLabel() ?? '',
     fly,
     play: playGame,
     prepareSky,

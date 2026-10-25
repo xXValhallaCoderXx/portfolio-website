@@ -6,13 +6,14 @@ import { liveryPicture, paintLivery } from '../../../adapters/rendering/livery.t
 import { HARNESSES } from '../../../adapters/rendering/harness.ts';
 import { emptyKit } from '../../../domains/progression/wing-kit.ts';
 import { kilos } from '../../../domains/good-lift/meet-card.ts';
+import { GLIDERS, GLIDER_NAMES, gliderCard } from '../../../domains/good-lift/gliders.ts';
 
-// The meet sheet's kit tab: what the kilos banked over every run, and two of the feats, have earned
-// (`sheet`, good-lift-store.js's kitSheet), and the choice of what to fly in. A choice goes to the
-// game (`onKit`), which keeps only what has been earned, writes it down and dresses the glider at
+// The meet sheet's kit tab: what the kilos banked over every run, and the feats, have earned
+// (`sheet`, good-lift-store.js's kitSheet), and the choice of what to fly in and on. A choice goes to
+// the game (`onKit`), which keeps only what has been earned, writes it down and dresses the glider at
 // once, and hands back the kit now worn. Plain controls throughout, each labelled with its state:
-// independent radio groups for wing and harness, and check boxes for chalk and helmet. Like
-// the rest of the sheet it ships with the game, never with the page.
+// independent radio groups for the glider (once the gliders fly), wing and harness, and check boxes
+// for chalk and helmet. Like the rest of the sheet it ships with the game, never with the page.
 
 // Whether this device asks for less motion, for which the chalk, though switched on, never shows
 // (meet-chalk.js).
@@ -52,6 +53,12 @@ function Swatch({ id }: { id: string }) {
   return <canvas ref={canvas} className="good-lift-swatch" width={192} height={48} aria-hidden="true" />;
 }
 
+// A glider's bars, and the moves beyond wingovers, spirals and loops it can be taken into.
+const BARS = ['glide', 'climb', 'agility', 'forgiveness'] as const;
+const fifths = (share: number) => Math.round(share * 4) + 1;
+const movesOf = (card: ReturnType<typeof gliderCard>) => ['WINGOVERS', 'SPIRALS', 'LOOPS', ...(card.stalls ? ['FULL STALL', 'TAIL SLIDE'] : []),
+  ...(card.heli ? ['HELICOPTER'] : []), ...(card.sat ? ['SAT'] : [])].join(' · ');
+
 /**
  * The kit a run has just earned, said as the sheet opens, as the feats are. The chalk switches
  * itself on, so the line says so, unless the device asks for less motion, when it never shows.
@@ -68,14 +75,19 @@ export function KitNews({ sheet }: { sheet?: KitSheet }) {
 export default function GoodLiftKit({ sheet, onKit }: { sheet?: KitSheet; onKit?: (change: Partial<KitChoice>) => KitChoice | undefined }) {
   const id = useId();
   const [worn, setWorn] = useState(() => sheet?.worn ?? emptyKit());
-  const [part, setPart] = useState<'wing' | 'harness'>('wing');
+  const gliders = !!sheet?.items.some((item) => item.kind === 'glider');
+  const [part, setPart] = useState<'glider' | 'wing' | 'harness'>(gliders ? 'glider' : 'wing');
   useEffect(() => {
     if (sheet?.worn) setWorn(sheet.worn);
-  }, [sheet?.worn.wing, sheet?.worn.harness, sheet?.worn.helmet, sheet?.worn.chalk]);
+  }, [sheet?.worn.wing, sheet?.worn.harness, sheet?.worn.helmet, sheet?.worn.chalk, sheet?.worn.glider]);
   if (!sheet) return <p className="dim">// the kit comes with a run.</p>;
 
   const calm = calmDevice();
   const { fresh, piece, wings, next, done, state } = buildKitView(sheet);
+  // Every pilot has the first glider; the rest are rungs of the kit.
+  const gliderItem = (key: string) => key === GLIDERS[0] ? { id: key, kind: 'glider', earned: true, left: 0 } : piece(key);
+  // A rung of tonnage that also asks a feat or another glider says so.
+  const also = next?.kind === 'glider' && next.met && (!next.met.feat || !next.met.after) ? ` · ${nameOf(next.id)} also needs ${asks({ ...next, kg: undefined }, sheet)}` : '';
   // Only what the game kept is shown as worn: a choice it would not keep changes nothing. Only the
   // change is sent, which the game lays over the kit it keeps, so a tab drawn again from an older
   // sheet (the map opened over it) can never put back a piece since changed.
@@ -90,9 +102,27 @@ export default function GoodLiftKit({ sheet, onKit }: { sheet?: KitSheet; onKit?
         <p className="good-lift-tonnage"><span>LIFETIME BANKED</span><strong>{kilos(sheet.tonnage)} <small>kg</small></strong></p>
         <p className="good-lift-kit-next">{next ? `${kilos(next.left)} kg to ${pieceName(next)}` : 'Every rung of the ladder is open'}</p>
         <p className="good-lift-ladder" aria-hidden="true"><i style={{ '--done': done.toFixed(3) } as CSSProperties} /></p>
-        {next && <p className="good-lift-kit-goal">Next unlock at {weight(next.kg!)}</p>}
+        {next && <p className="good-lift-kit-goal">Next unlock at {weight(next.kg!)}{also}</p>}
       </div>
-      <div className="good-lift-hangar-heading"><h3>HANGAR</h3><div role="group" aria-label="Kit part"><button type="button" aria-pressed={part === 'wing'} onClick={() => setPart('wing')}>Wing</button><button type="button" aria-pressed={part === 'harness'} onClick={() => setPart('harness')}>Harness</button></div></div>
+      <div className="good-lift-hangar-heading"><h3>HANGAR</h3><div role="group" aria-label="Kit part">{gliders && <button type="button" aria-pressed={part === 'glider'} onClick={() => setPart('glider')}>Glider</button>}<button type="button" aria-pressed={part === 'wing'} onClick={() => setPart('wing')}>Wing</button><button type="button" aria-pressed={part === 'harness'} onClick={() => setPart('harness')}>Harness</button></div></div>
+      {gliders && <fieldset className="good-lift-choice good-lift-hangar good-lift-gliders" hidden={part !== 'glider'}>
+        <legend className="good-lift-hide">glider</legend>
+        {GLIDERS.map((key) => {
+          const item = gliderItem(key), card = gliderCard(key), { badge, name, role } = GLIDER_NAMES[key];
+          return (
+            <label key={key} className={rowClass(item.earned, worn.glider === key)}>
+              <span className="good-lift-glider-badge" aria-hidden="true">{badge}</span>
+              <input type="radio" name={`${id}-glider`} value={key} checked={worn.glider === key} disabled={!item.earned} onChange={() => choose({ glider: key })} />
+              <b>{name}{fresh.has(key) && <em> new</em>}</b>{' '}
+              <span>{worn.glider === key ? 'Equipped · ' : item.earned ? 'Equip · ' : 'Locked · '}{item.earned ? role : asks(item, sheet)}</span>
+              <span className="good-lift-glider-bars" aria-label={BARS.map((bar) => `${bar} ${fifths(card[bar])} of 5`).join(', ')}>
+                {BARS.map((bar) => <span key={bar} aria-hidden="true"><small>{bar}</small><i style={{ '--value': card[bar].toFixed(3) } as CSSProperties} /></span>)}
+              </span>
+              <span className="good-lift-glider-moves">Can fly: {movesOf(card)}</span>
+            </label>
+          );
+        })}
+      </fieldset>}
       <fieldset className="good-lift-choice good-lift-hangar" hidden={part !== 'wing'}>
         <legend className="good-lift-hide">wing</legend>
         {wings.map((key) => {
@@ -152,7 +182,8 @@ export default function GoodLiftKit({ sheet, onKit }: { sheet?: KitSheet; onKit?
         })}
         {calm && <p className="dim">// chalk stays off while this device asks for less motion.</p>}
       </fieldset>
-      <p className="dim">// tonnage is every kilo ever banked here; it unlocks looks, never lift.</p>
+      <p className="dim">{gliders ? '// tonnage is every kilo ever banked here. Colours are looks; a glider changes how you fly, and none is best at everything.'
+        : '// tonnage is every kilo ever banked here; it unlocks looks, never lift.'}</p>
     </div>
   );
 }

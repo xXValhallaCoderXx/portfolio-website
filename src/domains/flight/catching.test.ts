@@ -5,9 +5,11 @@ import { createReferencePilot } from '../good-lift/pilots.ts';
 import { RUN, createRunWorld, startRun, stepRun } from '../good-lift/run-step.ts';
 import { CLOUD_LAUNCH, CLOUD_STRIKE, createCloudbaseRun } from '../good-lift/cloudbase-state.ts';
 
-// Test deliberate recovery inputs, not a population of synthetic surges from the old oscillator.
+// Test deliberate recovery inputs, not a population of synthetic surges from the old oscillator. The
+// scripted fold and its pumps are a wing's whose halves never fold by themselves: the classic wing's
+// (a glider's half folds where it is struck, and is flown out: recovery-runs.test.js).
 function recover(catches: boolean, seed: number) {
-  const world = startRun(createRunWorld({ sky: createCloudbaseRun({ hazards: false, wind: false }) }), seed);
+  const world = startRun(createRunWorld({ sky: createCloudbaseRun({ hazards: false, wind: false }), wing: 'classic' }), seed);
   world.g.pos.x = CLOUD_LAUNCH.x; world.g.pos.z = CLOUD_LAUNCH.z; world.g.pos.y = 500;
   world.sky.state.thermals.forEach((t: { live: boolean; strength: number; }) => { t.live = false; t.strength = 0; });
   world.sky.strike();
@@ -35,7 +37,7 @@ test('a reference pilot pumps a deliberate bird collapse open twice and saves he
 });
 test('short brake taps and holding the brake through a fold do not count as reopening pumps', () => {
   for (const mode of ['short', 'held'] as const) {
-    const world = startRun(createRunWorld({ sky: createCloudbaseRun({ hazards: false, wind: false }) }), 3);
+    const world = startRun(createRunWorld({ sky: createCloudbaseRun({ hazards: false, wind: false }), wing: 'classic' }), 3);
     world.g.pos.y = 500; world.sky.strike();
     let steps = 0;
     while (world.sky.state.pilot.collapse > 0 && steps < 300) {

@@ -3,7 +3,7 @@ import type { WorldRow } from '../../src/domains/good-lift/board.types.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LIMITS, ORIGINS, clientAddress, clientKey, createBoard, createLimiter, judge, publicBoard, readDay, withdraw } from '../src/runs.ts';
-import { fly, rewrite } from './flights.ts';
+import { bytesOf, fly, rewrite, textOf } from './flights.ts';
 import { MAX_LINK, encodeLog } from '../../src/domains/good-lift/recorder.ts';
 import { SIM_VERSION } from '../../src/domains/good-lift/sim-version.ts';
 import { DAILY_EPOCH, DAY_MS } from '../../src/domains/good-lift/good-lift-address.ts';
@@ -12,6 +12,7 @@ import { WORLD_BOARD } from '../../src/domains/good-lift/board-world.ts';
 import { runId } from '../../src/adapters/crypto/run-identity.service.ts';
 import { bynameFor } from '../../src/domains/good-lift/meet-bynames.ts';
 import { BLOCKED } from '../../src/domains/good-lift/meet-initials.ts';
+import { GLIDERS, LOG_WINGS } from '../../src/domains/good-lift/glider-ids.ts';
 
 // The day the tests are run on, five hours into it, and its board's key.
 const DAY = DAILY_EPOCH + 30;
@@ -97,7 +98,8 @@ function service({ limits = OPEN, store = fakeStore() }: {limits?:BoardLimits;st
 
 // The row a run's own replay makes, as the board should show it, taken at `at`.
 async function rowOf({ sheet, log }: Flown, at = NOW) {
-  return { who: log.initials, byname: bynameFor(sheet), total: sheet.total, style: sheet.stats.style, peak: sheet.peak, red: sheet.lifts.map((lift: {red:number}) => lift.red), at, id: await runId(log) };
+  return { who: log.initials, byname: bynameFor(sheet), total: sheet.total, style: sheet.stats.style, peak: sheet.peak, red: sheet.lifts.map((lift: {red:number}) => lift.red),
+    glider: log.glider, at, id: await runId(log) };
 }
 
 test('a named run of the Daily Sky goes on the world board as its replay came to, and anyone may see it but not the device it came from', async () => {
@@ -129,6 +131,23 @@ test('a named run of the Daily Sky goes on the world board as its replay came to
   assert.equal(asked.status, 200);
   assert.equal(asked.cache, `public, max-age=${LIMITS.cache}`);
   assert.deepEqual(asked.body, { ok: true, board: { version: SIM_VERSION, day: DAY, rows: [row] } });
+});
+
+test('a run on any glider goes on the board, its row naming the glider, and the same keys on another glider are another run', async () => {
+  const fn = service();
+  const ids = new Set<string>();
+  for (const [i, glider] of GLIDERS.entries()) {
+    const flight = fly(DAY, 'eased', { glider, initials: 'TOR' });
+    assert.equal(flight.log.glider, glider);
+    const sent = await fn.send(flight.text, { token: `${ME}${i}` });
+    assert.equal(sent.status, 200, `${glider}: ${JSON.stringify(sent.body)}`);
+    const id = await runId(flight.log);
+    assert.equal(sent.body.board!.rows.find((each) => each.id === id)?.glider, glider);
+    ids.add(id);
+  }
+  assert.equal(ids.size, GLIDERS.length, 'one id for each glider flown');
+  const rows = fn.store.docs.get(KEY)!.rows;
+  assert.deepEqual(rows.map((each) => each.glider).sort(), [...GLIDERS].sort());
 });
 
 test('the server verifies quantized independent brakes and mixed digital steps against the exact live result', async () => {
@@ -166,6 +185,20 @@ test('a run flown under other rules, on another day or sky, or ended by its pilo
   };
   for (const simVersion of [SIM_VERSION - 1, SIM_VERSION + 1]) {
     await refused(rewrite(column, { simVersion }), 422, 'version');
+  }
+  // A log of the format before this one (no wing named) was flown under the rules before these.
+  const bytes = bytesOf(column.text);
+  assert.deepEqual(bytes.slice(0, 3), [3, SIM_VERSION, LOG_WINGS.indexOf(column.log.glider)]);
+  await refused(textOf([2, ...bytes.slice(1, 2), ...bytes.slice(3)]), 422, 'version');
+  // A wing this build does not know, and the classic wing, which no run is flown on.
+  await refused(textOf([...bytes.slice(0, 2), LOG_WINGS.length, ...bytes.slice(3)]), 422, 'glider');
+  await refused(rewrite(column, { glider: 'classic' }), 422, 'glider');
+  // The same keys on another glider fly another run, which the log no longer fits: it ends before the
+  // log does, or somewhere else, or comes to another sheet than the log claims.
+  for (const glider of GLIDERS.filter((each) => each !== column.log.glider)) {
+    const other = await fn.send(rewrite(column, { glider }));
+    assert.equal(other.status, 422, glider);
+    assert.ok(['corrupt', 'ending', 'mismatch'].includes(other.body.why!), `${glider}: ${other.body.why}`);
   }
   // Only today's Daily Sky and yesterday's: not the day before, not tomorrow's, not a practice sky.
   for (const day of [DAY - 2, DAY + 1, 0]) await refused(rewrite(column, { day }), 422, 'day');
@@ -229,7 +262,8 @@ test('a run whose log claims another total or peak than its replay comes to is t
 
 // Rows for the board's own rules: a run's numbers as any run might have them, its id and its device.
 const hex = (n: number, digits: number) => n.toString(16).padStart(digits, '0');
-const row = (n: number, total: number, peak: number, at = NOW + n, style = 0) => ({ who: 'ABC', byname: '', total, style, peak, red: [0], at, id: hex(n, WORLD_BOARD.id) });
+const row = (n: number, total: number, peak: number, at = NOW + n, style = 0) => ({ who: 'ABC', byname: '', total, style, peak, red: [0], at, id: hex(n, WORLD_BOARD.id),
+  glider: GLIDERS[n % GLIDERS.length] as string });
 const device = (n: number) => hex(n, 32);
 const ON = { version: SIM_VERSION, day: DAY, at: NOW };
 // Puts each [row, device] on a board in turn, as runs come in, and returns the last reply and the board.
@@ -539,6 +573,8 @@ test('a day\'s document is read cleanly: damaged rows, a run or a device twice a
       { ...row(4, 200, 500), device: 'not a device' },
       { ...row(5, 200, 500), who: '', device: device(5) },
       { ...row(6, 200, 500), total: 101, device: device(6) },
+      { ...row(9, 200, 500), glider: 'classic', device: device(9) },
+      { ...row(10, 200, 500), glider: undefined, device: device(10) },
       'junk',
     ],
     devices: { [device(1)]: 3, [device(2)]: 0, nope: 4, [device(7)]: 1.5, [device(8)]: 2 },

@@ -8,7 +8,10 @@ import { scoreOf } from '../../../domains/good-lift/score.ts';
 import { isJudgedEnding } from '../../../domains/good-lift/run-rules.ts';
 import { bynameOf } from '../../../domains/good-lift/meet-bynames.ts';
 import { isBlocked, runesOf } from '../../../domains/good-lift/meet-initials.ts';
+import { GLIDER_NAMES, isGlider } from '../../../domains/good-lift/glider-ids.ts';
 import GoodLiftKit,{ KitNews } from './GoodLiftKit.tsx';
+import GoodLiftTricks, { TricksNews } from './GoodLiftTricks.tsx';
+import { sheetFeats } from '../services/tricks-view.service.ts';
 import '../result-layout.css';
 import '../meet-sheet.css';
 
@@ -19,11 +22,14 @@ const ENDINGS: Record<string, string> = {
   landed: 'Back on the ground; the bar was judged where you touched down.',
   quit: 'Run ended; the bar was forfeit.',
 };
+// The tricks tab for a sheet with a trick book, as every run's is; a sheet without one keeps three.
 const TABS = [
   { key: 'board', label: 'Board' },
   { key: 'result', label: 'Result' },
   { key: 'kit', label: 'Kit' },
+  { key: 'tricks', label: 'Tricks' },
 ];
+const BOOKLESS_TABS = TABS.slice(0, 3);
 /** One judge's light: a filled white disc or a hollow red ring, and the word for whoever cannot see either. */
 function Light({ judge, red }: { judge: string; red: number | boolean }) {
   return (
@@ -124,15 +130,20 @@ function Pilot({ who, via, byname, told = false }: { who?: string; via?: string;
   );
 }
 
+// A glider's class as a board and the sheet name it (EN-A … ACRO), or '' for none.
+const badgeOf = (glider?: string) => isGlider(glider) ? GLIDER_NAMES[glider].badge : '';
+
 /**
  * One run on a board, in its place (`place`, from 1, or none for the pinned bot): who flew it, what
- * it banked, its peak and its lights, and `tag`, a word on whose it is.
+ * it banked, its peak and its lights, and `tag`, a word on whose it is, with the class of glider it
+ * was flown on.
  */
 function BoardRow({ row, place, className = '', tag = '' }: { row: BoardRowData; place?: number; className?: string; tag?: string }) {
+  const said = [tag, badgeOf(row.glider)].filter(Boolean).join(' · ');
   return (
     <li value={place} className={className || undefined}>
       <span className="good-lift-row-rank">{row.via === 'bot' ? 'BOT' : place}</span>
-      <b className="good-lift-row-name"><Pilot who={row.who} via={row.via} byname={row.byname} />{tag && <i className="good-lift-tag">{tag}</i>}</b>
+      <b className="good-lift-row-name"><Pilot who={row.who} via={row.via} byname={row.byname} />{said && <i className="good-lift-tag">{said}</i>}</b>
       <span className="good-lift-row-lights"><span className="good-lift-hide">{row.red.length ? `${row.red.length} judged lifts` : 'No lift yet'}</span>{!row.red.length && <small>—</small>}{row.red.map((red: number, index: number) => <i aria-hidden="true" key={index} className={red ? (red & (red - 1) ? 'none' : 'one') : 'clean'} />)}</span>
       <span className="good-lift-row-peak">{metres(row.peak)} <small>m</small></span>
       <span className="good-lift-row-score">{points(row)} <small>pts</small></span>
@@ -248,7 +259,8 @@ function Barogram({ result }: { result: RunResult }) {
  * the `byname` the run earned, its skald's `verse`, and whether the `music` was on. The sheet
  * covers the game's own switch for the music, so it carries one: `music` is the switch as last
  * thrown, from anywhere (null until it is), and `onMusic` throws it. The kit the run's tonnage and
- * feats have earned is `result.kit`, and `onKit` puts a choice of it on.
+ * feats have earned is `result.kit`, and `onKit` puts a choice of it on. The trick book, as the run
+ * left it, is `result.book`: the tricks tab shows it.
  *
  * `bots` is what the bots came to on the run's sky (good-lift.js askBots), which lands after the
  * sheet has opened: it comes as a prop of its own, so taking it in never moves the focus, and it is
@@ -378,16 +390,19 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
       else onFjord();
     }
   };
+  const tabs = result.stats.tricks ? TABS : BOOKLESS_TABS;
+  // A sheet without the tab last looked at opens on the board.
+  useEffect(() => { if (!tabs.some((item) => item.key === tab)) setTab('board'); }, [tabs, tab]);
   const onTabKey = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     let next;
-    if (event.key === 'ArrowRight') next = (index + 1) % TABS.length;
-    else if (event.key === 'ArrowLeft') next = (index + TABS.length - 1) % TABS.length;
+    if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
     else if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = TABS.length - 1;
+    else if (event.key === 'End') next = tabs.length - 1;
     else return;
     event.preventDefault();
     buttons.current[next]?.focus();
-    setTab(TABS[next].key);
+    setTab(tabs[next].key);
   };
 
   const copyLink = async () => {
@@ -407,6 +422,7 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
 
   const { rival, landed, said, earned, fresh, best, rows, worldFor } = buildResultView(result, bots, world);
   const summary = resultSummary(result);
+  const feats = sheetFeats(result.stats);
   let place = 0;
   const here = (
     <><BoardColumns /><ol className="good-lift-board">
@@ -438,7 +454,7 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
         <i />
         <i />
         <i />
-        <span>MEET OVER · {result.label}</span>
+        <span>MEET OVER · {result.label}{badgeOf(result.wing) && ` · ${badgeOf(result.wing)}`}</span>
       </header>
       <div className="good-lift-result-layout">
         <div className="good-lift-result-summary">
@@ -460,8 +476,8 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
         </div>
 
         <div className="good-lift-result-detail">
-          <div className="good-lift-tabs" role="tablist" aria-label="Meet sheet">
-            {TABS.map((item, index) => (
+          <div className="good-lift-tabs" role="tablist" aria-label="Meet sheet" data-tabs={tabs.length}>
+            {tabs.map((item, index) => (
               <button
                 key={item.key}
                 ref={(element) => {
@@ -543,13 +559,14 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
               <SkyLine result={result} />
               {trickSaid(result.stats) && <p className="dim good-lift-tricks">{trickSaid(result.stats)}</p>}
               {bestComboSaid(result.stats.bestCombo) && <p className="good-lift-tricks">{bestComboSaid(result.stats.bestCombo)}</p>}
-              {rival && <p className="good-lift-verdict">vs {rival.who || 'a pilot'} · {points(rival)} pts · {metres(rival.peak)} m — {verdict(result, rival)}</p>}
+              {rival && <p className="good-lift-verdict">vs {rival.who || 'a pilot'}{badgeOf(rival.glider) && ` · ${badgeOf(rival.glider)}`} · {points(rival)} pts · {metres(rival.peak)} m — {verdict(result, rival)}</p>}
               {fresh.size > 0 && <p className="good-lift-fresh">new feat{fresh.size === 1 ? '' : 's'}: {FEATS.filter((feat) => fresh.has(feat.id)).map((feat) => feat.name).join(' · ')}</p>}
               <KitNews sheet={result.kit} />
+              <TricksNews book={result.book} run={result.stats.tricks} />
 
-              <h3 className="good-lift-section-title good-lift-feats-title">FEATS <span>{FEATS.filter(feat => earned.has(feat.id)).length} / {FEATS.length}</span></h3>
+              <h3 className="good-lift-section-title good-lift-feats-title">FEATS <span>{feats.filter(feat => earned.has(feat.id)).length} / {feats.length}</span></h3>
               <ul className="good-lift-feats" aria-label="Feats">
-                {FEATS.map((feat) => (
+                {feats.map((feat) => (
                   <li key={feat.id} className={`${earned.has(feat.id) ? 'earned' : ''}${fresh.has(feat.id) ? ' fresh' : ''}`}>
                     <b>
                       {earned.has(feat.id) ? '✓ ' : ''}
@@ -603,6 +620,12 @@ export default function GoodLiftResult({ result, music = null, bots = null, worl
             <div role="tabpanel" id={`${id}-panel-kit`} aria-labelledby={`${id}-tab-kit`} hidden={tab !== 'kit'} tabIndex={0}>
               <GoodLiftKit key={`${result.at}-${result.seed}`} sheet={result.kit} onKit={onKit} />
             </div>
+
+            {result.stats.tricks ? (
+              <div role="tabpanel" id={`${id}-panel-tricks`} aria-labelledby={`${id}-tab-tricks`} hidden={tab !== 'tricks'} tabIndex={0}>
+                <GoodLiftTricks book={result.book} run={result.stats.tricks} />
+              </div>
+            ) : null}
           </div>
         </div>
         <footer className={`good-lift-result-actions${onTraining ? ' has-training' : ''}`}>

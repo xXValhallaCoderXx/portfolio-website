@@ -8,6 +8,7 @@ import { encodeLog, isDirectFrame } from './recorder.ts';
 import { normalizeScore } from './board.ts';
 import { bynameOf } from './meet-bynames.ts';
 import { isBlocked } from './meet-initials.ts';
+import { isGlider } from './glider-ids.ts';
 
 // What the world board keeps: the best `keep` runs of each day's Daily Sky, one at most from each
 // device. A run's id is its first `id` hex digits of SHA-256, 96 bits: two runs that share one would
@@ -39,16 +40,17 @@ const flown = (bits: number) => {
 
 /**
  * A run's id on the world board, from its log (recorder.js decodeLog's): a digest of the log written
- * again with nothing in it but the run itself, the rules and the seed it was flown under and its
- * controls step by step, each step as the step reads it. The initials, the claims, the day and the
- * touch flag are no part of it, nor any way of writing a step's keys that flies the same, so one
- * flight has one id however its link is dressed: renamed, re-claimed, its keys rewritten or sent
- * from another device, it is the same run, and the board takes it once.
+ * again with nothing in it but the run itself, the rules, the glider and the seed it was flown under
+ * and its controls step by step, each step as the step reads it. The initials, the claims, the day
+ * and the touch flag are no part of it, nor any way of writing a step's keys that flies the same, so
+ * one flight has one id however its link is dressed: renamed, re-claimed, its keys rewritten or sent
+ * from another device, it is the same run, and the board takes it once. The same keys flown on
+ * another glider are another flight.
  */
-export function runId(log: { simVersion: number; seed: number; steps: number; bits: Uint8Array | Uint32Array | number[] }, digest: Digest) {
+export function runId(log: { simVersion: number; glider: string; seed: number; steps: number; bits: Uint8Array | Uint32Array | number[] }, digest: Digest) {
   const frames = Uint32Array.from('subarray' in log.bits ? log.bits.subarray(0, log.steps) : log.bits.slice(0, log.steps), flown);
   // Controller mode is part of a flight's identity, including fully released direct brakes.
-  return digest(encodeLog({ simVersion: log.simVersion, seed: log.seed }, frames, log.steps), WORLD_BOARD.id);
+  return digest(encodeLog({ simVersion: log.simVersion, glider: log.glider, seed: log.seed }, frames, log.steps), WORLD_BOARD.id);
 }
 
 /**
@@ -62,17 +64,19 @@ export function runId(log: { simVersion: number; seed: number; steps: number; bi
  *   red      each lift's lights in lift order, the mist last (board.js)
  *   at       ms since 1970 when the function took the run: of two that tie, the earlier ranks first
  *   id       its run's id (runId)
+ *   glider   the glider it was flown on (glider-ids.js), as its log names it
  *
  * Anything else is left behind, the device the run came from among it, which never leaves the
  * function. As on the local board, a byname this build does not know is blanked, not the row dropped.
  */
 export function normalizeWorldRow(row: unknown): WorldRow | null {
   if (!isRecord(row)) return null;
-  const { who, byname, at, id } = row;
+  const { who, byname, at, id, glider } = row;
   if (typeof who !== 'string' || !WHO.test(who) || isBlocked(who)) return null;
   const score = normalizeScore(row);
   if (!score) return null;
   if (typeof at !== 'number' || !Number.isFinite(at) || at < 0) return null;
   if (typeof id !== 'string' || !ID.test(id)) return null;
-  return { who, byname: typeof byname === 'string' && bynameOf(byname) ? byname : '', ...score, at, id };
+  if (!isGlider(glider)) return null;
+  return { who, byname: typeof byname === 'string' && bynameOf(byname) ? byname : '', ...score, at, id, glider };
 }

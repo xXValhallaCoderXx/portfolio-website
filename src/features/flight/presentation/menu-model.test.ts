@@ -44,3 +44,12 @@ test('opposite release, hold and easing are resolved from each requested pair', 
   const release = compactCoachCue({ action: 'release-all', brakeTargets: { left: 0, right: 0, tolerance: .07 } }, {}, 'keyboard');
   assert.equal(release.position, null); assert.match(release.cue, /both turn and brake/);
 });
+
+test('a card asking for the speed bar with the hands up says so on every device, and holds once it is held', () => {
+  const message = { brakeTargets: { left: 0, right: 0, tolerance: 0.07, bar: true } };
+  assert.match(compactCoachCue(message, {}, 'keyboard').cue, /↑ · speed bar/);
+  assert.match(compactCoachCue(message, {}, 'touch').cue, /Hold BAR/);
+  assert.equal(compactCoachCue(message, {}, 'touch').callout, 'BAR ↑');
+  assert.equal(compactCoachCue(message, { bar: true }, 'keyboard').callout, 'HOLD HERE');
+  assert.equal(compactCoachCue(message, { bar: true, leftBrake: 0.3 }, 'keyboard').status, 'pull', 'a brake held keeps the bar from acting');
+});

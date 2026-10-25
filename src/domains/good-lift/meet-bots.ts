@@ -1,8 +1,8 @@
 import type { RankedScore } from './board.types.ts';
 export interface BotScore extends RankedScore {red: readonly number[]; reason?: string}
 export interface MedalMark extends RankedScore {medal: string; by: string}
-export interface BotRun extends RankedScore {reason?: string; seed: number; at: number}
-export interface BotLandingResult {at: number; seed: number; medals: MedalMark[]; medal: string; beat: boolean; tst: RankedScore & {who: string; red: readonly number[]}; fresh: string[]; scores: readonly BotScore[]}
+export interface BotRun extends RankedScore {reason?: string; seed: number; at: number; wing?: string}
+export interface BotLandingResult {at: number; seed: number; medals: MedalMark[]; medal: string; beat: boolean; tst: RankedScore & {who: string; red: readonly number[]; glider?: string}; fresh: string[]; scores: readonly BotScore[]}
 export interface BotDeadline {didTimeout?: boolean; timeRemaining?: () => number}
 export interface BotScheduler<Handle> {now: () => number; later: (work: (deadline?: BotDeadline) => void) => Handle; cancel: (handle: Handle) => void; onError?: (error: unknown) => void}
 // The meet's bots: three reference pilots (pilots.js) who fly the sky a run was flown on once its
@@ -18,6 +18,7 @@ export interface BotScheduler<Handle> {now: () => number; later: (work: (deadlin
 // pilots do, so the bots here come to exactly what the same pilots do on the same sky in `npm test`.
 // Nothing a bot does reaches a run: each flies a world of its own, and none is ever recorded.
 import { TST, createReferencePilot } from './pilots.ts';
+import { GLIDERS, planFor } from './gliders.ts';
 import { RUN, createRunWorld, finishRun, startRun, stepRun } from './run-step.ts';
 import { createCloudbaseRun } from './cloudbase-state.ts';
 import { createMeet } from './meet-state.ts';
@@ -88,25 +89,27 @@ export function medalFor(run: RankedScore & {reason?: string}, scores: readonly 
 
 /**
  * The run still to be held up against TST once the bots land on its sky, after the sheet of `run`
- * ({ seed, reason, total, style, peak }) has opened: `run` itself if the sky judged it and it outranks the
- * run `owed` before on the same sky, or else that one. What was owed on another sky is dropped:
- * its sheet was put away before the bots landed, and they have left that sky. null for none.
+ * ({ seed, wing, reason, total, style, peak }) has opened: `run` itself if the sky judged it and it
+ * outranks the run `owed` before on the same sky and glider, or else that one. What was owed on
+ * another sky, or on another glider, is dropped: its sheet was put away before the bots landed, and
+ * they have left that sky, or fly another glider. null for none.
  */
-export function owing(owed: (RankedScore & {seed: number}) | null, run: RankedScore & {seed: number; reason?: string}) {
-  const before = owed?.seed === run.seed ? owed : null;
+export function owing(owed: (RankedScore & {seed: number; wing?: string}) | null, run: RankedScore & {seed: number; reason?: string; wing?: string}) {
+  const before = owed?.seed === run.seed && owed.wing === run.wing ? owed : null;
   const judged = isJudgedEnding(run.reason);
-  return judged && (!before || outranks(run, before)) ? { seed: run.seed, total: run.total, style: run.style ?? 0, peak: run.peak } : before;
+  return judged && (!before || outranks(run, before)) ? { seed: run.seed, ...(run.wing ? { wing: run.wing } : {}), total: run.total, style: run.style ?? 0, peak: run.peak } : before;
 }
 
 /**
- * What the bots tell the sheet of `run` (a sheet's result: { at, seed, reason, total, peak }) once
- * they have landed on its sky with `scores` (BOTS order), `fresh` being the feats that earned:
+ * What the bots tell the sheet of `run` (a sheet's result: { at, seed, wing, reason, total, peak })
+ * once they have landed on its sky, flying its glider, with `scores` (BOTS order), `fresh` being the
+ * feats that earned:
  *
  *   at, seed   the run whose sheet it is for (its start, ms) and its sky
  *   medals     the sky's medals, lightest first (medalsOf)
  *   medal      the medal the run took: 'bronze', 'silver', 'gold', or '' for none (medalFor)
  *   beat       whether the run out-lifted TST, as the board ranks runs
- *   tst        TST's run, for the day's board: { who, total, peak, red }
+ *   tst        TST's run, for the day's board: { who, total, peak, red, glider }
  *   fresh      the feats newly earned as they landed
  *   scores     what each bot came to
  */
@@ -118,7 +121,7 @@ export function landing(run: BotRun, scores: readonly BotScore[], fresh: string[
     medals: medalsOf(scores),
     medal: medalFor(run, scores),
     beat: isJudgedEnding(run.reason) && outranks(run, tst),
-    tst: { who: BOTS[0].name, total: tst.total, peak: tst.peak, red: tst.red },
+    tst: { who: BOTS[0].name, total: tst.total, peak: tst.peak, red: tst.red, ...(run.wing ? { glider: run.wing } : {}) },
     fresh,
     scores,
   };
@@ -128,7 +131,8 @@ export function landing(run: BotRun, scores: readonly BotScore[], fresh: string[
  * The bots flying one sky, a slice at a time, each in a world of its own that is made once and
  * reused for every sky after it. Nothing is made while they fly but each bot's score as it lands.
  *
- *   start(seed)     lays out the sky from `seed` for every bot and puts them all at the gate
+ *   start(seed, wing)  lays out the sky from `seed` for every bot and puts them all at the gate, in
+ *                   `wing` (the player's glider: the EN-A unless another is named)
  *   advance(steps)  flies up to `steps` more steps, one bot after another; true once all have landed
  *   seed            the sky being flown, -1 before the first
  *   landed          how many bots have finished their runs
@@ -144,15 +148,18 @@ export function createBotFlight() {
   // What a bot asks of its wing, written by its pilot at every step: one object for all of them.
   const intent = { turn: 0, brake: false, bar: false };
   let seed = -1;
+  let wing: string = GLIDERS[0];
   let landed = 0;
   let steps = 0;
 
-  function start(next: number) {
+  function start(next: number, flown: string = GLIDERS[0]) {
     seed = next >>> 0;
+    wing = flown;
     landed = steps = 0;
     for (let i = 0; i < BOTS.length; i++) {
+      worlds[i].wing = wing;
       startRun(worlds[i], seed);
-      pilots[i] = createReferencePilot(BOTS[i].pilot);
+      pilots[i] = createReferencePilot({ ...BOTS[i].pilot, plan: planFor(wing) });
       scores[i] = null;
     }
   }
@@ -188,6 +195,7 @@ export function createBotFlight() {
     start,
     advance,
     get seed() { return seed; },
+    get wing() { return wing; },
     get landed() { return landed; },
     get steps() { return steps; },
     get done() { return seed >= 0 && landed === BOTS.length; },
@@ -199,7 +207,8 @@ export function createBotFlight() {
  * The bots for the meet sheet: flown while the page is idle, a slice at a time, and kept for the
  * visit by sky once they have landed.
  *
- *   fly(seed, landed)       asks for the bots of the sky laid out from `seed`: `landed(scores)` is
+ *   fly(seed, landed, wing) asks for the bots of the sky laid out from `seed`, flying `wing` (the
+ *                           player's glider; the EN-A if none is named): `landed(scores)` is
  *                           called once they are all in (BOTS order, as createBotFlight's), from the
  *                           visit's own if they have flown that sky before, and never within the
  *                           call. Asking again takes the place of the last ask: bots part of the way
@@ -207,8 +216,8 @@ export function createBotFlight() {
  *                           starts them afresh. If they cannot fly at all (a fault), `landed(null)`.
  *   pause()                 stops flying, and forgets the ask, until fly() is called again (as a run
  *                           is flown: the bots never take a frame from a run)
- *   remember(seed, scores)  keeps scores known from elsewhere: the store's, for the day's sky
- *   known(seed)             the scores the visit keeps for that sky, or null
+ *   remember(seed, scores, wing)  keeps scores known from elsewhere: the store's, for the day's sky
+ *   known(seed, wing)       the scores the visit keeps for that sky and wing, or null
  *   state                   { seed, asked, flying, landed, steps, kept } for QA
  *   dispose()               stops for good
  *
@@ -219,20 +228,21 @@ export function createBots<Handle>({ now, later, cancel, onError }: BotScheduler
   // Made the first time bots are flown: three skies' worth of pools.
   let flight: ReturnType<typeof createBotFlight> | null = null;
   const kept = new Map<string, readonly BotScore[]>();
-  let ask: {seed: number; landed: (scores: readonly BotScore[] | null) => void} | null = null;
+  let ask: {seed: number; wing: string; landed: (scores: readonly BotScore[] | null) => void} | null = null;
   let timer: Handle | null = null;
 
-  const keyOf = (seed: number) => `${SIM_VERSION}:${seed >>> 0}`;
+  // Each glider's bots are kept apart: they fly it.
+  const keyOf = (seed: number, wing: string) => `${SIM_VERSION}:${seed >>> 0}:${wing}`;
 
-  function remember(seed: number, scores: readonly BotScore[]) {
-    const key = keyOf(seed);
+  function remember(seed: number, scores: readonly BotScore[], wing: string = GLIDERS[0]) {
+    const key = keyOf(seed, wing);
     kept.delete(key);
     kept.set(key, Object.freeze(scores.map((score) => Object.freeze({ ...score, red: Object.freeze([...score.red]) }))));
     // The oldest goes first: a Map keeps the order its keys were set in.
     while (kept.size > BOT_FLIGHT.keep) kept.delete(kept.keys().next().value!);
   }
 
-  const known = (seed: number) => kept.get(keyOf(seed)) ?? null;
+  const known = (seed: number, wing: string = GLIDERS[0]) => kept.get(keyOf(seed, wing)) ?? null;
 
   function pause() {
     if (timer !== null) cancel(timer);
@@ -240,9 +250,9 @@ export function createBots<Handle>({ now, later, cancel, onError }: BotScheduler
     ask = null;
   }
 
-  function fly(seed: number, landed: (scores: readonly BotScore[] | null) => void) {
+  function fly(seed: number, landed: (scores: readonly BotScore[] | null) => void, wing: string = GLIDERS[0]) {
     pause();
-    ask = { seed: seed >>> 0, landed };
+    ask = { seed: seed >>> 0, wing, landed };
     timer = later(work);
   }
 
@@ -253,11 +263,11 @@ export function createBots<Handle>({ now, later, cancel, onError }: BotScheduler
     timer = null;
     const asked = ask;
     if (!asked) return;
-    let scores = known(asked.seed);
+    let scores = known(asked.seed, asked.wing);
     if (!scores) {
       try {
-        if (!flight || flight.seed !== asked.seed) {
-          if (flight) flight.start(asked.seed);
+        if (!flight || flight.seed !== asked.seed || flight.wing !== asked.wing) {
+          if (flight) flight.start(asked.seed, asked.wing);
           else flight = createBotFlight();
           timer = later(work);
           return;
@@ -282,8 +292,8 @@ export function createBots<Handle>({ now, later, cancel, onError }: BotScheduler
           timer = later(work);
           return;
         }
-        remember(asked.seed, flight.scores as BotScore[]);
-        scores = known(asked.seed);
+        remember(asked.seed, flight.scores as BotScore[], asked.wing);
+        scores = known(asked.seed, asked.wing);
       } catch (error) {
         onError?.(error);
         flight = null;

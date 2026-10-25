@@ -11,7 +11,7 @@ import { BLOCKED } from './meet-initials.ts';
 // A log of any controls at all: a run's id is worked out from its log alone, flown or not.
 const BITS = Uint8Array.from({ length: 900 }, (_, i) => [0, 1, 1, 4, 8, 2, 3][(i >> 5) % 7]);
 const log = (meta = {}, bits = BITS) => {
-  const decoded = decodeLog(encodeLog({ simVersion: SIM_VERSION, seed: 0xc0ffee, day: 20_770, initials: 'REN', total: 102.5, peak: 640, ...meta }, bits, bits.length));
+  const decoded = decodeLog(encodeLog({ simVersion: SIM_VERSION, glider: 'en-c', seed: 0xc0ffee, day: 20_770, initials: 'REN', total: 102.5, peak: 640, ...meta }, bits, bits.length));
   assert.ok(decoded.ok);
   return decoded.log;
 };
@@ -23,7 +23,7 @@ test('digest is SHA-256 in hex, cut to the digits asked for, as the page and the
   assert.equal(await digest('ᚱᛖᚾ'), createHash('sha256').update('ᚱᛖᚾ', 'utf8').digest('hex'));
 });
 
-test('a run\'s id is a digest of the run alone: its rules, seed and controls, never its initials, claims, day or flags', async () => {
+test('a run\'s id is a digest of the run alone: its rules, glider, seed and controls, never its initials, claims, day or flags', async () => {
   const id = await runId(log());
   assert.match(id, new RegExp(`^[0-9a-f]{${WORLD_BOARD.id}}$`));
   // Its controls each as the step reads them: the brake and the bar bits together are the ears, both
@@ -34,22 +34,24 @@ test('a run\'s id is a digest of the run alone: its rules, seed and controls, ne
     const brake = bits & 4;
     return (both ? 0 : bits & 3) | brake | (!brake && (both || bits & 8) ? 8 : 0);
   });
-  const bare = encodeLog({ simVersion: SIM_VERSION, seed: 0xc0ffee }, read, BITS.length);
+  const bare = encodeLog({ simVersion: SIM_VERSION, glider: 'en-c', seed: 0xc0ffee }, read, BITS.length);
   assert.equal(id, createHash('sha256').update(bare).digest('hex').slice(0, WORLD_BOARD.id));
   // The same run however its link is dressed: renamed, unnamed, re-claimed, on a phone, any day.
   for (const meta of [{ initials: 'TOR' }, { initials: '' }, { total: 1000, peak: 1 }, { touch: true }, { day: 0 }]) {
     assert.equal(await runId(log(meta)), id, JSON.stringify(meta));
   }
-  // Any other run is another id: another sky, other rules, one step's controls changed, one step more.
+  // Any other run is another id: another sky, other rules, another glider, one step's controls
+  // changed, one step more.
   const changed = Uint8Array.from(BITS);
   changed[450] ^= 4;
   const longer = Uint8Array.from([...BITS, 0]);
-  const others = await Promise.all([runId(log({ seed: 0xc0ffef })), runId(log({ simVersion: SIM_VERSION + 1 })), runId(log({}, changed)), runId(log({}, longer))]);
-  assert.equal(new Set([id, ...others]).size, 5);
+  const others = await Promise.all([runId(log({ seed: 0xc0ffef })), runId(log({ simVersion: SIM_VERSION + 1 })), runId(log({ glider: 'en-d' })),
+    runId(log({}, changed)), runId(log({}, longer))]);
+  assert.equal(new Set([id, ...others]).size, 6);
 });
 
-test('a row of the world board is kept clean: named, never blocked, its numbers whole and its id a run\'s, and nothing more', () => {
-  const row = { who: 'REN', byname: BYNAMES[0].id, total: 512.5, style: 0, peak: 1412, red: [0, 2, 4], at: 1_792_000_000_000, id: 'a'.repeat(WORLD_BOARD.id) };
+test('a row of the world board is kept clean: named, never blocked, its numbers whole, its id a run\'s and its glider one, and nothing more', () => {
+  const row = { who: 'REN', byname: BYNAMES[0].id, total: 512.5, style: 0, peak: 1412, red: [0, 2, 4], at: 1_792_000_000_000, id: 'a'.repeat(WORLD_BOARD.id), glider: 'acro' };
   assert.deepEqual(normalizeWorldRow(row), row);
   // The device a run came from, and anything else, never leaves the function.
   assert.deepEqual(normalizeWorldRow({ ...row, device: 'f'.repeat(32), log: 'AQ', extra: 1 }), row);
@@ -60,6 +62,7 @@ test('a row of the world board is kept clean: named, never blocked, its numbers 
     { who: '' }, { who: 'ren' }, { who: 'RE' }, { who: 7 }, ...BLOCKED.map((who) => ({ who })),
     { total: 101 }, { total: -2.5 }, { total: '512.5' }, { peak: 1.5 }, { red: [8] }, { red: 'clean' },
     { at: -1 }, { at: Infinity }, { at: '1' }, { id: 'A'.repeat(WORLD_BOARD.id) }, { id: 'a'.repeat(WORLD_BOARD.id + 1) }, { id: undefined },
+    { glider: undefined }, { glider: 'classic' }, { glider: 'EN-C' }, { glider: 3 },
   ];
   for (const harm of damaged) assert.equal(normalizeWorldRow({ ...row, ...harm }), null, JSON.stringify(harm));
   for (const nonsense of [null, undefined, 'row', [], 7]) assert.equal(normalizeWorldRow(nonsense), null);
@@ -71,7 +74,7 @@ test('a row of the world board is kept clean: named, never blocked, its numbers 
 });
 
 test('a run keeps its id however its keys are written, where the step flies them the same', async () => {
-  const log = (bits: number[]) => ({ simVersion: 4, seed: 7, steps: bits.length, bits: Uint8Array.from(bits) });
+  const log = (bits: number[]) => ({ simVersion: 4, glider: 'en-a', seed: 7, steps: bits.length, bits: Uint8Array.from(bits) });
   const plain = await runId(log([0, 2, 2, 8, 4, 4, 1, 9, 12, 13, 0]));
   // Both arrows are the bar, and the brake wins over the bar they make; the ears with both arrows
   // are the ears held straight.
@@ -88,7 +91,7 @@ test('a run keeps its id however its keys are written, where the step flies them
 
 
 test('run identity preserves deep intent but canonicalizes its aliases and ears priority', async () => {
-  const make = (bits: number[]) => ({ simVersion: SIM_VERSION, seed: 7, steps: bits.length, bits: Uint8Array.from(bits) });
+  const make = (bits: number[]) => ({ simVersion: SIM_VERSION, glider: 'en-a', seed: 7, steps: bits.length, bits: Uint8Array.from(bits) });
   const canonical = await runId(make([0, 20, 21, 22, 20, 12, 13, 0]));
   assert.equal(await runId(make([0, 16, 17, 18, 23, 28, 29, 0])), canonical);
   assert.notEqual(await runId(make([0, 4, 5, 6, 4, 12, 13, 0])), canonical);

@@ -2,10 +2,12 @@ import type { AirSample, FlightInput, FlightState, PhasePrediction, PhysicsBodie
 // Public flight API. The rigid canopy, suspended pilot and four aerodynamic samples live in
 // flight-physics.js. Manual input changes physical brake/bar positions; maneuvers never prescribe
 // a trajectory or grant energy. Both the fjord and Good Lift call this same solver.
-import { PHYSICS, makePhysics, stepPhysics, physicsEnergy, copyPhysics, rotate, computeTrimPhysics } from './flight-physics.ts';
+import { PHYSICS, makePhysics, stepPhysics, physicsEnergy, copyPhysics, rotate, computeTrimPhysics, wingTable } from './flight-physics.ts';
 import { resetEnvelope, WING } from './wing-envelope.ts';
+import { FOLDED, failsBy, induce, twistBound, type Failure } from './wing-folds.ts';
 export { WING } from './wing-envelope.ts';
 export { PHYSICS, physicsEnergy } from './flight-physics.ts';
+export { FAILURES, type Failure } from './wing-folds.ts';
 
 // Nominal performance for navigation estimates, readouts and glide estimates. Actual
 // motion comes entirely from PHYSICS; these summaries do not command speed, yaw or sink.
@@ -23,17 +25,19 @@ export const PITCH = Object.freeze({ period: 3 });
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 // Canonical world bodies are authoritative. The familiar flat fields are read-only telemetry.
-let trim: PhysicsBodies | undefined;
-function trimmed() {
-  if (trim) return trim;
-  trim = computeTrimPhysics();
+// Each wing's settled trim is solved the first time it is flown.
+const trims = new Map<string, PhysicsBodies>();
+function trimmed(wing: string) {
+  let trim = trims.get(wing);
+  if (!trim) trims.set(wing, trim = computeTrimPhysics(wing));
   return trim;
 }
 
-export function createFlight<T extends Vector3>(pos: T): FlightState & { pos: T };
-export function createFlight(pos?: Vector3): FlightState;
-export function createFlight(pos: Vector3 = { x: 0, y: 0, z: 0 }): FlightState {
-  const g: FlightState = { ...makePhysics(pos), pos, yaw: 0, yawRate: 0, track: 0, trackRate: 0, bank: 0, speed: FLIGHT.speed.trim, sink: FLIGHT.sink.trim,
+/** A wing settled at trim at `pos`: the classic wing unless another registered `wing` is named. */
+export function createFlight<T extends Vector3>(pos: T, wing?: string): FlightState & { pos: T };
+export function createFlight(pos?: Vector3, wing?: string): FlightState;
+export function createFlight(pos: Vector3 = { x: 0, y: 0, z: 0 }, wing = 'classic'): FlightState {
+  const g: FlightState = { ...makePhysics(pos, wing), pos, yaw: 0, yawRate: 0, track: 0, trackRate: 0, bank: 0, speed: FLIGHT.speed.trim, sink: FLIGHT.sink.trim,
     vy: 0, turn: 0, lift: 0, liftSide: 0, brake: 0, deepBrake: false, brakeTarget: 0, acro: false, bar: 0, ears: 0,
     controlMode: 'legacy', leftBrake: 0, rightBrake: 0, leftBrakeTarget: 0, rightBrakeTarget: 0,
     coordination: 0, coordinatedLean: 0, pilotLean: 0, bankTarget: 0, pitch: 0, pitchRate: 0,
@@ -41,10 +45,11 @@ export function createFlight(pos: Vector3 = { x: 0, y: 0, z: 0 }): FlightState {
     windX: 0, windZ: 0, felt: false,
     tuck: 0,
     wingPhase: WING.flying, recoverySource: '', inflation: 1, forwardAirspeed: 0, frontalRisk: 0,
+    foldLeft: 0, foldRight: 0, cravatLeft: 0, cravatRight: 0, deepStall: 0, twist: 0, twisted: 0,
     loop: 0, loopAngle: 0, loopRate: 0,
     loops: 0, tension: 0, load: 1,
   };
-  return settleFlight(g);
+  return settleFlight(g, undefined, wing);
 }
 
 export function releaseFlight(g: FlightState) {
@@ -60,11 +65,17 @@ export function releaseFlight(g: FlightState) {
   g.coordination = g.coordinatedLean = g.pilotLean = g.bankTarget = 0;
   g.brakeTarget = 0; g.deepBrake = g.acro = false;
   g.wingPhase = WING.flying; g.recoverySource = ''; g.inflation = 1; g.frontalRisk = 0;
+  g.foldLeft = g.foldRight = g.cravatLeft = g.cravatRight = g.deepStall = g.twist = g.twisted = 0;
   return g;
 }
 
-export function settleFlight(g: FlightState, speed?: number) {
-  const t = trimmed();
+/**
+ * Puts `g` back at the settled trim of `wing`, where it is and facing as it faces, at `speed` if one
+ * is given. Whatever wing it flew before, it flies `wing` from here: the classic wing unless told
+ * otherwise, so the fjord, the hero and Training never carry on in a wing a run chose.
+ */
+export function settleFlight(g: FlightState, speed?: number, wing = 'classic') {
+  const t = trimmed(wing);
   const x = g.pos.x, y = g.pos.y, z = g.pos.z, yaw = g.yaw || 0;
   copyPhysics(g, t);
   Object.assign(g.pos, { x, y, z });
@@ -204,16 +215,53 @@ function telemetry(g: FlightState, controls: FlightInput, air: AirSample, dt: nu
   g.leftBrakeTarget = s.leftBrakeTarget; g.rightBrakeTarget = s.rightBrakeTarget;
   g.tension = s.tension;
   g.load = s.tension / (PHYSICS.pilotMass * PHYSICS.gravity);
-  g.wingPhase = s.wingPhase; g.recoverySource = s.recoverySource; g.inflation = s.inflation;
+  readWing(g);
   g.forwardAirspeed = (c.vel.x - wx) * nose.x + (c.vel.y - wy) * nose.y + (c.vel.z - wz) * nose.z;
-  g.frontalRisk = s.frontalRisk;
   g.stallLoad = Math.max(clamp((s.alpha - T.stallStart) / T.stallRange, 0, 1), s.stallWarning);
-  const separated = s.wingPhase === WING.entry || s.wingPhase === WING.stalled || s.wingPhase === WING.backfly || s.wingPhase === WING.exit;
-  g.stall = separated && s.recoverySource === 'stall' ? Math.max(s.separation, 0.01) : 0;
-  g.tuck = s.wingPhase === WING.frontal || s.wingPhase === WING.opening ? 1 - s.inflation : 0;
   g.windX = wx; g.windZ = wz; g.felt = true;
   g.lift = air.lift ?? Math.max(0, wy);
   s.energy = physicsEnergy(g);
+}
+
+// The wing's own state as the flat readouts say it: its phase, a stall, a front tuck, each half's fold
+// and caught tip, a deep stall and the line twist.
+function readWing(g: FlightState) {
+  const s = g.physical;
+  g.wingPhase = s.wingPhase; g.recoverySource = s.recoverySource; g.inflation = s.inflation;
+  g.frontalRisk = s.frontalRisk;
+  const separated = s.wingPhase === WING.entry || s.wingPhase === WING.stalled || s.wingPhase === WING.backfly || s.wingPhase === WING.exit;
+  g.stall = separated && s.recoverySource === 'stall' ? Math.max(s.separation, 0.01) : 0;
+  g.tuck = s.wingPhase === WING.frontal || s.wingPhase === WING.opening ? 1 - s.inflation : 0;
+  g.foldLeft = s.foldL; g.foldRight = s.foldR; g.cravatLeft = s.tipL; g.cravatRight = s.tipR;
+  g.deepStall = s.deepStall; g.twist = s.twist;
+  g.twisted = s.twist === 0 ? 0 : twistBound(wingTable(s.wing).feel?.recovery, s.twist);
+}
+
+/** Whether a half of the wing flies folded (wing-folds.js), or held so by a tip caught in its lines. */
+export const wingFolded = (g: FlightState) => g.foldLeft > FOLDED || g.foldRight > FOLDED || g.cravatLeft > 0 || g.cravatRight > 0;
+
+/**
+ * Whether the wing is in trouble a pilot has to fly it out of: stalled, tucked, folded, its lines
+ * twisted, or flying on one half (a spin, or a helicopter or SAT on purpose). The classic wing's is
+ * only ever a stall or a tuck.
+ */
+export function wingInTrouble(g: FlightState) {
+  const s = g.physical;
+  return g.stall > 0 || g.tuck > 0 || g.twisted > 0 || wingFolded(g) || (s.sepL >= 0.5) !== (s.sepR >= 0.5);
+}
+
+/** Whether the wing registered as `wing` can be made to have `kind` (wing-folds.js failsBy). */
+export const canInduce = (wing: string, kind: Failure) => failsBy(wingTable(wing), kind);
+
+/**
+ * Starts `kind` on `side` (−1 left, 1 right) at `size` between two steps, as a lesson's instructor or
+ * a strike does: the wing carries on from there by itself. Returns false, changing nothing, where the
+ * wing cannot have it (canInduce).
+ */
+export function induceFailure(g: FlightState, kind: Failure, side = 1, size?: number) {
+  if (!induce(g, wingTable(g.physical.wing), kind, side < 0 ? -1 : 1, size)) return false;
+  readWing(g);
+  return true;
 }
 
 export function stepFlight(g: FlightState, controls: FlightInput = {}, air: AirSample = {}, dt = 1 / 60) {
